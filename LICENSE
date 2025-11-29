@@ -1,6 +1,7 @@
 MIT License
 
-Copyright (c) 2024 Amiable
+Copyright (c) 2024 Andrej Karpathy (original llm-council)
+Copyright (c) 2024 Amiable (MCP server and derivative work)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

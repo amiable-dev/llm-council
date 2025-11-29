@@ -224,10 +224,32 @@ export LLM_COUNCIL_MAX_REVIEWERS=3
 | `LLM_COUNCIL_NORMALIZER_MODEL` | Model for normalization | google/gemini-2.0-flash-001 |
 | `LLM_COUNCIL_MAX_REVIEWERS` | Max reviewers per response | null (all) |
 
-## Credits
+## Credits & Attribution
 
-Based on the original [llm-council](https://github.com/karpathy/llm-council) by Andrej Karpathy.
+This project is a derivative work based on the original [llm-council](https://github.com/karpathy/llm-council) by Andrej Karpathy.
+
+**Original Work:**
+- Concept and 3-stage council orchestration: Andrej Karpathy
+- Core council logic (Stage 1-3 process)
+- OpenRouter integration
+
+**Derivative Work by Amiable:**
+- MCP (Model Context Protocol) server implementation
+- Removal of web frontend (focus on MCP functionality)
+- Python package structure for PyPI distribution
+- User-configurable model selection
+- Enhanced features (style normalization, self-vote exclusion, synthesis modes)
+- Test suite and modern packaging standards
+
+Karpathy's original README stated:
+> "I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like."
+
+This derivative work respects that spirit while packaging the core concept for broader use via the Model Context Protocol.
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
+
+**Dual Copyright:**
+- Original llm-council: Copyright (c) 2024 Andrej Karpathy
+- MCP server and derivative work: Copyright (c) 2024 Amiable
