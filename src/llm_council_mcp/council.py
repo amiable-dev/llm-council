@@ -13,8 +13,10 @@ from llm_council_mcp.config import (
     STYLE_NORMALIZATION,
     NORMALIZER_MODEL,
     MAX_REVIEWERS,
+    CACHE_ENABLED,
 )
 from llm_council_mcp.telemetry import get_telemetry
+from llm_council_mcp.cache import get_cache_key, get_cached_response, save_to_cache
 
 
 
@@ -608,7 +610,10 @@ Title:"""
     return title
 
 
-async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(
+    user_query: str,
+    bypass_cache: bool = False
+) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process.
 
@@ -620,10 +625,27 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
 
     Args:
         user_query: The user's question
+        bypass_cache: If True, skip cache lookup and force fresh query
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    # Check cache first (unless bypassed)
+    cache_key = get_cache_key(user_query)
+    if CACHE_ENABLED and not bypass_cache:
+        cached = get_cached_response(cache_key)
+        if cached:
+            # Add cache hit indicator to metadata
+            metadata = cached.get("metadata", {})
+            metadata["cache_hit"] = True
+            metadata["cache_key"] = cache_key
+            return (
+                cached.get("stage1_results", []),
+                cached.get("stage2_results", []),
+                cached.get("stage3_result", {}),
+                metadata
+            )
+
     # Initialize usage tracking
     total_usage = {
         "stage1": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
@@ -760,5 +782,11 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
         # Fire-and-forget - don't await to avoid blocking response
         import asyncio
         asyncio.create_task(telemetry.send_event(telemetry_event))
+
+    # Save to cache if caching is enabled
+    if CACHE_ENABLED:
+        metadata["cache_hit"] = False
+        metadata["cache_key"] = cache_key
+        save_to_cache(cache_key, stage1_results, stage2_results, stage3_result, metadata)
 
     return stage1_results, stage2_results, stage3_result, metadata

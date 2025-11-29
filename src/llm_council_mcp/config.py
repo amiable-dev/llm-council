@@ -119,3 +119,26 @@ MAX_REVIEWERS = (
     int(_max_reviewers_env) if _max_reviewers_env else
     _user_config.get("max_reviewers", DEFAULT_MAX_REVIEWERS)
 )
+
+# Response caching - priority: env var > config file > defaults
+DEFAULT_CACHE_ENABLED = False
+DEFAULT_CACHE_TTL = 0  # seconds, 0 = infinite (no expiry)
+DEFAULT_CACHE_DIR = Path.home() / ".cache" / "llm-council"
+
+_cache_env = os.getenv("LLM_COUNCIL_CACHE")
+CACHE_ENABLED = (
+    _cache_env.lower() in ('true', '1', 'yes') if _cache_env else
+    _user_config.get("cache_enabled", DEFAULT_CACHE_ENABLED)
+)
+
+_cache_ttl_env = os.getenv("LLM_COUNCIL_CACHE_TTL")
+CACHE_TTL = (
+    int(_cache_ttl_env) if _cache_ttl_env else
+    _user_config.get("cache_ttl", DEFAULT_CACHE_TTL)
+)
+
+_cache_dir_env = os.getenv("LLM_COUNCIL_CACHE_DIR")
+CACHE_DIR = (
+    Path(_cache_dir_env) if _cache_dir_env else
+    Path(_user_config.get("cache_dir", DEFAULT_CACHE_DIR))
+)
