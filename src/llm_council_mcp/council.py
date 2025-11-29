@@ -271,14 +271,33 @@ async def stage3_synthesize_final(
 
     # Mode-specific instructions
     if SYNTHESIS_MODE == "debate":
-        mode_instructions = """Your task as Chairman is to present a BALANCED ANALYSIS that highlights productive disagreements:
+        mode_instructions = """Your task as Chairman is to present a STRUCTURED ANALYSIS with clear sections.
 
-1. **Areas of Consensus**: What do most responses agree on?
-2. **Key Disagreements**: Where do responses fundamentally differ? Present BOTH perspectives fairly.
-3. **Trade-offs**: For each disagreement, explain the trade-offs between approaches.
-4. **Recommendation**: Offer your assessment, but acknowledge the validity of alternative views.
+You MUST include ALL of these sections in your response, using EXACTLY these headers:
 
-Do NOT flatten nuance into a single "best" answer. The user benefits from seeing where experts disagree."""
+## 1. Consensus Points
+What do most or all responses agree on? List the areas of clear agreement.
+
+## 2. Axes of Disagreement
+Identify 2-3 key dimensions where responses fundamentally differ. Name each axis (e.g., "Scalability vs. Simplicity", "Security vs. Developer Experience").
+
+## 3. Position Summaries
+For each axis of disagreement, summarize the competing positions:
+- **Position A**: [Summary of this view] — Held by: [which responses]
+- **Position B**: [Summary of opposing view] — Held by: [which responses]
+
+## 4. Crucial Assumptions
+What different contexts or assumptions lead to different conclusions? For example:
+- Response X assumes: [context, e.g., "high traffic, enterprise scale"]
+- Response Y assumes: [different context, e.g., "startup, rapid iteration"]
+
+## 5. Minority Reports
+Are there valuable insights from lower-ranked responses that shouldn't be discarded? Surface any unique perspectives, even if they were outvoted.
+
+## 6. Chairman's Assessment
+Your overall recommendation, with explicit acknowledgment of trade-offs. Be clear about WHICH position you favor and WHY, while validating the merits of alternatives.
+
+IMPORTANT: Do NOT flatten nuance into a single "best" answer. The user benefits from seeing structured disagreement. Include ALL 6 sections."""
     else:  # consensus mode (default)
         mode_instructions = """Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
 - The individual responses and their insights
