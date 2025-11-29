@@ -1,0 +1,268 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "description": "LLM Council benchmark dataset for evaluating council vs single-model performance",
+    "created": "2024-11-29"
+  },
+  "questions": [
+    {
+      "id": "tech-001",
+      "query": "What are the key differences between REST and GraphQL APIs?",
+      "category": "technical",
+      "difficulty": "medium",
+      "criteria": [
+        {
+          "description": "Explains data fetching differences (over/under-fetching)",
+          "keywords": ["over-fetching", "under-fetching", "overfetch", "single endpoint", "multiple endpoints"],
+          "required": true
+        },
+        {
+          "description": "Mentions schema or type system",
+          "keywords": ["schema", "type", "typed", "introspection", "strongly typed"],
+          "required": true
+        },
+        {
+          "description": "Discusses caching implications",
+          "keywords": ["cache", "caching", "HTTP cache", "CDN", "cacheable"],
+          "required": false
+        },
+        {
+          "description": "Mentions versioning approaches",
+          "keywords": ["version", "versioning", "evolution", "deprecation", "breaking change"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "tech-002",
+      "query": "Explain the CAP theorem and its practical implications for distributed databases.",
+      "category": "technical",
+      "difficulty": "hard",
+      "criteria": [
+        {
+          "description": "Defines Consistency",
+          "keywords": ["consistency", "consistent", "same data", "linearizable"],
+          "required": true
+        },
+        {
+          "description": "Defines Availability",
+          "keywords": ["availability", "available", "responds", "operational"],
+          "required": true
+        },
+        {
+          "description": "Defines Partition tolerance",
+          "keywords": ["partition", "network partition", "split", "network failure"],
+          "required": true
+        },
+        {
+          "description": "Explains the trade-off",
+          "keywords": ["trade-off", "choose two", "sacrifice", "cannot have all", "pick two"],
+          "required": true
+        },
+        {
+          "description": "Gives practical database examples",
+          "keywords": ["MongoDB", "Cassandra", "PostgreSQL", "DynamoDB", "Spanner", "CockroachDB"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "tech-003",
+      "query": "What are the best practices for securing a REST API?",
+      "category": "technical",
+      "difficulty": "medium",
+      "criteria": [
+        {
+          "description": "Mentions authentication methods",
+          "keywords": ["authentication", "OAuth", "JWT", "token", "API key", "bearer"],
+          "required": true
+        },
+        {
+          "description": "Discusses HTTPS/TLS",
+          "keywords": ["HTTPS", "TLS", "SSL", "encrypted", "encryption"],
+          "required": true
+        },
+        {
+          "description": "Mentions rate limiting",
+          "keywords": ["rate limit", "throttle", "throttling", "rate-limit"],
+          "required": false
+        },
+        {
+          "description": "Discusses input validation",
+          "keywords": ["validation", "sanitize", "sanitization", "injection", "XSS", "SQL injection"],
+          "required": false
+        },
+        {
+          "description": "Mentions CORS",
+          "keywords": ["CORS", "cross-origin", "Access-Control"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "reasoning-001",
+      "query": "A startup has $500k runway and needs to choose between hiring 2 senior engineers at $150k each or 4 junior engineers at $75k each. What factors should they consider?",
+      "category": "reasoning",
+      "difficulty": "medium",
+      "criteria": [
+        {
+          "description": "Considers productivity differences",
+          "keywords": ["productivity", "output", "velocity", "experience", "10x", "efficient"],
+          "required": true
+        },
+        {
+          "description": "Mentions mentorship or management overhead",
+          "keywords": ["mentor", "management", "oversight", "training", "guidance", "supervise"],
+          "required": true
+        },
+        {
+          "description": "Discusses risk factors",
+          "keywords": ["risk", "bus factor", "turnover", "retention", "key person"],
+          "required": false
+        },
+        {
+          "description": "Considers company stage and growth",
+          "keywords": ["stage", "growth", "scale", "early-stage", "startup", "runway"],
+          "required": false
+        },
+        {
+          "description": "Mentions technical complexity",
+          "keywords": ["complexity", "architecture", "technical debt", "quality", "code review"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "reasoning-002",
+      "query": "Should a company migrate from a monolith to microservices? What are the key considerations?",
+      "category": "reasoning",
+      "difficulty": "hard",
+      "criteria": [
+        {
+          "description": "Discusses when monolith is appropriate",
+          "keywords": ["monolith", "simpler", "small team", "start with", "premature"],
+          "required": true
+        },
+        {
+          "description": "Mentions operational complexity of microservices",
+          "keywords": ["complexity", "operational", "deploy", "orchestration", "kubernetes", "docker"],
+          "required": true
+        },
+        {
+          "description": "Discusses team structure (Conway's Law)",
+          "keywords": ["team", "Conway", "organizational", "communication", "autonomous"],
+          "required": false
+        },
+        {
+          "description": "Mentions data consistency challenges",
+          "keywords": ["data", "consistency", "distributed", "transaction", "saga", "eventual"],
+          "required": false
+        },
+        {
+          "description": "Suggests incremental migration approach",
+          "keywords": ["incremental", "strangler", "gradual", "step by step", "iterative"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "creative-001",
+      "query": "Design a system for a ride-sharing app like Uber. What are the main components?",
+      "category": "creative",
+      "difficulty": "hard",
+      "criteria": [
+        {
+          "description": "Includes user/driver matching service",
+          "keywords": ["matching", "dispatch", "assign", "pairing", "allocation"],
+          "required": true
+        },
+        {
+          "description": "Mentions real-time location tracking",
+          "keywords": ["location", "GPS", "real-time", "tracking", "coordinates", "geolocation"],
+          "required": true
+        },
+        {
+          "description": "Discusses pricing/fare calculation",
+          "keywords": ["pricing", "fare", "surge", "estimate", "cost", "payment"],
+          "required": true
+        },
+        {
+          "description": "Mentions notification system",
+          "keywords": ["notification", "push", "alert", "message", "SMS"],
+          "required": false
+        },
+        {
+          "description": "Discusses scalability considerations",
+          "keywords": ["scale", "scalability", "load", "peak", "millions", "distributed"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "factual-001",
+      "query": "What is the difference between TCP and UDP protocols?",
+      "category": "factual",
+      "difficulty": "easy",
+      "criteria": [
+        {
+          "description": "Explains TCP is connection-oriented",
+          "keywords": ["connection-oriented", "connection", "handshake", "established", "reliable"],
+          "required": true
+        },
+        {
+          "description": "Explains UDP is connectionless",
+          "keywords": ["connectionless", "datagram", "unreliable", "no connection", "fire and forget"],
+          "required": true
+        },
+        {
+          "description": "Mentions TCP guarantees delivery",
+          "keywords": ["guarantee", "reliable", "retransmit", "acknowledgment", "ACK", "ordered"],
+          "required": true
+        },
+        {
+          "description": "Mentions UDP is faster/lower latency",
+          "keywords": ["faster", "speed", "latency", "overhead", "lightweight"],
+          "required": false
+        },
+        {
+          "description": "Gives use case examples",
+          "keywords": ["streaming", "gaming", "video", "DNS", "VoIP", "HTTP"],
+          "required": false
+        }
+      ]
+    },
+    {
+      "id": "factual-002",
+      "query": "What are the SOLID principles in object-oriented programming?",
+      "category": "factual",
+      "difficulty": "medium",
+      "criteria": [
+        {
+          "description": "Explains Single Responsibility Principle",
+          "keywords": ["single responsibility", "one reason", "SRP", "one job"],
+          "required": true
+        },
+        {
+          "description": "Explains Open/Closed Principle",
+          "keywords": ["open/closed", "open for extension", "closed for modification", "OCP"],
+          "required": true
+        },
+        {
+          "description": "Explains Liskov Substitution Principle",
+          "keywords": ["Liskov", "substitution", "LSP", "subtype", "substitute"],
+          "required": true
+        },
+        {
+          "description": "Explains Interface Segregation Principle",
+          "keywords": ["interface segregation", "ISP", "specific interfaces", "fat interface"],
+          "required": true
+        },
+        {
+          "description": "Explains Dependency Inversion Principle",
+          "keywords": ["dependency inversion", "DIP", "depend on abstractions", "high-level"],
+          "required": true
+        }
+      ]
+    }
+  ]
+}
