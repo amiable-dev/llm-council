@@ -1,4 +1,4 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -43,3 +43,11 @@ Thumbs.db
 
 # uv
 uv.lock
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Version file (auto-generated)
+src/llm_council_mcp/_version.py

@@ -61,15 +61,21 @@ Create `~/.config/llm-council/config.json`:
     "google/gemini-pro",
     "meta-llama/llama-3-70b-instruct"
   ],
-  "chairman_model": "anthropic/claude-3-opus"
+  "chairman_model": "anthropic/claude-3-opus",
+  "synthesis_mode": "consensus",
+  "exclude_self_votes": true,
+  "style_normalization": false,
+  "max_reviewers": null
 }
 ```
 
 #### Option 3: Use Defaults
 
 If you don't configure anything, these defaults are used:
-- Council: GPT-4, Gemini Pro, Claude 3 Sonnet, Grok Beta
-- Chairman: Claude 3 Sonnet
+- Council: GPT-5.1, Gemini 3 Pro, Claude Sonnet 4.5, Grok 4
+- Chairman: Gemini 3 Pro
+- Mode: consensus
+- Self-vote exclusion: enabled
 
 **Finding Models**: Browse available models at [openrouter.ai/models](https://openrouter.ai/models)
 
@@ -129,13 +135,94 @@ Use consult_council to ask: "What are the trade-offs between microservices and m
 
 ## How It Works
 
-The council uses a 3-stage process inspired by ensemble methods and peer review:
+The council uses a multi-stage process inspired by ensemble methods and peer review:
 
-1. **Parallel Collection**: All models receive the question simultaneously and respond independently
-2. **Anonymous Peer Review**: Each model ranks the other responses (anonymized to prevent model bias)
-3. **Synthesis**: A chairman model reviews all responses and rankings to produce a comprehensive answer
+```
+User Query
+    ↓
+┌─────────────────────────────────────────────┐
+│ STAGE 1: Independent Responses              │
+│ • All council models queried in parallel    │
+│ • No knowledge of other responses           │
+│ • Graceful degradation if some fail         │
+└─────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────┐
+│ STAGE 1.5: Style Normalization (optional)   │
+│ • Rewrites responses in neutral style       │
+│ • Removes AI preambles and fingerprints     │
+│ • Strengthens anonymization                 │
+└─────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────┐
+│ STAGE 2: Anonymous Peer Review              │
+│ • Responses labeled A, B, C (randomized)    │
+│ • XML sandboxing prevents prompt injection  │
+│ • JSON-structured rankings with scores      │
+│ • Self-votes excluded from aggregation      │
+└─────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────┐
+│ STAGE 3: Chairman Synthesis                 │
+│ • Receives all responses + rankings         │
+│ • Consensus mode: single best answer        │
+│ • Debate mode: highlights disagreements     │
+└─────────────────────────────────────────────┘
+    ↓
+Final Response + Metadata
+```
 
 This approach helps surface diverse perspectives, identify consensus, and produce more balanced, well-reasoned answers.
+
+## Advanced Features
+
+### Self-Vote Exclusion
+
+By default, each model's vote for its own response is excluded from the aggregate rankings. This prevents self-preference bias.
+
+```bash
+export LLM_COUNCIL_EXCLUDE_SELF_VOTES=true  # default
+```
+
+### Synthesis Modes
+
+**Consensus Mode** (default): Chairman synthesizes a single best answer.
+
+**Debate Mode**: Chairman highlights areas of agreement, key disagreements, and trade-offs between perspectives.
+
+```bash
+export LLM_COUNCIL_MODE=debate
+```
+
+### Style Normalization (Stage 1.5)
+
+Optional preprocessing that rewrites all responses in a neutral style before peer review. This strengthens anonymization by removing stylistic "fingerprints" that might allow models to recognize each other.
+
+```bash
+export LLM_COUNCIL_STYLE_NORMALIZATION=true
+export LLM_COUNCIL_NORMALIZER_MODEL=google/gemini-2.0-flash-001  # fast/cheap
+```
+
+### Stratified Sampling (Large Councils)
+
+For councils with more than 5 models, you can limit the number of reviewers per response to reduce API costs (O(N²) → O(N×k)):
+
+```bash
+export LLM_COUNCIL_MAX_REVIEWERS=3
+```
+
+### All Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENROUTER_API_KEY` | OpenRouter API key | Required |
+| `LLM_COUNCIL_MODELS` | Comma-separated model list | GPT-5.1, Gemini 3 Pro, Claude 4.5, Grok 4 |
+| `LLM_COUNCIL_CHAIRMAN` | Chairman model | google/gemini-3-pro-preview |
+| `LLM_COUNCIL_MODE` | `consensus` or `debate` | consensus |
+| `LLM_COUNCIL_EXCLUDE_SELF_VOTES` | Exclude self-votes | true |
+| `LLM_COUNCIL_STYLE_NORMALIZATION` | Enable style normalization | false |
+| `LLM_COUNCIL_NORMALIZER_MODEL` | Model for normalization | google/gemini-2.0-flash-001 |
+| `LLM_COUNCIL_MAX_REVIEWERS` | Max reviewers per response | null (all) |
 
 ## Credits
 
