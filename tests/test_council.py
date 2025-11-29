@@ -127,11 +127,17 @@ def test_parse_ranking_no_false_positive_refusal():
 
 
 def test_borda_count_calculation():
-    """Test Borda count ranking aggregation."""
-    # 3 candidates, 2 reviewers
-    # Reviewer 1: A > B > C (A gets 2, B gets 1, C gets 0)
-    # Reviewer 2: B > A > C (B gets 2, A gets 1, C gets 0)
-    # Total: A=3, B=3, C=0 (tie between A and B)
+    """Test normalized Borda count ranking aggregation.
+
+    With normalization, scores are in [0, 1] range regardless of council size.
+    Formula: normalized_score = raw_borda / (num_candidates - 1)
+    """
+    # 3 candidates, 2 reviewers, max_borda = 2
+    # Reviewer 1: A > B > C
+    #   A gets 2/2=1.0, B gets 1/2=0.5, C gets 0/2=0.0
+    # Reviewer 2: B > A > C
+    #   B gets 2/2=1.0, A gets 1/2=0.5, C gets 0/2=0.0
+    # Average: A=(1.0+0.5)/2=0.75, B=(0.5+1.0)/2=0.75, C=0.0
 
     stage2_results = [
         {
@@ -163,11 +169,59 @@ def test_borda_count_calculation():
     # Check Borda scores exist
     assert all("borda_score" in r for r in result)
 
-    # A and B should be tied with borda_score of 1.5 each ((2+1)/2)
+    # A and B should be tied with normalized borda_score of 0.75 each
     scores_by_model = {r["model"]: r["borda_score"] for r in result}
-    assert scores_by_model["model_a"] == 1.5
-    assert scores_by_model["model_b"] == 1.5
+    assert scores_by_model["model_a"] == 0.75
+    assert scores_by_model["model_b"] == 0.75
     assert scores_by_model["model_c"] == 0.0
+
+
+def test_borda_normalization_council_size_independence():
+    """Test that normalized Borda scores are comparable across council sizes.
+
+    Critical fix for issue #14: Without normalization, a 3-model council
+    produces max score of 2, while a 5-model council produces max of 4.
+    With normalization, 1st place always gets 1.0 regardless of council size.
+    """
+    # 3-candidate council: max_borda = 2
+    stage2_small = [
+        {
+            "model": "reviewer1",
+            "ranking": "",
+            "parsed_ranking": {"ranking": ["Response A", "Response B", "Response C"], "scores": {}}
+        },
+    ]
+    label_small = {"Response A": "model_a", "Response B": "model_b", "Response C": "model_c"}
+
+    # 5-candidate council: max_borda = 4
+    stage2_large = [
+        {
+            "model": "reviewer1",
+            "ranking": "",
+            "parsed_ranking": {
+                "ranking": ["Response A", "Response B", "Response C", "Response D", "Response E"],
+                "scores": {}
+            }
+        },
+    ]
+    label_large = {
+        "Response A": "model_a", "Response B": "model_b", "Response C": "model_c",
+        "Response D": "model_d", "Response E": "model_e"
+    }
+
+    result_small = calculate_aggregate_rankings(stage2_small, label_small)
+    result_large = calculate_aggregate_rankings(stage2_large, label_large)
+
+    # 1st place should get 1.0 in BOTH council sizes
+    scores_small = {r["model"]: r["borda_score"] for r in result_small}
+    scores_large = {r["model"]: r["borda_score"] for r in result_large}
+
+    assert scores_small["model_a"] == 1.0, "3-model council: 1st place should be 1.0"
+    assert scores_large["model_a"] == 1.0, "5-model council: 1st place should be 1.0"
+
+    # Last place should get 0.0 in BOTH
+    assert scores_small["model_c"] == 0.0, "3-model council: last place should be 0.0"
+    assert scores_large["model_e"] == 0.0, "5-model council: last place should be 0.0"
 
 
 def test_borda_count_excludes_abstentions():

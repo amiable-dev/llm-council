@@ -431,16 +431,16 @@ def calculate_aggregate_rankings(
     label_to_model: Dict[str, str]
 ) -> List[Dict[str, Any]]:
     """
-    Calculate aggregate rankings using Borda Count method.
+    Calculate aggregate rankings using Normalized Borda Count method.
 
-    Borda Count assigns points based on ranking position:
-    - 1st place = (N-1) points
-    - 2nd place = (N-2) points
-    - Last place = 0 points
+    Borda Count assigns points based on ranking position, then normalizes
+    to [0, 1] range for cross-council comparability:
+    - 1st place = 1.0 (was N-1 points, normalized by dividing by N-1)
+    - 2nd place = (N-2)/(N-1)
+    - Last place = 0.0
 
-    This is more robust than averaging raw scores because it uses
-    relative rankings (which LLMs are better at) rather than absolute
-    scores (which are poorly calibrated across models).
+    Normalization is critical: without it, a 3-model council (max 2 points)
+    and 10-model council (max 9 points) produce incomparable scores.
 
     When EXCLUDE_SELF_VOTES is True, excludes votes where the reviewer
     is evaluating their own response (prevents self-preference bias).
@@ -450,17 +450,35 @@ def calculate_aggregate_rankings(
         label_to_model: Mapping from anonymous labels to model names
 
     Returns:
-        List of dicts with model name, Borda score, sorted best to worst
+        List of dicts with model name, normalized Borda score [0,1], sorted best to worst
     """
     from collections import defaultdict
 
     num_candidates = len(label_to_model)
 
-    # Track Borda points and raw scores for each model
-    model_borda_points = defaultdict(list)
+    # Edge case: single candidate can't be ranked
+    if num_candidates <= 1:
+        if num_candidates == 1:
+            model = list(label_to_model.values())[0]
+            return [{
+                "model": model,
+                "borda_score": 1.0,  # Only candidate gets perfect score
+                "average_position": 1.0,
+                "average_score": None,
+                "vote_count": 0,
+                "self_votes_excluded": EXCLUDE_SELF_VOTES,
+                "rank": 1
+            }]
+        return []
+
+    # Track normalized Borda scores and raw scores for each model
+    model_borda_scores = defaultdict(list)  # Now stores normalized [0,1] scores
     model_raw_scores = defaultdict(list)
     model_positions = defaultdict(list)
     self_votes_excluded = 0
+
+    # Normalization factor: max possible Borda points
+    max_borda = num_candidates - 1
 
     for ranking in stage2_results:
         reviewer_model = ranking.get('model', '')
@@ -472,7 +490,7 @@ def calculate_aggregate_rankings(
         if parsed.get('abstained'):
             continue
 
-        # Calculate Borda points from ranking positions
+        # Calculate normalized Borda scores from ranking positions
         for position, label in enumerate(ranking_list):
             if label in label_to_model:
                 author_model = label_to_model[label]
@@ -482,12 +500,14 @@ def calculate_aggregate_rankings(
                     self_votes_excluded += 1
                     continue
 
-                # Borda points: 1st place = (N-1), 2nd = (N-2), last = 0
-                borda_points = (num_candidates - 1) - position
-                model_borda_points[author_model].append(borda_points)
+                # Raw Borda points: 1st = (N-1), 2nd = (N-2), last = 0
+                raw_borda = max_borda - position
+                # Normalize to [0, 1]: divide by max possible points
+                normalized_borda = raw_borda / max_borda
+                model_borda_scores[author_model].append(normalized_borda)
                 model_positions[author_model].append(position + 1)  # 1-indexed for display
 
-        # Also track raw scores (as secondary signal)
+        # Also track raw scores (as secondary signal, normalized to [0,1])
         for label, score in scores.items():
             if label in label_to_model:
                 author_model = label_to_model[label]
@@ -495,23 +515,28 @@ def calculate_aggregate_rankings(
                 if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
                     continue
 
-                model_raw_scores[author_model].append(score)
+                # Normalize raw score to [0,1] (assuming 1-10 scale)
+                normalized_raw = score / 10.0 if isinstance(score, (int, float)) else None
+                if normalized_raw is not None:
+                    model_raw_scores[author_model].append(normalized_raw)
 
     # Calculate aggregates for each model
     aggregate = []
-    all_models = set(model_borda_points.keys()) | set(model_raw_scores.keys())
+    all_models = set(model_borda_scores.keys()) | set(model_raw_scores.keys())
 
     for model in all_models:
-        borda_points = model_borda_points.get(model, [])
+        borda_scores = model_borda_scores.get(model, [])
         raw_scores = model_raw_scores.get(model, [])
         positions = model_positions.get(model, [])
 
         entry = {
             "model": model,
-            "borda_score": round(sum(borda_points) / len(borda_points), 2) if borda_points else None,
+            # Average of normalized Borda scores [0,1]
+            "borda_score": round(sum(borda_scores) / len(borda_scores), 3) if borda_scores else None,
             "average_position": round(sum(positions) / len(positions), 2) if positions else None,
-            "average_score": round(sum(raw_scores) / len(raw_scores), 2) if raw_scores else None,
-            "vote_count": len(borda_points),
+            # Average of normalized raw scores [0,1]
+            "average_score": round(sum(raw_scores) / len(raw_scores), 3) if raw_scores else None,
+            "vote_count": len(borda_scores),
             "self_votes_excluded": EXCLUDE_SELF_VOTES
         }
         aggregate.append(entry)
