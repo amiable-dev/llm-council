@@ -256,3 +256,75 @@ def test_borda_count_excludes_abstentions():
 
     # Only 1 vote should count (reviewer2 abstained)
     assert all(r["vote_count"] == 1 for r in result)
+
+
+def test_detect_score_rank_mismatch():
+    """Test detection of score/rank mismatches."""
+    from llm_council_mcp.council import detect_score_rank_mismatch
+
+    # Case 1: No mismatch - scores match ranking order
+    ranking = ["Response A", "Response B", "Response C"]
+    scores = {"Response A": 9, "Response B": 7, "Response C": 5}
+    assert detect_score_rank_mismatch(ranking, scores) is False
+
+    # Case 2: Mismatch - ranking says A > B > C, but scores say B > A > C
+    ranking = ["Response A", "Response B", "Response C"]
+    scores = {"Response A": 7, "Response B": 9, "Response C": 5}
+    assert detect_score_rank_mismatch(ranking, scores) is True
+
+    # Case 3: Empty inputs
+    assert detect_score_rank_mismatch([], {}) is False
+    assert detect_score_rank_mismatch(["A"], {}) is False
+    assert detect_score_rank_mismatch([], {"A": 5}) is False
+
+    # Case 4: Single item (no comparison possible)
+    assert detect_score_rank_mismatch(["A"], {"A": 5}) is False
+
+    # Case 5: Partial scores - only check labels with scores
+    ranking = ["Response A", "Response B", "Response C"]
+    scores = {"Response A": 9, "Response B": 7}  # C has no score
+    assert detect_score_rank_mismatch(ranking, scores) is False
+
+
+def test_parse_ranking_detects_mismatch():
+    """Test that parse_ranking_from_text flags score/rank mismatches."""
+    # Mismatched: ranking says B > A > C, but scores say A > B > C
+    test_text = """
+    Here is my evaluation...
+
+    ```json
+    {
+      "ranking": ["Response B", "Response A", "Response C"],
+      "scores": {
+        "Response A": 9,
+        "Response B": 7,
+        "Response C": 5
+      }
+    }
+    ```
+    """
+
+    result = parse_ranking_from_text(test_text)
+    assert result["ranking"] == ["Response B", "Response A", "Response C"]
+    assert result.get("score_rank_mismatch") is True
+
+
+def test_parse_ranking_no_mismatch():
+    """Test that parse_ranking_from_text doesn't flag consistent scores."""
+    # Consistent: ranking and scores agree
+    test_text = """
+    ```json
+    {
+      "ranking": ["Response A", "Response B", "Response C"],
+      "scores": {
+        "Response A": 9,
+        "Response B": 7,
+        "Response C": 5
+      }
+    }
+    ```
+    """
+
+    result = parse_ranking_from_text(test_text)
+    assert result["ranking"] == ["Response A", "Response B", "Response C"]
+    assert result.get("score_rank_mismatch") is not True

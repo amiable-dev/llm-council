@@ -416,6 +416,39 @@ STAGE 2 - Peer Rankings:
     }, total_usage
 
 
+def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bool:
+    """Detect if ranking order contradicts score order.
+
+    LLMs are better at relative comparison than absolute calibration,
+    so rankings should be trusted over scores. This function detects
+    when they disagree for transparency in metadata.
+
+    Args:
+        ranking: List of labels in ranked order (best to worst)
+        scores: Dict mapping labels to numeric scores
+
+    Returns:
+        True if there's a mismatch (score order != ranking order)
+    """
+    if not ranking or not scores:
+        return False
+
+    # Only check labels that have scores
+    ranked_with_scores = [label for label in ranking if label in scores]
+
+    if len(ranked_with_scores) < 2:
+        return False
+
+    # Get score-based ordering (highest score first)
+    score_order = sorted(
+        ranked_with_scores,
+        key=lambda x: -scores.get(x, 0)
+    )
+
+    # Compare to ranking order
+    return ranked_with_scores != score_order
+
+
 def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
     """
     Parse the ranking JSON from the model's response.
@@ -425,12 +458,15 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
     - Legacy "FINAL RANKING:" format
     - Safety refusals (marks as abstained)
     - Parse failures (marks as abstained)
+    - Score/rank mismatches (detected and flagged)
 
     Args:
         ranking_text: The full text response from the model
 
     Returns:
-        Dict with 'ranking' (list), 'scores' (dict), and optionally 'abstained' (bool)
+        Dict with 'ranking' (list), 'scores' (dict), and optionally:
+        - 'abstained' (bool): If model refused to evaluate
+        - 'score_rank_mismatch' (bool): If scores contradict ranking
     """
     import re
     import json
@@ -467,6 +503,9 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
                 result['ranking'] = parsed['ranking']
             if isinstance(parsed.get('scores'), dict):
                 result['scores'] = parsed['scores']
+            # Check for score/rank mismatch
+            if detect_score_rank_mismatch(result['ranking'], result['scores']):
+                result['score_rank_mismatch'] = True
             return result
         except json.JSONDecodeError:
             pass
@@ -492,6 +531,9 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
                 result['ranking'] = parsed['ranking']
             if isinstance(parsed.get('scores'), dict):
                 result['scores'] = parsed['scores']
+            # Check for score/rank mismatch
+            if detect_score_rank_mismatch(result['ranking'], result['scores']):
+                result['score_rank_mismatch'] = True
             return result
         except json.JSONDecodeError:
             pass
@@ -788,14 +830,20 @@ async def run_full_council(
         "total_tokens": sum(s["total_tokens"] for s in total_usage.values()),
     }
 
-    # Collect abstention info from Stage 2
+    # Collect abstention info and score/rank mismatches from Stage 2
     abstentions = []
+    score_rank_mismatches = []
     for r in stage2_results:
         parsed = r.get('parsed_ranking', {})
         if parsed.get('abstained'):
             abstentions.append({
                 "model": r['model'],
                 "reason": parsed.get('abstention_reason', 'Unknown')
+            })
+        if parsed.get('score_rank_mismatch'):
+            score_rank_mismatches.append({
+                "model": r['model'],
+                "note": "Ranking order used (scores ignored per council recommendation)"
             })
 
     # Prepare metadata with configuration info
@@ -820,6 +868,10 @@ async def run_full_council(
     # Add abstention info if any reviewers abstained
     if abstentions:
         metadata["abstentions"] = abstentions
+
+    # Add score/rank mismatch warnings if any detected
+    if score_rank_mismatches:
+        metadata["score_rank_mismatches"] = score_rank_mismatches
 
     # Add degraded mode info if applicable
     if degraded_mode:
