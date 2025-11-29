@@ -25,7 +25,9 @@ def test_parse_ranking_from_text():
     """
     
     result = parse_ranking_from_text(test_text)
-    assert result == ["Response A", "Response B", "Response C"]
+    # New API returns dict with ranking and scores
+    assert "ranking" in result
+    assert result["ranking"] == ["Response A", "Response B", "Response C"]
 
 
 def test_calculate_aggregate_rankings():
@@ -33,8 +35,22 @@ def test_calculate_aggregate_rankings():
     from llm_council_mcp.council import calculate_aggregate_rankings
     
     stage2_results = [
-        {"model": "model1", "ranking": "FINAL RANKING:\n1. Response A\n2. Response B", "parsed_ranking": []},
-        {"model": "model2", "ranking": "FINAL RANKING:\n1. Response B\n2. Response A", "parsed_ranking": []},
+        {
+            "model": "model1",
+            "ranking": "FINAL RANKING:\n1. Response A\n2. Response B",
+            "parsed_ranking": {
+                "ranking": ["Response A", "Response B"],
+                "scores": {}
+            }
+        },
+        {
+            "model": "model2", 
+            "ranking": "FINAL RANKING:\n1. Response B\n2. Response A",
+            "parsed_ranking": {
+                "ranking": ["Response B", "Response A"],
+                "scores": {}
+            }
+        },
     ]
     
     label_to_model = {
@@ -47,4 +63,6 @@ def test_calculate_aggregate_rankings():
     # Both models should be in results
     assert len(result) == 2
     assert all("model" in r for r in result)
-    assert all("average_rank" in r for r in result)
+    # New API uses average_position and average_score
+    assert all("average_position" in r for r in result)
+    assert all("rank" in r for r in result)
