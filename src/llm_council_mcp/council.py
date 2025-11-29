@@ -54,6 +54,63 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
     return stage1_results, total_usage
 
 
+def should_normalize_styles(responses: List[str]) -> bool:
+    """Detect if responses are stylistically diverse enough to warrant normalization.
+
+    Uses heuristics to detect stylistic variance:
+    1. Format variance (markdown vs plain text)
+    2. Length variance (coefficient of variation > 0.5)
+    3. AI preamble inconsistency (some have, some don't)
+
+    Args:
+        responses: List of response text strings
+
+    Returns:
+        True if normalization would likely help reduce bias
+    """
+    import re
+    import statistics
+
+    if len(responses) < 2:
+        return False
+
+    # Heuristic 1: Format variance (markdown headers)
+    has_markdown = [bool(re.search(r'^#+\s', r, re.MULTILINE)) for r in responses]
+    if len(set(has_markdown)) > 1:  # Mix of markdown and plain
+        return True
+
+    # Heuristic 2: Length variance
+    lengths = [len(r) for r in responses]
+    mean_length = statistics.mean(lengths)
+    if mean_length > 0:
+        try:
+            cv = statistics.stdev(lengths) / mean_length  # Coefficient of variation
+            if cv > 0.5:  # High length variance
+                return True
+        except statistics.StatisticsError:
+            pass  # Not enough data points
+
+    # Heuristic 3: AI preamble detection
+    preambles = [
+        "as an ai", "as a language model", "i'd be happy to",
+        "certainly!", "great question", "sure!", "absolutely!",
+        "i don't have personal", "i'm an ai"
+    ]
+    preamble_counts = [
+        sum(1 for p in preambles if p in r.lower()[:200])  # Check first 200 chars
+        for r in responses
+    ]
+    if max(preamble_counts) > 0 and min(preamble_counts) == 0:
+        return True  # Some have preambles, some don't
+
+    # Heuristic 4: Code block variance
+    has_code = [bool(re.search(r'```', r)) for r in responses]
+    if len(set(has_code)) > 1:  # Mix of code blocks and no code blocks
+        return True
+
+    return False
+
+
 async def stage1_5_normalize_styles(
     stage1_results: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
@@ -64,6 +121,11 @@ async def stage1_5_normalize_styles(
     preserving content, making it harder for reviewers to identify
     which model produced each response.
 
+    Supports three modes:
+    - False: Never normalize (skip this stage)
+    - True: Always normalize all responses
+    - "auto": Normalize only when stylistic variance is detected
+
     Args:
         stage1_results: Results from Stage 1
 
@@ -72,8 +134,15 @@ async def stage1_5_normalize_styles(
     """
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    if not STYLE_NORMALIZATION:
+    # Handle different normalization modes
+    if STYLE_NORMALIZATION == "auto":
+        responses = [r['response'] for r in stage1_results]
+        if not should_normalize_styles(responses):
+            return stage1_results, total_usage
+        # Proceed with normalization (auto-triggered)
+    elif not STYLE_NORMALIZATION:
         return stage1_results, total_usage
+    # else: STYLE_NORMALIZATION is True, always normalize
 
     normalized_results = []
 

@@ -33,6 +33,7 @@ DEFAULT_SYNTHESIS_MODE = "consensus"
 DEFAULT_EXCLUDE_SELF_VOTES = True
 
 # Whether to normalize response styles before peer review (Stage 1.5)
+# Options: False (never), True (always), "auto" (when variance detected)
 DEFAULT_STYLE_NORMALIZATION = False
 
 # Model to use for style normalization (fast/cheap model recommended)
@@ -100,11 +101,16 @@ EXCLUDE_SELF_VOTES = (
 )
 
 # Style normalization - priority: env var > config file > defaults
+# Supports: false (never), true (always), auto (adaptive detection)
 _style_norm_env = os.getenv("LLM_COUNCIL_STYLE_NORMALIZATION")
-STYLE_NORMALIZATION = (
-    _style_norm_env.lower() in ('true', '1', 'yes') if _style_norm_env else
-    _user_config.get("style_normalization", DEFAULT_STYLE_NORMALIZATION)
-)
+if _style_norm_env:
+    _style_norm_env_lower = _style_norm_env.lower()
+    if _style_norm_env_lower == "auto":
+        STYLE_NORMALIZATION = "auto"
+    else:
+        STYLE_NORMALIZATION = _style_norm_env_lower in ('true', '1', 'yes')
+else:
+    STYLE_NORMALIZATION = _user_config.get("style_normalization", DEFAULT_STYLE_NORMALIZATION)
 
 # Normalizer model - priority: env var > config file > defaults
 NORMALIZER_MODEL = (
