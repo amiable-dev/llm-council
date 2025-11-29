@@ -2,6 +2,7 @@
 
 import html
 import random
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional
 from llm_council_mcp.openrouter import query_models_parallel, query_model
 from llm_council_mcp.config import (
@@ -13,6 +14,7 @@ from llm_council_mcp.config import (
     NORMALIZER_MODEL,
     MAX_REVIEWERS,
 )
+from llm_council_mcp.telemetry import get_telemetry
 
 
 
@@ -687,5 +689,32 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     # Add degraded mode info if applicable
     if degraded_mode:
         metadata["degraded_mode"] = degraded_mode
+
+    # Emit telemetry event (non-blocking, fire-and-forget)
+    telemetry = get_telemetry()
+    if telemetry.is_enabled():
+        telemetry_event = {
+            "type": "council_completed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "council_size": len(COUNCIL_MODELS),
+            "responses_received": num_responses,
+            "synthesis_mode": SYNTHESIS_MODE,
+            "rankings": [
+                {
+                    "model": r["model"],
+                    "borda_score": r.get("borda_score"),
+                    "vote_count": r.get("vote_count", 0)
+                }
+                for r in aggregate_rankings
+            ],
+            "config": {
+                "exclude_self_votes": EXCLUDE_SELF_VOTES,
+                "style_normalization": STYLE_NORMALIZATION,
+                "max_reviewers": MAX_REVIEWERS
+            }
+        }
+        # Fire-and-forget - don't await to avoid blocking response
+        import asyncio
+        asyncio.create_task(telemetry.send_event(telemetry_event))
 
     return stage1_results, stage2_results, stage3_result, metadata
