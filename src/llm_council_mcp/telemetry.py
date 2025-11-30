@@ -150,3 +150,31 @@ def reset_telemetry() -> None:
     """
     global _telemetry
     _telemetry = NoOpTelemetry()
+
+
+def _auto_init_telemetry() -> None:
+    """Auto-initialize telemetry based on configuration.
+
+    Called during module import to set up telemetry if enabled in config.
+    This is a no-op if telemetry is disabled (the default).
+    """
+    try:
+        from llm_council_mcp.config import TELEMETRY_ENABLED, TELEMETRY_LEVEL, TELEMETRY_ENDPOINT
+
+        if TELEMETRY_ENABLED:
+            from llm_council_mcp.telemetry_client import HttpTelemetry
+            client = HttpTelemetry(
+                endpoint=TELEMETRY_ENDPOINT,
+                level=TELEMETRY_LEVEL,
+            )
+            set_telemetry(client)
+    except ImportError:
+        # Config or client not available, use default NoOp
+        pass
+    except Exception:
+        # Any other error, fail silently and use NoOp
+        pass
+
+
+# Auto-initialize on module load
+_auto_init_telemetry()

@@ -148,3 +148,35 @@ CACHE_DIR = (
     Path(_cache_dir_env) if _cache_dir_env else
     Path(_user_config.get("cache_dir", DEFAULT_CACHE_DIR))
 )
+
+# =============================================================================
+# Telemetry Configuration (ADR-001)
+# =============================================================================
+# Opt-in telemetry for contributing anonymized voting data to the LLM Leaderboard.
+# Privacy-first: disabled by default, no query text transmitted at basic levels.
+#
+# Levels:
+#   off      - No telemetry (default)
+#   anonymous - Basic voting data (rankings, durations, model counts)
+#   debug    - + query_hash for troubleshooting (no actual query content)
+#
+# Example: export LLM_COUNCIL_TELEMETRY=anonymous
+
+DEFAULT_TELEMETRY_LEVEL = "off"
+DEFAULT_TELEMETRY_ENDPOINT = "https://ingest.llmcouncil.ai/v1/events"
+
+# Parse telemetry level from environment
+_telemetry_env = os.getenv("LLM_COUNCIL_TELEMETRY", "").lower().strip()
+TELEMETRY_LEVEL = _telemetry_env if _telemetry_env in ("off", "anonymous", "debug") else (
+    _user_config.get("telemetry_level", DEFAULT_TELEMETRY_LEVEL)
+)
+
+# Telemetry enabled if level is not "off"
+TELEMETRY_ENABLED = TELEMETRY_LEVEL != "off"
+
+# Telemetry endpoint - can be overridden for self-hosted installations
+TELEMETRY_ENDPOINT = (
+    os.getenv("LLM_COUNCIL_TELEMETRY_ENDPOINT") or
+    _user_config.get("telemetry_endpoint") or
+    DEFAULT_TELEMETRY_ENDPOINT
+)
