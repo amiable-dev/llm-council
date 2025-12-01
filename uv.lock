@@ -453,7 +453,7 @@ wheels = [
 ]
 
 [[package]]
-name = "llm-council"
+name = "llm-council-core"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
