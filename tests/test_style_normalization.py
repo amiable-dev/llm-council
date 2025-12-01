@@ -1,7 +1,7 @@
 """Tests for adaptive style normalization."""
 
 import pytest
-from llm_council_mcp.council import should_normalize_styles
+from llm_council.council import should_normalize_styles
 
 
 class TestShouldNormalizeStyles:

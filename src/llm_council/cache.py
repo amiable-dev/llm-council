@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 
-from llm_council_mcp.config import (
+from llm_council.config import (
     CACHE_ENABLED,
     CACHE_TTL,
     CACHE_DIR,

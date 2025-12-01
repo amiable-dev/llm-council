@@ -1,11 +1,11 @@
 """Basic tests for council orchestration."""
 import pytest
-from llm_council_mcp.council import parse_ranking_from_text, calculate_aggregate_rankings
+from llm_council.council import parse_ranking_from_text, calculate_aggregate_rankings
 
 
 def test_council_imports():
     """Test that council module can be imported."""
-    from llm_council_mcp import council
+    from llm_council import council
     assert hasattr(council, 'run_full_council')
     assert hasattr(council, 'stage1_collect_responses')
     assert hasattr(council, 'stage2_collect_rankings')
@@ -14,7 +14,7 @@ def test_council_imports():
 
 def test_parse_ranking_from_text():
     """Test ranking parser function."""
-    from llm_council_mcp.council import parse_ranking_from_text
+    from llm_council.council import parse_ranking_from_text
     
     test_text = """
     Some analysis here...
@@ -33,7 +33,7 @@ def test_parse_ranking_from_text():
 
 def test_calculate_aggregate_rankings():
     """Test aggregate ranking calculation."""
-    from llm_council_mcp.council import calculate_aggregate_rankings
+    from llm_council.council import calculate_aggregate_rankings
     
     stage2_results = [
         {
@@ -260,7 +260,7 @@ def test_borda_count_excludes_abstentions():
 
 def test_detect_score_rank_mismatch():
     """Test detection of score/rank mismatches."""
-    from llm_council_mcp.council import detect_score_rank_mismatch
+    from llm_council.council import detect_score_rank_mismatch
 
     # Case 1: No mismatch - scores match ranking order
     ranking = ["Response A", "Response B", "Response C"]

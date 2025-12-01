@@ -1,7 +1,7 @@
 """Tests for telemetry module."""
 
 import pytest
-from llm_council_mcp.telemetry import (
+from llm_council.telemetry import (
     TelemetryProtocol,
     NoOpTelemetry,
     get_telemetry,

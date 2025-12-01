@@ -17,7 +17,7 @@ class TestTelemetryConfig:
         with patch.dict(os.environ, {}, clear=True):
             # Need to reload config to pick up env changes
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENABLED is False
@@ -27,7 +27,7 @@ class TestTelemetryConfig:
         """LLM_COUNCIL_TELEMETRY=off should disable telemetry."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "off"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENABLED is False
@@ -37,7 +37,7 @@ class TestTelemetryConfig:
         """LLM_COUNCIL_TELEMETRY=anonymous should enable basic telemetry."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENABLED is True
@@ -47,7 +47,7 @@ class TestTelemetryConfig:
         """LLM_COUNCIL_TELEMETRY=debug should enable debug telemetry."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "debug"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENABLED is True
@@ -57,7 +57,7 @@ class TestTelemetryConfig:
         """Telemetry level should be case-insensitive."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "ANONYMOUS"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENABLED is True
@@ -67,7 +67,7 @@ class TestTelemetryConfig:
         """Default telemetry endpoint should be set."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENDPOINT is not None
@@ -81,7 +81,7 @@ class TestTelemetryConfig:
             "LLM_COUNCIL_TELEMETRY_ENDPOINT": custom_endpoint
         }):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             assert config.TELEMETRY_ENDPOINT == custom_endpoint
@@ -92,8 +92,8 @@ class TestHttpTelemetryClient:
 
     def test_client_implements_protocol(self):
         """HttpTelemetry should implement TelemetryProtocol."""
-        from llm_council_mcp.telemetry import TelemetryProtocol
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry import TelemetryProtocol
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(endpoint="https://example.com/events", level="anonymous")
 
@@ -101,7 +101,7 @@ class TestHttpTelemetryClient:
 
     def test_client_disabled_when_level_off(self):
         """Client should report disabled when level is off."""
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(endpoint="https://example.com/events", level="off")
 
@@ -109,7 +109,7 @@ class TestHttpTelemetryClient:
 
     def test_client_enabled_when_level_anonymous(self):
         """Client should report enabled when level is anonymous."""
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(endpoint="https://example.com/events", level="anonymous")
 
@@ -118,7 +118,7 @@ class TestHttpTelemetryClient:
     @pytest.mark.asyncio
     async def test_send_event_does_nothing_when_disabled(self):
         """send_event should be a no-op when disabled."""
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(endpoint="https://example.com/events", level="off")
 
@@ -128,7 +128,7 @@ class TestHttpTelemetryClient:
     @pytest.mark.asyncio
     async def test_send_event_posts_to_endpoint(self):
         """send_event should POST to the configured endpoint."""
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(
             endpoint="https://example.com/events",
@@ -155,7 +155,7 @@ class TestHttpTelemetryClient:
 
     def test_filter_strips_query_text_at_anonymous_level(self):
         """Anonymous level should strip query_text and query_hash."""
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(endpoint="https://example.com/events", level="anonymous")
 
@@ -174,7 +174,7 @@ class TestHttpTelemetryClient:
 
     def test_filter_keeps_query_hash_at_debug_level(self):
         """Debug level should keep query_hash but strip query_text."""
-        from llm_council_mcp.telemetry_client import HttpTelemetry
+        from llm_council.telemetry_client import HttpTelemetry
 
         client = HttpTelemetry(endpoint="https://example.com/events", level="debug")
 
@@ -199,11 +199,11 @@ class TestTelemetryAutoInit:
         """Telemetry should be auto-initialized when config enables it."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             # Reload telemetry to trigger auto-init with new config
-            from llm_council_mcp import telemetry
+            from llm_council import telemetry
             importlib.reload(telemetry)
 
             assert telemetry.get_telemetry().is_enabled() is True
@@ -212,11 +212,11 @@ class TestTelemetryAutoInit:
         """Telemetry should be NoOp when config disables it."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "off"}):
             import importlib
-            from llm_council_mcp import config
+            from llm_council import config
             importlib.reload(config)
 
             # Reload telemetry to trigger auto-init with new config
-            from llm_council_mcp import telemetry
+            from llm_council import telemetry
             importlib.reload(telemetry)
 
             assert telemetry.get_telemetry().is_enabled() is False

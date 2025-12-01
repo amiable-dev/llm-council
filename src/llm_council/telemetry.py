@@ -14,11 +14,11 @@ Privacy Notice:
 - No raw queries, responses, or personally identifiable information
 
 Usage (default - no telemetry):
-    from llm_council_mcp.telemetry import get_telemetry
+    from llm_council.telemetry import get_telemetry
     telemetry = get_telemetry()  # Returns NoOpTelemetry
 
 Usage (with custom implementation):
-    from llm_council_mcp.telemetry import set_telemetry
+    from llm_council.telemetry import set_telemetry
 
     class MyTelemetry:
         def is_enabled(self) -> bool: return True
@@ -126,7 +126,7 @@ def set_telemetry(impl: TelemetryProtocol) -> None:
         TypeError: If impl doesn't satisfy TelemetryProtocol.
 
     Example:
-        from llm_council_mcp.telemetry import set_telemetry
+        from llm_council.telemetry import set_telemetry
         from my_telemetry import MyTelemetryClient
 
         client = MyTelemetryClient(endpoint="https://...")
@@ -159,10 +159,10 @@ def _auto_init_telemetry() -> None:
     This is a no-op if telemetry is disabled (the default).
     """
     try:
-        from llm_council_mcp.config import TELEMETRY_ENABLED, TELEMETRY_LEVEL, TELEMETRY_ENDPOINT
+        from llm_council.config import TELEMETRY_ENABLED, TELEMETRY_LEVEL, TELEMETRY_ENDPOINT
 
         if TELEMETRY_ENABLED:
-            from llm_council_mcp.telemetry_client import HttpTelemetry
+            from llm_council.telemetry_client import HttpTelemetry
             client = HttpTelemetry(
                 endpoint=TELEMETRY_ENDPOINT,
                 level=TELEMETRY_LEVEL,

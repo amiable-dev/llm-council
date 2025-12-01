@@ -1,18 +1,18 @@
 [project]
-name = "llm-council-mcp"
+name = "llm-council"
 dynamic = ["version"]
-description = "MCP server that consults multiple LLMs and provides synthesized guidance"
+description = "Multi-LLM council system with peer review and synthesis"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Amiable" }]
 maintainers = [{ email = "contact@amiable.dev" }]
 keywords = [
-    "mcp",
     "llm",
     "ai",
     "openrouter",
-    "model-context-protocol",
+    "council",
+    "multi-model",
     "claude",
     "gpt",
     "gemini",
@@ -30,19 +30,22 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-dependencies = ["python-dotenv>=1.0.0", "httpx>=0.27.0", "mcp>=1.22.0"]
+# Core dependencies - minimal for library usage
+dependencies = ["python-dotenv>=1.0.0", "httpx>=0.27.0"]
 
 [project.optional-dependencies]
+# MCP server dependencies - install with: pip install "llm-council[mcp]"
+mcp = ["mcp>=1.22.0"]
 dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0", "ruff>=0.1.0"]
 
 [project.urls]
-Homepage = "https://github.com/amiable-dev/llm-council-mcp"
-Repository = "https://github.com/amiable-dev/llm-council-mcp"
-Issues = "https://github.com/amiable-dev/llm-council-mcp/issues"
-Documentation = "https://github.com/amiable-dev/llm-council-mcp#readme"
+Homepage = "https://github.com/amiable-dev/llm-council"
+Repository = "https://github.com/amiable-dev/llm-council"
+Issues = "https://github.com/amiable-dev/llm-council/issues"
+Documentation = "https://github.com/amiable-dev/llm-council#readme"
 
 [project.scripts]
-llm-council = "llm_council_mcp.mcp_server:main"
+llm-council = "llm_council.cli:main"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
@@ -52,10 +55,10 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/llm_council_mcp/_version.py"
+version-file = "src/llm_council/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm_council_mcp"]
+packages = ["src/llm_council"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

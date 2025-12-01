@@ -73,7 +73,7 @@ jobs:
           pip install -e .
 
       - name: Run type checker
-        run: mypy src/llm_council_mcp --ignore-missing-imports || echo "Type checking warnings (non-blocking)"
+        run: mypy src/llm_council --ignore-missing-imports || echo "Type checking warnings (non-blocking)"
 
   # Trigger smoke tests in the proprietary council-cloud repo
   # This ensures OSS changes don't break the cloud integration

@@ -5,7 +5,7 @@ produces better responses than individual models. Critical for ensuring
 leaderboard data quality (prevent "Garbage In, Garbage Out").
 
 Usage:
-    from llm_council_mcp.evaluation import run_benchmark, load_test_dataset
+    from llm_council.evaluation import run_benchmark, load_test_dataset
 
     # Run full benchmark
     results = await run_benchmark("tests/data/benchmark.json")
@@ -180,9 +180,9 @@ async def run_benchmark(
     Returns:
         List of BenchmarkResult for each question
     """
-    from llm_council_mcp.council import run_full_council
-    from llm_council_mcp.openrouter import query_model
-    from llm_council_mcp.config import COUNCIL_MODELS
+    from llm_council.council import run_full_council
+    from llm_council.openrouter import query_model
+    from llm_council.config import COUNCIL_MODELS
 
     if models is None:
         models = COUNCIL_MODELS

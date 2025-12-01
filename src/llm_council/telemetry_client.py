@@ -9,8 +9,8 @@ Privacy Notice (ADR-001):
 - DEBUG level: + query_hash for troubleshooting (no actual query text)
 
 Usage:
-    from llm_council_mcp.telemetry_client import HttpTelemetry
-    from llm_council_mcp.telemetry import set_telemetry
+    from llm_council.telemetry_client import HttpTelemetry
+    from llm_council.telemetry import set_telemetry
 
     client = HttpTelemetry(
         endpoint="https://ingest.llmcouncil.ai/v1/events",
@@ -216,7 +216,7 @@ def create_telemetry_client(
     Returns:
         Configured HttpTelemetry instance
     """
-    from llm_council_mcp.config import TELEMETRY_ENDPOINT
+    from llm_council.config import TELEMETRY_ENDPOINT
 
     return HttpTelemetry(
         endpoint=endpoint or TELEMETRY_ENDPOINT,

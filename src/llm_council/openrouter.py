@@ -3,7 +3,7 @@
 import httpx
 import asyncio
 from typing import List, Dict, Any, Optional
-from llm_council_mcp.config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+from llm_council.config import OPENROUTER_API_KEY, OPENROUTER_API_URL
 
 
 async def query_model(

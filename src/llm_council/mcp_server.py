@@ -1,6 +1,6 @@
 """LLM Council MCP Server - consult multiple LLMs and get synthesized guidance."""
 from mcp.server.fastmcp import FastMCP
-from llm_council_mcp.council import run_full_council
+from llm_council.council import run_full_council
 
 
 

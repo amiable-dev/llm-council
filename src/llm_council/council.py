@@ -4,8 +4,8 @@ import html
 import random
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional
-from llm_council_mcp.openrouter import query_models_parallel, query_model
-from llm_council_mcp.config import (
+from llm_council.openrouter import query_models_parallel, query_model
+from llm_council.config import (
     COUNCIL_MODELS,
     CHAIRMAN_MODEL,
     SYNTHESIS_MODE,
@@ -15,8 +15,8 @@ from llm_council_mcp.config import (
     MAX_REVIEWERS,
     CACHE_ENABLED,
 )
-from llm_council_mcp.telemetry import get_telemetry
-from llm_council_mcp.cache import get_cache_key, get_cached_response, save_to_cache
+from llm_council.telemetry import get_telemetry
+from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
 
 
 

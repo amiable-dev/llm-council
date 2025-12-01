@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from llm_council_mcp.cache import (
+from llm_council.cache import (
     get_cache_key,
     get_cached_response,
     save_to_cache,
@@ -40,10 +40,10 @@ class TestGetCacheKey:
 
     def test_config_affects_key(self):
         """Different config produces different key."""
-        with patch("llm_council_mcp.cache.COUNCIL_MODELS", ["model-a", "model-b"]):
+        with patch("llm_council.cache.COUNCIL_MODELS", ["model-a", "model-b"]):
             key1 = get_cache_key("Test query")
 
-        with patch("llm_council_mcp.cache.COUNCIL_MODELS", ["model-c", "model-d"]):
+        with patch("llm_council.cache.COUNCIL_MODELS", ["model-c", "model-d"]):
             key2 = get_cache_key("Test query")
 
         assert key1 != key2
@@ -57,9 +57,9 @@ class TestCacheOperations:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
-                    with patch("llm_council_mcp.cache.CACHE_TTL", 0):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
+                    with patch("llm_council.cache.CACHE_TTL", 0):
                         cache_key = "test123456789abc"
 
                         stage1 = [{"model": "test", "response": "Hello"}]
@@ -81,14 +81,14 @@ class TestCacheOperations:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
                     cached = get_cached_response("nonexistent12345")
                     assert cached is None
 
     def test_cache_disabled(self):
         """Return None when caching is disabled."""
-        with patch("llm_council_mcp.cache.CACHE_ENABLED", False):
+        with patch("llm_council.cache.CACHE_ENABLED", False):
             cached = get_cached_response("anykey123456789")
             assert cached is None
 
@@ -97,10 +97,10 @@ class TestCacheOperations:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
                     # Save with TTL = 0 (infinite)
-                    with patch("llm_council_mcp.cache.CACHE_TTL", 0):
+                    with patch("llm_council.cache.CACHE_TTL", 0):
                         cache_key = "ttltest123456789"
                         save_to_cache(cache_key, [], [], {}, {})
 
@@ -113,7 +113,7 @@ class TestCacheOperations:
                         json.dump(data, f)
 
                     # Now check with TTL = 60 (entry should be expired)
-                    with patch("llm_council_mcp.cache.CACHE_TTL", 60):
+                    with patch("llm_council.cache.CACHE_TTL", 60):
                         cached = get_cached_response(cache_key)
                         assert cached is None
 
@@ -122,9 +122,9 @@ class TestCacheOperations:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
-                    with patch("llm_council_mcp.cache.CACHE_TTL", 0):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
+                    with patch("llm_council.cache.CACHE_TTL", 0):
                         cache_key = "infinitettl12345"
                         save_to_cache(cache_key, [], [], {}, {})
 
@@ -149,9 +149,9 @@ class TestCacheManagement:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
-                    with patch("llm_council_mcp.cache.CACHE_TTL", 0):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
+                    with patch("llm_council.cache.CACHE_TTL", 0):
                         # Add some cache entries
                         save_to_cache("key1_123456789ab", [], [], {}, {})
                         save_to_cache("key2_123456789ab", [], [], {}, {})
@@ -168,9 +168,9 @@ class TestCacheManagement:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
-                    with patch("llm_council_mcp.cache.CACHE_TTL", 3600):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
+                    with patch("llm_council.cache.CACHE_TTL", 3600):
                         save_to_cache("stats_test123456", [], [], {}, {})
 
                         stats = get_cache_stats()
@@ -187,8 +187,8 @@ class TestCacheManagement:
         with tempfile.TemporaryDirectory() as tmpdir:
             cache_dir = Path(tmpdir)
 
-            with patch("llm_council_mcp.cache.CACHE_ENABLED", True):
-                with patch("llm_council_mcp.cache.CACHE_DIR", cache_dir):
+            with patch("llm_council.cache.CACHE_ENABLED", True):
+                with patch("llm_council.cache.CACHE_DIR", cache_dir):
                     stats = get_cache_stats()
 
                     assert stats["entries"] == 0

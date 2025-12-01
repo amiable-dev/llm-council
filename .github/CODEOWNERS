@@ -1,4 +1,4 @@
-# CODEOWNERS for llm-council-mcp
+# CODEOWNERS for llm-council
 # This file ensures proper review of sensitive code areas to prevent
 # accidental IP leakage and maintain code quality.
 
@@ -6,13 +6,13 @@
 * @amiable-dev/maintainers
 
 # Telemetry module (protocol interface) - critical for OSS/proprietary boundary
-src/llm_council_mcp/telemetry.py @amiable-dev/maintainers
+src/llm_council/telemetry.py @amiable-dev/maintainers
 
 # Core council logic - changes affect both OSS and cloud implementations
-src/llm_council_mcp/council.py @amiable-dev/maintainers
+src/llm_council/council.py @amiable-dev/maintainers
 
 # Configuration - model lists and settings
-src/llm_council_mcp/config.py @amiable-dev/maintainers
+src/llm_council/config.py @amiable-dev/maintainers
 
 # CI/CD workflows - security critical
 .github/ @amiable-dev/maintainers

@@ -5,7 +5,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from llm_council_mcp.evaluation import (
+from llm_council.evaluation import (
     evaluate_response,
     load_test_dataset,
     calculate_aggregate_stats,
