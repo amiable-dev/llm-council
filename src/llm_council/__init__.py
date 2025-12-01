@@ -36,6 +36,7 @@ from llm_council.telemetry import (
     set_telemetry,
     reset_telemetry,
 )
+from llm_council._version import __version__, __version_tuple__
 
 __all__ = [
     # Core orchestration
@@ -58,4 +59,7 @@ __all__ = [
     "get_telemetry",
     "set_telemetry",
     "reset_telemetry",
+    # Version
+    "__version__",
+    "__version_tuple__",
 ]
