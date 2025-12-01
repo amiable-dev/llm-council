@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2024-12-01
+
+### Changed
+
+- **Package Renamed**: PyPI package renamed from `llm-council` to `llm-council-core`
+  - Import remains `llm_council` (no code changes needed)
+  - CLI command remains `llm-council`
+  - Install: `pip install llm-council-core[mcp]`
+
+### Added
+
+- **Version Export**: `__version__` and `__version_tuple__` now exported from package root
+  - Enables version checking: `from llm_council import __version__`
+
 ## [0.3.0] - 2024-11-29
 
 ### Added
