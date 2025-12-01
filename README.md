@@ -1,9 +1,9 @@
-# LLM Council MCP Server
+# LLM Council Core
 
-[![PyPI version](https://badge.fury.io/py/llm-council-mcp.svg)](https://pypi.org/project/llm-council-mcp/)
+[![PyPI version](https://badge.fury.io/py/llm-council-core.svg)](https://pypi.org/project/llm-council-core/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that allows AI assistants to consult a council of multiple LLMs and receive synthesized guidance.
+A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.
 
 ## What is This?
 
@@ -15,7 +15,12 @@ Instead of asking a single LLM for answers, this MCP server:
 ## Installation
 
 ```bash
-pip install llm-council-mcp
+pip install llm-council-core[mcp]
+```
+
+For core library only (no MCP server):
+```bash
+pip install llm-council-core
 ```
 
 ## Setup

@@ -1,5 +1,5 @@
 [project]
-name = "llm-council"
+name = "llm-council-core"
 dynamic = ["version"]
 description = "Multi-LLM council system with peer review and synthesis"
 readme = "README.md"
@@ -34,12 +34,12 @@ classifiers = [
 dependencies = ["python-dotenv>=1.0.0", "httpx>=0.27.0"]
 
 [project.optional-dependencies]
-# HTTP server dependencies - install with: pip install "llm-council[http]"
+# HTTP server dependencies - install with: pip install "llm-council-core[http]"
 http = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
-# MCP server dependencies - install with: pip install "llm-council[mcp]"
+# MCP server dependencies - install with: pip install "llm-council-core[mcp]"
 mcp = ["mcp>=1.22.0"]
 # All server dependencies
-all = ["llm-council[http,mcp]"]
+all = ["llm-council-core[http,mcp]"]
 # Development dependencies
 dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0", "ruff>=0.1.0", "pytest-cov>=4.0.0"]
 
