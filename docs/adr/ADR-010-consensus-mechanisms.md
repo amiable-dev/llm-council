@@ -1,9 +1,9 @@
-# ADR-010: Alternative Consensus Mechanisms
+# ADR-010: Consensus Mechanism - Normalized Score Averaging
 
-**Status:** Proposed
+**Status:** Proposed (Revised)
 **Date:** 2024-12-12
-**Deciders:** LLM Council (Unanimous)
-**Technical Story:** Evaluate and select improved ranking aggregation algorithms beyond Borda Count
+**Deciders:** LLM Council (Unanimous on revision)
+**Technical Story:** Select the optimal ranking aggregation for 3-5 LLM reviewers
 
 ## Context and Problem Statement
 
@@ -13,19 +13,35 @@ The council currently uses **Normalized Borda Count** to aggregate peer rankings
 - Self-votes excluded to prevent bias
 - Average Borda score determines final ranking
 
-While Borda is simple and interpretable, it has known limitations:
-1. **Treats all rank distances equally** (1st vs 2nd same as 9th vs 10th)
-2. **Not Condorcet-consistent** (may not select the pairwise majority winner)
-3. **Vulnerable to strategic voting** (burying strong competitors)
-4. **Doesn't capture "closeness"** well for close decisions
+**Critical insight:** We also collect 1-10 scores from each reviewer, but currently discard this data by converting to ranks.
+
+### The Real Problems (Not Theoretical Voting Issues)
+
+| Problem | Description |
+|---------|-------------|
+| **LLM biases** | Models prefer verbose responses, familiar styles |
+| **Score calibration** | GPT scores harshly (avg 6), Claude generously (avg 8) |
+| **Small sample size** | 3-5 voters means high statistical noise |
+| **Close decisions** | Need to know when top responses are effectively tied |
+
+### Why Ranks Are Wrong
+
+Converting scores to ranks **deletes information**:
+
+```
+Scenario A: Scores [10, 9.9, 2] → Ranks [1, 2, 3]
+Scenario B: Scores [6, 3, 1]   → Ranks [1, 2, 3]
+```
+
+In Scenario A, the top two are effectively tied. In Scenario B, there's a clear winner. Rank-based methods (Borda, Schulze) treat these identically.
 
 ## Decision Drivers
 
-* **Computational complexity**: Must work in real-time (3-10 models, sub-second)
-* **Robustness**: Resistant to strategic voting and model biases
-* **Tie handling**: Graceful handling of ties and abstentions
-* **Interpretability**: Users should understand why a response won
-* **Close decisions**: Better signal when top responses are nearly equivalent
+* **Simplicity**: Minimize implementation and maintenance cost
+* **Use available data**: We already collect scores - use them
+* **Handle calibration**: Different LLMs score differently
+* **Detect ties**: Know when decisions are too close to call
+* **Solve actual problems**: LLM biases, not strategic voting
 
 ## Considered Options
 
@@ -160,127 +176,185 @@ Combine ordinal ranking with cardinal score magnitude.
 
 ## Decision Outcome
 
-**Chosen: Tiered Architecture**
+**Chosen: Normalized Score Averaging**
 
-Based on council consensus, implement a layered approach:
+After critical re-evaluation, the council **unanimously rejected** the complex tiered architecture (Schulze + Bradley-Terry + Buckets) as "engineering theater" - solving theoretical problems we don't have while ignoring our actual challenges.
 
-1. **Primary Ranker: Schulze Method**
-   - Best theoretical properties for small N
-   - Condorcet-consistent, clone-proof
-   - Replaces Borda as the core ranking algorithm
+### Why Complex Voting Methods Are Wrong Here
 
-2. **Uncertainty Layer: Bradley-Terry (Optional)**
-   - Quantifies confidence in rankings
-   - Outputs "Response A has 70% probability of being best"
-   - Helps chairman know when to hedge
+| Method | What It Solves | Why It's Irrelevant |
+|--------|---------------|---------------------|
+| **Schulze** | Strategic voting, clone attacks | LLMs don't strategize |
+| **Bradley-Terry** | Uncertainty from limited pairwise data | We have full scores already |
+| **Condorcet methods** | Rock-paper-scissors cycles | Quality is transitive in LLM evals |
 
-3. **Presentation Layer: Bucket Consensus**
-   - Convert Schulze ranking to tiers for users
-   - Top 20% = Excellent, next 30% = Good, etc.
-   - Matches how LLMs naturally think about quality
+With 3-5 voters, Schulze is **more sensitive to noise** than Borda, not less. A single outlier can flip pairwise majorities unpredictably.
 
-4. **Fallback: Borda Count**
-   - Keep existing implementation as fallback
-   - Use when Schulze produces unexpected results
+### The Recommended Mechanism
 
-### Rationale
-
-The council unanimously recommended this architecture because:
-
-1. **Schulze is proven** for small voter counts and resistant to manipulation
-2. **Bradley-Terry addresses the "closeness" concern** by providing probabilistic margins
-3. **Buckets improve UX** by avoiding artificial precision in rankings
-4. **Borda remains available** for comparison and graceful degradation
-
-## Implementation
-
-### Schulze Algorithm
+**Normalized Score Averaging with Confidence-Based Tie Detection**
 
 ```python
-def schulze_ranking(pairwise_matrix: list[list[int]]) -> list[int]:
+import numpy as np
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict, List, Tuple
+
+@dataclass
+class AggregateResult:
+    model: str
+    mean_score: float      # Normalized mean (z-score scale)
+    std_error: float       # Standard error of mean
+    vote_count: int
+    is_tied_with_next: bool = False
+
+def aggregate_scores(
+    scores_by_reviewer: Dict[str, Dict[str, float]],
+    exclude_self_votes: bool = True
+) -> List[AggregateResult]:
     """
-    Compute Schulze ranking from pairwise preference matrix.
+    Aggregate reviewer scores using z-score normalization.
 
     Args:
-        pairwise_matrix[i][j] = times response i ranked above j
+        scores_by_reviewer: {reviewer_model: {candidate_model: score}}
+        exclude_self_votes: Whether to exclude self-evaluations
 
     Returns:
-        Indices sorted by Schulze ranking (best first)
+        List of results sorted by mean score (best first)
     """
-    n = len(pairwise_matrix)
+    # Step 1: Z-normalize per reviewer (fixes calibration bias)
+    normalized = {}
+    for reviewer, scores in scores_by_reviewer.items():
+        # Exclude self-vote if configured
+        if exclude_self_votes:
+            scores = {k: v for k, v in scores.items() if k != reviewer}
 
-    # Initialize direct strengths
-    strength = [[0] * n for _ in range(n)]
-    for i in range(n):
-        for j in range(n):
-            if i != j and pairwise_matrix[i][j] > pairwise_matrix[j][i]:
-                strength[i][j] = pairwise_matrix[i][j]
+        if not scores:
+            continue
 
-    # Floyd-Warshall for strongest paths
-    for k in range(n):
-        for i in range(n):
-            for j in range(n):
-                if i != j:
-                    strength[i][j] = max(
-                        strength[i][j],
-                        min(strength[i][k], strength[k][j])
-                    )
+        values = list(scores.values())
+        mean = np.mean(values)
+        std = np.std(values)
 
-    # Rank by wins in strength comparison
-    wins = [
-        sum(1 for j in range(n) if strength[i][j] > strength[j][i])
-        for i in range(n)
-    ]
+        # Fallback if no variance (all same score)
+        if std < 0.001:
+            normalized[reviewer] = {k: 0.0 for k in scores}
+        else:
+            normalized[reviewer] = {
+                k: (v - mean) / std for k, v in scores.items()
+            }
 
-    return sorted(range(n), key=lambda i: -wins[i])
+    # Step 2: Aggregate normalized scores per candidate
+    candidate_scores = defaultdict(list)
+    for reviewer, scores in normalized.items():
+        for candidate, score in scores.items():
+            candidate_scores[candidate].append(score)
+
+    # Step 3: Calculate mean, standard error, and rank
+    results = []
+    for candidate, scores in candidate_scores.items():
+        n = len(scores)
+        mean = np.mean(scores)
+        std_error = np.std(scores) / np.sqrt(n) if n > 1 else 0
+
+        results.append(AggregateResult(
+            model=candidate,
+            mean_score=round(mean, 3),
+            std_error=round(std_error, 3),
+            vote_count=n
+        ))
+
+    # Sort by mean score (highest first)
+    results.sort(key=lambda x: -x.mean_score)
+
+    # Step 4: Flag statistical ties (overlapping 95% confidence intervals)
+    for i in range(len(results) - 1):
+        curr, next_ = results[i], results[i + 1]
+        # 95% CI uses ~1.96 * std_error
+        curr_lower = curr.mean_score - 1.96 * curr.std_error
+        next_upper = next_.mean_score + 1.96 * next_.std_error
+
+        if curr_lower < next_upper:
+            results[i].is_tied_with_next = True
+
+    return results
 ```
+
+### How This Solves Our Actual Problems
+
+| Problem | Solution |
+|---------|----------|
+| **Score calibration** | Z-normalization: harsh reviewer (avg 6) and generous reviewer (avg 8) both center to 0 |
+| **LLM biases** | Normalization spreads preferences; biases become noise that averages out |
+| **Small sample size** | Standard error tells you when N is too small to decide |
+| **Close decisions** | Overlapping confidence intervals explicitly flag ties |
 
 ### Configuration
 
 ```python
 # config.py additions
-DEFAULT_RANKING_METHOD = "schulze"  # "borda", "schulze", "hybrid"
-DEFAULT_SHOW_CONFIDENCE = False     # Enable Bradley-Terry confidence
-DEFAULT_BUCKET_TIERS = ["Excellent", "Good", "Acceptable", "Poor"]
+DEFAULT_RANKING_METHOD = "normalized_scores"  # "borda", "normalized_scores"
+DEFAULT_TIE_THRESHOLD = 1.96  # Z-score for 95% confidence interval
+DEFAULT_FALLBACK_TO_BORDA = True  # Use Borda as tiebreaker
+```
+
+### Example Output
+
+```json
+{
+  "rankings": [
+    {"model": "gpt-4o", "mean_score": 0.82, "std_error": 0.15, "tied": false},
+    {"model": "claude-opus", "mean_score": 0.45, "std_error": 0.22, "tied": true},
+    {"model": "gemini-pro", "mean_score": 0.31, "std_error": 0.18, "tied": false}
+  ],
+  "interpretation": "gpt-4o is the clear winner. claude-opus and gemini-pro are statistically tied."
+}
 ```
 
 ### Migration Path
 
-1. **Phase 1**: Implement Schulze alongside Borda, run in shadow mode
-2. **Phase 2**: Compare rankings, validate Schulze produces sensible results
-3. **Phase 3**: Switch default to Schulze, keep Borda as option
-4. **Phase 4**: Add Bradley-Terry confidence intervals (optional feature)
-5. **Phase 5**: Add bucket presentation to UI
+1. **Phase 1**: Collect scores alongside ranks (already done)
+2. **Phase 2**: Implement normalized score averaging in parallel with Borda
+3. **Phase 3**: Compare results, validate on historical data
+4. **Phase 4**: Switch default to normalized scores
+5. **Phase 5**: Keep Borda as optional tiebreaker
+
+### What to Invest In Instead
+
+The council recommends spending the "complexity budget" saved from not implementing Schulze on:
+
+1. **Better prompts**: Explicitly instruct reviewers to "penalize unnecessary verbosity"
+2. **Bias audits**: Track correlation between scores and response length
+3. **Rubrics**: Score on specific criteria (accuracy, conciseness, helpfulness) not holistic vibes
+4. **Response order randomization**: Mitigate positional bias
 
 ## Consequences
 
 ### Positive
-- More robust rankings resistant to strategic voting
-- Better identification of Condorcet winners
-- Quantified confidence for close decisions
-- Clearer user presentation via tiers
+- **Simpler**: ~30 lines vs. hundreds for Schulze
+- **Uses all data**: Scores contain magnitude information ranks discard
+- **Built-in confidence**: Know when decisions are uncertain
+- **Interpretable**: "Model A scored 0.8σ above mean" is clear
+- **Handles calibration**: Z-scores fix harsh/generous reviewers automatically
 
 ### Negative
-- Slightly more complex than Borda
-- Schulze internals harder to explain
-- Additional testing needed for edge cases
+- Requires scores (we already have them)
+- Z-scores can be unstable with very low variance (handled by fallback)
 
 ### Risks
-- Schulze and Borda may produce different winners (monitor during rollout)
-- Bradley-Terry adds computational overhead (keep optional)
+- If all reviewers give identical scores, z-normalization fails → fallback to Borda
+- Systematic biases (all LLMs prefer verbosity) still need prompt engineering to fix
 
 ## Complexity Comparison
 
-| Method | Time Complexity | Space | Real-time N=10? |
-|--------|-----------------|-------|-----------------|
-| Borda | O(NR) | O(N) | Yes |
-| Copeland | O(N²R) | O(N²) | Yes |
-| Schulze | O(N³) | O(N²) | Yes (~1ms) |
-| Kemeny-Young | O(N!) | O(N!) | Marginal |
-| Bradley-Terry | O(N² × iter) | O(N) | Yes (~10ms) |
+| Method | Implementation | Solves Calibration? | Detects Ties? | Uses Score Magnitude? |
+|--------|---------------|---------------------|---------------|----------------------|
+| Borda | Simple | No | Poorly | No |
+| Schulze | Complex | No | No | No |
+| **Normalized Scores** | Simple | **Yes** | **Yes** | **Yes** |
 
 ## References
 
 - [ADR-007: Council Scoring Methodology](./ADR-007-scoring-methodology.md)
-- [Schulze Method Wikipedia](https://en.wikipedia.org/wiki/Schulze_method)
-- [Social Choice Theory - Condorcet Methods](https://plato.stanford.edu/entries/voting-methods/)
+- [Inter-rater reliability and z-score normalization](https://en.wikipedia.org/wiki/Standard_score)
+- [Why Condorcet methods fail for small electorates](https://plato.stanford.edu/entries/voting-methods/)
