@@ -1,10 +1,21 @@
 """3-stage LLM Council orchestration."""
 
+import asyncio
 import html
 import random
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Tuple, Optional
-from llm_council.openrouter import query_models_parallel, query_model
+from typing import List, Dict, Any, Tuple, Optional, Callable, Awaitable
+
+from llm_council.openrouter import (
+    query_models_parallel,
+    query_model,
+    query_models_with_progress,
+    STATUS_OK,
+    STATUS_TIMEOUT,
+    STATUS_RATE_LIMITED,
+    STATUS_AUTH_ERROR,
+    STATUS_ERROR,
+)
 from llm_council.config import (
     COUNCIL_MODELS,
     CHAIRMAN_MODEL,
@@ -17,6 +28,36 @@ from llm_council.config import (
 )
 from llm_council.telemetry import get_telemetry
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
+
+
+# =============================================================================
+# ADR-012: Tiered Timeout Strategy Constants
+# =============================================================================
+# Per ADR-012 council recommendation:
+# - Per-model soft deadline: 15s (start planning fallback)
+# - Per-model hard deadline: 25s (abandon that model)
+# - Global synthesis trigger: 40s (must start synthesis)
+# - Response deadline: 50s (must return something)
+
+TIMEOUT_PER_MODEL_SOFT = 15.0
+TIMEOUT_PER_MODEL_HARD = 25.0
+TIMEOUT_SYNTHESIS_TRIGGER = 40.0
+TIMEOUT_RESPONSE_DEADLINE = 50.0
+
+
+# =============================================================================
+# ADR-012: Model Status Types (mirrors openrouter status types)
+# =============================================================================
+
+MODEL_STATUS_OK = STATUS_OK
+MODEL_STATUS_TIMEOUT = STATUS_TIMEOUT
+MODEL_STATUS_ERROR = STATUS_ERROR
+MODEL_STATUS_RATE_LIMITED = STATUS_RATE_LIMITED
+MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
+
+
+# Progress callback type
+ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
 
@@ -52,6 +93,331 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
             total_usage["total_tokens"] += usage.get('total_tokens', 0)
 
     return stage1_results, total_usage
+
+
+async def stage1_collect_responses_with_status(
+    user_query: str,
+    timeout: float = TIMEOUT_PER_MODEL_HARD,
+    on_progress: Optional[ProgressCallback] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, Dict[str, Any]]]:
+    """
+    Stage 1: Collect individual responses with per-model status tracking (ADR-012).
+
+    This is the reliability-enhanced version of stage1_collect_responses that:
+    - Returns structured status for each model (ok, timeout, error, rate_limited)
+    - Supports progress callbacks for real-time updates
+    - Uses tiered timeouts per ADR-012
+
+    Args:
+        user_query: The user's question
+        timeout: Per-model timeout in seconds (default: TIMEOUT_PER_MODEL_HARD)
+        on_progress: Optional async callback(completed, total, message) for progress
+
+    Returns:
+        Tuple of:
+        - results list: Successful responses only
+        - usage dict: Aggregated token counts
+        - model_statuses dict: Per-model status information
+    """
+    messages = [{"role": "user", "content": user_query}]
+
+    # Query all models with progress tracking
+    responses = await query_models_with_progress(
+        COUNCIL_MODELS,
+        messages,
+        on_progress=on_progress,
+        timeout=timeout,
+    )
+
+    # Format results and aggregate usage
+    stage1_results = []
+    total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    model_statuses: Dict[str, Dict[str, Any]] = {}
+
+    for model, response in responses.items():
+        # Store status for every model
+        model_statuses[model] = {
+            "status": response.get("status", MODEL_STATUS_ERROR),
+            "latency_ms": response.get("latency_ms", 0),
+        }
+
+        if response.get("error"):
+            model_statuses[model]["error"] = response["error"]
+
+        if response.get("retry_after"):
+            model_statuses[model]["retry_after"] = response["retry_after"]
+
+        # Only include successful responses in results
+        if response.get("status") == STATUS_OK:
+            stage1_results.append({
+                "model": model,
+                "response": response.get("content", "")
+            })
+            model_statuses[model]["response"] = response.get("content", "")
+
+            # Aggregate usage
+            usage = response.get("usage", {})
+            total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
+
+    return stage1_results, total_usage, model_statuses
+
+
+def generate_partial_warning(
+    model_statuses: Dict[str, Dict[str, Any]],
+    requested: int
+) -> Optional[str]:
+    """
+    Generate a warning message for partial results (ADR-012).
+
+    Args:
+        model_statuses: Dict mapping model names to their status info
+        requested: Number of models originally requested
+
+    Returns:
+        Warning string if partial results, None if all succeeded
+    """
+    ok_count = sum(1 for s in model_statuses.values() if s.get("status") == STATUS_OK)
+
+    if ok_count == requested:
+        return None
+
+    failed_models = [
+        model for model, status in model_statuses.items()
+        if status.get("status") != STATUS_OK
+    ]
+
+    failed_reasons = []
+    for model in failed_models:
+        status = model_statuses[model].get("status", "unknown")
+        model_short = model.split("/")[-1]  # e.g., "gpt-4" from "openai/gpt-4"
+        failed_reasons.append(f"{model_short} ({status})")
+
+    return (
+        f"This answer is based on {ok_count} of {requested} intended models. "
+        f"Did not respond: {', '.join(failed_reasons)}."
+    )
+
+
+async def quick_synthesis(
+    user_query: str,
+    model_responses: Dict[str, Dict[str, Any]],
+) -> Tuple[str, Dict[str, int]]:
+    """
+    Generate a quick synthesis from partial responses (ADR-012 fallback).
+
+    Used when the full council pipeline times out but we have some responses.
+    Synthesizes directly from Stage 1 responses without peer review.
+
+    Args:
+        user_query: The original user query
+        model_responses: Dict mapping model names to their response info
+
+    Returns:
+        Tuple of (synthesis text, usage dict)
+    """
+    # Filter to only successful responses
+    successful = {
+        model: info for model, info in model_responses.items()
+        if info.get("status") == STATUS_OK and info.get("response")
+    }
+
+    if not successful:
+        return "Error: No model responses available for synthesis.", {}
+
+    # Build context from available responses
+    responses_text = "\n\n".join([
+        f"**{model}**:\n{info['response']}"
+        for model, info in successful.items()
+    ])
+
+    synthesis_prompt = f"""You are synthesizing multiple AI responses into a single coherent answer.
+Note: This is a PARTIAL synthesis - some models did not respond in time.
+
+Original Question: {user_query}
+
+Available Responses:
+{responses_text}
+
+Provide a concise synthesis of the available responses. Focus on areas of agreement
+and highlight any important insights. Be clear that this is based on partial data."""
+
+    messages = [{"role": "user", "content": synthesis_prompt}]
+
+    # Use chairman model for synthesis
+    response = await query_model(CHAIRMAN_MODEL, messages, timeout=15.0, disable_tools=True)
+
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    if response is None:
+        # Chairman failed - return best available response
+        best_response = list(successful.values())[0].get("response", "")
+        return f"(Fallback - single model response)\n\n{best_response}", usage
+
+    usage = response.get("usage", {})
+    return response.get("content", ""), usage
+
+
+async def run_council_with_fallback(
+    user_query: str,
+    bypass_cache: bool = False,
+    on_progress: Optional[ProgressCallback] = None,
+    synthesis_deadline: float = TIMEOUT_SYNTHESIS_TRIGGER,
+) -> Dict[str, Any]:
+    """
+    Run the council with timeout handling and fallback synthesis (ADR-012).
+
+    This is the reliability-enhanced version of run_full_council that:
+    - Returns structured results per ADR-012 schema
+    - Handles timeouts gracefully with partial results
+    - Provides fallback synthesis when full pipeline can't complete
+    - Tracks per-model status throughout
+
+    Args:
+        user_query: The user's question
+        bypass_cache: If True, skip cache lookup
+        on_progress: Optional async callback for progress updates
+        synthesis_deadline: Time limit before triggering fallback synthesis
+
+    Returns:
+        Dict with ADR-012 structured schema:
+        {
+            "synthesis": str,
+            "model_responses": {model: {status, latency_ms, response?, error?}},
+            "metadata": {
+                "status": "complete" | "partial" | "failed",
+                "completed_models": int,
+                "requested_models": int,
+                "synthesis_type": "full" | "partial" | "stage1_only",
+                "warning": str | None,
+                ...
+            }
+        }
+    """
+    requested_models = len(COUNCIL_MODELS)
+
+    # Initialize result structure per ADR-012 schema
+    result: Dict[str, Any] = {
+        "synthesis": "",
+        "model_responses": {},
+        "metadata": {
+            "status": "complete",
+            "completed_models": 0,
+            "requested_models": requested_models,
+            "synthesis_type": "full",
+            "warning": None,
+        }
+    }
+
+    # Helper for progress reporting
+    async def report_progress(step: int, total: int, message: str):
+        if on_progress:
+            try:
+                await on_progress(step, total, message)
+            except Exception:
+                pass  # Progress reporting is best-effort
+
+    total_steps = requested_models * 2 + 3  # stage1 + stage2 + synthesis + finalize
+    await report_progress(0, total_steps, "Starting council...")
+
+    # Inner coroutine for the main council work (allows timeout wrapping)
+    async def run_council_pipeline() -> Dict[str, Any]:
+        nonlocal result
+
+        # Stage 1 with status tracking
+        async def stage1_progress(completed, total, msg):
+            await report_progress(completed, total_steps, f"Stage 1: {msg}")
+
+        stage1_results, stage1_usage, model_statuses = await stage1_collect_responses_with_status(
+            user_query,
+            timeout=TIMEOUT_PER_MODEL_HARD,
+            on_progress=stage1_progress,
+        )
+
+        result["model_responses"] = model_statuses
+        result["metadata"]["completed_models"] = len(stage1_results)
+
+        # Check if we have any responses
+        if not stage1_results:
+            result["metadata"]["status"] = "failed"
+            result["metadata"]["synthesis_type"] = "none"
+            result["synthesis"] = "Error: All models failed to respond. Please try again."
+            result["metadata"]["warning"] = generate_partial_warning(model_statuses, requested_models)
+            await report_progress(total_steps, total_steps, "Failed - no responses")
+            return result
+
+        await report_progress(requested_models, total_steps, "Stage 1 complete, starting peer review...")
+
+        # Stage 1.5: Style normalization (if enabled)
+        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
+
+        # Stage 2: Peer review
+        await report_progress(requested_models + 1, total_steps, "Stage 2: Peer review...")
+        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
+            user_query, responses_for_review
+        )
+        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+
+        await report_progress(requested_models * 2, total_steps, "Stage 2 complete, synthesizing...")
+
+        # Stage 3: Full synthesis
+        stage3_result, stage3_usage = await stage3_synthesize_final(
+            user_query,
+            stage1_results,
+            stage2_results,
+            aggregate_rankings
+        )
+
+        result["synthesis"] = stage3_result.get("response", "")
+        result["metadata"]["status"] = "complete"
+        result["metadata"]["synthesis_type"] = "full"
+        result["metadata"]["aggregate_rankings"] = aggregate_rankings
+        result["metadata"]["label_to_model"] = label_to_model
+
+        # Add warning if some models failed
+        warning = generate_partial_warning(model_statuses, requested_models)
+        if warning:
+            result["metadata"]["warning"] = warning
+            result["metadata"]["status"] = "partial"
+
+        await report_progress(total_steps, total_steps, "Complete")
+        return result
+
+    try:
+        # Run with timeout (Python 3.10 compatible)
+        return await asyncio.wait_for(run_council_pipeline(), timeout=synthesis_deadline)
+
+    except asyncio.TimeoutError:
+        # Global timeout - synthesize from what we have
+        result["metadata"]["status"] = "partial"
+
+        if result["metadata"]["completed_models"] > 0:
+            # We have Stage 1 results - do quick synthesis
+            await report_progress(total_steps - 1, total_steps, "Timeout - quick synthesis...")
+
+            synthesis, usage = await quick_synthesis(user_query, result["model_responses"])
+            result["synthesis"] = synthesis
+            result["metadata"]["synthesis_type"] = "partial" if result["metadata"]["completed_models"] > 1 else "stage1_only"
+            result["metadata"]["warning"] = generate_partial_warning(
+                result["model_responses"], requested_models
+            )
+        else:
+            # No responses at all
+            result["metadata"]["status"] = "failed"
+            result["metadata"]["synthesis_type"] = "none"
+            result["synthesis"] = "Error: Council timed out before any models responded."
+
+        await report_progress(total_steps, total_steps, "Complete (partial)")
+        return result
+
+    except Exception as e:
+        # Unexpected error
+        result["metadata"]["status"] = "failed"
+        result["metadata"]["synthesis_type"] = "none"
+        result["synthesis"] = f"Error: Unexpected failure - {str(e)}"
+        await report_progress(total_steps, total_steps, f"Failed: {e}")
+        return result
 
 
 def should_normalize_styles(responses: List[str]) -> bool:

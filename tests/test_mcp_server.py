@@ -45,14 +45,25 @@ async def test_consult_council_tool():
     """Test that consult_council tool is properly defined."""
     from llm_council.mcp_server import consult_council
 
-    # Mock the run_full_council function
-    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
-    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
-    mock_stage3 = {"model": "chairman", "response": "Synthesized response"}
-    mock_metadata = {"label_to_model": {}, "aggregate_rankings": []}
+    # Mock the run_council_with_fallback function (ADR-012 structured response)
+    mock_result = {
+        "synthesis": "Synthesized response",
+        "model_responses": {
+            "test-model": {"status": "ok", "latency_ms": 1000, "response": "Test response"}
+        },
+        "metadata": {
+            "status": "complete",
+            "completed_models": 1,
+            "requested_models": 1,
+            "synthesis_type": "full",
+            "warning": None,
+            "label_to_model": {},
+            "aggregate_rankings": []
+        }
+    }
 
-    with patch('llm_council.mcp_server.run_full_council') as mock_council:
-        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+        mock_council.return_value = mock_result
 
         result = await consult_council("test query", include_details=False)
 
@@ -65,18 +76,30 @@ async def test_consult_council_with_details():
     """Test consult_council with include_details=True."""
     from llm_council.mcp_server import consult_council
 
-    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
-    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
-    mock_stage3 = {"model": "chairman", "response": "Synthesized response"}
-    mock_metadata = {"label_to_model": {}, "aggregate_rankings": []}
+    mock_result = {
+        "synthesis": "Synthesized response",
+        "model_responses": {
+            "test-model": {"status": "ok", "latency_ms": 1000, "response": "Test response"}
+        },
+        "metadata": {
+            "status": "complete",
+            "completed_models": 1,
+            "requested_models": 1,
+            "synthesis_type": "full",
+            "warning": None,
+            "label_to_model": {"Response A": "test-model"},
+            "aggregate_rankings": []
+        }
+    }
 
-    with patch('llm_council.mcp_server.run_full_council') as mock_council:
-        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+        mock_council.return_value = mock_result
 
         result = await consult_council("test query", include_details=True)
 
         assert "### Chairman's Synthesis" in result
         assert "### Council Details" in result
+        assert "Model Status" in result
         assert "Stage 1: Individual Opinions" in result
         assert "Stage 2: Peer Review" in result
 
@@ -86,13 +109,21 @@ async def test_consult_council_with_confidence_level():
     """Test consult_council with confidence level parameter (ADR-012)."""
     from llm_council.mcp_server import consult_council
 
-    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
-    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
-    mock_stage3 = {"model": "chairman", "response": "Quick response"}
-    mock_metadata = {"label_to_model": {}, "aggregate_rankings": []}
+    mock_result = {
+        "synthesis": "Quick response",
+        "model_responses": {"test-model": {"status": "ok", "latency_ms": 500}},
+        "metadata": {
+            "status": "complete",
+            "completed_models": 1,
+            "requested_models": 1,
+            "synthesis_type": "full",
+            "warning": None,
+            "aggregate_rankings": []
+        }
+    }
 
-    with patch('llm_council.mcp_server.run_full_council') as mock_council:
-        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+        mock_council.return_value = mock_result
 
         # Test with "quick" confidence
         result = await consult_council("test query", confidence="quick")
@@ -104,19 +135,25 @@ async def test_consult_council_with_rankings_metadata():
     """Test consult_council includes aggregate rankings in output."""
     from llm_council.mcp_server import consult_council
 
-    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
-    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
-    mock_stage3 = {"model": "chairman", "response": "Synthesized response"}
-    mock_metadata = {
-        "label_to_model": {},
-        "aggregate_rankings": [
-            {"model": "openai/gpt-4", "borda_score": 0.85, "rank": 1},
-            {"model": "anthropic/claude", "borda_score": 0.75, "rank": 2},
-        ]
+    mock_result = {
+        "synthesis": "Synthesized response",
+        "model_responses": {},
+        "metadata": {
+            "status": "complete",
+            "completed_models": 2,
+            "requested_models": 2,
+            "synthesis_type": "full",
+            "warning": None,
+            "label_to_model": {},
+            "aggregate_rankings": [
+                {"model": "openai/gpt-4", "borda_score": 0.85, "rank": 1},
+                {"model": "anthropic/claude", "borda_score": 0.75, "rank": 2},
+            ]
+        }
     }
 
-    with patch('llm_council.mcp_server.run_full_council') as mock_council:
-        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+        mock_council.return_value = mock_result
 
         result = await consult_council("test query")
 
@@ -206,20 +243,66 @@ async def test_consult_council_with_context_progress():
     """Test that consult_council calls progress reporting when context is provided."""
     from llm_council.mcp_server import consult_council
 
-    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
-    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
-    mock_stage3 = {"model": "chairman", "response": "Synthesized response"}
-    mock_metadata = {"label_to_model": {}, "aggregate_rankings": []}
+    mock_result = {
+        "synthesis": "Synthesized response",
+        "model_responses": {"test-model": {"status": "ok", "latency_ms": 1000}},
+        "metadata": {
+            "status": "complete",
+            "completed_models": 1,
+            "requested_models": 1,
+            "synthesis_type": "full",
+            "warning": None,
+            "label_to_model": {},
+            "aggregate_rankings": []
+        }
+    }
 
     # Create a mock context with report_progress method
     mock_ctx = MagicMock()
     mock_ctx.report_progress = AsyncMock()
 
-    with patch('llm_council.mcp_server.run_full_council') as mock_council:
-        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+    # Mock run_council_with_fallback to call the on_progress callback
+    async def mock_council_fn(query, on_progress=None, synthesis_deadline=None):
+        if on_progress:
+            await on_progress(0, 5, "Starting...")
+            await on_progress(5, 5, "Complete")
+        return mock_result
 
+    with patch('llm_council.mcp_server.run_council_with_fallback', side_effect=mock_council_fn):
         result = await consult_council("test query", ctx=mock_ctx)
 
         # Verify progress was reported (at least start and end)
         assert mock_ctx.report_progress.called
         assert mock_ctx.report_progress.call_count >= 2
+
+
+@pytest.mark.asyncio
+async def test_consult_council_shows_warning_on_partial():
+    """Test that consult_council shows warning when partial results returned (ADR-012)."""
+    from llm_council.mcp_server import consult_council
+
+    mock_result = {
+        "synthesis": "Partial synthesis",
+        "model_responses": {
+            "model-a": {"status": "ok", "latency_ms": 1000},
+            "model-b": {"status": "timeout", "latency_ms": 25000, "error": "Timeout"},
+        },
+        "metadata": {
+            "status": "partial",
+            "completed_models": 1,
+            "requested_models": 2,
+            "synthesis_type": "partial",
+            "warning": "This answer is based on 1 of 2 intended models. Did not respond: model-b (timeout).",
+            "aggregate_rankings": []
+        }
+    }
+
+    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+        mock_council.return_value = mock_result
+
+        result = await consult_council("test query")
+
+        assert "Partial synthesis" in result
+        assert "Note" in result
+        assert "1 of 2" in result
+        assert "partial" in result.lower()

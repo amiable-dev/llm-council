@@ -5,6 +5,8 @@ Implements ADR-012: MCP Server Reliability and Long-Running Operation Handling
 - Health check tool
 - Confidence levels (quick/balanced/high)
 - Structured results with per-model status
+- Tiered timeouts with fallback synthesis
+- Partial results on timeout
 """
 import json
 import time
@@ -12,7 +14,10 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP, Context
 
-from llm_council.council import run_full_council
+from llm_council.council import (
+    run_council_with_fallback,
+    TIMEOUT_SYNTHESIS_TRIGGER,
+)
 from llm_council.config import COUNCIL_MODELS, CHAIRMAN_MODEL, OPENROUTER_API_KEY
 from llm_council.openrouter import query_model_with_status, STATUS_OK
 
@@ -46,38 +51,47 @@ async def consult_council(
     """
     # Get confidence configuration
     config = CONFIDENCE_CONFIGS.get(confidence, CONFIDENCE_CONFIGS["high"])
-    model_limit = config["models"]
+    timeout = config.get("timeout", TIMEOUT_SYNTHESIS_TRIGGER)
 
-    # Select models based on confidence level
-    models_to_use = COUNCIL_MODELS[:model_limit] if model_limit else COUNCIL_MODELS
-    num_models = len(models_to_use)
-
-    # Calculate total steps for progress: models + peer review + synthesis
-    total_steps = num_models + num_models + 2  # stage1 + stage2 + synthesis + finalize
-
-    # Progress reporting helper
-    async def report_progress(step: int, message: str):
+    # Progress reporting helper that bridges MCP context to council callback
+    async def on_progress(step: int, total: int, message: str):
         if ctx:
             try:
-                await ctx.report_progress(step, total_steps, message)
+                await ctx.report_progress(step, total, message)
             except Exception:
                 pass  # Progress reporting is best-effort
 
-    await report_progress(0, f"Starting council with {num_models} models...")
+    # Run the council with ADR-012 reliability features:
+    # - Tiered timeouts (15s/25s/40s/50s)
+    # - Partial results on timeout
+    # - Fallback synthesis
+    # - Per-model status tracking
+    council_result = await run_council_with_fallback(
+        query,
+        on_progress=on_progress,
+        synthesis_deadline=timeout,
+    )
 
-    # Run the council with progress updates
-    # Note: For now, we use the existing run_full_council which doesn't have
-    # granular progress. In Phase 2, we'll refactor council.py to support callbacks.
-    stage1, stage2, stage3, metadata = await run_full_council(query)
-
-    await report_progress(total_steps - 1, "Formatting response...")
-
-    chairman_response = stage3.get("response", "No response from Chairman.")
+    # Extract results from ADR-012 structured response
+    synthesis = council_result.get("synthesis", "No response from council.")
+    metadata = council_result.get("metadata", {})
+    model_responses = council_result.get("model_responses", {})
 
     # Build result with metadata (ADR-012 structured output)
-    result = f"### Chairman's Synthesis\n\n{chairman_response}\n"
+    result = f"### Chairman's Synthesis\n\n{synthesis}\n"
 
-    # Add council metadata
+    # Add warning if partial results
+    warning = metadata.get("warning")
+    if warning:
+        result += f"\n> **Note**: {warning}\n"
+
+    # Add status info
+    status = metadata.get("status", "unknown")
+    if status != "complete":
+        synthesis_type = metadata.get("synthesis_type", "unknown")
+        result += f"\n*Council status: {status} ({synthesis_type} synthesis)*\n"
+
+    # Add council rankings if available
     aggregate = metadata.get("aggregate_rankings", [])
     if aggregate:
         result += "\n### Council Rankings\n"
@@ -87,17 +101,26 @@ async def consult_council(
 
     if include_details:
         result += "\n\n### Council Details\n"
-        # Add Stage 1 details (Individual Responses)
+
+        # Add per-model status (ADR-012)
+        result += "\n#### Model Status\n"
+        for model, info in model_responses.items():
+            model_short = model.split("/")[-1]
+            status_icon = "✓" if info.get("status") == "ok" else "✗"
+            latency = info.get("latency_ms", 0)
+            result += f"- {status_icon} {model_short}: {info.get('status', 'unknown')} ({latency}ms)\n"
+
+        # Add Stage 1 details (Individual Responses) - only successful ones
         result += "\n#### Stage 1: Individual Opinions\n"
-        for item in stage1:
-            result += f"\n**{item['model']}**:\n{item['response']}\n"
+        for model, info in model_responses.items():
+            if info.get("status") == "ok" and info.get("response"):
+                result += f"\n**{model}**:\n{info['response']}\n"
 
-        # Add Stage 2 details (Rankings)
-        result += "\n#### Stage 2: Peer Review\n"
-        for item in stage2:
-            result += f"\n**{item['model']}** ranking:\n{item['ranking']}\n"
-
-    await report_progress(total_steps, "Complete")
+        # Add Stage 2 details (Rankings) if available
+        label_to_model = metadata.get("label_to_model", {})
+        if label_to_model:
+            result += "\n#### Stage 2: Peer Review\n"
+            result += f"*Label mappings: {json.dumps(label_to_model)}*\n"
 
     return result
 

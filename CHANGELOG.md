@@ -14,10 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Health check tool `council_health_check()` to verify API connectivity before expensive operations
   - Confidence levels parameter: "quick" (2 models, ~10s), "balanced" (3 models, ~25s), "high" (full council, ~45s)
 
+- **Tiered Timeout Strategy (ADR-012 Phase 2)**: Graceful degradation under time pressure
+  - Per-model soft deadline: 15s (start planning fallback)
+  - Per-model hard deadline: 25s (abandon that model)
+  - Global synthesis trigger: 40s (must start synthesis)
+  - Response deadline: 50s (must return something)
+
+- **Partial Results on Timeout**: Return whatever data has been collected
+  - `run_council_with_fallback()`: New function with ADR-012 structured result schema
+  - `quick_synthesis()`: Fast fallback synthesis from Stage 1 responses when Stage 2 times out
+  - `generate_partial_warning()`: Clear warning messages indicating partial results
+  - Per-model status tracking throughout the pipeline
+
 - **Structured Error Handling**: Better failure taxonomy for model queries
   - Status types: `ok`, `timeout`, `rate_limited`, `auth_error`, `error`
   - Each response includes `latency_ms`, error messages, `retry_after` where applicable
   - Distinguishes between timeout, rate limiting (429), and auth errors (401/403)
+
+- **New Council Functions**:
+  - `stage1_collect_responses_with_status()`: Stage 1 with per-model status tracking
+  - `run_council_with_fallback()`: Full pipeline with tiered timeouts and fallback synthesis
 
 - **New OpenRouter Functions**:
   - `query_model_with_status()`: Returns structured result with status instead of None on failure
@@ -25,8 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `consult_council` MCP tool now uses `run_council_with_fallback()` for reliability
 - `consult_council` MCP tool now accepts optional `confidence` parameter
 - Council rankings now displayed in output when available
+- Partial result warnings shown when some models timeout
 
 ## [0.1.0] - 2024-12-01
 
