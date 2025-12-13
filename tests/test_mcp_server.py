@@ -3,7 +3,8 @@
 These tests require the optional [mcp] dependencies.
 Install with: pip install "llm-council[mcp]"
 """
-from unittest.mock import AsyncMock, patch
+import json
+from unittest.mock import AsyncMock, patch, MagicMock
 import pytest
 
 # Skip all tests in this module if MCP is not installed
@@ -15,6 +16,7 @@ def test_mcp_server_imports():
     from llm_council import mcp_server
     assert hasattr(mcp_server, 'mcp')
     assert hasattr(mcp_server, 'consult_council')
+    assert hasattr(mcp_server, 'council_health_check')
     assert hasattr(mcp_server, 'main')
 
 
@@ -22,6 +24,20 @@ def test_main_entry_point_exists():
     """Test that main() entry point is defined."""
     from llm_council.mcp_server import main
     assert callable(main)
+
+
+def test_confidence_configs_defined():
+    """Test that confidence level configurations are defined (ADR-012)."""
+    from llm_council.mcp_server import CONFIDENCE_CONFIGS
+
+    assert "quick" in CONFIDENCE_CONFIGS
+    assert "balanced" in CONFIDENCE_CONFIGS
+    assert "high" in CONFIDENCE_CONFIGS
+
+    # Quick should have fewer models
+    assert CONFIDENCE_CONFIGS["quick"]["models"] == 2
+    assert CONFIDENCE_CONFIGS["balanced"]["models"] == 3
+    assert CONFIDENCE_CONFIGS["high"]["models"] is None  # Use all
 
 
 @pytest.mark.asyncio
@@ -63,3 +79,147 @@ async def test_consult_council_with_details():
         assert "### Council Details" in result
         assert "Stage 1: Individual Opinions" in result
         assert "Stage 2: Peer Review" in result
+
+
+@pytest.mark.asyncio
+async def test_consult_council_with_confidence_level():
+    """Test consult_council with confidence level parameter (ADR-012)."""
+    from llm_council.mcp_server import consult_council
+
+    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
+    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
+    mock_stage3 = {"model": "chairman", "response": "Quick response"}
+    mock_metadata = {"label_to_model": {}, "aggregate_rankings": []}
+
+    with patch('llm_council.mcp_server.run_full_council') as mock_council:
+        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+
+        # Test with "quick" confidence
+        result = await consult_council("test query", confidence="quick")
+        assert "Quick response" in result
+
+
+@pytest.mark.asyncio
+async def test_consult_council_with_rankings_metadata():
+    """Test consult_council includes aggregate rankings in output."""
+    from llm_council.mcp_server import consult_council
+
+    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
+    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
+    mock_stage3 = {"model": "chairman", "response": "Synthesized response"}
+    mock_metadata = {
+        "label_to_model": {},
+        "aggregate_rankings": [
+            {"model": "openai/gpt-4", "borda_score": 0.85, "rank": 1},
+            {"model": "anthropic/claude", "borda_score": 0.75, "rank": 2},
+        ]
+    }
+
+    with patch('llm_council.mcp_server.run_full_council') as mock_council:
+        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+
+        result = await consult_council("test query")
+
+        assert "### Council Rankings" in result
+        assert "openai/gpt-4" in result
+        assert "0.85" in result
+
+
+@pytest.mark.asyncio
+async def test_council_health_check_no_api_key():
+    """Test health check when API key is not configured."""
+    from llm_council.mcp_server import council_health_check
+
+    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', None):
+        result = await council_health_check()
+        data = json.loads(result)
+
+        assert data["api_key_configured"] is False
+        assert data["ready"] is False
+        assert "not configured" in data["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_council_health_check_success():
+    """Test health check with successful API connectivity."""
+    from llm_council.mcp_server import council_health_check
+    from llm_council.openrouter import STATUS_OK
+
+    mock_response = {
+        "status": STATUS_OK,
+        "content": "pong",
+        "latency_ms": 150,
+    }
+
+    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', 'test-key'), \
+         patch('llm_council.mcp_server.query_model_with_status', return_value=mock_response):
+
+        result = await council_health_check()
+        data = json.loads(result)
+
+        assert data["api_key_configured"] is True
+        assert data["ready"] is True
+        assert "api_connectivity" in data
+        assert data["api_connectivity"]["status"] == STATUS_OK
+
+
+@pytest.mark.asyncio
+async def test_council_health_check_api_error():
+    """Test health check when API returns an error."""
+    from llm_council.mcp_server import council_health_check
+    from llm_council.openrouter import STATUS_AUTH_ERROR
+
+    mock_response = {
+        "status": STATUS_AUTH_ERROR,
+        "error": "Invalid API key",
+        "latency_ms": 50,
+    }
+
+    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', 'invalid-key'), \
+         patch('llm_council.mcp_server.query_model_with_status', return_value=mock_response):
+
+        result = await council_health_check()
+        data = json.loads(result)
+
+        assert data["api_key_configured"] is True
+        assert data["ready"] is False
+        assert "connectivity issue" in data["message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_council_health_check_includes_estimates():
+    """Test health check includes duration estimates (ADR-012)."""
+    from llm_council.mcp_server import council_health_check
+
+    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', None):
+        result = await council_health_check()
+        data = json.loads(result)
+
+        assert "estimated_duration" in data
+        assert "quick" in data["estimated_duration"]
+        assert "balanced" in data["estimated_duration"]
+        assert "high" in data["estimated_duration"]
+
+
+@pytest.mark.asyncio
+async def test_consult_council_with_context_progress():
+    """Test that consult_council calls progress reporting when context is provided."""
+    from llm_council.mcp_server import consult_council
+
+    mock_stage1 = [{"model": "test-model", "response": "Test response"}]
+    mock_stage2 = [{"model": "test-model", "ranking": "Test ranking", "parsed_ranking": []}]
+    mock_stage3 = {"model": "chairman", "response": "Synthesized response"}
+    mock_metadata = {"label_to_model": {}, "aggregate_rankings": []}
+
+    # Create a mock context with report_progress method
+    mock_ctx = MagicMock()
+    mock_ctx.report_progress = AsyncMock()
+
+    with patch('llm_council.mcp_server.run_full_council') as mock_council:
+        mock_council.return_value = (mock_stage1, mock_stage2, mock_stage3, mock_metadata)
+
+        result = await consult_council("test query", ctx=mock_ctx)
+
+        # Verify progress was reported (at least start and end)
+        assert mock_ctx.report_progress.called
+        assert mock_ctx.report_progress.call_count >= 2

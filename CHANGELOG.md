@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-13
+
+### Added
+
+- **MCP Server Reliability (ADR-012)**: Comprehensive improvements for long-running operations
+  - Progress notifications via `ctx.report_progress()` during council execution
+  - Health check tool `council_health_check()` to verify API connectivity before expensive operations
+  - Confidence levels parameter: "quick" (2 models, ~10s), "balanced" (3 models, ~25s), "high" (full council, ~45s)
+
+- **Structured Error Handling**: Better failure taxonomy for model queries
+  - Status types: `ok`, `timeout`, `rate_limited`, `auth_error`, `error`
+  - Each response includes `latency_ms`, error messages, `retry_after` where applicable
+  - Distinguishes between timeout, rate limiting (429), and auth errors (401/403)
+
+- **New OpenRouter Functions**:
+  - `query_model_with_status()`: Returns structured result with status instead of None on failure
+  - `query_models_with_progress()`: Parallel queries with real-time progress callbacks
+
+### Changed
+
+- `consult_council` MCP tool now accepts optional `confidence` parameter
+- Council rankings now displayed in output when available
+
 ## [0.1.0] - 2024-12-01
 
 ### Changed

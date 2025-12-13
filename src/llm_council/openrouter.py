@@ -2,8 +2,17 @@
 
 import httpx
 import asyncio
-from typing import List, Dict, Any, Optional
+import time
+from typing import List, Dict, Any, Optional, Callable, Awaitable
 from llm_council.config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+
+
+# Status constants for structured results (ADR-012)
+STATUS_OK = "ok"
+STATUS_TIMEOUT = "timeout"
+STATUS_RATE_LIMITED = "rate_limited"
+STATUS_AUTH_ERROR = "auth_error"
+STATUS_ERROR = "error"
 
 
 async def query_model(
@@ -24,6 +33,34 @@ async def query_model(
     Returns:
         Response dict with 'content', optional 'reasoning_details', and 'usage', or None if failed
     """
+    result = await query_model_with_status(model, messages, timeout, disable_tools)
+    if result["status"] == STATUS_OK:
+        return {
+            "content": result.get("content"),
+            "reasoning_details": result.get("reasoning_details"),
+            "usage": result.get("usage", {}),
+        }
+    return None
+
+
+async def query_model_with_status(
+    model: str,
+    messages: List[Dict[str, str]],
+    timeout: float = 120.0,
+    disable_tools: bool = False
+) -> Dict[str, Any]:
+    """
+    Query a single model via OpenRouter API with structured status (ADR-012).
+
+    Args:
+        model: OpenRouter model identifier (e.g., "openai/gpt-4o")
+        messages: List of message dicts with 'role' and 'content'
+        timeout: Request timeout in seconds
+        disable_tools: If True, explicitly disable tool/function calling
+
+    Returns:
+        Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
+    """
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -39,6 +76,8 @@ async def query_model(
         payload["tools"] = []
         payload["tool_choice"] = "none"
 
+    start_time = time.time()
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
@@ -46,6 +85,25 @@ async def query_model(
                 headers=headers,
                 json=payload
             )
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            # Handle specific HTTP status codes (ADR-012 failure taxonomy)
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After", "60")
+                return {
+                    "status": STATUS_RATE_LIMITED,
+                    "latency_ms": latency_ms,
+                    "error": f"Rate limited by {model}",
+                    "retry_after": int(retry_after) if retry_after.isdigit() else 60,
+                }
+
+            if response.status_code in (401, 403):
+                return {
+                    "status": STATUS_AUTH_ERROR,
+                    "latency_ms": latency_ms,
+                    "error": f"Authentication failed for {model}: {response.status_code}",
+                }
+
             response.raise_for_status()
 
             data = response.json()
@@ -53,24 +111,40 @@ async def query_model(
             usage = data.get('usage', {})
 
             return {
-                'content': message.get('content'),
-                'reasoning_details': message.get('reasoning_details'),
-                'usage': {
+                "status": STATUS_OK,
+                "content": message.get('content'),
+                "reasoning_details": message.get('reasoning_details'),
+                "latency_ms": latency_ms,
+                "usage": {
                     'prompt_tokens': usage.get('prompt_tokens', 0),
                     'completion_tokens': usage.get('completion_tokens', 0),
                     'total_tokens': usage.get('total_tokens', 0)
                 }
             }
 
+    except httpx.TimeoutException:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {
+            "status": STATUS_TIMEOUT,
+            "latency_ms": latency_ms,
+            "error": f"Timeout after {timeout}s",
+        }
+
     except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
         print(f"Error querying model {model}: {e}")
-        return None
+        return {
+            "status": STATUS_ERROR,
+            "latency_ms": latency_ms,
+            "error": str(e),
+        }
 
 
 async def query_models_parallel(
     models: List[str],
     messages: List[Dict[str, str]],
-    disable_tools: bool = False
+    disable_tools: bool = False,
+    timeout: float = 120.0,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -79,15 +153,69 @@ async def query_models_parallel(
         models: List of OpenRouter model identifiers
         messages: List of message dicts to send to each model
         disable_tools: If True, disable tool/function calling for all queries
+        timeout: Per-model timeout in seconds
 
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
     """
     # Create tasks for all models
-    tasks = [query_model(model, messages, disable_tools=disable_tools) for model in models]
+    tasks = [query_model(model, messages, timeout=timeout, disable_tools=disable_tools) for model in models]
 
     # Wait for all to complete
     responses = await asyncio.gather(*tasks)
 
     # Map models to their responses
     return {model: response for model, response in zip(models, responses)}
+
+
+# Progress callback type for ADR-012
+ProgressCallback = Callable[[int, int, str], Awaitable[None]]
+
+
+async def query_models_with_progress(
+    models: List[str],
+    messages: List[Dict[str, str]],
+    on_progress: Optional[ProgressCallback] = None,
+    timeout: float = 25.0,
+    disable_tools: bool = False,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Query multiple models with progress callbacks and structured status (ADR-012).
+
+    Args:
+        models: List of OpenRouter model identifiers
+        messages: List of message dicts to send to each model
+        on_progress: Async callback(completed, total, message) for progress updates
+        timeout: Per-model timeout in seconds (default 25s per ADR-012)
+        disable_tools: If True, disable tool/function calling for all queries
+
+    Returns:
+        Dict mapping model identifier to structured result with status
+    """
+    results: Dict[str, Dict[str, Any]] = {}
+    total = len(models)
+    completed = 0
+
+    # Report initial progress
+    if on_progress:
+        await on_progress(0, total, f"Querying {total} models...")
+
+    # Create tasks with model tracking
+    async def query_with_tracking(model: str) -> tuple[str, Dict[str, Any]]:
+        result = await query_model_with_status(model, messages, timeout=timeout, disable_tools=disable_tools)
+        return model, result
+
+    tasks = [query_with_tracking(model) for model in models]
+
+    # Process as they complete for real-time progress
+    for coro in asyncio.as_completed(tasks):
+        model, result = await coro
+        results[model] = result
+        completed += 1
+
+        if on_progress:
+            status_emoji = "✓" if result["status"] == STATUS_OK else "✗"
+            model_short = model.split("/")[-1]  # e.g., "gpt-4" from "openai/gpt-4"
+            await on_progress(completed, total, f"{status_emoji} {model_short} ({completed}/{total})")
+
+    return results
