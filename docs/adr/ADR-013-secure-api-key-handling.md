@@ -1,6 +1,6 @@
 # ADR-013: Secure API Key Handling
 
-**Status:** Draft (Revised per LLM Council Review)
+**Status:** Accepted (Implemented via TDD)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering, Security
 
