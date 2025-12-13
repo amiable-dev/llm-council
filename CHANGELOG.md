@@ -39,12 +39,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `query_model_with_status()`: Returns structured result with status instead of None on failure
   - `query_models_with_progress()`: Parallel queries with real-time progress callbacks
 
+- **Secure API Key Handling (ADR-013)**: Multi-tier secure key resolution
+  - Key resolution priority: Environment variable → System Keychain → Config file
+  - Optional `keyring` dependency for system keychain integration
+  - `setup-key` CLI command for securely storing API keys
+  - Key source tracking via `get_key_source()` for diagnostics
+  - Warning emitted when key loaded from insecure config file (suppressible)
+
+- **New CLI Command**:
+  - `llm-council setup-key`: Securely store API key in system keychain
+  - `llm-council setup-key --stdin`: Read key from stdin for CI/CD automation
+
+- **New Optional Dependency**:
+  - `[secure]` extra: `pip install "llm-council-core[secure]"` for keychain support
+
 ### Changed
 
 - `consult_council` MCP tool now uses `run_council_with_fallback()` for reliability
 - `consult_council` MCP tool now accepts optional `confidence` parameter
 - Council rankings now displayed in output when available
 - Partial result warnings shown when some models timeout
+- Health check now includes `key_source` field showing where API key came from
 
 ## [0.1.0] - 2024-12-01
 

@@ -4,10 +4,30 @@ Usage:
     llm-council           # Start MCP server (default)
     llm-council serve     # Start HTTP server
     llm-council serve --port 9000 --host 127.0.0.1
+    llm-council setup-key # Store API key in system keychain (ADR-013)
 """
 
 import argparse
 import sys
+
+# Optional keyring import - may not be installed
+keyring = None
+try:
+    import keyring as _keyring_module
+    keyring = _keyring_module
+except ImportError:
+    pass  # keyring not installed - this is fine
+
+
+def _is_fail_backend() -> bool:
+    """Check if keyring has a fail backend (headless/Docker)."""
+    if keyring is None:
+        return True
+    try:
+        from keyring.backends import fail
+        return isinstance(keyring.get_keyring(), fail.Keyring)
+    except Exception:
+        return True
 
 
 def main():
@@ -35,10 +55,24 @@ def main():
         help="Port to bind to (default: 8000)",
     )
 
+    # Setup key command (ADR-013)
+    setup_key_parser = subparsers.add_parser(
+        "setup-key",
+        help="Securely store API key in system keychain",
+    )
+    setup_key_parser.add_argument(
+        "--stdin",
+        action="store_true",
+        dest="from_stdin",
+        help="Read API key from stdin (for CI/CD automation)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "serve":
         serve_http(host=args.host, port=args.port)
+    elif args.command == "setup-key":
+        setup_key(from_stdin=args.from_stdin)
     else:
         # Default: MCP server
         serve_mcp()
@@ -78,6 +112,56 @@ def serve_mcp():
         sys.exit(1)
 
     mcp.run()
+
+
+def setup_key(from_stdin: bool = False):
+    """Securely store API key in system keychain (ADR-013).
+
+    Args:
+        from_stdin: If True, read key from stdin (for CI/CD automation).
+                   If False, prompt interactively using getpass.
+    """
+    # Check if keyring is available
+    if keyring is None:
+        print("Error: keyring package not installed.", file=sys.stderr)
+        print("\nInstall with: pip install 'llm-council-core[secure]'", file=sys.stderr)
+        sys.exit(1)
+
+    # Check for fail backend (headless/Docker)
+    if _is_fail_backend():
+        print("Error: No keychain backend available.", file=sys.stderr)
+        print("On headless servers, use environment variables instead.", file=sys.stderr)
+        print("\nSet OPENROUTER_API_KEY in your environment or .env file.", file=sys.stderr)
+        sys.exit(1)
+
+    import getpass
+
+    # Get the key
+    if from_stdin:
+        key = sys.stdin.read().strip()
+    else:
+        key = getpass.getpass("Enter your OpenRouter API key: ")
+
+    if not key:
+        print("Error: No key provided.", file=sys.stderr)
+        sys.exit(1)
+
+    # Validate format (warning only, not blocking)
+    if not key.startswith("sk-or-"):
+        print("Warning: Key doesn't look like an OpenRouter key (expected sk-or-...)")
+        if not from_stdin:
+            confirm = input("Store anyway? [y/N]: ")
+            if confirm.lower() != 'y':
+                print("Aborted.")
+                sys.exit(1)
+
+    # Store the key
+    try:
+        keyring.set_password("llm-council", "openrouter_api_key", key)
+        print("API key stored securely in system keychain.")
+    except Exception as e:
+        print(f"Error storing key: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

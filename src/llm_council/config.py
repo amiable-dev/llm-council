@@ -1,14 +1,62 @@
 """Configuration for the LLM Council."""
 
 import os
+import sys
 import json
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# OpenRouter API key
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# =============================================================================
+# ADR-013: Secure API Key Handling
+# =============================================================================
+# Key resolution priority (per Council recommendation):
+# 1. Environment variable (explicit override, CI/CD standard)
+# 2. System Keychain/Credential Manager (desktop security)
+# 3. .env file (via dotenv - already loaded above)
+# 4. Config file (least secure, warn user)
+
+# Track which source the key came from (for diagnostics)
+_key_source: Optional[str] = None
+
+# Optional keyring import - may not be installed
+keyring = None
+try:
+    import keyring as _keyring_module
+    keyring = _keyring_module
+except ImportError:
+    pass  # keyring not installed - this is fine
+
+
+def _is_fail_backend() -> bool:
+    """Check if keyring has a fail backend (headless/Docker)."""
+    if keyring is None:
+        return True
+    try:
+        from keyring.backends import fail
+        return isinstance(keyring.get_keyring(), fail.Keyring)
+    except Exception:
+        return True
+
+
+def _get_api_key_from_keychain() -> Optional[str]:
+    """Attempt to retrieve API key from system keychain (ADR-013)."""
+    if keyring is None:
+        return None
+
+    try:
+        # Check if we have a real backend (not the fail backend)
+        if _is_fail_backend():
+            return None
+
+        key = keyring.get_password("llm-council", "openrouter_api_key")
+        return key
+    except Exception:
+        # Keychain access failed (headless, permissions, etc.)
+        return None
 
 # OpenRouter API endpoint
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -71,6 +119,63 @@ def _get_models_from_env():
 
 # Load user configuration
 _user_config = _load_user_config()
+
+
+def _get_api_key() -> Optional[str]:
+    """
+    Resolve API key with priority (ADR-013, per Council recommendation):
+    1. Environment variable (explicit override, CI/CD standard)
+    2. System keychain (desktop security)
+    3. .env file (via dotenv, already loaded)
+    4. Config file (warn if used)
+
+    Returns:
+        API key string or None if not found
+    """
+    global _key_source
+
+    # 1. Environment variable takes priority (CI/CD standard)
+    key = os.getenv("OPENROUTER_API_KEY")
+    if key:
+        _key_source = "environment"
+        return key
+
+    # 2. Try keychain (if available)
+    key = _get_api_key_from_keychain()
+    if key:
+        _key_source = "keychain"
+        return key
+
+    # 3. .env file would have set the env var, so this is config file fallback
+    config_key = _user_config.get("openrouter_api_key")
+    if config_key:
+        _key_source = "config_file"
+        # Emit warning to stderr (suppressible via LLM_COUNCIL_SUPPRESS_WARNINGS)
+        if not os.getenv("LLM_COUNCIL_SUPPRESS_WARNINGS"):
+            print(
+                "Warning: API key loaded from config file. This is insecure. "
+                "Consider using environment variables or keychain. "
+                "Set LLM_COUNCIL_SUPPRESS_WARNINGS=1 to silence.",
+                file=sys.stderr
+            )
+        return config_key
+
+    # No key found
+    _key_source = None
+    return None
+
+
+def get_key_source() -> Optional[str]:
+    """Return the source where the API key was loaded from (ADR-013).
+
+    Returns:
+        "environment", "keychain", "config_file", or None if no key found
+    """
+    return _key_source
+
+
+# OpenRouter API key - resolved via ADR-013 priority chain
+OPENROUTER_API_KEY = _get_api_key()
 
 # Council models - priority: env var > config file > defaults
 COUNCIL_MODELS = (

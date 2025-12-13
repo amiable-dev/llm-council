@@ -18,7 +18,7 @@ from llm_council.council import (
     run_council_with_fallback,
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
-from llm_council.config import COUNCIL_MODELS, CHAIRMAN_MODEL, OPENROUTER_API_KEY
+from llm_council.config import COUNCIL_MODELS, CHAIRMAN_MODEL, OPENROUTER_API_KEY, get_key_source
 from llm_council.openrouter import query_model_with_status, STATUS_OK
 
 
@@ -135,6 +135,7 @@ async def council_health_check() -> str:
     """
     checks = {
         "api_key_configured": bool(OPENROUTER_API_KEY),
+        "key_source": get_key_source(),  # ADR-013: Show where key came from
         "council_size": len(COUNCIL_MODELS),
         "chairman_model": CHAIRMAN_MODEL,
         "models": COUNCIL_MODELS,
