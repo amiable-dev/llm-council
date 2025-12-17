@@ -298,6 +298,37 @@ The council includes built-in reliability features for long-running operations:
 ✓ gemini-3-pro (2/4) | waiting: gpt-5.1, grok-4
 ```
 
+### Structured Rubric Scoring (ADR-016)
+
+By default, reviewers provide a single 1-10 holistic score. With rubric scoring enabled, reviewers score each response on five dimensions:
+
+| Dimension | Weight | Description |
+|-----------|--------|-------------|
+| **Accuracy** | 35% | Factual correctness, no hallucinations |
+| **Relevance** | 10% | Addresses the actual question asked |
+| **Completeness** | 20% | Covers all aspects of the question |
+| **Conciseness** | 15% | Efficient communication, no padding |
+| **Clarity** | 20% | Well-organized, easy to understand |
+
+**Accuracy Ceiling**: When enabled (default), accuracy acts as a ceiling on the overall score:
+- Accuracy < 5: Score caps at 4.0 (40%)
+- Accuracy 5-6: Score caps at 7.0 (70%)
+- Accuracy ≥ 7: No ceiling
+
+This prevents well-written hallucinations from ranking well.
+
+```bash
+# Enable rubric scoring
+export LLM_COUNCIL_RUBRIC_SCORING=true
+
+# Customize weights (must sum to 1.0)
+export LLM_COUNCIL_WEIGHT_ACCURACY=0.40
+export LLM_COUNCIL_WEIGHT_RELEVANCE=0.10
+export LLM_COUNCIL_WEIGHT_COMPLETENESS=0.20
+export LLM_COUNCIL_WEIGHT_CONCISENESS=0.10
+export LLM_COUNCIL_WEIGHT_CLARITY=0.20
+```
+
 ### All Environment Variables
 
 | Variable | Description | Default |
@@ -310,6 +341,9 @@ The council includes built-in reliability features for long-running operations:
 | `LLM_COUNCIL_STYLE_NORMALIZATION` | Enable style normalization | false |
 | `LLM_COUNCIL_NORMALIZER_MODEL` | Model for normalization | google/gemini-2.0-flash-001 |
 | `LLM_COUNCIL_MAX_REVIEWERS` | Max reviewers per response | null (all) |
+| `LLM_COUNCIL_RUBRIC_SCORING` | Enable multi-dimensional rubric scoring | false |
+| `LLM_COUNCIL_ACCURACY_CEILING` | Use accuracy as score ceiling | true |
+| `LLM_COUNCIL_WEIGHT_*` | Rubric dimension weights (ACCURACY, RELEVANCE, COMPLETENESS, CONCISENESS, CLARITY) | See above |
 | `LLM_COUNCIL_SUPPRESS_WARNINGS` | Suppress security warnings | false |
 
 ## Credits & Attribution

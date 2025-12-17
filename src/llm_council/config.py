@@ -255,6 +255,60 @@ CACHE_DIR = (
 )
 
 # =============================================================================
+# ADR-016: Structured Rubric Scoring Configuration
+# =============================================================================
+# Multi-dimensional evaluation with accuracy ceiling mechanism.
+# When enabled, reviewers score on: accuracy, relevance, completeness,
+# conciseness, and clarity instead of a single holistic score.
+
+DEFAULT_RUBRIC_SCORING_ENABLED = False  # Off by default for backwards compatibility
+DEFAULT_ACCURACY_CEILING_ENABLED = True  # Use accuracy as ceiling when rubric enabled
+
+# Default rubric weights (post-council review)
+DEFAULT_RUBRIC_WEIGHTS = {
+    "accuracy": 0.35,
+    "relevance": 0.10,
+    "completeness": 0.20,
+    "conciseness": 0.15,
+    "clarity": 0.20,
+}
+
+# Rubric scoring enabled - priority: env var > config file > default
+_rubric_env = os.getenv("LLM_COUNCIL_RUBRIC_SCORING")
+RUBRIC_SCORING_ENABLED = (
+    _rubric_env.lower() in ('true', '1', 'yes') if _rubric_env else
+    _user_config.get("rubric_scoring", DEFAULT_RUBRIC_SCORING_ENABLED)
+)
+
+# Accuracy ceiling enabled - priority: env var > config file > default
+_ceiling_env = os.getenv("LLM_COUNCIL_ACCURACY_CEILING")
+ACCURACY_CEILING_ENABLED = (
+    _ceiling_env.lower() in ('true', '1', 'yes') if _ceiling_env else
+    _user_config.get("accuracy_ceiling", DEFAULT_ACCURACY_CEILING_ENABLED)
+)
+
+# Rubric weights - priority: env vars > config file > defaults
+RUBRIC_WEIGHTS = {
+    "accuracy": float(os.getenv("LLM_COUNCIL_WEIGHT_ACCURACY",
+                     str(_user_config.get("rubric_weights", {}).get("accuracy", DEFAULT_RUBRIC_WEIGHTS["accuracy"])))),
+    "relevance": float(os.getenv("LLM_COUNCIL_WEIGHT_RELEVANCE",
+                      str(_user_config.get("rubric_weights", {}).get("relevance", DEFAULT_RUBRIC_WEIGHTS["relevance"])))),
+    "completeness": float(os.getenv("LLM_COUNCIL_WEIGHT_COMPLETENESS",
+                         str(_user_config.get("rubric_weights", {}).get("completeness", DEFAULT_RUBRIC_WEIGHTS["completeness"])))),
+    "conciseness": float(os.getenv("LLM_COUNCIL_WEIGHT_CONCISENESS",
+                        str(_user_config.get("rubric_weights", {}).get("conciseness", DEFAULT_RUBRIC_WEIGHTS["conciseness"])))),
+    "clarity": float(os.getenv("LLM_COUNCIL_WEIGHT_CLARITY",
+                    str(_user_config.get("rubric_weights", {}).get("clarity", DEFAULT_RUBRIC_WEIGHTS["clarity"])))),
+}
+
+# Validate rubric weights sum to 1.0
+_rubric_weight_sum = sum(RUBRIC_WEIGHTS.values())
+if abs(_rubric_weight_sum - 1.0) > 0.01:
+    import warnings
+    warnings.warn(f"Rubric weights sum to {_rubric_weight_sum}, not 1.0. Results may be unexpected.")
+
+
+# =============================================================================
 # Telemetry Configuration (ADR-001)
 # =============================================================================
 # Opt-in telemetry for contributing anonymized voting data to the LLM Leaderboard.

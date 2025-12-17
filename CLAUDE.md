@@ -30,9 +30,20 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Prompts models to evaluate and rank (with strict format requirements)
   - Returns tuple: (rankings_list, label_to_model_dict)
   - Each ranking includes both raw text and `parsed_ranking` list
+  - **ADR-016**: When `RUBRIC_SCORING_ENABLED=true`, uses multi-dimensional rubric prompt
 - `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section, handles both numbered lists and plain format
 - `calculate_aggregate_rankings()`: Computes average rank position across all peer evaluations
+
+**`rubric.py`** - ADR-016 Structured Rubric Scoring
+- `RubricScore`: Dataclass for multi-dimensional scores (accuracy, relevance, completeness, conciseness, clarity)
+- `calculate_weighted_score()`: Weighted average from dimension scores
+- `calculate_weighted_score_with_accuracy_ceiling()`: Weighted score with accuracy acting as ceiling
+  - Accuracy < 5: caps at 4.0 (prevents well-written hallucinations from ranking well)
+  - Accuracy 5-6: caps at 7.0
+  - Accuracy ≥ 7: no ceiling
+- `parse_rubric_evaluation()`: Extracts rubric JSON from model response, handles code blocks
+- `validate_weights()`: Ensures weights sum to 1.0 and include all dimensions
 
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`
