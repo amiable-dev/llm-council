@@ -178,6 +178,7 @@ async def query_models_with_progress(
     on_progress: Optional[ProgressCallback] = None,
     timeout: float = 25.0,
     disable_tools: bool = False,
+    shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Query multiple models with progress callbacks and structured status (ADR-012).
@@ -188,11 +189,16 @@ async def query_models_with_progress(
         on_progress: Async callback(completed, total, message) for progress updates
         timeout: Per-model timeout in seconds (default 25s per ADR-012)
         disable_tools: If True, disable tool/function calling for all queries
+        shared_results: Optional dict to populate incrementally. If provided, results
+            are written here as each model completes, preserving state even if the
+            function is cancelled by an outer timeout. This fixes ADR-012 diagnostic
+            loss on global timeout.
 
     Returns:
         Dict mapping model identifier to structured result with status
     """
-    results: Dict[str, Dict[str, Any]] = {}
+    # Use shared_results if provided, otherwise create local dict
+    results: Dict[str, Dict[str, Any]] = shared_results if shared_results is not None else {}
     total = len(models)
     completed = 0
 
@@ -210,7 +216,7 @@ async def query_models_with_progress(
     # Process as they complete for real-time progress
     for coro in asyncio.as_completed(tasks):
         model, result = await coro
-        results[model] = result
+        results[model] = result  # Write to shared dict immediately
         completed += 1
 
         if on_progress:

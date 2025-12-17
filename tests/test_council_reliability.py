@@ -165,17 +165,24 @@ async def test_run_council_with_fallback_partial_on_timeout():
         await asyncio.sleep(100)  # Will be cancelled by timeout
         return [], {}, {}
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
+    # Mock stage1 that also populates shared_raw_responses for timeout handling
+    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None):
+        # Simulate the shared dict being populated (for timeout diagnostic preservation)
+        if shared_raw_responses is not None:
+            shared_raw_responses["model-a"] = {"status": "ok", "content": "A", "latency_ms": 100}
+            shared_raw_responses["model-b"] = {"status": "ok", "content": "B", "latency_ms": 100}
+        return (
+            [{"model": "model-a", "response": "A"}, {"model": "model-b", "response": "B"}],
+            {},
+            {"model-a": {"status": "ok", "response": "A"}, "model-b": {"status": "ok", "response": "B"}}
+        )
+
+    with patch('llm_council.council.stage1_collect_responses_with_status', side_effect=mock_stage1_fn), \
          patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
          patch('llm_council.council.stage2_collect_rankings', side_effect=slow_stage2), \
          patch('llm_council.council.quick_synthesis') as mock_quick, \
          patch('llm_council.council.COUNCIL_MODELS', ['model-a', 'model-b']):
 
-        mock_s1.return_value = (
-            [{"model": "model-a", "response": "A"}, {"model": "model-b", "response": "B"}],
-            {},
-            {"model-a": {"status": "ok", "response": "A"}, "model-b": {"status": "ok", "response": "B"}}
-        )
         mock_s15.return_value = ([{"model": "model-a", "response": "A"}, {"model": "model-b", "response": "B"}], {})
         mock_quick.return_value = ("Quick synthesis from partial data", {})
 
@@ -317,17 +324,25 @@ async def test_full_council_fallback_stage1_only():
     async def timeout_stage2(*args, **kwargs):
         await asyncio.sleep(100)
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
+    # Mock stage1 that also populates shared_raw_responses for timeout handling
+    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None):
+        # Simulate the shared dict being populated (for timeout diagnostic preservation)
+        if shared_raw_responses is not None:
+            shared_raw_responses["a"] = {"status": "ok", "content": "A", "latency_ms": 100}
+            shared_raw_responses["b"] = {"status": "ok", "content": "B", "latency_ms": 100}
+            shared_raw_responses["c"] = {"status": "ok", "content": "C", "latency_ms": 100}
+        return (
+            [{"model": "a", "response": "A"}, {"model": "b", "response": "B"}, {"model": "c", "response": "C"}],
+            {},
+            {"a": {"status": "ok", "response": "A"}, "b": {"status": "ok", "response": "B"}, "c": {"status": "ok", "response": "C"}}
+        )
+
+    with patch('llm_council.council.stage1_collect_responses_with_status', side_effect=mock_stage1_fn), \
          patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
          patch('llm_council.council.stage2_collect_rankings', side_effect=timeout_stage2), \
          patch('llm_council.council.quick_synthesis') as mock_quick, \
          patch('llm_council.council.COUNCIL_MODELS', ['a', 'b', 'c']):
 
-        mock_s1.return_value = (
-            [{"model": "a", "response": "A"}, {"model": "b", "response": "B"}, {"model": "c", "response": "C"}],
-            {},
-            {"a": {"status": "ok", "response": "A"}, "b": {"status": "ok", "response": "B"}, "c": {"status": "ok", "response": "C"}}
-        )
         mock_s15.return_value = ([
             {"model": "a", "response": "A"},
             {"model": "b", "response": "B"},
