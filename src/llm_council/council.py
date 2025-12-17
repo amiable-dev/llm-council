@@ -99,6 +99,7 @@ async def stage1_collect_responses_with_status(
     user_query: str,
     timeout: float = TIMEOUT_PER_MODEL_HARD,
     on_progress: Optional[ProgressCallback] = None,
+    shared_raw_responses: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, Dict[str, Any]]]:
     """
     Stage 1: Collect individual responses with per-model status tracking (ADR-012).
@@ -112,6 +113,9 @@ async def stage1_collect_responses_with_status(
         user_query: The user's question
         timeout: Per-model timeout in seconds (default: TIMEOUT_PER_MODEL_HARD)
         on_progress: Optional async callback(completed, total, message) for progress
+        shared_raw_responses: Optional dict that gets populated incrementally as models
+            respond. Used for preserving diagnostic state when outer timeout cancels
+            this function before it returns.
 
     Returns:
         Tuple of:
@@ -122,11 +126,13 @@ async def stage1_collect_responses_with_status(
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models with progress tracking
+    # Pass shared_raw_responses so results are preserved even if we're cancelled
     responses = await query_models_with_progress(
         COUNCIL_MODELS,
         messages,
         on_progress=on_progress,
         timeout=timeout,
+        shared_results=shared_raw_responses,
     )
 
     # Format results and aggregate usage
@@ -310,6 +316,11 @@ async def run_council_with_fallback(
         }
     }
 
+    # Shared dict for incremental model responses - survives timeout cancellation
+    # This fixes ADR-012 diagnostic loss: even if the pipeline is cancelled by
+    # asyncio.wait_for timeout, we'll have per-model status from completed queries
+    shared_raw_responses: Dict[str, Dict[str, Any]] = {}
+
     # Helper for progress reporting
     async def report_progress(step: int, total: int, message: str):
         if on_progress:
@@ -333,6 +344,7 @@ async def run_council_with_fallback(
             user_query,
             timeout=TIMEOUT_PER_MODEL_HARD,
             on_progress=stage1_progress,
+            shared_raw_responses=shared_raw_responses,  # Preserve state on timeout
         )
 
         result["model_responses"] = model_statuses
@@ -390,23 +402,55 @@ async def run_council_with_fallback(
 
     except asyncio.TimeoutError:
         # Global timeout - synthesize from what we have
+        # IMPORTANT: Use shared_raw_responses which was populated incrementally
+        # even as the pipeline was cancelled. This preserves diagnostic info.
         result["metadata"]["status"] = "partial"
 
-        if result["metadata"]["completed_models"] > 0:
-            # We have Stage 1 results - do quick synthesis
+        # Build model_responses from shared dict (preserved across cancellation)
+        model_statuses: Dict[str, Dict[str, Any]] = {}
+        successful_responses: Dict[str, str] = {}
+
+        for model, response in shared_raw_responses.items():
+            model_statuses[model] = {
+                "status": response.get("status", MODEL_STATUS_ERROR),
+                "latency_ms": response.get("latency_ms", 0),
+            }
+            if response.get("error"):
+                model_statuses[model]["error"] = response["error"]
+            if response.get("status") == STATUS_OK and response.get("content"):
+                model_statuses[model]["response"] = response.get("content", "")
+                successful_responses[model] = response.get("content", "")
+
+        # Mark models that didn't respond as timeout
+        for model in COUNCIL_MODELS:
+            if model not in model_statuses:
+                model_statuses[model] = {
+                    "status": MODEL_STATUS_TIMEOUT,
+                    "latency_ms": int(synthesis_deadline * 1000),
+                    "error": f"Global timeout after {synthesis_deadline}s"
+                }
+
+        result["model_responses"] = model_statuses
+        result["metadata"]["completed_models"] = len(successful_responses)
+
+        if successful_responses:
+            # We have some responses - do quick synthesis
             await report_progress(total_steps - 1, total_steps, "Timeout - quick synthesis...")
 
             synthesis, usage = await quick_synthesis(user_query, result["model_responses"])
             result["synthesis"] = synthesis
-            result["metadata"]["synthesis_type"] = "partial" if result["metadata"]["completed_models"] > 1 else "stage1_only"
+            result["metadata"]["synthesis_type"] = "partial" if len(successful_responses) > 1 else "stage1_only"
             result["metadata"]["warning"] = generate_partial_warning(
                 result["model_responses"], requested_models
             )
         else:
-            # No responses at all
+            # No responses at all - but now we have diagnostic info!
             result["metadata"]["status"] = "failed"
             result["metadata"]["synthesis_type"] = "none"
             result["synthesis"] = "Error: Council timed out before any models responded."
+            result["metadata"]["warning"] = generate_partial_warning(
+                result["model_responses"], requested_models
+            )
 
         await report_progress(total_steps, total_steps, "Complete (partial)")
         return result

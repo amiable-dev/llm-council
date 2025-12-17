@@ -22,9 +22,7 @@
       "type": "stdio",
       "command": "/Users/christopherjoseph/projects/amiable/llm-council/.venv/bin/llm-council",
       "args": [],
-      "env": {
-        "OPENROUTER_API_KEY": "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"
-      }
+      "env": {}
     }
   }
 }

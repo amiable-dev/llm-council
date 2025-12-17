@@ -297,6 +297,29 @@ Weight reviewers by historical calibration accuracy.
 
 ---
 
+## Preliminary Technical Analysis
+
+*(Pending formal council review due to API unavailability)*
+
+**Strengths identified:**
+- Empirical, data-driven approach to measuring bias
+- Z-normalization for calibration is well-established methodology
+- Non-invasive design (logging only, not modifying results)
+
+**Recommendations:**
+1. **Threshold |r| > 0.3 is reasonable** but report p-values alongside r (statistical power is low with N=4)
+2. **Missing metrics to consider:**
+   - Style bias (do reviewers prefer certain writing styles?)
+   - Model familiarity bias (do reviewers rate "related" models differently?)
+   - Question-type interaction (is length bias worse for certain query types?)
+3. **Start with per-session logging** before implementing persistence for historical tracking
+
+**Dependencies:** Requires ADR-017 position tracking enhancement.
+
+**Priority:** MEDIUM - Depends on ADR-017 enhancements; enables data-driven improvement.
+
+---
+
 ## Success Metrics
 
 - Bias audit runs without adding >100ms latency

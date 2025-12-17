@@ -133,9 +133,17 @@ async def council_health_check() -> str:
     Returns status of API connectivity, configured models, and estimated response time.
     Use this to verify the council is working before calling consult_council.
     """
+    import os as _os
+
+    # Debug: show key prefix and working directory to diagnose key loading issues
+    key_preview = f"{OPENROUTER_API_KEY[:20]}..." if OPENROUTER_API_KEY else None
+    cwd = _os.getcwd()
+
     checks = {
         "api_key_configured": bool(OPENROUTER_API_KEY),
         "key_source": get_key_source(),  # ADR-013: Show where key came from
+        "key_preview": key_preview,  # Debug: first 20 chars
+        "working_directory": cwd,  # Debug: where is .env loaded from?
         "council_size": len(COUNCIL_MODELS),
         "chairman_model": CHAIRMAN_MODEL,
         "models": COUNCIL_MODELS,
