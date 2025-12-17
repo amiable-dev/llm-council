@@ -288,9 +288,15 @@ The council includes built-in reliability features for long-running operations:
 **Partial Results**: If some models timeout, the council returns results from the models that responded, with a clear warning indicating which models were excluded.
 
 **Confidence Levels**: Use the `confidence` parameter to trade off speed vs. thoroughness:
-- `quick`: 2 models, ~10 seconds
-- `balanced`: 3 models, ~25 seconds
-- `high`: Full council, ~45 seconds (default)
+- `quick`: ~20-30 seconds (fastest models)
+- `balanced`: ~45-60 seconds (most models)
+- `high`: ~60-90 seconds (full council, default)
+
+**Progress Feedback**: During deliberation, progress updates show which models have responded and which are still pending:
+```
+✓ claude-opus-4.5 (1/4) | waiting: gpt-5.1, gemini-3-pro, grok-4
+✓ gemini-3-pro (2/4) | waiting: gpt-5.1, grok-4
+```
 
 ### All Environment Variables
 

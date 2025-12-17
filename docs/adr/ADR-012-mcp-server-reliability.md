@@ -81,15 +81,19 @@ async def consult_council(query: str, ctx: Context, include_details: bool = Fals
 
 When timeout or partial failure occurs, return whatever data has been collected rather than failing entirely.
 
-**Tiered Timeout Strategy** (Council Recommendation):
+**Tiered Timeout Strategy** (Updated 2025-12-17):
+
+Based on observed model response times (complex queries can take 40-60s per model), timeouts have been calibrated to prioritize completeness:
+
 ```
-Per-model soft deadline:  15s  (start planning fallback)
-Per-model hard deadline:  25s  (abandon that model)
-Global synthesis trigger: 40s  (must start synthesis)
-Response deadline:        50s  (must return something)
+Confidence Level    Timeout    Use Case
+─────────────────────────────────────────
+quick               30s        Fast responses, may have fewer models
+balanced            75s        Most models respond
+high                120s       Full council deliberation (default)
 ```
 
-This tiered approach is safer than a single 55s deadline, leaving headroom for synthesis and network overhead.
+**Note**: Original council recommendation was 15s/25s/40s/50s tiered deadlines, but real-world latencies required significant increases.
 
 **Implementation**:
 ```python
@@ -119,6 +123,27 @@ async def run_full_council_with_fallback(query: str, synthesis_deadline: float =
             results["metadata"]["synthesis_type"] = "partial"
 
     return results
+```
+
+**Implementation Note (2025-12-17)**: The above pseudocode has a subtle bug—when `asyncio.wait_for` times out, it cancels the inner coroutine before `model_responses` is populated. The fix uses a **shared dict pattern**:
+
+```python
+# Create shared dict BEFORE the try block
+shared_raw_responses: Dict[str, Any] = {}
+
+async def run_council_pipeline():
+    # Pass shared dict to model queries
+    responses = await query_models_with_progress(
+        models, messages,
+        shared_results=shared_raw_responses  # Populated incrementally
+    )
+    # ... rest of pipeline
+
+try:
+    await asyncio.wait_for(run_council_pipeline(), timeout=deadline)
+except asyncio.TimeoutError:
+    # shared_raw_responses survives cancellation!
+    # Build model_responses from it, marking missing models as "timeout"
 ```
 
 **Structured Result Schema** (Council Recommendation):
@@ -196,9 +221,9 @@ async def council_health_check() -> str:
     return json.dumps(checks, indent=2)
 ```
 
-### 4. Confidence Levels (Council Recommendation)
+### 4. Confidence Levels (Updated 2025-12-17)
 
-Instead of a simple "fast mode" toggle, implement **confidence levels** that map to different model counts and timeout strategies:
+Instead of a simple "fast mode" toggle, implement **confidence levels** that map to different timeout strategies:
 
 ```python
 @mcp.tool()
@@ -210,15 +235,21 @@ async def consult_council(
 ) -> str:
     """
     Args:
-        confidence: "quick" (1-2 models, ~10s), "balanced" (3 models, ~25s), "high" (4+ models, ~45s)
+        confidence: "quick" (~30s), "balanced" (~75s), "high" (~120s, default)
     """
     configs = {
-        "quick": {"models": 2, "timeout": 15},
-        "balanced": {"models": 3, "timeout": 30},
-        "high": {"models": len(COUNCIL_MODELS), "timeout": 45}
+        "quick": {"models": 2, "timeout": 30},
+        "balanced": {"models": 3, "timeout": 75},
+        "high": {"models": len(COUNCIL_MODELS), "timeout": 120}
     }
     config = configs.get(confidence, configs["high"])
     # ... proceed with selected configuration
+```
+
+**Progress Feedback**: During model queries, progress updates show which models have responded:
+```
+✓ claude-opus-4.5 (1/4) | waiting: gpt-5.1, gemini-3-pro, grok-4
+✓ gemini-3-pro (2/4) | waiting: gpt-5.1, grok-4
 ```
 
 **Alternative: Racing Pattern** (Council Suggestion)
