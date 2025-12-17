@@ -26,10 +26,13 @@ mcp = FastMCP("LLM Council")
 
 
 # Confidence level configurations (ADR-012)
+# Timeout values calibrated based on observed model response times:
+# - Simple queries: Claude 4-10s, Gemini 6-9s, GPT 2-5s, Grok 5-10s
+# - Complex queries: Claude 10-12s, Gemini 30-32s, GPT 40+s, Grok 40+s
 CONFIDENCE_CONFIGS = {
-    "quick": {"models": 2, "timeout": 15, "description": "Fast response with 2 models (~10s)"},
-    "balanced": {"models": 3, "timeout": 25, "description": "Balanced response with 3 models (~25s)"},
-    "high": {"models": None, "timeout": 40, "description": "Full council deliberation (~45s)"},
+    "quick": {"models": 2, "timeout": 20, "description": "Fast response with 2 models (~15s)"},
+    "balanced": {"models": 3, "timeout": 45, "description": "Balanced response with 3 models (~35s)"},
+    "high": {"models": None, "timeout": 60, "description": "Full council deliberation (~50s)"},
 }
 
 
@@ -148,9 +151,9 @@ async def council_health_check() -> str:
         "chairman_model": CHAIRMAN_MODEL,
         "models": COUNCIL_MODELS,
         "estimated_duration": {
-            "quick": "~10 seconds (2 models)",
-            "balanced": "~25 seconds (3 models)",
-            "high": f"~45 seconds ({len(COUNCIL_MODELS)} models)",
+            "quick": "~15 seconds (2 models)",
+            "balanced": "~35 seconds (3 models)",
+            "high": f"~50 seconds ({len(COUNCIL_MODELS)} models)",
         },
     }
 

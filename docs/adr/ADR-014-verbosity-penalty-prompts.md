@@ -148,21 +148,36 @@ Add a separate "verbosity" dimension that penalizes length.
 
 ---
 
-## Preliminary Technical Analysis
+## Council Review Feedback
 
-*(Pending formal council review due to API unavailability)*
+**Reviewed:** 2025-12-17 (Claude Opus 4.5, Gemini 3 Pro)
 
-**Strengths identified:**
-- Addresses well-documented LLM verbosity bias
-- Actionable prompt language with specific patterns
-- Configurable design
+### Key Insight: Double-Penalty Risk with ADR-016
 
-**Recommendations:**
-1. Add balancing clause: "Do not penalize responses that are appropriately detailed for complex questions"
-2. Add positive examples of good conciseness alongside verbosity patterns
-3. Consider query-type sensitivity (technical questions may need more detail)
+The council identified a critical interaction between this ADR and ADR-016 (Structured Rubric Scoring):
 
-**Priority:** HIGH - Low effort (prompt changes only), high impact on evaluation quality.
+> "If you penalize a model in the system prompt for being long (ADR-014), and *also* score it down in the rubric for not being concise (ADR-016), you create a 'hyper-conciseness' incentive that may cause the model to strip out necessary details."
+
+### Council Verdict
+
+**Penalize "fluff," not length.** The consensus supports penalizing *unnecessary* verbosity while recognizing that:
+- Length ≠ verbosity (a 500-word response can be dense; a 100-word one can be padded)
+- Crude length penalties risk encouraging incomplete answers
+
+### Recommendations
+
+1. **Defer implementation** until ADR-016 rubric's "Conciseness" impact is measured
+2. If implemented alongside ADR-016, significantly reduce Conciseness weight (e.g., 10% instead of 20%)
+3. Add balancing clause: "Do not penalize responses that are appropriately detailed for complex questions"
+4. Focus on **information density** rather than raw word count
+
+### Proposed Metrics (Council Addition)
+
+- **Information density**: content value / tokens
+- **Relevance**: Is everything included pertinent?
+- **Structural efficiency**: No redundant preambles like "That's a great question!"
+
+**Updated Priority:** MEDIUM - Should be implemented *after* ADR-016 to measure interaction effects.
 
 ---
 
