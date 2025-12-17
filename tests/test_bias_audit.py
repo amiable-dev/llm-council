@@ -13,6 +13,7 @@ from llm_council.bias_audit import (
     calculate_position_bias,
     run_bias_audit,
     extract_scores_from_stage2,
+    derive_position_mapping,
     LENGTH_CORRELATION_THRESHOLD,
     POSITION_VARIANCE_THRESHOLD,
 )
@@ -458,3 +459,154 @@ class TestBiasAuditIntegration:
         # Should deserialize back
         parsed = json.loads(json_str)
         assert parsed["overall_bias_risk"] in ["low", "medium", "high"]
+
+
+class TestDerivePositionMapping:
+    """Tests for derive_position_mapping helper function.
+
+    This function derives position indices from label_to_model mapping.
+    'Response A' → position 0, 'Response B' → position 1, etc.
+    """
+
+    def test_basic_mapping_three_responses(self):
+        """Derive positions for 3 responses."""
+        label_to_model = {
+            "Response A": "openai/gpt-4",
+            "Response B": "anthropic/claude-3",
+            "Response C": "google/gemini-pro",
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        assert position_mapping == {
+            "openai/gpt-4": 0,
+            "anthropic/claude-3": 1,
+            "google/gemini-pro": 2,
+        }
+
+    def test_four_responses(self):
+        """Derive positions for 4 responses."""
+        label_to_model = {
+            "Response A": "model-a",
+            "Response B": "model-b",
+            "Response C": "model-c",
+            "Response D": "model-d",
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        assert position_mapping["model-a"] == 0
+        assert position_mapping["model-b"] == 1
+        assert position_mapping["model-c"] == 2
+        assert position_mapping["model-d"] == 3
+
+    def test_handles_out_of_order_dict(self):
+        """Handle dict that isn't in A, B, C order (unlikely but possible)."""
+        label_to_model = {
+            "Response C": "model-c",
+            "Response A": "model-a",
+            "Response B": "model-b",
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        # Position is derived from letter, not insertion order
+        assert position_mapping["model-a"] == 0
+        assert position_mapping["model-b"] == 1
+        assert position_mapping["model-c"] == 2
+
+    def test_empty_mapping(self):
+        """Return empty dict for empty input."""
+        position_mapping = derive_position_mapping({})
+        assert position_mapping == {}
+
+    def test_none_input(self):
+        """Return empty dict for None input."""
+        position_mapping = derive_position_mapping(None)
+        assert position_mapping == {}
+
+    def test_single_response(self):
+        """Handle single response case."""
+        label_to_model = {"Response A": "only-model"}
+        position_mapping = derive_position_mapping(label_to_model)
+
+        assert position_mapping == {"only-model": 0}
+
+    def test_non_standard_label_format(self):
+        """Handle labels that don't match expected format gracefully."""
+        label_to_model = {
+            "Response A": "model-a",
+            "Model B": "model-b",  # Non-standard format
+            "Response C": "model-c",
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        # Should still map valid Response X labels
+        assert position_mapping.get("model-a") == 0
+        assert position_mapping.get("model-c") == 2
+        # Non-standard label might be skipped or handled gracefully
+
+    def test_lowercase_response_labels(self):
+        """Handle lowercase 'response a' format gracefully."""
+        label_to_model = {
+            "response a": "model-a",
+            "response b": "model-b",
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        # Should handle case-insensitively
+        assert position_mapping.get("model-a") == 0
+        assert position_mapping.get("model-b") == 1
+
+    def test_enhanced_format_with_display_index(self):
+        """Use display_index from enhanced format (council-recommended hardening)."""
+        label_to_model = {
+            "Response A": {"model": "openai/gpt-4", "display_index": 0},
+            "Response B": {"model": "anthropic/claude-3", "display_index": 1},
+            "Response C": {"model": "google/gemini-pro", "display_index": 2},
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        assert position_mapping == {
+            "openai/gpt-4": 0,
+            "anthropic/claude-3": 1,
+            "google/gemini-pro": 2,
+        }
+
+    def test_enhanced_format_with_shuffled_indices(self):
+        """Enhanced format correctly handles non-alphabetical display order."""
+        # Simulates a scenario where Response A was shown second
+        label_to_model = {
+            "Response A": {"model": "model-a", "display_index": 1},
+            "Response B": {"model": "model-b", "display_index": 0},
+            "Response C": {"model": "model-c", "display_index": 2},
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        # display_index takes precedence over label letter
+        assert position_mapping["model-a"] == 1  # A was shown second
+        assert position_mapping["model-b"] == 0  # B was shown first
+        assert position_mapping["model-c"] == 2
+
+    def test_mixed_format_prefers_enhanced(self):
+        """When both formats present, prefer enhanced display_index."""
+        # This shouldn't happen in practice, but test defensive behavior
+        label_to_model = {
+            "Response A": {"model": "model-a", "display_index": 2},  # Enhanced
+            "Response B": "model-b",  # Legacy
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        # Enhanced format uses display_index
+        assert position_mapping.get("model-a") == 2
+        # Legacy format falls back to letter parsing
+        assert position_mapping.get("model-b") == 1
+
+    def test_enhanced_format_missing_display_index(self):
+        """Handle enhanced format dict missing display_index gracefully."""
+        label_to_model = {
+            "Response A": {"model": "model-a"},  # Missing display_index
+            "Response B": {"model": "model-b", "display_index": 1},
+        }
+        position_mapping = derive_position_mapping(label_to_model)
+
+        # Falls back to letter parsing when display_index missing
+        assert position_mapping.get("model-a") == 0
+        assert position_mapping.get("model-b") == 1

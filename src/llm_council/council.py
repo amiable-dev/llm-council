@@ -40,6 +40,7 @@ from llm_council.rubric import (
 from llm_council.bias_audit import (
     run_bias_audit,
     extract_scores_from_stage2,
+    derive_position_mapping,
     BiasAuditResult,
 )
 from llm_council.safety_gate import (
@@ -74,6 +75,30 @@ MODEL_STATUS_OK = STATUS_OK
 MODEL_STATUS_TIMEOUT = STATUS_TIMEOUT
 MODEL_STATUS_ERROR = STATUS_ERROR
 MODEL_STATUS_RATE_LIMITED = STATUS_RATE_LIMITED
+
+
+# =============================================================================
+# Label-to-Model Mapping Helpers (v0.3.0+ Enhanced Format Support)
+# =============================================================================
+# Per council recommendation, label_to_model uses enhanced format:
+# {"Response A": {"model": "gpt-4", "display_index": 0}}
+# But also supports legacy format for backward compatibility:
+# {"Response A": "gpt-4"}
+
+def _get_model_from_label_value(value):
+    """Extract model name from label_to_model value (enhanced or legacy format).
+
+    Args:
+        value: Either a string (legacy) or dict with 'model' key (enhanced)
+
+    Returns:
+        Model name string
+    """
+    if isinstance(value, dict):
+        return value.get("model", "")
+    return value
+
+
 MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
 
 
@@ -642,10 +667,12 @@ async def stage2_collect_rankings(
     # Create anonymized labels for responses (Response A, Response B, etc.)
     labels = [chr(65 + i) for i in range(len(shuffled_results))]  # A, B, C, ...
 
-    # Create mapping from label to model name
+    # Create mapping from label to model name with explicit display_index
+    # Enhanced format (v0.3.0+) per council recommendation to eliminate string parsing fragility
+    # INVARIANT: Labels are assigned in lexicographic order corresponding to presentation order
     label_to_model = {
-        f"Response {label}": result['model']
-        for label, result in zip(labels, shuffled_results)
+        f"Response {label}": {"model": result['model'], "display_index": i}
+        for i, (label, result) in enumerate(zip(labels, shuffled_results))
     }
 
     # Build the ranking prompt with XML delimiters for prompt injection defense
@@ -1137,7 +1164,7 @@ def calculate_aggregate_rankings(
     # Edge case: single candidate can't be ranked
     if num_candidates <= 1:
         if num_candidates == 1:
-            model = list(label_to_model.values())[0]
+            model = _get_model_from_label_value(list(label_to_model.values())[0])
             return [{
                 "model": model,
                 "borda_score": 1.0,  # Only candidate gets perfect score
@@ -1171,7 +1198,7 @@ def calculate_aggregate_rankings(
         # Calculate normalized Borda scores from ranking positions
         for position, label in enumerate(ranking_list):
             if label in label_to_model:
-                author_model = label_to_model[label]
+                author_model = _get_model_from_label_value(label_to_model[label])
 
                 # Exclude self-votes if configured
                 if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
@@ -1188,7 +1215,7 @@ def calculate_aggregate_rankings(
         # Also track raw scores (as secondary signal, normalized to [0,1])
         for label, score in scores.items():
             if label in label_to_model:
-                author_model = label_to_model[label]
+                author_model = _get_model_from_label_value(label_to_model[label])
 
                 if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
                     continue
@@ -1347,7 +1374,8 @@ async def run_full_council(
         # Single model: skip peer review entirely
         degraded_mode = "single_model"
         stage2_results = []
-        label_to_model = {"Response A": stage1_results[0]['model']}
+        # Enhanced format (v0.3.0+) with explicit display_index
+        label_to_model = {"Response A": {"model": stage1_results[0]['model'], "display_index": 0}}
         aggregate_rankings = [{
             "model": stage1_results[0]['model'],
             "rank": 1,
@@ -1380,11 +1408,13 @@ async def run_full_council(
     if BIAS_AUDIT_ENABLED and len(stage2_results) > 0:
         # Extract scores from Stage 2 results
         stage2_scores = extract_scores_from_stage2(stage2_results, label_to_model)
-        # Run bias audit (no position mapping available in current pipeline)
+        # Derive position mapping from label_to_model (Response A → 0, Response B → 1, etc.)
+        position_mapping = derive_position_mapping(label_to_model)
+        # Run bias audit with position data for position bias detection
         bias_audit_result = run_bias_audit(
             stage1_results,
             stage2_scores,
-            position_mapping=None  # Position data would need Stage 2 to track this
+            position_mapping=position_mapping
         )
 
     # Stage 3: Synthesize final answer (with mode support)
