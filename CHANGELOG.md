@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-12-17
+
+### Added
+
+- **Bias Auditing (ADR-015)**: Detect systematic biases in peer review scoring
+  - Length-score correlation detection (Pearson r, threshold |r| > 0.3)
+  - Position bias detection via `display_index` tracking
+  - Reviewer calibration analysis (harsh/generous reviewers)
+  - Overall bias risk assessment ("low", "medium", "high")
+  - Pure Python implementation (no scipy/numpy dependency)
+  - Configuration: `LLM_COUNCIL_BIAS_AUDIT=true`
+
+- **Structured Rubric Scoring (ADR-016)**: Multi-dimensional evaluation
+  - Five dimensions: accuracy (35%), relevance (10%), completeness (20%), conciseness (15%), clarity (20%)
+  - Accuracy ceiling mechanism: prevents confident lies from ranking well
+  - Scoring anchors with behavioral examples for each 1-10 level
+  - Customizable weights via `LLM_COUNCIL_WEIGHT_*` environment variables
+  - Configuration: `LLM_COUNCIL_RUBRIC_SCORING=true`
+
+- **Safety Gate (ADR-016)**: Pass/fail pre-check for harmful content
+  - Detects: dangerous instructions, weapon making, malware/hacking, self-harm, PII exposure
+  - Context-aware: allows educational/defensive security content
+  - Failed responses capped at score 0
+  - Configuration: `LLM_COUNCIL_SAFETY_GATE=true`
+
+- **Enhanced Position Tracking (Council-Recommended)**: Robust position bias detection
+  - Enhanced `label_to_model` format with explicit `display_index`
+  - Eliminates string parsing fragility
+  - Backward compatible with legacy format
+  - Documented invariant for label assignment order
+
+- **New Bias Audit Functions**:
+  - `run_bias_audit()`: Main entry point for bias analysis
+  - `calculate_length_correlation()`: Pure Python Pearson correlation
+  - `audit_reviewer_calibration()`: Detect harsh/generous reviewers
+  - `calculate_position_bias()`: Position effect detection
+  - `derive_position_mapping()`: Extract positions from label mapping
+  - `extract_scores_from_stage2()`: Convert Stage 2 results for analysis
+
+- **New Safety Functions**:
+  - `check_response_safety()`: Scan for harmful content patterns
+  - `apply_safety_gate_to_score()`: Cap scores for failed safety checks
+
+- **New Rubric Functions**:
+  - `calculate_weighted_score()`: Weighted average from dimension scores
+  - `calculate_weighted_score_with_accuracy_ceiling()`: Accuracy-capped scoring
+  - `parse_rubric_evaluation()`: Extract rubric JSON from model responses
+
+### Changed
+
+- `label_to_model` now uses enhanced format: `{"Response A": {"model": "...", "display_index": 0}}`
+- Stage 2 evaluation prompts updated for rubric scoring when enabled
+- Council metadata now includes `bias_audit` results when enabled
+
+### Documentation
+
+- ADR-015: Bias Auditing - Implementation status and invariants documented
+- ADR-016: Structured Rubric Scoring - Scoring anchors and safety gate details
+- ADR-017: Response Order Randomization - Position tracking implementation and future scenarios
+- README.md: New environment variables and feature documentation
+- CLAUDE.md: Developer documentation for new modules
+
 ## [0.2.0] - 2025-12-13
 
 ### Added
