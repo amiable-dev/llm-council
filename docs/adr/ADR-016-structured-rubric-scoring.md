@@ -1,6 +1,6 @@
 # ADR-016: Structured Rubric Scoring
 
-**Status:** Accepted with Modifications (Council Reviewed 2025-12-17)
+**Status:** Implemented (TDD, 2025-12-17)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-014 (Verbosity Penalty)
