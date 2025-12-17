@@ -29,6 +29,8 @@ from llm_council.config import (
     ACCURACY_CEILING_ENABLED,
     RUBRIC_WEIGHTS,
     BIAS_AUDIT_ENABLED,
+    SAFETY_GATE_ENABLED,
+    SAFETY_SCORE_CAP,
 )
 from llm_council.rubric import (
     parse_rubric_evaluation,
@@ -39,6 +41,11 @@ from llm_council.bias_audit import (
     run_bias_audit,
     extract_scores_from_stage2,
     BiasAuditResult,
+)
+from llm_council.safety_gate import (
+    check_response_safety,
+    apply_safety_gate_to_score,
+    SafetyCheckResult,
 )
 from llm_council.telemetry import get_telemetry
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
@@ -1309,6 +1316,21 @@ async def run_full_council(
     total_usage["stage1"] = stage1_usage
     num_responses = len(stage1_results)
 
+    # ADR-016: Safety Gate - check responses for harmful content
+    safety_results = {}
+    if SAFETY_GATE_ENABLED:
+        for result in stage1_results:
+            model = result.get("model", "unknown")
+            response = result.get("response", "")
+            safety_check = check_response_safety(response)
+            safety_results[model] = {
+                "passed": safety_check.passed,
+                "reason": safety_check.reason,
+                "flagged_patterns": safety_check.flagged_patterns,
+            }
+            # Add safety result to the stage1 result
+            result["safety_check"] = safety_results[model]
+
     # If no models responded successfully, return error
     if num_responses == 0:
         return [], [], {
@@ -1432,6 +1454,18 @@ async def run_full_council(
     if bias_audit_result is not None:
         from dataclasses import asdict
         metadata["bias_audit"] = asdict(bias_audit_result)
+
+    # ADR-016: Add safety gate results if enabled
+    if SAFETY_GATE_ENABLED and safety_results:
+        metadata["safety_gate"] = {
+            "enabled": True,
+            "results": safety_results,
+            "failed_models": [
+                model for model, result in safety_results.items()
+                if not result["passed"]
+            ],
+            "score_cap": SAFETY_SCORE_CAP,
+        }
 
     # Emit telemetry event (non-blocking, fire-and-forget)
     telemetry = get_telemetry()

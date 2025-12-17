@@ -309,6 +309,31 @@ if abs(_rubric_weight_sum - 1.0) > 0.01:
 
 
 # =============================================================================
+# ADR-016: Safety Gate Configuration
+# =============================================================================
+# Pass/fail safety check before rubric scoring applies.
+# Filters harmful content (dangerous instructions, malware, self-harm, PII).
+# When enabled, responses failing safety checks are capped at score 0.
+
+DEFAULT_SAFETY_GATE_ENABLED = False  # Off by default for backwards compatibility
+DEFAULT_SAFETY_SCORE_CAP = 0.0  # Score cap for failed safety checks
+
+# Safety gate enabled - priority: env var > config file > default
+_safety_gate_env = os.getenv("LLM_COUNCIL_SAFETY_GATE")
+SAFETY_GATE_ENABLED = (
+    _safety_gate_env.lower() in ('true', '1', 'yes') if _safety_gate_env else
+    _user_config.get("safety_gate", DEFAULT_SAFETY_GATE_ENABLED)
+)
+
+# Safety score cap - priority: env var > config file > default
+_safety_cap_env = os.getenv("LLM_COUNCIL_SAFETY_SCORE_CAP")
+SAFETY_SCORE_CAP = (
+    float(_safety_cap_env) if _safety_cap_env else
+    float(_user_config.get("safety_score_cap", DEFAULT_SAFETY_SCORE_CAP))
+)
+
+
+# =============================================================================
 # ADR-015: Bias Auditing Configuration
 # =============================================================================
 # Automatically detect systematic biases in peer review scoring:

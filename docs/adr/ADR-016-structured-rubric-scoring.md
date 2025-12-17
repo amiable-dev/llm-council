@@ -369,6 +369,7 @@ The council approved ADR-016 with the following conditions:
 2. ✅ Add Relevance dimension
 3. ✅ Supersede ADR-014 (verbosity penalty handled by Conciseness)
 4. ✅ Document scoring anchors before production use (see below)
+5. ✅ Implement Safety Gate pre-check (see below)
 
 ---
 
@@ -445,13 +446,52 @@ The ceiling thresholds were chosen based on the principle that **accuracy is a p
 
 ---
 
+## Safety Gate (Condition #5)
+
+A pass/fail safety check runs before rubric scoring to filter harmful content. Responses that fail safety checks are capped at score 0 regardless of other dimension scores.
+
+### Safety Patterns Detected
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| **dangerous_instructions** | Weapons, explosives, harmful devices | "How to make a bomb" |
+| **weapon_making** | Firearm/weapon construction | "Build a gun at home" |
+| **malware_hacking** | Unauthorized access, malware | "Hack into an account" |
+| **self_harm** | Self-harm encouragement | "Ways to hurt yourself" |
+| **pii_exposure** | Personal information leakage | "SSN: 123-45-6789" |
+
+### Context-Aware Detection
+
+Educational/defensive content is allowed if it includes appropriate context:
+- "To prevent this attack..." ✅ Passes
+- "Here's how to hack..." ❌ Fails
+- "I can't provide instructions for..." ✅ Passes (refusal)
+
+### Configuration
+
+```bash
+# Enable safety gate (off by default)
+export LLM_COUNCIL_SAFETY_GATE=true
+
+# Customize score cap for failed safety checks (default: 0)
+export LLM_COUNCIL_SAFETY_SCORE_CAP=0.0
+```
+
+### Implementation Notes
+
+- Safety gate runs after Stage 1 (response collection)
+- Results are included in metadata under `safety_gate`
+- Failed models are listed in `safety_gate.failed_models`
+- Does not block response generation, only caps scores
+
+---
+
 ## Future Work
 
-The following items from council review were **recommendations** (not acceptance conditions) and are tracked for future consideration:
+The following items from council review are tracked for future consideration:
 
-1. **Safety Pre-Check Gate** - Pass/fail gate before rubric applies to filter harmful content
-2. **Task-Specific Rubrics** - Different weights for coding, creative, factual queries
-3. **Z-Normalization** - Calibrate reviewer scores to reduce harsh/generous bias
+1. **Task-Specific Rubrics** - Different weights for coding, creative, factual queries
+2. **Z-Normalization** - Calibrate reviewer scores to reduce harsh/generous bias
 
 ---
 

@@ -336,6 +336,28 @@ export LLM_COUNCIL_WEIGHT_CONCISENESS=0.10
 export LLM_COUNCIL_WEIGHT_CLARITY=0.20
 ```
 
+### Safety Gate (ADR-016)
+
+When enabled, a pass/fail safety check runs before rubric scoring to filter harmful content:
+
+| Pattern | Description |
+|---------|-------------|
+| **dangerous_instructions** | Weapons, explosives, harmful devices |
+| **weapon_making** | Firearm/weapon construction |
+| **malware_hacking** | Unauthorized access, malware |
+| **self_harm** | Self-harm encouragement |
+| **pii_exposure** | Personal information leakage |
+
+Responses that fail safety checks are capped at score 0 regardless of other dimension scores. Educational/defensive content is context-aware and allowed.
+
+```bash
+# Enable safety gate
+export LLM_COUNCIL_SAFETY_GATE=true
+
+# Customize score cap (default: 0)
+export LLM_COUNCIL_SAFETY_SCORE_CAP=0.0
+```
+
 ### Bias Auditing (ADR-015)
 
 When enabled, the council automatically detects systematic biases in peer review scoring:
@@ -376,6 +398,8 @@ export LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD=0.5
 | `LLM_COUNCIL_RUBRIC_SCORING` | Enable multi-dimensional rubric scoring | false |
 | `LLM_COUNCIL_ACCURACY_CEILING` | Use accuracy as score ceiling | true |
 | `LLM_COUNCIL_WEIGHT_*` | Rubric dimension weights (ACCURACY, RELEVANCE, COMPLETENESS, CONCISENESS, CLARITY) | See above |
+| `LLM_COUNCIL_SAFETY_GATE` | Enable safety pre-check gate | false |
+| `LLM_COUNCIL_SAFETY_SCORE_CAP` | Score cap for failed safety checks | 0.0 |
 | `LLM_COUNCIL_BIAS_AUDIT` | Enable bias auditing (ADR-015) | false |
 | `LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD` | Length-score correlation threshold for bias detection | 0.3 |
 | `LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD` | Position variance threshold for bias detection | 0.5 |

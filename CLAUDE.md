@@ -48,6 +48,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Fallback**: If rubric parsing fails, falls back to holistic scoring via `parse_ranking_from_text()`
 - **Scoring Anchors**: Defined in ADR-016 with behavioral examples for each score level (1-10)
 
+**`safety_gate.py`** - ADR-016 Safety Gate
+- `SafetyCheckResult`: Dataclass with passed, reason, flagged_patterns
+- `check_response_safety()`: Scans response for harmful patterns
+- `apply_safety_gate_to_score()`: Caps score if safety check fails
+- **Patterns detected**: dangerous_instructions, weapon_making, malware_hacking, self_harm, pii_exposure
+- **Context-aware**: Exclusion contexts allow educational/defensive content
+- Configuration in `config.py`: `SAFETY_GATE_ENABLED`, `SAFETY_SCORE_CAP`
+
 **`bias_audit.py`** - ADR-015 Bias Auditing
 - `BiasAuditResult`: Dataclass containing all bias metrics
 - `calculate_length_correlation()`: Pure Python Pearson correlation (no scipy/numpy)
