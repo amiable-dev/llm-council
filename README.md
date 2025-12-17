@@ -371,6 +371,8 @@ When enabled, the council automatically detects systematic biases in peer review
 **Output**: When bias is detected, the metadata includes a `bias_audit` object with:
 - `length_score_correlation`: Pearson correlation coefficient
 - `length_bias_detected`: Boolean flag
+- `position_score_variance`: Variance of mean scores by presentation position
+- `position_bias_detected`: Boolean flag (derived from anonymization labels A, B, C...)
 - `harsh_reviewers` / `generous_reviewers`: Lists of biased reviewers
 - `overall_bias_risk`: "low", "medium", or "high"
 

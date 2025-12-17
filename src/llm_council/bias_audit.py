@@ -227,17 +227,92 @@ def calculate_position_bias(
     return round(pos_variance, 3), detected
 
 
+def derive_position_mapping(
+    label_to_model: Optional[Dict[str, Any]]
+) -> Dict[str, int]:
+    """Derive position mapping from label_to_model mapping.
+
+    Supports two formats:
+    1. Enhanced format (v0.3.0+): {"Response A": {"model": "gpt-4", "display_index": 0}}
+    2. Legacy format: {"Response A": "gpt-4"}
+
+    The enhanced format uses display_index directly, eliminating string parsing fragility.
+    Falls back to letter parsing (A=0, B=1) for legacy format or missing display_index.
+
+    INVARIANT: Anonymization labels are assigned in lexicographic order corresponding
+    to presentation order (A=first, B=second). This invariant MUST be maintained.
+
+    Args:
+        label_to_model: Mapping from labels like 'Response A' to model names or
+                        enhanced dicts with {model, display_index}
+
+    Returns:
+        {model_name: position_index} mapping
+    """
+    if not label_to_model:
+        return {}
+
+    import re
+    position_mapping: Dict[str, int] = {}
+
+    for label, value in label_to_model.items():
+        # Handle enhanced format: {"model": "...", "display_index": N}
+        if isinstance(value, dict):
+            model = value.get("model")
+            display_index = value.get("display_index")
+
+            if model:
+                if display_index is not None:
+                    # Use explicit display_index (preferred)
+                    position_mapping[model] = display_index
+                else:
+                    # Fall back to letter parsing if display_index missing
+                    match = re.match(r'^[Rr]esponse\s+([A-Za-z])$', label.strip())
+                    if match:
+                        letter = match.group(1).upper()
+                        position = ord(letter) - ord('A')
+                        position_mapping[model] = position
+        else:
+            # Legacy format: value is the model name string
+            model = value
+            match = re.match(r'^[Rr]esponse\s+([A-Za-z])$', label.strip())
+            if match:
+                letter = match.group(1).upper()
+                position = ord(letter) - ord('A')
+                position_mapping[model] = position
+
+    return position_mapping
+
+
+def _get_model_from_label_value(value: Any) -> Optional[str]:
+    """Extract model name from label_to_model value (enhanced or legacy format).
+
+    Args:
+        value: Either a string (legacy) or dict with 'model' key (enhanced)
+
+    Returns:
+        Model name string or None
+    """
+    if isinstance(value, dict):
+        return value.get("model")
+    return value if isinstance(value, str) else None
+
+
 def extract_scores_from_stage2(
     stage2_results: List[Dict[str, Any]],
-    label_to_model: Dict[str, str]
+    label_to_model: Dict[str, Any]
 ) -> Dict[str, Dict[str, float]]:
     """Extract scores from Stage 2 parsed rankings.
 
     Converts {reviewer: {label: score}} to {reviewer: {model: score}}.
 
+    Supports both enhanced format (v0.3.0+) and legacy format:
+    - Enhanced: {"Response A": {"model": "gpt-4", "display_index": 0}}
+    - Legacy: {"Response A": "gpt-4"}
+
     Args:
         stage2_results: List of Stage 2 result dicts with parsed_ranking
-        label_to_model: Mapping from "Response A" labels to model names
+        label_to_model: Mapping from "Response A" labels to model names or enhanced dicts
 
     Returns:
         {reviewer_model: {candidate_model: score}} nested dict
@@ -260,7 +335,9 @@ def extract_scores_from_stage2(
         reviewer_scores: Dict[str, float] = {}
         for label, score in scores.items():
             # Convert label (e.g., "Response A") to model name
-            model = label_to_model.get(label)
+            # Supports both enhanced and legacy formats
+            label_value = label_to_model.get(label)
+            model = _get_model_from_label_value(label_value) if label_value else None
             if model:
                 reviewer_scores[model] = score
 

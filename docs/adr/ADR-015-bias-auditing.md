@@ -1,6 +1,6 @@
 # ADR-015: Bias Auditing and Length Correlation Tracking
 
-**Status:** Accepted (Council Reviewed 2025-12-17)
+**Status:** Accepted → Implemented (2025-12-17)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-014 (Verbosity Penalty)
@@ -346,11 +346,75 @@ The council identified biases not covered in the original proposal:
 
 | ADR | Dependency Type |
 |-----|-----------------|
-| ADR-017 (Position Tracking) | **Required** - Position data needed for bias calculation |
+| ~~ADR-017 (Position Tracking)~~ | **Implemented Inline** - Position data derived from `label_to_model` via `derive_position_mapping()` |
 | ADR-016 (Rubric Scoring) | **Enhances** - Per-dimension bias analysis possible with rubric |
 | ADR-014 (Verbosity Penalty) | **Superseded** - Bias auditing replaces manual penalty |
 
-**Priority:** HIGH - Foundation for data-driven evaluation improvements. Implement after ADR-016/017.
+**Priority:** HIGH - Foundation for data-driven evaluation improvements. ~~Implement after ADR-016/017.~~ Implemented 2025-12-17.
+
+---
+
+## Implementation Status (2025-12-17)
+
+### Completed Components
+
+| Component | File | Tests |
+|-----------|------|-------|
+| `BiasAuditResult` dataclass | `src/llm_council/bias_audit.py` | 2 tests |
+| `calculate_length_correlation()` | `src/llm_council/bias_audit.py` | 6 tests |
+| `audit_reviewer_calibration()` | `src/llm_council/bias_audit.py` | 4 tests |
+| `calculate_position_bias()` | `src/llm_council/bias_audit.py` | 4 tests |
+| `derive_position_mapping()` | `src/llm_council/bias_audit.py` | 8 tests |
+| `extract_scores_from_stage2()` | `src/llm_council/bias_audit.py` | 4 tests |
+| `run_bias_audit()` | `src/llm_council/bias_audit.py` | 5 tests |
+| Pipeline integration | `src/llm_council/council.py` | - |
+| Configuration | `src/llm_council/config.py` | - |
+
+### Key Implementation Details
+
+1. **Pure Python** - No scipy/numpy dependency; uses `statistics` module
+2. **Position Mapping** - Derived from `label_to_model` (Response A → 0, Response B → 1, etc.)
+3. **Pearson Correlation** - Custom implementation with Abramowitz-Stegun normal CDF approximation
+4. **Configurable Thresholds**:
+   - `LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD` (default: 0.3)
+   - `LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD` (default: 0.5)
+
+### Position Mapping Implementation
+
+Position information is derived from the anonymization label mapping rather than tracked separately.
+
+#### Invariant (Council-Recommended)
+
+> **INVARIANT:** Anonymization labels SHALL be assigned in lexicographic order corresponding to presentation order:
+> - Label "Response A" → position 0 (first presented)
+> - Label "Response B" → position 1 (second presented)
+> - And so forth lexicographically
+>
+> This invariant MUST be maintained by any changes to the anonymization module.
+
+#### Enhanced Data Structure
+
+To eliminate fragility of string parsing, the `label_to_model` structure includes explicit `display_index`:
+
+```python
+# Enhanced label_to_model structure (v0.3.0+)
+{
+    "Response A": {"model": "openai/gpt-4", "display_index": 0},
+    "Response B": {"model": "anthropic/claude-3", "display_index": 1},
+    "Response C": {"model": "google/gemini-pro", "display_index": 2}
+}
+
+# derive_position_mapping() output
+{"openai/gpt-4": 0, "anthropic/claude-3": 1, "google/gemini-pro": 2}
+```
+
+#### Backward Compatibility
+
+The `derive_position_mapping()` function supports both formats:
+- **Enhanced format**: Uses `display_index` directly (preferred)
+- **Legacy format**: Falls back to parsing position from label letter (A=0, B=1)
+
+This enables position bias detection without requiring a separate ADR-017. See [ADR-017](ADR-017-position-tracking.md) for scenarios where explicit position tracking would be needed.
 
 ---
 

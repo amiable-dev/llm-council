@@ -61,9 +61,21 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `calculate_length_correlation()`: Pure Python Pearson correlation (no scipy/numpy)
 - `audit_reviewer_calibration()`: Detects harsh/generous reviewers (mean ± 1 std from median)
 - `calculate_position_bias()`: Detects position effects in scoring
+- `derive_position_mapping()`: Converts `label_to_model` → position indices
+  - Supports enhanced format (v0.3.0+): Uses `display_index` directly
+  - Supports legacy format: Derives from label letter (A → 0, B → 1)
 - `run_bias_audit()`: Main entry point, runs all bias checks and returns overall risk assessment
 - `extract_scores_from_stage2()`: Converts Stage 2 results to format needed for bias audit
 - Configuration in `config.py`: `BIAS_AUDIT_ENABLED`, `LENGTH_CORRELATION_THRESHOLD`, `POSITION_VARIANCE_THRESHOLD`
+
+**Enhanced `label_to_model` Format (v0.3.0+)**
+Per council recommendation for robustness, anonymization now uses explicit position indices:
+```python
+# Enhanced format (eliminates string parsing fragility)
+{"Response A": {"model": "openai/gpt-4", "display_index": 0}, ...}
+
+# INVARIANT: Labels are assigned in lexicographic order (A=0, B=1, etc.)
+```
 
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`

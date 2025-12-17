@@ -1,6 +1,6 @@
 # ADR-017: Response Order Randomization
 
-**Status:** Accepted (Essential for ADR-015, Council Reviewed 2025-12-17)
+**Status:** Accepted → Partially Implemented (2025-12-17)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-015 (Bias Auditing)
@@ -138,14 +138,62 @@ For each reviewer, systematically rotate the order.
 
 ## Implementation Status
 
-| Feature | Status |
-|---------|--------|
-| Basic randomization | ✅ Implemented |
-| Anonymous labels | ✅ Implemented |
-| Label-to-model mapping | ✅ Implemented |
-| Position tracking | ❌ Not yet |
-| Per-reviewer randomization | ❌ Not yet |
-| Deterministic seed option | ❌ Not yet |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Basic randomization | ✅ Implemented | `random.shuffle()` in Stage 2 |
+| Anonymous labels | ✅ Implemented | Response A, B, C... |
+| Label-to-model mapping | ✅ Implemented | Enhanced format with `display_index` |
+| Position tracking | ✅ Implemented (v0.3.0) | Via `display_index` in enhanced format |
+| Per-reviewer randomization | ❌ Not yet | See "When More Advanced Tracking is Needed" |
+| Deterministic seed option | ❌ Not yet | See "When More Advanced Tracking is Needed" |
+
+### Position Tracking Implementation (v0.3.0)
+
+Position tracking is now implemented via the enhanced `label_to_model` format:
+
+```python
+# Enhanced format (v0.3.0+) - includes explicit display_index
+label_to_model = {
+    "Response A": {"model": "openai/gpt-4", "display_index": 0},
+    "Response B": {"model": "anthropic/claude-3", "display_index": 1},
+    "Response C": {"model": "google/gemini-pro", "display_index": 2}
+}
+```
+
+The `derive_position_mapping()` function in `bias_audit.py` extracts position data for ADR-015 bias auditing.
+
+**INVARIANT:** Labels are assigned in lexicographic order corresponding to presentation order (A=0, B=1, etc.). This invariant MUST be maintained by any changes to the anonymization module.
+
+---
+
+## When More Advanced Position Tracking is Needed
+
+Per LLM Council review, the current implementation (single-order randomization with position tracking) is sufficient for MVP. However, separate position tracking mechanisms would be needed for:
+
+### Scenario 1: Per-Reviewer Randomization
+If each reviewer sees a different order to further mitigate position bias, the current single `display_index` won't capture reviewer-specific positions.
+
+**Solution:** Add `reviewer_position_mapping: Dict[str, Dict[str, int]]` to track per-reviewer orders.
+
+### Scenario 2: Client-Side Shuffling
+If the frontend shuffles response order for UI reasons (e.g., to prevent "first-token loading bias"), the backend `display_index` won't reflect the actual displayed order.
+
+**Solution:** Frontend must report actual display positions back to the backend.
+
+### Scenario 3: Dynamic/Interactive Reordering
+If users can manually reorder responses, sort by criteria, or collapse/expand sections, static position tracking breaks.
+
+**Solution:** Log position at interaction time, not at generation time.
+
+### Scenario 4: Multi-Round Re-Presentation
+If responses are re-shown in subsequent conversation turns with different ordering, initial position data becomes stale.
+
+**Solution:** Track position per-round, not just per-session.
+
+### Scenario 5: Non-Ordinal Labels
+If anonymization evolves to use non-alphabetical labels (GUIDs, colors, random strings), the current `display_index` derivation from label letters would break.
+
+**Solution:** Already mitigated by explicit `display_index` in enhanced format.
 
 ---
 
@@ -197,26 +245,36 @@ ADR-017 (Position Tracking)
 
 ### Code Changes Required
 
+~~Original proposal: Add separate `label_to_position` return value.~~
+
+**Actual Implementation (v0.3.0):** Position data embedded in enhanced `label_to_model` format:
+
 ```python
-# council.py - Updated return signature
-async def stage2_collect_rankings(
-    user_query: str,
-    stage1_results: List[Dict]
-) -> Tuple[List[Dict], Dict[str, str], Dict[str, int], Dict]:
-    """
-    Returns:
-        stage2_results: List of ranking results
-        label_to_model: {"Response A": "openai/gpt-4", ...}
-        label_to_position: {"Response A": 0, "Response B": 1, ...}  # NEW
-        usage: Token usage stats
-    """
+# council.py - Enhanced label_to_model format
+label_to_model = {
+    f"Response {label}": {"model": result['model'], "display_index": i}
+    for i, (label, result) in enumerate(zip(labels, shuffled_results))
+}
+
+# bias_audit.py - Extract position mapping
+def derive_position_mapping(label_to_model):
+    """Supports both enhanced and legacy formats."""
+    for label, value in label_to_model.items():
+        if isinstance(value, dict):
+            position_mapping[value["model"]] = value["display_index"]
+        else:
+            # Legacy fallback: derive from label letter
+            position_mapping[value] = ord(label.split()[-1]) - ord('A')
 ```
 
 ### Status Update
 
-**Status:** Accepted → **Accepted (Essential for ADR-015)**
+**Status:** Accepted → **Partially Implemented (2025-12-17)**
 
-Position tracking implementation is now a **blocking dependency** for ADR-015 bias auditing.
+- ✅ Position tracking: Implemented via `display_index`
+- ✅ ADR-015 integration: `derive_position_mapping()` extracts position data
+- ❌ Per-reviewer randomization: Not yet needed
+- ❌ Deterministic seeding: Not yet needed
 
 ---
 
