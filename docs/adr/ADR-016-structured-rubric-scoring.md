@@ -362,13 +362,96 @@ Based on council feedback, the recommended weight distribution:
 
 ### Status Update
 
-**Status:** Draft → **Accepted with Modifications**
+**Status:** Draft → Accepted with Modifications → **Implemented (TDD)**
 
 The council approved ADR-016 with the following conditions:
-1. Implement accuracy ceiling mechanism
-2. Add Relevance dimension
-3. Supersede ADR-014 (verbosity penalty handled by Conciseness)
-4. Document scoring anchors before production use
+1. ✅ Implement accuracy ceiling mechanism
+2. ✅ Add Relevance dimension
+3. ✅ Supersede ADR-014 (verbosity penalty handled by Conciseness)
+4. ✅ Document scoring anchors before production use (see below)
+
+---
+
+## Scoring Anchors (Condition #4)
+
+To reduce inter-reviewer noise, the following behavioral anchors define what each score level means:
+
+### Accuracy Anchors
+
+| Score | Description | Example |
+|-------|-------------|---------|
+| **9-10** | Completely accurate, no errors or hallucinations | All facts verifiable, claims properly qualified |
+| **7-8** | Mostly accurate, minor imprecisions | One date slightly off, but core message correct |
+| **5-6** | Mixed accuracy, some errors | Several minor factual errors, but main point valid |
+| **3-4** | Significant errors | Major misconceptions or outdated information |
+| **1-2** | Mostly incorrect or hallucinated | Fabricated facts, confident lies |
+
+### Relevance Anchors
+
+| Score | Description | Example |
+|-------|-------------|---------|
+| **9-10** | Directly addresses the question asked | Stays on topic, answers what was asked |
+| **7-8** | Mostly relevant, minor tangents | Includes useful but not directly asked info |
+| **5-6** | Partially relevant | Some content off-topic |
+| **3-4** | Largely off-topic | Misunderstood the question |
+| **1-2** | Completely irrelevant | Did not engage with the question |
+
+### Completeness Anchors
+
+| Score | Description | Example |
+|-------|-------------|---------|
+| **9-10** | Comprehensive, covers all aspects | All parts of multi-part question answered |
+| **7-8** | Covers main points, minor omissions | 90% of question addressed |
+| **5-6** | Covers some aspects, gaps | Missing important considerations |
+| **3-4** | Incomplete | Major parts of question unanswered |
+| **1-2** | Barely addresses the question | Superficial or placeholder response |
+
+### Conciseness Anchors
+
+| Score | Description | Example |
+|-------|-------------|---------|
+| **9-10** | Every word adds value | Dense, efficient communication |
+| **7-8** | Mostly efficient, minor padding | Slight verbosity but acceptable |
+| **5-6** | Some unnecessary content | Redundant explanations, hedging |
+| **3-4** | Significant padding | Filler phrases, restates question |
+| **1-2** | Extremely verbose | Bloated, repetitive, buries the answer |
+
+### Clarity Anchors
+
+| Score | Description | Example |
+|-------|-------------|---------|
+| **9-10** | Crystal clear, perfectly organized | Logical flow, appropriate formatting |
+| **7-8** | Clear, minor organization issues | Good structure, slight improvements possible |
+| **5-6** | Understandable but messy | Points present but poorly organized |
+| **3-4** | Confusing | Hard to follow, unclear language |
+| **1-2** | Incomprehensible | Incoherent or contradictory |
+
+---
+
+## Accuracy Ceiling Rationale
+
+The ceiling thresholds were chosen based on the principle that **accuracy is a prerequisite, not just a dimension**:
+
+| Accuracy Score | Ceiling | Rationale |
+|----------------|---------|-----------|
+| **< 5** | 4.0 (40%) | A response scoring 4 or below on accuracy is fundamentally unreliable. Even if well-written, confident lies are worse than no answer. The 40% ceiling ensures such responses cannot rank in the top half. |
+| **5-6** | 7.0 (70%) | Moderate accuracy issues ("mixed accuracy" per anchors) warrant caution but aren't disqualifying. The 70% ceiling allows reasonable ranking while preventing top scores. |
+| **≥ 7** | None | At 7+, accuracy is acceptable ("mostly accurate" per anchors). Other dimensions can differentiate responses without penalty. |
+
+**Design Principle**: These thresholds map to the scoring anchor definitions above:
+- < 5 = "Significant errors" or worse → cannot be a good response
+- 5-6 = "Mixed accuracy" → capped at "good" (70%)
+- 7+ = "Mostly accurate" or better → full scoring potential
+
+---
+
+## Future Work
+
+The following items from council review were **recommendations** (not acceptance conditions) and are tracked for future consideration:
+
+1. **Safety Pre-Check Gate** - Pass/fail gate before rubric applies to filter harmful content
+2. **Task-Specific Rubrics** - Different weights for coding, creative, factual queries
+3. **Z-Normalization** - Calibrate reviewer scores to reduce harsh/generous bias
 
 ---
 

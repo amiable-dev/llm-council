@@ -311,11 +311,18 @@ By default, reviewers provide a single 1-10 holistic score. With rubric scoring 
 | **Clarity** | 20% | Well-organized, easy to understand |
 
 **Accuracy Ceiling**: When enabled (default), accuracy acts as a ceiling on the overall score:
-- Accuracy < 5: Score caps at 4.0 (40%)
-- Accuracy 5-6: Score caps at 7.0 (70%)
-- Accuracy ≥ 7: No ceiling
+- Accuracy < 5: Score caps at 4.0 (40%) — "significant errors or worse"
+- Accuracy 5-6: Score caps at 7.0 (70%) — "mixed accuracy"
+- Accuracy ≥ 7: No ceiling — "mostly accurate or better"
 
 This prevents well-written hallucinations from ranking well.
+
+**Scoring Anchors**: Each score level has defined behavioral meaning (see [ADR-016](docs/adr/ADR-016-structured-rubric-scoring.md)):
+- 9-10: Excellent (completely accurate, comprehensive, crystal clear)
+- 7-8: Good (mostly accurate, covers main points)
+- 5-6: Mixed (some errors or gaps)
+- 3-4: Poor (significant issues)
+- 1-2: Failing (fundamentally flawed)
 
 ```bash
 # Enable rubric scoring

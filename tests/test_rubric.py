@@ -490,6 +490,151 @@ That concludes my evaluation.
         assert result["evaluations"]["Response B"]["accuracy"] == 5
 
 
+class TestFallbackBehavior:
+    """Tests for fallback behavior when rubric parsing fails."""
+
+    def test_fallback_returns_none_for_invalid_json(self):
+        """When rubric parsing fails, should return None for fallback to holistic."""
+        # Response without proper JSON structure
+        response_text = '''
+I've evaluated the responses.
+
+Response A is better because it's more accurate.
+Response B lacks completeness.
+
+FINAL RANKING:
+1. Response A
+2. Response B
+'''
+        result = parse_rubric_evaluation(response_text)
+        # Should return None, allowing fallback to holistic scoring
+        assert result is None
+
+    def test_fallback_holistic_ranking_still_parseable(self):
+        """Holistic format should be parseable by the main council parser."""
+        from llm_council.council import parse_ranking_from_text
+
+        response_text = '''
+Let me evaluate these responses.
+
+Response A is very accurate and complete.
+Response B has some issues.
+
+```json
+{
+  "ranking": ["Response A", "Response B"],
+  "scores": {
+    "Response A": 8,
+    "Response B": 6
+  }
+}
+```
+'''
+        # Rubric parser should return None (no evaluations field)
+        rubric_result = parse_rubric_evaluation(response_text)
+        assert rubric_result is None
+
+        # But holistic parser should still work
+        holistic_result = parse_ranking_from_text(response_text)
+        assert holistic_result["ranking"] == ["Response A", "Response B"]
+        assert holistic_result["scores"]["Response A"] == 8
+
+    def test_malformed_evaluations_returns_none(self):
+        """Malformed evaluations structure should return None."""
+        response_text = '''
+```json
+{
+  "ranking": ["Response A"],
+  "evaluations": "not a dict"
+}
+```
+'''
+        result = parse_rubric_evaluation(response_text)
+        # Should return None because evaluations is not a dict
+        assert result is None or not isinstance(result.get("evaluations"), dict)
+
+
+class TestRubricPipelineIntegration:
+    """Tests for rubric scoring integration with council pipeline."""
+
+    def test_stage2_rubric_score_calculation(self):
+        """Test that Stage 2 correctly calculates rubric scores."""
+        from llm_council.rubric import (
+            calculate_weighted_score_with_accuracy_ceiling,
+            UPDATED_RUBRIC_WEIGHTS,
+        )
+
+        # Simulate parsed rubric evaluation from Stage 2
+        evaluations = {
+            "Response A": {
+                "accuracy": 9, "relevance": 8, "completeness": 8,
+                "conciseness": 7, "clarity": 8
+            },
+            "Response B": {
+                "accuracy": 4, "relevance": 9, "completeness": 9,
+                "conciseness": 9, "clarity": 9
+            },
+        }
+
+        # Calculate scores as council.py would
+        scores_with_ceiling = {}
+        for resp_label, eval_data in evaluations.items():
+            dimension_scores = {
+                "accuracy": eval_data.get("accuracy", 5),
+                "relevance": eval_data.get("relevance", 5),
+                "completeness": eval_data.get("completeness", 5),
+                "conciseness": eval_data.get("conciseness", 5),
+                "clarity": eval_data.get("clarity", 5),
+            }
+            overall = calculate_weighted_score_with_accuracy_ceiling(
+                dimension_scores, UPDATED_RUBRIC_WEIGHTS
+            )
+            scores_with_ceiling[resp_label] = overall
+
+        # Response A: high accuracy, no ceiling
+        # 0.35*9 + 0.10*8 + 0.20*8 + 0.15*7 + 0.20*8 = 3.15 + 0.80 + 1.60 + 1.05 + 1.60 = 8.20
+        assert scores_with_ceiling["Response A"] == 8.2
+
+        # Response B: low accuracy (4), ceiling at 4.0
+        assert scores_with_ceiling["Response B"] == 4.0
+
+    def test_aggregate_rankings_preserve_rubric_scores(self):
+        """Test that aggregate rankings work with rubric scores."""
+        # Simulate stage2_results with rubric scoring
+        stage2_results = [
+            {
+                "model": "reviewer-1",
+                "parsed_ranking": {
+                    "ranking": ["Response A", "Response B"],
+                    "scores": {"Response A": 8.2, "Response B": 4.0},
+                    "rubric_scoring": True,
+                }
+            },
+            {
+                "model": "reviewer-2",
+                "parsed_ranking": {
+                    "ranking": ["Response A", "Response B"],
+                    "scores": {"Response A": 7.5, "Response B": 5.0},
+                    "rubric_scoring": True,
+                }
+            },
+        ]
+        label_to_model = {
+            "Response A": "model-a",
+            "Response B": "model-b",
+        }
+
+        from llm_council.council import calculate_aggregate_rankings
+
+        rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+
+        # model-a should rank higher (better scores)
+        assert rankings[0]["model"] == "model-a"
+        assert rankings[0]["rank"] == 1
+        assert rankings[1]["model"] == "model-b"
+        assert rankings[1]["rank"] == 2
+
+
 class TestRubricIntegration:
     """Integration tests combining scoring and parsing."""
 

@@ -39,11 +39,14 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `RubricScore`: Dataclass for multi-dimensional scores (accuracy, relevance, completeness, conciseness, clarity)
 - `calculate_weighted_score()`: Weighted average from dimension scores
 - `calculate_weighted_score_with_accuracy_ceiling()`: Weighted score with accuracy acting as ceiling
-  - Accuracy < 5: caps at 4.0 (prevents well-written hallucinations from ranking well)
-  - Accuracy 5-6: caps at 7.0
-  - Accuracy ≥ 7: no ceiling
+  - Accuracy < 5: caps at 4.0 ("significant errors or worse" per scoring anchors)
+  - Accuracy 5-6: caps at 7.0 ("mixed accuracy")
+  - Accuracy ≥ 7: no ceiling ("mostly accurate or better")
+  - **Rationale**: Prevents confident lies from ranking well; thresholds map to scoring anchor definitions
 - `parse_rubric_evaluation()`: Extracts rubric JSON from model response, handles code blocks
 - `validate_weights()`: Ensures weights sum to 1.0 and include all dimensions
+- **Fallback**: If rubric parsing fails, falls back to holistic scoring via `parse_ranking_from_text()`
+- **Scoring Anchors**: Defined in ADR-016 with behavioral examples for each score level (1-10)
 
 **`bias_audit.py`** - ADR-015 Bias Auditing
 - `BiasAuditResult`: Dataclass containing all bias metrics
