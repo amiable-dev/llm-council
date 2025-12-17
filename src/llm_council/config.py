@@ -309,6 +309,40 @@ if abs(_rubric_weight_sum - 1.0) > 0.01:
 
 
 # =============================================================================
+# ADR-015: Bias Auditing Configuration
+# =============================================================================
+# Automatically detect systematic biases in peer review scoring:
+# - Length-score correlation (verbosity bias)
+# - Position bias (primacy/recency effects)
+# - Reviewer calibration (harsh vs generous reviewers)
+
+DEFAULT_BIAS_AUDIT_ENABLED = False  # Off by default for backwards compatibility
+DEFAULT_LENGTH_CORRELATION_THRESHOLD = 0.3  # |r| above this = bias detected
+DEFAULT_POSITION_VARIANCE_THRESHOLD = 0.5   # Score variance by position
+
+# Bias audit enabled - priority: env var > config file > default
+_bias_audit_env = os.getenv("LLM_COUNCIL_BIAS_AUDIT")
+BIAS_AUDIT_ENABLED = (
+    _bias_audit_env.lower() in ('true', '1', 'yes') if _bias_audit_env else
+    _user_config.get("bias_audit", DEFAULT_BIAS_AUDIT_ENABLED)
+)
+
+# Length correlation threshold - priority: env var > config file > default
+_length_corr_env = os.getenv("LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD")
+LENGTH_CORRELATION_THRESHOLD = (
+    float(_length_corr_env) if _length_corr_env else
+    float(_user_config.get("length_correlation_threshold", DEFAULT_LENGTH_CORRELATION_THRESHOLD))
+)
+
+# Position variance threshold - priority: env var > config file > default
+_position_var_env = os.getenv("LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD")
+POSITION_VARIANCE_THRESHOLD = (
+    float(_position_var_env) if _position_var_env else
+    float(_user_config.get("position_variance_threshold", DEFAULT_POSITION_VARIANCE_THRESHOLD))
+)
+
+
+# =============================================================================
 # Telemetry Configuration (ADR-001)
 # =============================================================================
 # Opt-in telemetry for contributing anonymized voting data to the LLM Leaderboard.
