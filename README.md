@@ -329,6 +329,31 @@ export LLM_COUNCIL_WEIGHT_CONCISENESS=0.10
 export LLM_COUNCIL_WEIGHT_CLARITY=0.20
 ```
 
+### Bias Auditing (ADR-015)
+
+When enabled, the council automatically detects systematic biases in peer review scoring:
+
+| Bias Type | Description | Detection Threshold |
+|-----------|-------------|---------------------|
+| **Length-Score Correlation** | Do longer responses score higher? | \|r\| > 0.3 |
+| **Reviewer Calibration** | Are some reviewers consistently harsh/generous? | Mean ± 1 std from median |
+| **Position Bias** | Does presentation order affect scores? | Variance > 0.5 |
+
+**Output**: When bias is detected, the metadata includes a `bias_audit` object with:
+- `length_score_correlation`: Pearson correlation coefficient
+- `length_bias_detected`: Boolean flag
+- `harsh_reviewers` / `generous_reviewers`: Lists of biased reviewers
+- `overall_bias_risk`: "low", "medium", or "high"
+
+```bash
+# Enable bias auditing
+export LLM_COUNCIL_BIAS_AUDIT=true
+
+# Customize thresholds (optional)
+export LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD=0.3
+export LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD=0.5
+```
+
 ### All Environment Variables
 
 | Variable | Description | Default |
@@ -344,6 +369,9 @@ export LLM_COUNCIL_WEIGHT_CLARITY=0.20
 | `LLM_COUNCIL_RUBRIC_SCORING` | Enable multi-dimensional rubric scoring | false |
 | `LLM_COUNCIL_ACCURACY_CEILING` | Use accuracy as score ceiling | true |
 | `LLM_COUNCIL_WEIGHT_*` | Rubric dimension weights (ACCURACY, RELEVANCE, COMPLETENESS, CONCISENESS, CLARITY) | See above |
+| `LLM_COUNCIL_BIAS_AUDIT` | Enable bias auditing (ADR-015) | false |
+| `LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD` | Length-score correlation threshold for bias detection | 0.3 |
+| `LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD` | Position variance threshold for bias detection | 0.5 |
 | `LLM_COUNCIL_SUPPRESS_WARNINGS` | Suppress security warnings | false |
 
 ## Credits & Attribution

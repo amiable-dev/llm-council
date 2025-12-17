@@ -45,6 +45,15 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `parse_rubric_evaluation()`: Extracts rubric JSON from model response, handles code blocks
 - `validate_weights()`: Ensures weights sum to 1.0 and include all dimensions
 
+**`bias_audit.py`** - ADR-015 Bias Auditing
+- `BiasAuditResult`: Dataclass containing all bias metrics
+- `calculate_length_correlation()`: Pure Python Pearson correlation (no scipy/numpy)
+- `audit_reviewer_calibration()`: Detects harsh/generous reviewers (mean ± 1 std from median)
+- `calculate_position_bias()`: Detects position effects in scoring
+- `run_bias_audit()`: Main entry point, runs all bias checks and returns overall risk assessment
+- `extract_scores_from_stage2()`: Converts Stage 2 results to format needed for bias audit
+- Configuration in `config.py`: `BIAS_AUDIT_ENABLED`, `LENGTH_CORRELATION_THRESHOLD`, `POSITION_VARIANCE_THRESHOLD`
+
 **`storage.py`**
 - JSON-based conversation storage in `data/conversations/`
 - Each conversation: `{id, created_at, messages[]}`
@@ -163,13 +172,17 @@ User Query
     ↓
 Stage 1: Parallel queries → [individual responses]
     ↓
+Stage 1.5 (optional): Style normalization
+    ↓
 Stage 2: Anonymize → Parallel ranking queries → [evaluations + parsed rankings]
     ↓
-Aggregate Rankings Calculation → [sorted by avg position]
+Aggregate Rankings Calculation → [sorted by Borda score]
+    ↓
+Bias Audit (if enabled): Length correlation, reviewer calibration, position bias
     ↓
 Stage 3: Chairman synthesis with full context
     ↓
-Return: {stage1, stage2, stage3, metadata}
+Return: {stage1, stage2, stage3, metadata (including bias_audit if enabled)}
     ↓
 Frontend: Display with tabs + validation UI
 ```

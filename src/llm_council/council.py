@@ -28,11 +28,17 @@ from llm_council.config import (
     RUBRIC_SCORING_ENABLED,
     ACCURACY_CEILING_ENABLED,
     RUBRIC_WEIGHTS,
+    BIAS_AUDIT_ENABLED,
 )
 from llm_council.rubric import (
     parse_rubric_evaluation,
     calculate_weighted_score,
     calculate_weighted_score_with_accuracy_ceiling,
+)
+from llm_council.bias_audit import (
+    run_bias_audit,
+    extract_scores_from_stage2,
+    BiasAuditResult,
 )
 from llm_council.telemetry import get_telemetry
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
@@ -1347,6 +1353,18 @@ async def run_full_council(
     total_usage["stage1_5"] = stage1_5_usage
     total_usage["stage2"] = stage2_usage
 
+    # ADR-015: Run bias audit if enabled
+    bias_audit_result = None
+    if BIAS_AUDIT_ENABLED and len(stage2_results) > 0:
+        # Extract scores from Stage 2 results
+        stage2_scores = extract_scores_from_stage2(stage2_results, label_to_model)
+        # Run bias audit (no position mapping available in current pipeline)
+        bias_audit_result = run_bias_audit(
+            stage1_results,
+            stage2_scores,
+            position_mapping=None  # Position data would need Stage 2 to track this
+        )
+
     # Stage 3: Synthesize final answer (with mode support)
     stage3_result, stage3_usage = await stage3_synthesize_final(
         user_query,
@@ -1409,6 +1427,11 @@ async def run_full_council(
     # Add degraded mode info if applicable
     if degraded_mode:
         metadata["degraded_mode"] = degraded_mode
+
+    # ADR-015: Add bias audit results if enabled and computed
+    if bias_audit_result is not None:
+        from dataclasses import asdict
+        metadata["bias_audit"] = asdict(bias_audit_result)
 
     # Emit telemetry event (non-blocking, fire-and-forget)
     telemetry = get_telemetry()
