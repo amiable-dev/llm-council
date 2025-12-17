@@ -1,6 +1,6 @@
 # ADR-017: Response Order Randomization
 
-**Status:** Accepted (Already Implemented)
+**Status:** Accepted (Essential for ADR-015, Council Reviewed 2025-12-17)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-015 (Bias Auditing)
@@ -155,6 +155,68 @@ For each reviewer, systematically rotate the order.
 2. Should we implement Latin square balancing for larger councils?
 3. How important is deterministic seeding for reproducibility?
 4. Should position tracking be mandatory (for ADR-015) or optional?
+
+---
+
+## Council Review Feedback
+
+**Reviewed:** 2025-12-17 (GPT-5.1, Gemini 3 Pro, Claude Sonnet 4.5, Grok 4)
+
+### Verdict: Approved - Position Tracking Essential
+
+The council unanimously approved ADR-017, emphasizing that position tracking is **essential** for ADR-015 bias auditing to function.
+
+### Key Insights
+
+> "Position bias is one of the most well-documented biases in LLM evaluation. Without position tracking, you cannot measure it, and without measuring it, you cannot prove your randomization is working."
+
+### Approved Enhancements (Priority Order)
+
+| Enhancement | Priority | Rationale |
+|-------------|----------|-----------|
+| **Position Tracking** | **P0 - Required** | Foundation for ADR-015 bias auditing |
+| **Deterministic Seeding** | P1 - High | Essential for reproducible testing |
+| **Per-Reviewer Randomization** | P2 - Medium | Stronger bias mitigation but adds complexity |
+| **Latin Square Balancing** | P3 - Deferred | Only needed for large-scale evaluations |
+
+### Implementation Guidance
+
+1. **Position Tracking Must Return**: Add `label_to_position` to Stage 2 return signature
+2. **Store in Metadata**: Position data should be persisted in council result metadata
+3. **Seed Configuration**: Add `LLM_COUNCIL_RANDOM_SEED` environment variable for testing
+
+### Cross-ADR Dependencies
+
+```
+ADR-017 (Position Tracking)
+    │
+    ├──► ADR-015 (Bias Auditing) - REQUIRES position data
+    │
+    └──► ADR-016 (Rubric Scoring) - BENEFITS from position analysis
+```
+
+### Code Changes Required
+
+```python
+# council.py - Updated return signature
+async def stage2_collect_rankings(
+    user_query: str,
+    stage1_results: List[Dict]
+) -> Tuple[List[Dict], Dict[str, str], Dict[str, int], Dict]:
+    """
+    Returns:
+        stage2_results: List of ranking results
+        label_to_model: {"Response A": "openai/gpt-4", ...}
+        label_to_position: {"Response A": 0, "Response B": 1, ...}  # NEW
+        usage: Token usage stats
+    """
+```
+
+### Status Update
+
+**Status:** Accepted → **Accepted (Essential for ADR-015)**
+
+Position tracking implementation is now a **blocking dependency** for ADR-015 bias auditing.
 
 ---
 

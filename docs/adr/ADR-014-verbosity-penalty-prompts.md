@@ -1,6 +1,6 @@
 # ADR-014: Verbosity Penalty in Evaluation Prompts
 
-**Status:** Draft (Ready for Council Review)
+**Status:** Superseded by ADR-016
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms)
@@ -178,6 +178,20 @@ The council identified a critical interaction between this ADR and ADR-016 (Stru
 - **Structural efficiency**: No redundant preambles like "That's a great question!"
 
 **Updated Priority:** MEDIUM - Should be implemented *after* ADR-016 to measure interaction effects.
+
+### Final Verdict: Merge into ADR-016
+
+The council's consolidated recommendation is to **merge ADR-014 into ADR-016** rather than implementing them as separate features:
+
+> "The Conciseness dimension in ADR-016's rubric already addresses verbosity. Adding a separate verbosity penalty in the system prompt creates redundancy and risks over-correction. The rubric approach is more principled—it scores conciseness as one of four dimensions rather than applying a blanket penalty."
+
+**Action Items:**
+1. ~~Implement ADR-014 verbosity penalty~~ → **Deprecated**
+2. Rely on ADR-016's Conciseness dimension (20% weight) for verbosity control
+3. If Conciseness alone is insufficient, adjust its weight rather than adding separate penalty
+4. Focus ADR-014 effort on defining "information density" metrics for ADR-015 bias auditing
+
+**Status Change:** Draft → **Superseded by ADR-016**
 
 ---
 

@@ -1,6 +1,6 @@
 # ADR-016: Structured Rubric Scoring
 
-**Status:** Draft (Ready for Council Review)
+**Status:** Accepted with Modifications (Council Reviewed 2025-12-17)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-014 (Verbosity Penalty)
@@ -287,6 +287,88 @@ Different rubrics for different query types (coding, creative, factual).
 3. **Add Safety pre-check**: Pass/fail gate before rubric applies
 4. **Resolve ADR-014 conflict**: Defer verbosity penalty until rubric's Conciseness impact is measured
 5. **Document scoring anchors**: Define behavioral examples for each score level
+
+### Accuracy Soft-Gating Implementation
+
+The council's key insight: accuracy should act as a **ceiling** on the overall score, not just a weighted component.
+
+**Ceiling Approach** (Recommended):
+```python
+def calculate_weighted_score_with_accuracy_ceiling(
+    scores: Dict[str, int],
+    weights: Dict[str, float] = None
+) -> float:
+    """
+    Calculate weighted score with accuracy acting as a ceiling.
+
+    If accuracy < 5: overall score cannot exceed 40%
+    If accuracy < 7: overall score cannot exceed 70%
+    """
+    if weights is None:
+        weights = {
+            "accuracy": 0.35,
+            "completeness": 0.25,
+            "conciseness": 0.20,
+            "clarity": 0.20
+        }
+
+    # Calculate base weighted score
+    base_score = sum(scores[dim] * weights[dim] for dim in weights if dim in scores)
+
+    # Apply accuracy ceiling
+    accuracy = scores.get("accuracy", 10)
+    if accuracy < 5:
+        ceiling = 4.0  # Max 40% of possible score
+    elif accuracy < 7:
+        ceiling = 7.0  # Max 70% of possible score
+    else:
+        ceiling = 10.0  # No ceiling
+
+    return round(min(base_score, ceiling), 2)
+```
+
+**Rationale**: A well-written hallucination (Accuracy=3, Completeness=9, Conciseness=9, Clarity=9) would score 7.35 under pure weighting. With the ceiling approach, it caps at 4.0—preventing confident lies from ranking well.
+
+### Pointwise vs Pairwise Architecture
+
+The council raised an important architectural consideration:
+
+> "ADR-016's rubric assumes **pointwise** evaluation (rate each response independently). However, the council's Stage 2 currently uses **pairwise/listwise** evaluation (rank responses relative to each other). These approaches have different bias profiles."
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Pointwise** | Absolute scores, stable across sessions | Scale drift, reviewer calibration issues |
+| **Pairwise** | Relative ranking, more robust | No absolute quality signal |
+| **Hybrid** | Best of both | More complex prompts |
+
+**Recommendation**: Implement ADR-016 as pointwise within the existing pairwise framework:
+1. Reviewers score each response on the rubric (pointwise)
+2. Rankings are derived from overall scores (preserves current aggregation)
+3. Individual dimension scores enable bias analysis
+
+### Updated Rubric Weights (Post-Council)
+
+Based on council feedback, the recommended weight distribution:
+
+| Criterion | Original | Updated | Notes |
+|-----------|----------|---------|-------|
+| **Accuracy** | 35% | 35% + ceiling | Acts as ceiling, not just weight |
+| **Relevance** | - | 10% | New dimension |
+| **Completeness** | 25% | 20% | Reduced to accommodate Relevance |
+| **Conciseness** | 20% | 15% | Reduced; ADR-014 superseded |
+| **Clarity** | 20% | 20% | Unchanged |
+
+**Note**: Weights now sum to 100% (35+10+20+15+20) with Accuracy ceiling applied separately.
+
+### Status Update
+
+**Status:** Draft → **Accepted with Modifications**
+
+The council approved ADR-016 with the following conditions:
+1. Implement accuracy ceiling mechanism
+2. Add Relevance dimension
+3. Supersede ADR-014 (verbosity penalty handled by Conciseness)
+4. Document scoring anchors before production use
 
 ---
 

@@ -1,6 +1,6 @@
 # ADR-015: Bias Auditing and Length Correlation Tracking
 
-**Status:** Draft (Ready for Council Review)
+**Status:** Accepted (Council Reviewed 2025-12-17)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-014 (Verbosity Penalty)
@@ -297,26 +297,60 @@ Weight reviewers by historical calibration accuracy.
 
 ---
 
-## Preliminary Technical Analysis
+## Council Review Feedback
 
-*(Pending formal council review due to API unavailability)*
+**Reviewed:** 2025-12-17 (GPT-5.1, Gemini 3 Pro, Claude Sonnet 4.5, Grok 4)
 
-**Strengths identified:**
-- Empirical, data-driven approach to measuring bias
-- Z-normalization for calibration is well-established methodology
-- Non-invasive design (logging only, not modifying results)
+### Verdict: Approved with Enhancements
 
-**Recommendations:**
-1. **Threshold |r| > 0.3 is reasonable** but report p-values alongside r (statistical power is low with N=4)
-2. **Missing metrics to consider:**
-   - Style bias (do reviewers prefer certain writing styles?)
-   - Model familiarity bias (do reviewers rate "related" models differently?)
-   - Question-type interaction (is length bias worse for certain query types?)
-3. **Start with per-session logging** before implementing persistence for historical tracking
+The council unanimously approved ADR-015's approach to bias auditing, with recommendations to expand the bias taxonomy.
 
-**Dependencies:** Requires ADR-017 position tracking enhancement.
+### Approved Elements
 
-**Priority:** MEDIUM - Depends on ADR-017 enhancements; enables data-driven improvement.
+| Element | Council Assessment |
+|---------|-------------------|
+| **Length-score correlation** | Sound methodology; |r| > 0.3 threshold appropriate |
+| **Reviewer calibration** | Z-normalization is industry standard |
+| **Per-session logging** | Correct starting point before persistence |
+| **Non-invasive design** | Important—don't auto-adjust scores |
+
+### Additional Biases to Track
+
+The council identified biases not covered in the original proposal:
+
+| Bias Type | Description | Detection Method |
+|-----------|-------------|------------------|
+| **Self-Consistency** | Same model gives different scores to identical content across sessions | Run duplicate queries, measure score variance |
+| **Anchoring Bias** | First response seen anchors expectations for subsequent responses | Track correlation between position and deviation from mean |
+| **Style Mimicry** | Reviewers prefer responses similar to their own output style | Embed responses, measure similarity to reviewer's typical style |
+| **Sycophancy Detection** | Models rating competitors harshly while being lenient on "friendly" models | Track reviewer→candidate score patterns |
+| **Reasoning Chain Bias** | Longer reasoning ≠ better reasoning but may be rated higher | Track reasoning length vs. answer correctness |
+
+### Implementation Recommendations
+
+1. **Phase 1**: Implement core metrics (length, position, calibration) per session
+2. **Phase 2**: Add self-consistency testing (periodic duplicate queries)
+3. **Phase 3**: Implement cross-session persistence for reviewer profiling
+4. **Phase 4**: Build bias dashboard for visualization
+
+### Statistical Considerations
+
+> "With N=4 models, statistical power is very low. Correlation coefficients should be interpreted with extreme caution. Consider bootstrapping confidence intervals rather than p-values."
+
+**Minimum sample sizes for reliable detection:**
+- Length correlation: N ≥ 10 responses per session
+- Position bias: N ≥ 20 sessions with position tracking
+- Reviewer calibration: N ≥ 50 reviews per reviewer
+
+### Dependencies
+
+| ADR | Dependency Type |
+|-----|-----------------|
+| ADR-017 (Position Tracking) | **Required** - Position data needed for bias calculation |
+| ADR-016 (Rubric Scoring) | **Enhances** - Per-dimension bias analysis possible with rubric |
+| ADR-014 (Verbosity Penalty) | **Superseded** - Bias auditing replaces manual penalty |
+
+**Priority:** HIGH - Foundation for data-driven evaluation improvements. Implement after ADR-016/017.
 
 ---
 
