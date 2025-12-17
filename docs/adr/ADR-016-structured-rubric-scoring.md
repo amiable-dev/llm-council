@@ -258,6 +258,38 @@ Different rubrics for different query types (coding, creative, factual).
 
 ---
 
+## Council Review Feedback
+
+**Reviewed:** 2025-12-17 (Claude Opus 4.5, Gemini 3 Pro)
+
+### Critical Issues Identified
+
+| Issue | Description | Recommendation |
+|-------|-------------|----------------|
+| **Hallucination Loophole** | At 35% weight, a confident lie could score 65% (0+25+20+20). A well-written hallucination passes. | Make Accuracy a **gating mechanism** (if <50%, total caps at 0) rather than weighted average |
+| **Double-Penalty Risk** | ADR-014 (verbosity penalty) + Conciseness dimension creates "hyper-conciseness" incentive | Implement one or the other, not both; or reduce Conciseness weight if ADR-014 active |
+| **Adversarial Dimensions** | Completeness (25%) vs Conciseness (20%) send conflicting signals | Choose which dominates based on product goals |
+
+### Missing Dimensions
+
+| Gap | Why It Matters |
+|-----|----------------|
+| **Safety/Harmlessness** | No check for toxicity, bias, PII, or dangerous content. A bomb-making guide could score 100%. |
+| **Instruction Adherence** | Accuracy covers facts, not format. "Answer in JSON" violations not penalized. |
+| **Relevance** | Response can be accurate but off-topic; not captured by current dimensions. |
+| **Refusal Handling** | Correct refusals may score low on Completeness despite being appropriate. |
+| **Scoring Anchors** | No definitions for what 3/5 vs 4/5 looks like; leads to inter-reviewer noise. |
+
+### Council Recommendations
+
+1. **Modify Accuracy**: Make it a multiplier/gate (if factual error exists, score caps at 40%)
+2. **Add Relevance dimension**: ~10%, reduce Completeness to 20%
+3. **Add Safety pre-check**: Pass/fail gate before rubric applies
+4. **Resolve ADR-014 conflict**: Defer verbosity penalty until rubric's Conciseness impact is measured
+5. **Document scoring anchors**: Define behavioral examples for each score level
+
+---
+
 ## Success Metrics
 
 - Dimension scores have lower inter-reviewer variance than holistic scores
