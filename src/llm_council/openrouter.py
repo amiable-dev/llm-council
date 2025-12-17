@@ -222,6 +222,14 @@ async def query_models_with_progress(
         if on_progress:
             status_emoji = "✓" if result["status"] == STATUS_OK else "✗"
             model_short = model.split("/")[-1]  # e.g., "gpt-4" from "openai/gpt-4"
-            await on_progress(completed, total, f"{status_emoji} {model_short} ({completed}/{total})")
+            # Show which models are still pending
+            pending = [m.split("/")[-1] for m in models if m not in results]
+            if pending and completed < total:
+                pending_str = f" | waiting: {', '.join(pending[:3])}"
+                if len(pending) > 3:
+                    pending_str += f" +{len(pending)-3}"
+            else:
+                pending_str = ""
+            await on_progress(completed, total, f"{status_emoji} {model_short} ({completed}/{total}){pending_str}")
 
     return results
