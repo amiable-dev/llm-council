@@ -360,21 +360,28 @@ export LLM_COUNCIL_SAFETY_SCORE_CAP=0.0
 
 ### Bias Auditing (ADR-015)
 
-When enabled, the council automatically detects systematic biases in peer review scoring:
+When enabled, the council reports per-session bias indicators from peer review scoring:
 
 | Bias Type | Description | Detection Threshold |
 |-----------|-------------|---------------------|
 | **Length-Score Correlation** | Do longer responses score higher? | \|r\| > 0.3 |
-| **Reviewer Calibration** | Are some reviewers consistently harsh/generous? | Mean ± 1 std from median |
+| **Reviewer Calibration** | Are some reviewers harsh/generous relative to peers? | Mean ± 1 std from median |
 | **Position Bias** | Does presentation order affect scores? | Variance > 0.5 |
 
-**Output**: When bias is detected, the metadata includes a `bias_audit` object with:
+**Output**: The metadata includes a `bias_audit` object with:
 - `length_score_correlation`: Pearson correlation coefficient
 - `length_bias_detected`: Boolean flag
 - `position_score_variance`: Variance of mean scores by presentation position
 - `position_bias_detected`: Boolean flag (derived from anonymization labels A, B, C...)
 - `harsh_reviewers` / `generous_reviewers`: Lists of biased reviewers
 - `overall_bias_risk`: "low", "medium", or "high"
+
+**Important Limitations**: With only 4-5 models per session, these metrics have limited statistical power:
+- Length correlation with n=5 data points can only detect *extreme* biases
+- Position bias from a single ordering cannot distinguish position effects from quality differences
+- Reviewer calibration is relative to the current session only
+
+These are **per-session indicators** (red flags for extreme anomalies), not statistically robust proof of systematic bias. Interpret with appropriate caution.
 
 ```bash
 # Enable bias auditing
@@ -384,6 +391,46 @@ export LLM_COUNCIL_BIAS_AUDIT=true
 export LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD=0.3
 export LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD=0.5
 ```
+
+### Cross-Session Bias Aggregation (ADR-018)
+
+For statistically meaningful bias detection across multiple sessions, enable bias persistence:
+
+```bash
+# Enable bias persistence (stores metrics locally)
+export LLM_COUNCIL_BIAS_PERSISTENCE=true
+
+# Consent level: 0=off, 1=local only (default), 2=anonymous, 3=enhanced, 4=research
+export LLM_COUNCIL_BIAS_CONSENT=1
+
+# Store path (default: ~/.llm-council/bias_metrics.jsonl)
+export LLM_COUNCIL_BIAS_STORE=~/.llm-council/bias_metrics.jsonl
+```
+
+**Generate cross-session bias reports:**
+
+```bash
+# Text report (default)
+llm-council bias-report
+
+# JSON output
+llm-council bias-report --format json
+
+# Include detailed reviewer profiles
+llm-council bias-report --verbose
+
+# Limit to last 50 sessions
+llm-council bias-report --sessions 50
+```
+
+**Statistical confidence tiers:**
+
+| Sessions | Confidence | UI Treatment |
+|----------|------------|--------------|
+| N < 10 | Insufficient | "Collecting data..." |
+| 10-19 | Preliminary | Warning shown |
+| 20-49 | Moderate | CIs displayed |
+| N >= 50 | High | Full analysis |
 
 ### All Environment Variables
 
@@ -405,6 +452,13 @@ export LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD=0.5
 | `LLM_COUNCIL_BIAS_AUDIT` | Enable bias auditing (ADR-015) | false |
 | `LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD` | Length-score correlation threshold for bias detection | 0.3 |
 | `LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD` | Position variance threshold for bias detection | 0.5 |
+| `LLM_COUNCIL_BIAS_PERSISTENCE` | Enable cross-session bias storage (ADR-018) | false |
+| `LLM_COUNCIL_BIAS_STORE` | Path to bias metrics JSONL file | ~/.llm-council/bias_metrics.jsonl |
+| `LLM_COUNCIL_BIAS_CONSENT` | Consent level: 0=off, 1=local, 2=anonymous, 3=enhanced, 4=research | 1 |
+| `LLM_COUNCIL_BIAS_WINDOW_SESSIONS` | Rolling window: max sessions for aggregation | 100 |
+| `LLM_COUNCIL_BIAS_WINDOW_DAYS` | Rolling window: max days for aggregation | 30 |
+| `LLM_COUNCIL_MIN_BIAS_SESSIONS` | Minimum sessions for aggregation analysis | 20 |
+| `LLM_COUNCIL_HASH_SECRET` | Secret for query hashing (RESEARCH consent only) | dev-secret |
 | `LLM_COUNCIL_SUPPRESS_WARNINGS` | Suppress security warnings | false |
 
 ## Credits & Attribution

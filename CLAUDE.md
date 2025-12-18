@@ -56,7 +56,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **Context-aware**: Exclusion contexts allow educational/defensive content
 - Configuration in `config.py`: `SAFETY_GATE_ENABLED`, `SAFETY_SCORE_CAP`
 
-**`bias_audit.py`** - ADR-015 Bias Auditing
+**`bias_audit.py`** - ADR-015 Per-Session Bias Indicators
 - `BiasAuditResult`: Dataclass containing all bias metrics
 - `calculate_length_correlation()`: Pure Python Pearson correlation (no scipy/numpy)
 - `audit_reviewer_calibration()`: Detects harsh/generous reviewers (mean ± 1 std from median)
@@ -67,6 +67,39 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `run_bias_audit()`: Main entry point, runs all bias checks and returns overall risk assessment
 - `extract_scores_from_stage2()`: Converts Stage 2 results to format needed for bias audit
 - Configuration in `config.py`: `BIAS_AUDIT_ENABLED`, `LENGTH_CORRELATION_THRESHOLD`, `POSITION_VARIANCE_THRESHOLD`
+
+**Statistical Limitations**: Per-session bias auditing has inherent limitations with small sample sizes:
+- With N=4-5 models, length correlation has only 4-5 data points (minimum 30+ needed for significance)
+- Position bias from a single ordering cannot distinguish position effects from quality differences
+- Reviewer calibration is relative to the current session only, not across sessions
+- These metrics are **indicators for extreme anomalies**, not statistically robust proof of systematic bias
+
+**`bias_persistence.py`** - ADR-018 Phase 1: Data Persistence
+- `BiasMetricRecord`: Dataclass for individual bias measurements (schema version 1.1.0)
+- `ConsentLevel`: Enum for privacy consent levels (OFF=0, LOCAL_ONLY=1, ANONYMOUS=2, ENHANCED=3, RESEARCH=4)
+- `hash_query_if_enabled()`: HMAC hash for query grouping (RESEARCH consent only)
+- `append_bias_records()`: Atomic JSONL append
+- `read_bias_records()`: Read with filtering (max_sessions, max_days, since)
+- `create_bias_records_from_session()`: Convert Stage 2 results to records
+- `persist_session_bias_data()`: High-level integration point for council.py
+- Configuration in `config.py`: `BIAS_PERSISTENCE_ENABLED`, `BIAS_STORE_PATH`, etc.
+
+**`bias_aggregation.py`** - ADR-018 Phase 2-3: Cross-Session Analysis
+- `StatisticalConfidence`: Enum for confidence tiers (INSUFFICIENT, PRELIMINARY, MODERATE, HIGH)
+- `fisher_z_transform()` / `inverse_fisher_z()`: Fisher z-transformation for correlation CIs
+- `determine_confidence_level()`: Map sample size to confidence tier
+- `pooled_correlation_with_ci()`: Pooled length-score correlation with 95% CI
+- `aggregate_reviewer_profiles()`: Per-reviewer mean, std, harshness z-score
+- `aggregate_position_bias()`: Variance of position means
+- `run_aggregated_bias_audit()`: Main entry point for cross-session analysis
+- `generate_bias_report_text()` / `generate_bias_report_json()`: CLI report generation
+- `detect_temporal_trends()`: Phase 3 - rolling window trend detection
+- `detect_anomalies()`: Phase 3 - outlier session flagging
+
+**CLI (`cli.py`) - bias-report command**
+```bash
+llm-council bias-report [--input FILE] [--sessions N] [--days N] [--format text|json] [--verbose]
+```
 
 **Enhanced `label_to_model` Format (v0.3.0+)**
 Per council recommendation for robustness, anonymization now uses explicit position indices:
@@ -201,7 +234,7 @@ Stage 2: Anonymize → Parallel ranking queries → [evaluations + parsed rankin
     ↓
 Aggregate Rankings Calculation → [sorted by Borda score]
     ↓
-Bias Audit (if enabled): Length correlation, reviewer calibration, position bias
+Bias Audit (if enabled): Per-session indicators (length correlation, reviewer calibration, position bias)
     ↓
 Stage 3: Chairman synthesis with full context
     ↓

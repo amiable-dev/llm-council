@@ -5,17 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Cross-Session Bias Aggregation (ADR-018)**: Statistically meaningful bias detection
+  - Phase 1: JSONL-based bias metric persistence with schema versioning (v1.1.0)
+  - Phase 2: Statistical aggregation with Fisher z-transforms and confidence intervals
+  - Phase 3: Temporal trend detection and anomaly flagging
+  - `BiasMetricRecord` dataclass with one record per (session, model, reviewer)
+  - `ConsentLevel` enum: OFF(0), LOCAL_ONLY(1), ANONYMOUS(2), ENHANCED(3), RESEARCH(4)
+  - Reviewer profiles with harshness z-scores for calibration analysis
+  - Position bias aggregation via variance of position means
+  - 74 new tests (44 Phase 1 + 30 Phase 2-3)
+
+- **CLI `bias-report` Command**: Cross-session bias analysis from the command line
+  - Text and JSON output formats
+  - Filtering by sessions (`--sessions N`) and days (`--days N`)
+  - Verbose mode (`--verbose`) for detailed reviewer profiles
+  - Custom input path (`--input FILE`)
+
+- **New Aggregation Functions**:
+  - `run_aggregated_bias_audit()`: Main entry point for cross-session analysis
+  - `pooled_correlation_with_ci()`: Pooled length-score correlation with 95% CI
+  - `aggregate_reviewer_profiles()`: Per-reviewer mean, std, harshness z-score
+  - `aggregate_position_bias()`: Variance of position means
+  - `detect_temporal_trends()`: Rolling window trend detection
+  - `detect_anomalies()`: Outlier session flagging
+
+- **New Configuration Options**:
+  - `LLM_COUNCIL_BIAS_PERSISTENCE`: Enable cross-session storage (default: false)
+  - `LLM_COUNCIL_BIAS_STORE`: Path to JSONL file (default: ~/.llm-council/bias_metrics.jsonl)
+  - `LLM_COUNCIL_BIAS_CONSENT`: Privacy consent level 0-4 (default: 1)
+  - `LLM_COUNCIL_BIAS_WINDOW_SESSIONS`: Rolling window max sessions (default: 100)
+  - `LLM_COUNCIL_BIAS_WINDOW_DAYS`: Rolling window max days (default: 30)
+  - `LLM_COUNCIL_MIN_BIAS_SESSIONS`: Minimum sessions for aggregation (default: 20)
+  - `LLM_COUNCIL_HASH_SECRET`: Secret for query hashing (RESEARCH consent only)
+
+- **Statistical Confidence Tiers**:
+  - INSUFFICIENT (N < 10): "Collecting data..."
+  - PRELIMINARY (10-19): High volatility warning
+  - MODERATE (20-49): Confidence intervals displayed
+  - HIGH (N >= 50): Full analysis with narrow CIs
+
+### Documentation
+
+- ADR-018: Implementation status section with CLI usage examples
+- README.md: Cross-session bias aggregation section and environment variables
+- CLAUDE.md: Documentation for bias_persistence.py and bias_aggregation.py modules
+
 ## [0.3.0] - 2025-12-17
 
 ### Added
 
-- **Bias Auditing (ADR-015)**: Detect systematic biases in peer review scoring
+- **Bias Auditing (ADR-015)**: Per-session bias indicators for peer review scoring
   - Length-score correlation detection (Pearson r, threshold |r| > 0.3)
   - Position bias detection via `display_index` tracking
   - Reviewer calibration analysis (harsh/generous reviewers)
   - Overall bias risk assessment ("low", "medium", "high")
   - Pure Python implementation (no scipy/numpy dependency)
   - Configuration: `LLM_COUNCIL_BIAS_AUDIT=true`
+  - **Note**: With 4-5 models per session, these are indicators for extreme anomalies, not statistically robust proof
 
 - **Structured Rubric Scoring (ADR-016)**: Multi-dimensional evaluation
   - Five dimensions: accuracy (35%), relevance (10%), completeness (20%), conciseness (15%), clarity (20%)

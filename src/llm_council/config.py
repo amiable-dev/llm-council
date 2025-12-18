@@ -368,6 +368,68 @@ POSITION_VARIANCE_THRESHOLD = (
 
 
 # =============================================================================
+# ADR-018: Cross-Session Bias Persistence Configuration
+# =============================================================================
+# Accumulate bias metrics across sessions for aggregated analysis.
+# Stores one record per (session, model, reviewer) combination in JSONL format.
+# Only stores one record per (session, model, reviewer) combination.
+# JSONL format enables O(N) linear scan aggregation without file I/O hell.
+# See: docs/adr/ADR-018-cross-session-bias-aggregation.md
+
+DEFAULT_BIAS_PERSISTENCE_ENABLED = False  # Off for backward compatibility
+DEFAULT_BIAS_STORE_PATH = Path.home() / ".llm-council" / "bias_metrics.jsonl"
+DEFAULT_BIAS_WINDOW_SESSIONS = 100
+DEFAULT_BIAS_WINDOW_DAYS = 30
+DEFAULT_MIN_BIAS_SESSIONS = 20
+DEFAULT_BIAS_CONSENT_LEVEL = 1  # LOCAL_ONLY
+
+# Bias persistence enabled - priority: env var > config file > default
+_bias_persist_env = os.getenv("LLM_COUNCIL_BIAS_PERSISTENCE")
+BIAS_PERSISTENCE_ENABLED = (
+    _bias_persist_env.lower() in ('true', '1', 'yes') if _bias_persist_env else
+    _user_config.get("bias_persistence", DEFAULT_BIAS_PERSISTENCE_ENABLED)
+)
+
+# Bias store path - priority: env var > config file > default
+_bias_store_env = os.getenv("LLM_COUNCIL_BIAS_STORE")
+BIAS_STORE_PATH = (
+    Path(_bias_store_env).expanduser() if _bias_store_env else
+    Path(_user_config.get("bias_store_path", DEFAULT_BIAS_STORE_PATH)).expanduser()
+)
+
+# Rolling window: sessions - priority: env var > config file > default
+_bias_window_sessions_env = os.getenv("LLM_COUNCIL_BIAS_WINDOW_SESSIONS")
+BIAS_WINDOW_SESSIONS = (
+    int(_bias_window_sessions_env) if _bias_window_sessions_env else
+    int(_user_config.get("bias_window_sessions", DEFAULT_BIAS_WINDOW_SESSIONS))
+)
+
+# Rolling window: days - priority: env var > config file > default
+_bias_window_days_env = os.getenv("LLM_COUNCIL_BIAS_WINDOW_DAYS")
+BIAS_WINDOW_DAYS = (
+    int(_bias_window_days_env) if _bias_window_days_env else
+    int(_user_config.get("bias_window_days", DEFAULT_BIAS_WINDOW_DAYS))
+)
+
+# Minimum sessions for aggregation - priority: env var > config file > default
+_min_bias_sessions_env = os.getenv("LLM_COUNCIL_MIN_BIAS_SESSIONS")
+MIN_BIAS_SESSIONS = (
+    int(_min_bias_sessions_env) if _min_bias_sessions_env else
+    int(_user_config.get("min_bias_sessions", DEFAULT_MIN_BIAS_SESSIONS))
+)
+
+# Consent level - priority: env var > config file > default
+_bias_consent_env = os.getenv("LLM_COUNCIL_BIAS_CONSENT")
+BIAS_CONSENT_LEVEL = (
+    int(_bias_consent_env) if _bias_consent_env else
+    int(_user_config.get("bias_consent_level", DEFAULT_BIAS_CONSENT_LEVEL))
+)
+
+# Hash secret for query hashing (Research consent level only)
+BIAS_HASH_SECRET = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
+
+
+# =============================================================================
 # Telemetry Configuration (ADR-001)
 # =============================================================================
 # Opt-in telemetry for contributing anonymized voting data to the LLM Leaderboard.
