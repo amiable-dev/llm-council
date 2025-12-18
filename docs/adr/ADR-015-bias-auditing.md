@@ -36,7 +36,19 @@ Without metrics, we cannot:
 
 ## Decision
 
-Implement a bias auditing module that calculates and logs correlation metrics for each council session.
+Implement a per-session bias auditing module that calculates and reports correlation metrics for each council session.
+
+### Scope and Limitations
+
+**This ADR implements per-session bias indicators only.** With typical council sizes of 4-5 models:
+
+| Metric | Data Points | Minimum for Significance | Status |
+|--------|-------------|-------------------------|--------|
+| Length correlation | 4-5 pairs | 30+ pairs | **Indicator only** |
+| Position bias | 1 ordering | 20+ orderings | **Indicator only** |
+| Reviewer calibration | N*(N-1) scores | 50+ scores/reviewer | **Indicator only** |
+
+These metrics can detect **extreme single-session anomalies** (e.g., r > 0.9) but should not be interpreted as statistically robust proof of systematic bias. They are diagnostic indicators, not statistical evidence.
 
 ### Proposed Implementation
 

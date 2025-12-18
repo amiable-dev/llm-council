@@ -3,6 +3,10 @@
 import asyncio
 import html
 import random
+import asyncio
+import html
+import random
+import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional, Callable, Awaitable
 
@@ -49,7 +53,9 @@ from llm_council.safety_gate import (
     SafetyCheckResult,
 )
 from llm_council.telemetry import get_telemetry
+from llm_council.telemetry import get_telemetry
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
+from llm_council.bias_persistence import persist_session_bias_data
 
 
 # =============================================================================
@@ -378,6 +384,9 @@ async def run_council_with_fallback(
     total_steps = requested_models * 2 + 3  # stage1 + stage2 + synthesis + finalize
     await report_progress(0, total_steps, "Starting council...")
 
+    # Generate session_id early to share between bias persistence and telemetry
+    session_id = str(uuid.uuid4())
+
     # Inner coroutine for the main council work (allows timeout wrapping)
     async def run_council_pipeline() -> Dict[str, Any]:
         nonlocal result
@@ -417,6 +426,17 @@ async def run_council_with_fallback(
         )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
+        # ADR-018: Persist bias data for cross-session analysis
+        # Only if enabled in config (checked inside function)
+        # Use the session_id generated at start of outer scope (now nonlocal)
+        persist_session_bias_data(
+            session_id=session_id,
+            stage1_results=stage1_results,
+            stage2_results=stage2_results,
+            label_to_model=label_to_model,
+            query=user_query,
+        )
+
         await report_progress(requested_models * 2, total_steps, "Stage 2 complete, synthesizing...")
 
         # Stage 3: Full synthesis
@@ -438,6 +458,33 @@ async def run_council_with_fallback(
         if warning:
             result["metadata"]["warning"] = warning
             result["metadata"]["status"] = "partial"
+
+        # Emit telemetry event (fire-and-forget)
+        telemetry = get_telemetry()
+        if telemetry.is_enabled():
+            telemetry_event = {
+                "type": "council_completed",
+                "session_id": session_id,  # Shared with bias persistence
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "council_size": len(COUNCIL_MODELS),
+                "responses_received": len(stage1_results),
+                "synthesis_mode": SYNTHESIS_MODE,
+                "rankings": [
+                    {
+                        "model": r["model"],
+                        "borda_score": r.get("borda_score"),
+                        "vote_count": r.get("vote_count", 0)
+                    }
+                    for r in aggregate_rankings
+                ],
+                "config": {
+                    "exclude_self_votes": EXCLUDE_SELF_VOTES,
+                    "style_normalization": STYLE_NORMALIZATION,
+                    "max_reviewers": MAX_REVIEWERS
+                }
+            }
+            # Fire-and-forget
+            asyncio.create_task(telemetry.send_event(telemetry_event))
 
         await report_progress(total_steps, total_steps, "Complete")
         return result
