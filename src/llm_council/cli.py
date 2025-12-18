@@ -1,10 +1,11 @@
 """CLI entry point with graceful degradation for optional dependencies (ADR-009).
 
 Usage:
-    llm-council           # Start MCP server (default)
-    llm-council serve     # Start HTTP server
+    llm-council               # Start MCP server (default)
+    llm-council serve         # Start HTTP server
     llm-council serve --port 9000 --host 127.0.0.1
-    llm-council setup-key # Store API key in system keychain (ADR-013)
+    llm-council setup-key     # Store API key in system keychain (ADR-013)
+    llm-council bias-report   # Cross-session bias analysis (ADR-018)
 """
 
 import argparse
@@ -67,12 +68,56 @@ def main():
         help="Read API key from stdin (for CI/CD automation)",
     )
 
+    # Bias report command (ADR-018)
+    bias_parser = subparsers.add_parser(
+        "bias-report",
+        help="Analyze cross-session bias metrics",
+    )
+    bias_parser.add_argument(
+        "--input",
+        type=str,
+        dest="input_path",
+        help="Path to JSONL store (default: ~/.llm-council/bias_metrics.jsonl)",
+    )
+    bias_parser.add_argument(
+        "--sessions",
+        type=int,
+        dest="max_sessions",
+        help="Limit to last N sessions",
+    )
+    bias_parser.add_argument(
+        "--days",
+        type=int,
+        dest="max_days",
+        help="Limit to last N days",
+    )
+    bias_parser.add_argument(
+        "--format",
+        choices=["text", "json", "csv"],
+        default="text",
+        dest="output_format",
+        help="Output format (default: text)",
+    )
+    bias_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Include detailed reviewer profiles",
+    )
+
     args = parser.parse_args()
 
     if args.command == "serve":
         serve_http(host=args.host, port=args.port)
     elif args.command == "setup-key":
         setup_key(from_stdin=args.from_stdin)
+    elif args.command == "bias-report":
+        bias_report(
+            input_path=args.input_path,
+            max_sessions=args.max_sessions,
+            max_days=args.max_days,
+            output_format=args.output_format,
+            verbose=args.verbose,
+        )
     else:
         # Default: MCP server
         serve_mcp()
@@ -162,6 +207,55 @@ def setup_key(from_stdin: bool = False):
     except Exception as e:
         print(f"Error storing key: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def bias_report(
+    input_path: str = None,
+    max_sessions: int = None,
+    max_days: int = None,
+    output_format: str = "text",
+    verbose: bool = False,
+):
+    """Generate cross-session bias analysis report (ADR-018).
+
+    Args:
+        input_path: Path to JSONL store (default: ~/.llm-council/bias_metrics.jsonl)
+        max_sessions: Limit to last N sessions
+        max_days: Limit to last N days
+        output_format: 'text' or 'json'
+        verbose: Include detailed reviewer profiles
+    """
+    from pathlib import Path
+
+    from llm_council.bias_aggregation import (
+        generate_bias_report_text,
+        generate_bias_report_json,
+        generate_bias_report_csv,
+    )
+
+    store_path = Path(input_path) if input_path else None
+
+    if output_format == "json":
+        output = generate_bias_report_json(
+            store_path=store_path,
+            max_sessions=max_sessions,
+            max_days=max_days,
+        )
+    elif output_format == "csv":
+        output = generate_bias_report_csv(
+            store_path=store_path,
+            max_sessions=max_sessions,
+            max_days=max_days,
+        )
+    else:
+        output = generate_bias_report_text(
+            store_path=store_path,
+            max_sessions=max_sessions,
+            max_days=max_days,
+            verbose=verbose,
+        )
+
+    print(output)
 
 
 if __name__ == "__main__":
