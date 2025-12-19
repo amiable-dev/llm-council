@@ -63,7 +63,7 @@ OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Default Council members - list of OpenRouter model identifiers
 DEFAULT_COUNCIL_MODELS = [
-    "openai/gpt-5.1",
+    "openai/gpt-5.2-pro",
     "google/gemini-3-pro-preview",
     "anthropic/claude-opus-4.5",
     "x-ai/grok-4",
