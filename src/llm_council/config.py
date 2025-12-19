@@ -460,3 +460,82 @@ TELEMETRY_ENDPOINT = (
     _user_config.get("telemetry_endpoint") or
     DEFAULT_TELEMETRY_ENDPOINT
 )
+
+
+# =============================================================================
+# ADR-012: Tier-Sovereign Timeout Configuration (Added 2025-12-19)
+# =============================================================================
+# Configurable timeouts per confidence tier to support reasoning models.
+# Each tier has both a total timeout and a per-model timeout.
+#
+# Tiers:
+#   quick     - Fast responses, fewer/simpler models (30s total, 20s per-model)
+#   balanced  - Most models respond (90s total, 45s per-model)
+#   high      - Full council deliberation (180s total, 90s per-model)
+#   reasoning - Deep reasoning models like o1, GPT-5.2-pro (300s total, 150s per-model)
+#
+# Environment variables:
+#   LLM_COUNCIL_TIMEOUT_<TIER>=<seconds>        - Total timeout for tier
+#   LLM_COUNCIL_MODEL_TIMEOUT_<TIER>=<seconds>  - Per-model timeout for tier
+#   LLM_COUNCIL_TIMEOUT_MULTIPLIER=<float>      - Global multiplier (emergency override)
+
+DEFAULT_TIER_TIMEOUTS = {
+    "quick": {"total": 30, "per_model": 20},
+    "balanced": {"total": 90, "per_model": 45},
+    "high": {"total": 180, "per_model": 90},
+    "reasoning": {"total": 300, "per_model": 150},
+}
+
+# Models that require the reasoning tier
+REASONING_MODELS = {
+    "openai/o1",
+    "openai/o1-preview",
+    "openai/o1-mini",
+    "openai/gpt-5.2-pro",
+}
+
+# Global timeout multiplier (for emergency adjustments)
+_timeout_multiplier_env = os.getenv("LLM_COUNCIL_TIMEOUT_MULTIPLIER")
+TIMEOUT_MULTIPLIER = float(_timeout_multiplier_env) if _timeout_multiplier_env else 1.0
+
+
+def get_tier_timeout(tier: str) -> dict:
+    """
+    Get timeout configuration for a tier, with environment variable overrides.
+
+    Args:
+        tier: One of "quick", "balanced", "high", "reasoning"
+
+    Returns:
+        dict with "total" and "per_model" timeout values in seconds
+    """
+    defaults = DEFAULT_TIER_TIMEOUTS.get(tier, DEFAULT_TIER_TIMEOUTS["high"])
+    tier_upper = tier.upper()
+
+    # Check for tier-specific env var overrides
+    total_env = os.getenv(f"LLM_COUNCIL_TIMEOUT_{tier_upper}")
+    per_model_env = os.getenv(f"LLM_COUNCIL_MODEL_TIMEOUT_{tier_upper}")
+
+    total = int(total_env) if total_env else defaults["total"]
+    per_model = int(per_model_env) if per_model_env else defaults["per_model"]
+
+    # Apply global multiplier
+    return {
+        "total": int(total * TIMEOUT_MULTIPLIER),
+        "per_model": int(per_model * TIMEOUT_MULTIPLIER),
+    }
+
+
+def infer_tier_from_models(models: list) -> str:
+    """
+    Auto-select tier based on the slowest model in the council.
+
+    Args:
+        models: List of model identifiers
+
+    Returns:
+        Recommended tier name
+    """
+    if any(m in REASONING_MODELS for m in models):
+        return "reasoning"
+    return "high"

@@ -322,6 +322,7 @@ async def run_council_with_fallback(
     bypass_cache: bool = False,
     on_progress: Optional[ProgressCallback] = None,
     synthesis_deadline: float = TIMEOUT_SYNTHESIS_TRIGGER,
+    per_model_timeout: float = TIMEOUT_PER_MODEL_HARD,
 ) -> Dict[str, Any]:
     """
     Run the council with timeout handling and fallback synthesis (ADR-012).
@@ -331,12 +332,14 @@ async def run_council_with_fallback(
     - Handles timeouts gracefully with partial results
     - Provides fallback synthesis when full pipeline can't complete
     - Tracks per-model status throughout
+    - Supports tier-sovereign timeouts (ADR-012 Section 5)
 
     Args:
         user_query: The user's question
         bypass_cache: If True, skip cache lookup
         on_progress: Optional async callback for progress updates
         synthesis_deadline: Time limit before triggering fallback synthesis
+        per_model_timeout: Time limit per individual model query (default: 25s, reasoning: 150s)
 
     Returns:
         Dict with ADR-012 structured schema:
@@ -397,7 +400,7 @@ async def run_council_with_fallback(
 
         stage1_results, stage1_usage, model_statuses = await stage1_collect_responses_with_status(
             user_query,
-            timeout=TIMEOUT_PER_MODEL_HARD,
+            timeout=per_model_timeout,  # ADR-012 Section 5: Tier-sovereign timeout
             on_progress=stage1_progress,
             shared_raw_responses=shared_raw_responses,  # Preserve state on timeout
         )
