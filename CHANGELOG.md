@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-12-19
+
+### Added
+
+- **Tier-Sovereign Timeout Architecture (ADR-012 Section 5)**: Configurable per-tier timeouts for reasoning models
+  - New `reasoning` confidence tier: 300s total, 150s per-model (supports GPT-5.2-pro, o1, o1-preview)
+  - Existing tiers updated: quick (30s/20s), balanced (90s/45s), high (180s/90s)
+  - `get_tier_timeout()`: Retrieves timeout config with environment variable overrides
+  - `infer_tier_from_models()`: Auto-selects tier based on slowest model in council
+  - `per_model_timeout` parameter on `run_council_with_fallback()` for fine-grained control
+
+- **New Environment Variables**:
+  - `LLM_COUNCIL_TIMEOUT_<TIER>`: Override total timeout per tier (QUICK, BALANCED, HIGH, REASONING)
+  - `LLM_COUNCIL_MODEL_TIMEOUT_<TIER>`: Override per-model timeout per tier
+
+### Documentation
+
+- ADR-012 Section 5: Tier-Sovereign Timeout Architecture with model compatibility matrix
+- Infrastructure considerations for AWS ALB, Nginx, and proxy timeouts
+
 ## [0.4.1] - 2025-12-19
 
 ### Changed
