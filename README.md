@@ -15,7 +15,7 @@ Instead of asking a single LLM for answers, this MCP server:
 ## Installation
 
 ```bash
-pip install llm-council-core[mcp]
+pip install "llm-council-core[mcp]"
 ```
 
 For core library only (no MCP server):
