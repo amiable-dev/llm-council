@@ -269,7 +269,125 @@ async def race_council(query: str, target_responses: int = 3):
     return completed
 ```
 
-### 5. Job-Based Async Pattern (Deferred)
+### 5. Tier-Sovereign Timeout Architecture (Added 2025-12-19)
+
+**Council Verdict:** Move from hardcoded per-model timeouts to a **Tier-Sovereign** configuration where each tier defines its own time budget.
+
+**Problem:** Reasoning models (GPT-5.2-pro, o1) require 60-110s per query, far exceeding the original 25s per-model timeout. A global timeout increase would break fast-path tiers.
+
+**Solution:** 4-tier system with per-tier configurable timeouts:
+
+| Tier | Total Timeout | Per-Model Cap | Target Models | Use Case |
+|------|---------------|---------------|---------------|----------|
+| **quick** | 30s | 20s | GPT-4o-mini, Haiku | Fast answers, fewer models |
+| **balanced** | 90s | 45s | Sonnet 3.5, GPT-4o | Most models respond |
+| **high** | 180s | 90s | Full council (non-reasoning) | Complete deliberation |
+| **reasoning** | 300s | 150s | o1, GPT-5.2-pro | Deep reasoning models |
+
+**Configuration via Environment Variables:**
+
+```bash
+# Per-tier total timeout (seconds)
+LLM_COUNCIL_TIMEOUT_QUICK=30
+LLM_COUNCIL_TIMEOUT_BALANCED=90
+LLM_COUNCIL_TIMEOUT_HIGH=180
+LLM_COUNCIL_TIMEOUT_REASONING=300
+
+# Per-tier per-model timeout (seconds)
+LLM_COUNCIL_MODEL_TIMEOUT_QUICK=20
+LLM_COUNCIL_MODEL_TIMEOUT_BALANCED=45
+LLM_COUNCIL_MODEL_TIMEOUT_HIGH=90
+LLM_COUNCIL_MODEL_TIMEOUT_REASONING=150
+
+# Global multiplier (emergency override)
+LLM_COUNCIL_TIMEOUT_MULTIPLIER=1.0
+```
+
+**Implementation:**
+
+```python
+# config.py additions
+DEFAULT_TIER_TIMEOUTS = {
+    "quick": {"total": 30, "per_model": 20},
+    "balanced": {"total": 90, "per_model": 45},
+    "high": {"total": 180, "per_model": 90},
+    "reasoning": {"total": 300, "per_model": 150},
+}
+
+def get_tier_timeout(tier: str) -> dict:
+    """Get timeout configuration for a tier, with env var overrides."""
+    defaults = DEFAULT_TIER_TIMEOUTS.get(tier, DEFAULT_TIER_TIMEOUTS["high"])
+    tier_upper = tier.upper()
+
+    total = int(os.getenv(f"LLM_COUNCIL_TIMEOUT_{tier_upper}", defaults["total"]))
+    per_model = int(os.getenv(f"LLM_COUNCIL_MODEL_TIMEOUT_{tier_upper}", defaults["per_model"]))
+
+    # Apply global multiplier if set
+    multiplier = float(os.getenv("LLM_COUNCIL_TIMEOUT_MULTIPLIER", "1.0"))
+
+    return {
+        "total": int(total * multiplier),
+        "per_model": int(per_model * multiplier),
+    }
+```
+
+**MCP Server Integration:**
+
+```python
+CONFIDENCE_CONFIGS = {
+    "quick": {"models": 2, **get_tier_timeout("quick")},
+    "balanced": {"models": 3, **get_tier_timeout("balanced")},
+    "high": {"models": None, **get_tier_timeout("high")},
+    "reasoning": {"models": None, **get_tier_timeout("reasoning")},
+}
+```
+
+**Infrastructure Considerations:**
+
+| Component | Default | Risk | Mitigation |
+|-----------|---------|------|------------|
+| AWS ALB idle timeout | 60s | Kills connection during model "thinking" | Increase to 300s or use WebSocket |
+| Nginx proxy_read_timeout | 60s | Same as ALB | Set `proxy_read_timeout 300s;` |
+| Client-side timeout | Varies | User assumes crash | Stream progress updates |
+
+**Concurrency Safeguard:**
+
+```python
+# Limit concurrent reasoning-tier requests to prevent resource exhaustion
+REASONING_TIER_SEMAPHORE = asyncio.Semaphore(2)
+
+async def consult_council_reasoning(query: str, ...):
+    async with REASONING_TIER_SEMAPHORE:
+        return await run_council_with_fallback(query, ...)
+```
+
+**Model-Tier Compatibility Matrix:**
+
+| Model | quick | balanced | high | reasoning |
+|-------|-------|----------|------|-----------|
+| GPT-4o-mini | ✓ | ✓ | ✓ | ✓ |
+| Claude Haiku | ✓ | ✓ | ✓ | ✓ |
+| Claude Sonnet 3.5 | ✗ | ✓ | ✓ | ✓ |
+| GPT-4o | ✗ | ✓ | ✓ | ✓ |
+| Claude Opus 4.5 | ✗ | ✗ | ✓ | ✓ |
+| Gemini 3 Pro | ✗ | ✗ | ✓ | ✓ |
+| GPT-5.2-pro | ✗ | ✗ | ✗ | ✓ |
+| o1 | ✗ | ✗ | ✗ | ✓ |
+
+**Automatic Tier Selection (Future):**
+
+```python
+REASONING_MODELS = {"openai/o1", "openai/gpt-5.2-pro", "openai/o1-preview"}
+
+def infer_tier_from_models(models: List[str]) -> str:
+    """Auto-select tier based on slowest model in council."""
+    if any(m in REASONING_MODELS for m in models):
+        return "reasoning"
+    # ... additional logic
+    return "high"
+```
+
+### 6. Job-Based Async Pattern (Deferred)
 
 **Council Verdict: Defer indefinitely.** The job-based pattern adds significant complexity (persistence, job lifecycle, cleanup, polling UX) that conflicts with MCP's stateless design.
 
@@ -347,6 +465,8 @@ If implemented later, use in-memory job tracking with TTL (jobs expire after 5 m
 | Optimal deadline? | **40-45s** (not 55s). Tiered per-model deadlines preferred over single global. |
 | Indicate which models responded? | **Yes, explicitly.** Structured metadata with per-model status is essential. |
 | Fast mode valuable? | **Yes, as "confidence levels"** (quick/balanced/high) mapping to model count + timeout. |
+| Reasoning model timeouts? (2025-12-19) | **Tier-Sovereign architecture.** 4 tiers with per-tier configurable timeouts. Reasoning tier: 300s total, 150s per-model. |
+| Per-tier vs global timeout config? (2025-12-19) | **Per-tier configuration.** Global overrides are dangerous; use per-tier env vars with optional multiplier. |
 
 ---
 

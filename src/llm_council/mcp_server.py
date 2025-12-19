@@ -3,10 +3,11 @@
 Implements ADR-012: MCP Server Reliability and Long-Running Operation Handling
 - Progress notifications during council execution
 - Health check tool
-- Confidence levels (quick/balanced/high)
+- Confidence levels (quick/balanced/high/reasoning)
 - Structured results with per-model status
 - Tiered timeouts with fallback synthesis
 - Partial results on timeout
+- Tier-Sovereign timeout configuration (2025-12-19)
 """
 import json
 import time
@@ -18,23 +19,52 @@ from llm_council.council import (
     run_council_with_fallback,
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
-from llm_council.config import COUNCIL_MODELS, CHAIRMAN_MODEL, OPENROUTER_API_KEY, get_key_source
+from llm_council.config import (
+    COUNCIL_MODELS,
+    CHAIRMAN_MODEL,
+    OPENROUTER_API_KEY,
+    get_key_source,
+    get_tier_timeout,
+    infer_tier_from_models,
+)
 from llm_council.openrouter import query_model_with_status, STATUS_OK
 
 
 mcp = FastMCP("LLM Council")
 
 
-# Confidence level configurations (ADR-012)
-# Timeout values calibrated to allow all models to respond:
-# - Complex queries can take 40-60s per model
-# - Progress feedback keeps caller informed during wait
-# - Longer timeouts prioritize completeness over speed
-CONFIDENCE_CONFIGS = {
-    "quick": {"models": 2, "timeout": 30, "description": "Fast response (~20-30s)"},
-    "balanced": {"models": 3, "timeout": 75, "description": "Balanced response (~45-60s)"},
-    "high": {"models": None, "timeout": 120, "description": "Full council deliberation (~90s)"},
-}
+def _build_confidence_configs() -> dict:
+    """
+    Build confidence configs dynamically from tier timeout settings.
+
+    This allows environment variable overrides per ADR-012 Section 5.
+    """
+    return {
+        "quick": {
+            "models": 2,
+            **get_tier_timeout("quick"),
+            "description": "Fast response (~20-30s)",
+        },
+        "balanced": {
+            "models": 3,
+            **get_tier_timeout("balanced"),
+            "description": "Balanced response (~45-60s)",
+        },
+        "high": {
+            "models": None,
+            **get_tier_timeout("high"),
+            "description": "Full council deliberation (~90s)",
+        },
+        "reasoning": {
+            "models": None,
+            **get_tier_timeout("reasoning"),
+            "description": "Deep reasoning models (~3-5min)",
+        },
+    }
+
+
+# Build configs at import time (can be refreshed if needed)
+CONFIDENCE_CONFIGS = _build_confidence_configs()
 
 
 @mcp.tool()
@@ -53,9 +83,10 @@ async def consult_council(
         include_details: If True, includes individual model responses and rankings.
         ctx: MCP context for progress reporting (injected automatically).
     """
-    # Get confidence configuration
+    # Get confidence configuration (ADR-012 Section 5: Tier-Sovereign Timeouts)
     config = CONFIDENCE_CONFIGS.get(confidence, CONFIDENCE_CONFIGS["high"])
-    timeout = config.get("timeout", TIMEOUT_SYNTHESIS_TRIGGER)
+    total_timeout = config.get("total", TIMEOUT_SYNTHESIS_TRIGGER)
+    per_model_timeout = config.get("per_model", 90)  # Default to high tier
 
     # Progress reporting helper that bridges MCP context to council callback
     async def on_progress(step: int, total: int, message: str):
@@ -66,14 +97,15 @@ async def consult_council(
                 pass  # Progress reporting is best-effort
 
     # Run the council with ADR-012 reliability features:
-    # - Tiered timeouts (15s/25s/40s/50s)
+    # - Tier-sovereign timeouts (per-tier total and per-model)
     # - Partial results on timeout
     # - Fallback synthesis
     # - Per-model status tracking
     council_result = await run_council_with_fallback(
         query,
         on_progress=on_progress,
-        synthesis_deadline=timeout,
+        synthesis_deadline=total_timeout,
+        per_model_timeout=per_model_timeout,
     )
 
     # Extract results from ADR-012 structured response
