@@ -1,6 +1,6 @@
 # LLM Council Core
 
-[![PyPI version](https://badge.fury.io/py/llm-council-core.svg)](https://pypi.org/project/llm-council-core/)
+[![PyPI version](https://img.shields.io/pypi/v/llm-council-core.svg)](https://pypi.org/project/llm-council-core/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.
