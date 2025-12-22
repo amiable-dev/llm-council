@@ -331,3 +331,73 @@ class TestDomainKeywords:
 
         for query in creative_queries:
             assert classify_query_domain(query) == DomainCategory.CREATIVE, f"Failed for: {query}"
+
+
+class TestWildcardObservability:
+    """Test L2_WILDCARD_SELECTED event emission (ADR-024 Issue #65)."""
+
+    def test_select_wildcard_emits_event(self):
+        """select_wildcard() should emit L2_WILDCARD_SELECTED event."""
+        from llm_council.triage.wildcard import select_wildcard
+        from llm_council.triage.types import DomainCategory
+        from llm_council.layer_contracts import LayerEventType, get_layer_events, clear_layer_events
+
+        clear_layer_events()
+
+        result = select_wildcard(DomainCategory.CODE, exclude_models=["openai/gpt-4o"])
+
+        assert result is not None
+
+        # Check event was emitted
+        events = get_layer_events()
+        wildcard_events = [e for e in events if e.event_type == LayerEventType.L2_WILDCARD_SELECTED]
+        assert len(wildcard_events) == 1
+
+        event = wildcard_events[0]
+        assert event.data["domain"] == "CODE"
+        assert event.data["selected_model"] == result
+        assert "openai/gpt-4o" in event.data["excluded_models"]
+
+    def test_select_wildcard_event_includes_tier_info(self):
+        """Event should include tier constraint info if provided."""
+        from llm_council.triage.wildcard import select_wildcard
+        from llm_council.triage.types import DomainCategory
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.layer_contracts import LayerEventType, get_layer_events, clear_layer_events
+
+        clear_layer_events()
+
+        tier_contract = create_tier_contract("quick")
+        result = select_wildcard(DomainCategory.REASONING, tier_contract=tier_contract)
+
+        events = get_layer_events()
+        wildcard_events = [e for e in events if e.event_type == LayerEventType.L2_WILDCARD_SELECTED]
+        assert len(wildcard_events) == 1
+
+        event = wildcard_events[0]
+        assert event.data["tier"] == "quick"
+
+    def test_fallback_selection_emits_event_with_fallback_flag(self):
+        """When fallback model is used, event should indicate this."""
+        from llm_council.triage.wildcard import select_wildcard
+        from llm_council.triage.types import DomainCategory, WildcardConfig
+        from llm_council.layer_contracts import LayerEventType, get_layer_events, clear_layer_events
+
+        clear_layer_events()
+
+        # Create config with empty pools to force fallback
+        config = WildcardConfig(
+            specialist_pools={DomainCategory.CODE: []},  # Empty pool
+            fallback_model="meta-llama/llama-3-70b-instruct",
+        )
+
+        result = select_wildcard(DomainCategory.CODE, config=config)
+
+        assert result == "meta-llama/llama-3-70b-instruct"
+
+        events = get_layer_events()
+        wildcard_events = [e for e in events if e.event_type == LayerEventType.L2_WILDCARD_SELECTED]
+        assert len(wildcard_events) == 1
+
+        event = wildcard_events[0]
+        assert event.data["fallback_used"] is True

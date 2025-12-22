@@ -24,6 +24,10 @@ from llm_council.triage.complexity import (
     ComplexityLevel,
     classify_complexity_detailed,
 )
+from llm_council.layer_contracts import (
+    LayerEventType,
+    emit_layer_event,
+)
 
 
 @dataclass
@@ -282,6 +286,28 @@ class FastPathRouter:
         # Default: 30 seconds
         return 30.0
 
+    def _emit_fast_path_event(
+        self,
+        query: str,
+        result: "FastPathResult",
+    ) -> None:
+        """Emit L2_FAST_PATH_TRIGGERED event (ADR-024)."""
+        # Get complexity for the query
+        complexity_result = classify_complexity_detailed(query)
+
+        emit_layer_event(
+            LayerEventType.L2_FAST_PATH_TRIGGERED,
+            {
+                "query_complexity": complexity_result.level.value,
+                "model": result.model,
+                "confidence": result.confidence,
+                "escalated": result.escalated,
+                "escalation_reason": result.escalation_reason,
+            },
+            layer_from="L2",
+            layer_to="L2",
+        )
+
     async def route(
         self,
         query: str,
@@ -309,19 +335,21 @@ class FastPathRouter:
 
         # Handle model failure
         if response is None:
-            return FastPathResult(
+            result = FastPathResult(
                 used_fast_path=True,
                 model=model,
                 escalated=True,
                 escalation_reason="model_error",
             )
+            self._emit_fast_path_event(query, result)
+            return result
 
         # Extract confidence
         confidence = self.confidence_extractor.extract(response)
 
         # Check safety flag
         if response.get("safety_flag", False):
-            return FastPathResult(
+            result = FastPathResult(
                 used_fast_path=True,
                 response=response.get("content"),
                 model=model,
@@ -329,10 +357,12 @@ class FastPathRouter:
                 escalated=True,
                 escalation_reason="safety_flag_triggered",
             )
+            self._emit_fast_path_event(query, result)
+            return result
 
         # Check confidence threshold
         if confidence < self.config.confidence_threshold:
-            return FastPathResult(
+            result = FastPathResult(
                 used_fast_path=True,
                 response=response.get("content"),
                 model=model,
@@ -340,15 +370,19 @@ class FastPathRouter:
                 escalated=True,
                 escalation_reason="confidence_below_threshold",
             )
+            self._emit_fast_path_event(query, result)
+            return result
 
         # Fast path successful
-        return FastPathResult(
+        result = FastPathResult(
             used_fast_path=True,
             response=response.get("content"),
             model=model,
             confidence=confidence,
             escalated=False,
         )
+        self._emit_fast_path_event(query, result)
+        return result
 
     async def _query_model(
         self,

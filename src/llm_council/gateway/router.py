@@ -40,6 +40,7 @@ class GatewayRouter:
         model_routing: Optional[Dict[str, str]] = None,
         default_gateway: str = "openrouter",
         circuit_breaker_config: Optional[Dict[str, Any]] = None,
+        fallback_chains: Optional[Dict[str, List[str]]] = None,
     ):
         """Initialize the gateway router.
 
@@ -50,6 +51,7 @@ class GatewayRouter:
                           Supports wildcards (e.g., "anthropic/*": "custom").
             default_gateway: Gateway to use when no routing rule matches.
             circuit_breaker_config: Config for circuit breakers.
+            fallback_chains: Dict from gateway_id to list of fallback gateway_ids.
         """
         # Initialize gateways
         if gateways is not None:
@@ -59,6 +61,7 @@ class GatewayRouter:
 
         self._model_routing = model_routing or {}
         self._default_gateway = default_gateway
+        self._fallback_chains = fallback_chains or {}
         self._circuit_breaker_config = circuit_breaker_config or {
             "failure_threshold": 5,
             "success_threshold": 1,
@@ -113,7 +116,7 @@ class GatewayRouter:
         return "unknown"
 
     async def complete(self, request: GatewayRequest) -> GatewayResponse:
-        """Route and execute a completion request.
+        """Route and execute a completion request with fallback support.
 
         Args:
             request: Gateway request with model and messages.
@@ -122,32 +125,112 @@ class GatewayRouter:
             GatewayResponse from the selected gateway.
 
         Raises:
-            CircuitOpenError: If the circuit breaker is open.
+            CircuitOpenError: If all suitable gateways are unavailable.
+            Exception: If all gateways fail.
         """
-        gateway = self.get_gateway_for_model(request.model)
-        gateway_id = self._get_gateway_id(gateway)
-        cb = self._get_circuit_breaker(gateway_id)
+        # ADR-024: Validate boundary crossing and emit L4_GATEWAY_REQUEST
+        # Local import to avoid circular dependency
+        from ..layer_contracts import (
+            LayerEventType, 
+            emit_layer_event, 
+            cross_l3_to_l4
+        )
+        cross_l3_to_l4(request)
 
-        # Check circuit breaker
-        if not cb.allow_request():
-            raise CircuitOpenError(
-                f"Circuit is open for gateway {gateway_id}",
-                router_id=gateway_id,
-            )
+        initial_gateway = self.get_gateway_for_model(request.model)
+        initial_gateway_id = self._get_gateway_id(initial_gateway)
+        
+        # Build chain: [initial, ...fallbacks]
+        chain_ids = [initial_gateway_id]
+        if initial_gateway_id in self._fallback_chains:
+            chain_ids.extend(self._fallback_chains[initial_gateway_id])
+            
+        last_exception = None
+        
+        for i, gateway_id in enumerate(chain_ids):
+            if gateway_id not in self.gateways:
+                continue
+                
+            gateway = self.gateways[gateway_id]
+            cb = self._get_circuit_breaker(gateway_id)
+            
+            # Emit fallback event if this is not the first attempt
+            if i > 0:
+                emit_layer_event(
+                    LayerEventType.L4_GATEWAY_FALLBACK,
+                    {
+                        "model": request.model,
+                        "from_gateway": chain_ids[i-1],
+                        "to_gateway": gateway_id,
+                        "reason": str(last_exception) if last_exception else "unknown"
+                    },
+                    layer_from="L4",
+                    layer_to="L4"
+                )
 
-        try:
-            response = await gateway.complete(request)
+            # Check circuit breaker
+            if not cb.allow_request():
+                # If circuit is open, we consider this a "failure" contextually 
+                # (unavailable) and move to next fallback
+                last_exception = CircuitOpenError(
+                    f"Circuit is open for gateway {gateway_id}",
+                    router_id=gateway_id,
+                )
+                continue
 
-            # Record success/failure based on response status
-            if response.status == "ok":
-                cb.record_success()
-            elif response.status in ("error", "timeout"):
+            try:
+                response = await gateway.complete(request)
+
+                # Record success/failure based on response status
+                if response.status == "ok":
+                    cb.record_success()
+                    
+                    # ADR-024: Emit response event
+                    emit_layer_event(
+                        LayerEventType.L4_GATEWAY_RESPONSE,
+                        {
+                            "gateway": gateway_id,
+                            "latency_ms": response.latency_ms,
+                            "status": response.status,
+                            "model": response.model
+                        },
+                        layer_from="L4",
+                        layer_to="L3"
+                    )
+                    return response
+                elif response.status in ("error", "timeout"):
+                    cb.record_failure()
+
+                    # ADR-024: Emit response event for errors too (observability)
+                    emit_layer_event(
+                        LayerEventType.L4_GATEWAY_RESPONSE,
+                        {
+                            "gateway": gateway_id,
+                            "latency_ms": response.latency_ms,
+                            "status": response.status,
+                            "model": response.model,
+                            "error": response.error
+                        },
+                        layer_from="L4",
+                        layer_to="L3"
+                    )
+
+                    # Keep track of error but continue to next fallback
+                    if response.error:
+                        last_exception = Exception(f"Gateway {gateway_id} error: {response.error}")
+                    else:
+                        last_exception = Exception(f"Gateway {gateway_id} returned status {response.status}")
+
+            except Exception as e:
                 cb.record_failure()
-
-            return response
-        except Exception as e:
-            cb.record_failure()
-            raise
+                last_exception = e
+                continue
+                
+        # If we get here, all gateways failed
+        if last_exception:
+            raise last_exception
+        else:
+            raise Exception(f"All gateways in chain failed: {chain_ids}")
 
     async def complete_many(
         self,

@@ -1,6 +1,6 @@
 # ADR-024: Unified Routing Architecture
 
-**Status:** COMPLETE (All 4 Phases Implemented, Execution Wiring Fixed v0.11.1)
+**Status:** COMPLETE (Full L1-L4 Observability Verified v0.12.1)
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)
@@ -730,6 +730,13 @@ Gateway C [CLOSED] → try request
   - Previous: `council.py` imported directly from `openrouter` (gateway layer was dead code)
   - Fixed: `council.py` now imports from `gateway_adapter` (enables CircuitBreaker, fallback)
   - Added 4 gateway wiring tests to prevent regression
+
+### Phase 5: Full Observability Wiring (v0.12.1)
+- [x] L3_COUNCIL_START and L3_COUNCIL_COMPLETE events in `council.py`
+- [x] L4_GATEWAY_RESPONSE and L4_GATEWAY_FALLBACK events in `router.py`
+- [x] L2_FAST_PATH_TRIGGERED event in `fast_path.py` (Issue #64)
+- [x] L2_WILDCARD_SELECTED event in `wildcard.py` (Issue #65)
+- [x] Gateway fallback chain iteration with circuit breaker integration
 
 ---
 

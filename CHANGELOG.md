@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1] - 2025-12-22
+
+### Added
+
+- **Gateway Fallback Chain (ADR-023)**: Seamless retry with secondary gateways on failure
+  - `GatewayRouter.complete()` now iterates through fallback chain
+  - `fallback_chains` parameter for configuring fallback order
+  - Emits `L4_GATEWAY_FALLBACK` event on gateway switch
+  - Circuit breaker integration skips unavailable gateways
+
+- **Full Observability Wiring (ADR-024)**: Layer events emitted throughout execution
+  - `L2_FAST_PATH_TRIGGERED`: Emitted when fast path routing is attempted (Issue #64)
+  - `L2_WILDCARD_SELECTED`: Emitted when wildcard specialist is selected (Issue #65)
+  - `L3_COUNCIL_START`: Emitted at council execution start
+  - `L3_COUNCIL_COMPLETE`: Emitted at council completion (success, timeout, error)
+  - `L4_GATEWAY_RESPONSE`: Emitted for all gateway responses (success and error)
+  - Layer boundary crossings: `cross_l1_to_l2()`, `cross_l2_to_l3()`, `cross_l3_to_l4()`
+
+### Fixed
+
+- Gateway router indentation issue
+- L4_GATEWAY_RESPONSE now emitted for error/timeout responses (not just success)
+
+### Changed
+
+- 11 new tests for gateway fallback, observability wiring, fast path events, and wildcard events
+
 ## [0.12.0] - 2025-12-22
 
 ### Added

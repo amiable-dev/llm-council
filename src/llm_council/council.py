@@ -54,10 +54,15 @@ from llm_council.safety_gate import (
     SafetyCheckResult,
 )
 from llm_council.telemetry import get_telemetry
-from llm_council.telemetry import get_telemetry
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
 from llm_council.bias_persistence import persist_session_bias_data
 from llm_council.triage import run_triage
+from llm_council.layer_contracts import (
+    LayerEventType,
+    emit_layer_event,
+    cross_l1_to_l2,
+    cross_l2_to_l3,
+)
 
 
 # =============================================================================
@@ -375,6 +380,10 @@ async def run_council_with_fallback(
     """
     triage_metadata = None
 
+    # ADR-024 (Observability): Record L1 -> L2 boundary
+    if tier_contract:
+        cross_l1_to_l2(tier_contract, user_query)
+
     # ADR-020: Apply triage if wildcard or optimization enabled
     if use_wildcard or optimize_prompts:
         triage_result = run_triage(
@@ -383,6 +392,10 @@ async def run_council_with_fallback(
             include_wildcard=use_wildcard,
             optimize_prompts=optimize_prompts,
         )
+        
+        # ADR-024 (Observability): Record L2 -> L3 boundary
+        cross_l2_to_l3(triage_result, tier_contract)
+        
         council_models = triage_result.resolved_models
         triage_metadata = triage_result.metadata
     # Determine models to use: explicit > tier_contract > default
@@ -394,6 +407,19 @@ async def run_council_with_fallback(
         council_models = COUNCIL_MODELS
 
     requested_models = len(council_models)
+
+    # ADR-024: Emit L3 Start Event
+    emit_layer_event(
+        LayerEventType.L3_COUNCIL_START,
+        {
+            "model_count": requested_models,
+            "models": council_models,
+            "tier": tier_contract.tier if tier_contract else None,
+            "triage_metadata": triage_metadata,
+        },
+        layer_from="L2",  # Or L1 if skipped
+        layer_to="L3",
+    )
 
     # Initialize result structure per ADR-012 schema
     result: Dict[str, Any] = {
@@ -529,6 +555,19 @@ async def run_council_with_fallback(
             # Fire-and-forget
             asyncio.create_task(telemetry.send_event(telemetry_event))
 
+        # ADR-024: Emit L3 Complete Event
+        emit_layer_event(
+            LayerEventType.L3_COUNCIL_COMPLETE,
+            {
+                "status": result["metadata"].get("status", "ok"),
+                "synthesis_type": result["metadata"].get("synthesis_type"),
+                "model_count": len(result.get("model_responses", {})),
+                "tier": tier_contract.tier if tier_contract else None,
+            },
+            layer_from="L3",
+            layer_to="L2",
+        )
+
         await report_progress(total_steps, total_steps, "Complete")
         return result
 
@@ -588,6 +627,20 @@ async def run_council_with_fallback(
                 result["model_responses"], requested_models
             )
 
+        # ADR-024: Emit L3 Complete Event (timeout/partial)
+        emit_layer_event(
+            LayerEventType.L3_COUNCIL_COMPLETE,
+            {
+                "status": result["metadata"].get("status", "partial"),
+                "synthesis_type": result["metadata"].get("synthesis_type"),
+                "model_count": len(result.get("model_responses", {})),
+                "tier": tier_contract.tier if tier_contract else None,
+                "timeout": True,
+            },
+            layer_from="L3",
+            layer_to="L2",
+        )
+
         await report_progress(total_steps, total_steps, "Complete (partial)")
         return result
 
@@ -596,6 +649,21 @@ async def run_council_with_fallback(
         result["metadata"]["status"] = "failed"
         result["metadata"]["synthesis_type"] = "none"
         result["synthesis"] = f"Error: Unexpected failure - {str(e)}"
+
+        # ADR-024: Emit L3 Complete Event (error)
+        emit_layer_event(
+            LayerEventType.L3_COUNCIL_COMPLETE,
+            {
+                "status": "failed",
+                "synthesis_type": "none",
+                "model_count": len(result.get("model_responses", {})),
+                "tier": tier_contract.tier if tier_contract else None,
+                "error": str(e),
+            },
+            layer_from="L3",
+            layer_to="L2",
+        )
+
         await report_progress(total_steps, total_steps, f"Failed: {e}")
         return result
 

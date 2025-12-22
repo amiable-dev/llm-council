@@ -292,3 +292,83 @@ class TestFastPathWithTierContract:
 
         # Should be within tier's per-model timeout
         assert timeout <= quick_contract.per_model_timeout_ms / 1000
+
+
+class TestFastPathObservability:
+    """Test L2_FAST_PATH_TRIGGERED event emission (ADR-024 Issue #64)."""
+
+    @pytest.fixture
+    def router(self):
+        """Create an enabled fast path router."""
+        config = FastPathConfig(enabled=True, confidence_threshold=0.92)
+        return FastPathRouter(config)
+
+    @pytest.mark.asyncio
+    async def test_route_emits_fast_path_triggered_event(self, router):
+        """FastPathRouter.route() should emit L2_FAST_PATH_TRIGGERED event."""
+        from llm_council.layer_contracts import LayerEventType, get_layer_events, clear_layer_events
+
+        clear_layer_events()
+
+        mock_response = {
+            "content": "The answer is 4.",
+            "confidence": 0.95,
+        }
+
+        with patch.object(router, "_query_model", return_value=mock_response):
+            result = await router.route("What is 2+2?")
+
+        assert result.used_fast_path is True
+
+        # Check event was emitted
+        events = get_layer_events()
+        fast_path_events = [e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED]
+        assert len(fast_path_events) == 1
+
+        event = fast_path_events[0]
+        assert event.data["confidence"] == 0.95
+        assert event.data["model"] is not None
+        assert "query_complexity" in event.data
+
+    @pytest.mark.asyncio
+    async def test_escalated_route_still_emits_event(self, router):
+        """Even escalated routes should emit the fast path event."""
+        from llm_council.layer_contracts import LayerEventType, get_layer_events, clear_layer_events
+
+        clear_layer_events()
+
+        mock_response = {
+            "content": "I'm not sure.",
+            "confidence": 0.5,  # Below threshold
+        }
+
+        with patch.object(router, "_query_model", return_value=mock_response):
+            result = await router.route("What is 2+2?")
+
+        assert result.escalated is True
+
+        # Event should still be emitted
+        events = get_layer_events()
+        fast_path_events = [e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED]
+        assert len(fast_path_events) == 1
+        assert fast_path_events[0].data["escalated"] is True
+
+    @pytest.mark.asyncio
+    async def test_disabled_router_does_not_emit_event(self):
+        """Disabled router should not emit events."""
+        from llm_council.layer_contracts import LayerEventType, get_layer_events, clear_layer_events
+
+        clear_layer_events()
+
+        config = FastPathConfig(enabled=False)
+        router = FastPathRouter(config)
+
+        result = await router.route("What is 2+2?")
+
+        # Should bypass fast path entirely
+        assert result.used_fast_path is False
+
+        # No fast path events
+        events = get_layer_events()
+        fast_path_events = [e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED]
+        assert len(fast_path_events) == 0

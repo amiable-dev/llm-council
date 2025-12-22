@@ -8,6 +8,7 @@ import re
 from typing import List, Optional
 
 from llm_council.tier_contract import TierContract
+from llm_council.layer_contracts import LayerEventType, emit_layer_event
 
 from .types import DomainCategory, WildcardConfig, DEFAULT_SPECIALIST_POOLS
 
@@ -117,6 +118,7 @@ def select_wildcard(
         config = WildcardConfig()
 
     exclude_set = set(exclude_models) if exclude_models else set()
+    exclude_list = list(exclude_set)
 
     # Get specialist pool for domain
     pool = config.specialist_pools.get(domain, [])
@@ -125,8 +127,28 @@ def select_wildcard(
     available = [m for m in pool if m not in exclude_set]
 
     # If pool is empty or all excluded, use fallback
-    if not available:
-        return config.fallback_model
+    fallback_used = not available
+    if fallback_used:
+        selected_model = config.fallback_model
+    else:
+        # Select first available (could be randomized in future)
+        selected_model = available[0]
 
-    # Select first available (could be randomized in future)
-    return available[0]
+    # ADR-024: Emit L2_WILDCARD_SELECTED event
+    event_data = {
+        "domain": domain.name,
+        "selected_model": selected_model,
+        "excluded_models": exclude_list,
+        "fallback_used": fallback_used,
+    }
+    if tier_contract is not None:
+        event_data["tier"] = tier_contract.tier
+
+    emit_layer_event(
+        LayerEventType.L2_WILDCARD_SELECTED,
+        event_data,
+        layer_from="L2",
+        layer_to="L2",
+    )
+
+    return selected_model
