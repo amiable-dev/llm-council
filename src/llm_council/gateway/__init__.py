@@ -47,6 +47,7 @@ from .errors import (
 )
 from .openrouter import OpenRouterGateway
 from .circuit_breaker import CircuitBreaker, CircuitState
+from .router import GatewayRouter
 
 __all__ = [
     # Types
@@ -75,4 +76,6 @@ __all__ = [
     # Circuit Breaker
     "CircuitBreaker",
     "CircuitState",
+    # Router
+    "GatewayRouter",
 ]
