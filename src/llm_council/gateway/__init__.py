@@ -45,6 +45,7 @@ from .errors import (
     ContentFilterError,
     ContextLengthError,
 )
+from .openrouter import OpenRouterGateway
 
 __all__ = [
     # Types
@@ -68,4 +69,6 @@ __all__ = [
     "CircuitOpenError",
     "ContentFilterError",
     "ContextLengthError",
+    # Gateways
+    "OpenRouterGateway",
 ]
