@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional, Callable, Awaitable
 
-from llm_council.openrouter import (
+from llm_council.gateway_adapter import (
     query_models_parallel,
     query_model,
     query_models_with_progress,

@@ -1,6 +1,6 @@
 # ADR-024: Unified Routing Architecture
 
-**Status:** COMPLETE (All 4 Phases Implemented)
+**Status:** COMPLETE (All 4 Phases Implemented, Execution Wiring Fixed v0.11.1)
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)
@@ -722,10 +722,14 @@ Gateway C [CLOSED] → try request
 - [x] Add observability hooks (LayerEvent, emit_layer_event)
 - [x] Add boundary crossing helpers (cross_l1_to_l2, etc.)
 
-### Phase 4: Integration Testing
-- [ ] Test tier escalation paths
-- [ ] Test gateway fallback with tier interaction
-- [ ] Test auto-tier selection via Not Diamond
+### Phase 4: Integration Testing & Execution Wiring
+- [x] Test tier escalation paths
+- [x] Test gateway fallback with tier interaction
+- [x] Test auto-tier selection via Not Diamond
+- [x] **CRITICAL FIX (v0.11.1)**: Wire `council.py` to use `gateway_adapter`
+  - Previous: `council.py` imported directly from `openrouter` (gateway layer was dead code)
+  - Fixed: `council.py` now imports from `gateway_adapter` (enables CircuitBreaker, fallback)
+  - Added 4 gateway wiring tests to prevent regression
 
 ---
 

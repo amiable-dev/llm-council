@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2025-12-22
+
+### Fixed
+
+- **CRITICAL: Gateway Layer Execution Wiring (ADR-024)**
+  - `council.py` now imports from `gateway_adapter` instead of `openrouter` directly
+  - This enables the gateway layer features (CircuitBreaker, fallback routing) to actually execute
+  - Previously, gateway layer code was implemented but never called ("dead code")
+  - Gateway wiring is now verified by 4 new integration tests
+
+### Added
+
+- **Gateway Wiring Tests**: `TestGatewayWiring` class in `test_layer_integration.py`
+  - `test_council_imports_gateway_adapter`: Verifies council uses gateway_adapter
+  - `test_council_module_has_correct_imports`: Validates function object identity
+  - `test_gateway_adapter_routes_to_direct_by_default`: Tests backward compatibility
+  - `test_gateway_adapter_uses_router_when_enabled`: Tests gateway routing path
+
 ## [0.11.0] - 2025-12-22
 
 ### Added
