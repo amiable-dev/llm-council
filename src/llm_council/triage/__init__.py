@@ -22,6 +22,7 @@ from .types import (
     WildcardConfig,
 )
 from .wildcard import classify_query_domain, select_wildcard
+from .prompt_optimizer import PromptOptimizer, get_model_provider
 
 __all__ = [
     "run_triage",
@@ -32,6 +33,8 @@ __all__ = [
     "DEFAULT_SPECIALIST_POOLS",
     "classify_query_domain",
     "select_wildcard",
+    "PromptOptimizer",
+    "get_model_provider",
 ]
 
 
@@ -41,11 +44,12 @@ def run_triage(
     domain_hint: Optional[DomainCategory] = None,
     include_wildcard: bool = False,
     wildcard_config: Optional[WildcardConfig] = None,
+    optimize_prompts: bool = False,
 ) -> TriageResult:
     """Run query triage to determine models and optimize prompts.
 
-    Performs domain classification and optional wildcard selection
-    to add specialist models to the council.
+    Performs domain classification, optional wildcard selection,
+    and optional per-model prompt optimization.
 
     Args:
         query: The user query to triage
@@ -53,6 +57,7 @@ def run_triage(
         domain_hint: Optional domain hint for specialist selection
         include_wildcard: Whether to add a wildcard specialist model
         wildcard_config: Optional custom wildcard configuration
+        optimize_prompts: Whether to apply per-model prompt optimization
 
     Returns:
         TriageResult with resolved models and prompts
@@ -81,8 +86,14 @@ def run_triage(
             "wildcard": wildcard,
         }
 
-    # Passthrough: use original query for all models
-    optimized_prompts = {model: query for model in models}
+    # Apply prompt optimization if enabled
+    if optimize_prompts:
+        optimizer = PromptOptimizer(enabled=True)
+        optimized_prompts = optimizer.optimize(query, models)
+        metadata["optimization_applied"] = True
+    else:
+        # Passthrough: use original query for all models
+        optimized_prompts = {model: query for model in models}
 
     return TriageResult(
         resolved_models=models,
