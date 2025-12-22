@@ -26,7 +26,9 @@ from llm_council.config import (
     get_key_source,
     get_tier_timeout,
     infer_tier_from_models,
+    TIER_MODEL_POOLS,
 )
+from llm_council.tier_contract import create_tier_contract
 from llm_council.openrouter import query_model_with_status, STATUS_OK
 
 
@@ -88,6 +90,10 @@ async def consult_council(
     total_timeout = config.get("total", TIMEOUT_SYNTHESIS_TRIGGER)
     per_model_timeout = config.get("per_model", 90)  # Default to high tier
 
+    # Create TierContract for tier-appropriate model selection (ADR-022)
+    tier = confidence if confidence in TIER_MODEL_POOLS else "high"
+    tier_contract = create_tier_contract(tier)
+
     # Progress reporting helper that bridges MCP context to council callback
     async def on_progress(step: int, total: int, message: str):
         if ctx:
@@ -96,8 +102,9 @@ async def consult_council(
             except Exception:
                 pass  # Progress reporting is best-effort
 
-    # Run the council with ADR-012 reliability features:
+    # Run the council with ADR-012 and ADR-022 features:
     # - Tier-sovereign timeouts (per-tier total and per-model)
+    # - Tier-appropriate model selection (ADR-022)
     # - Partial results on timeout
     # - Fallback synthesis
     # - Per-model status tracking
@@ -106,6 +113,7 @@ async def consult_council(
         on_progress=on_progress,
         synthesis_deadline=total_timeout,
         per_model_timeout=per_model_timeout,
+        tier_contract=tier_contract,
     )
 
     # Extract results from ADR-012 structured response
@@ -123,9 +131,13 @@ async def consult_council(
 
     # Add status info
     status = metadata.get("status", "unknown")
+    tier_used = metadata.get("tier")
     if status != "complete":
         synthesis_type = metadata.get("synthesis_type", "unknown")
-        result += f"\n*Council status: {status} ({synthesis_type} synthesis)*\n"
+        tier_info = f", tier: {tier_used}" if tier_used else ""
+        result += f"\n*Council status: {status} ({synthesis_type} synthesis{tier_info})*\n"
+    elif tier_used:
+        result += f"\n*Tier: {tier_used}*\n"
 
     # Add council rankings if available
     aggregate = metadata.get("aggregate_rankings", [])
