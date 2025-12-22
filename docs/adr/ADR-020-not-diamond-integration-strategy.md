@@ -1,6 +1,6 @@
 # ADR-020: Not Diamond Integration Strategy for LLM Council Ecosystem
 
-**Status:** Tier 3 Implemented (v0.8.0) - Tier 1-2 Pending
+**Status:** Tier 1-3 Implemented (v0.12.0)
 **Date:** 2025-12-19 (Updated: 2025-12-22)
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed (GPT-5.2-pro, Claude Opus 4.5, Gemini 3 Pro, Grok-4)
@@ -33,7 +33,10 @@ This ADR operates at **Layer 2** in the unified routing architecture:
 |------|-----------|--------|
 | Tier 3 | Wildcard Selection | **Implemented (v0.8.0)** |
 | Tier 2 | Prompt Optimization | **Implemented (v0.8.0)** |
-| Tier 1 | Complexity Triage | Placeholder (Not Diamond integration pending) |
+| Tier 1 | Confidence-Gated Fast Path | **Implemented (v0.12.0)** |
+| Tier 1 | Shadow Council Sampling | **Implemented (v0.12.0)** |
+| Tier 1 | Rollback Metric Tracking | **Implemented (v0.12.0)** |
+| Tier 1 | Not Diamond API Integration | **Implemented (v0.12.0)** - Optional, graceful fallback to heuristics |
 
 ---
 

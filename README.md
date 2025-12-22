@@ -519,11 +519,14 @@ The gateway layer is currently **opt-in** (default: disabled) for backward compa
 
 ### Triage Layer (ADR-020)
 
-The triage layer provides query classification and model selection optimizations:
+The triage layer provides query classification, model selection optimizations, and confidence-gated routing:
 
+- **Confidence-Gated Fast Path**: Routes simple queries to a single model, escalating to full council when confidence is low
+- **Shadow Council Sampling**: Random 5% sampling validates fast path quality against full council
+- **Rollback Monitoring**: Automatic rollback when disagreement/escalation rates breach thresholds
 - **Wildcard Selection**: Adds domain-specialized models to the council based on query classification
 - **Prompt Optimization**: Per-model prompt adaptation (Claude gets XML, OpenAI gets Markdown)
-- **Complexity Classification**: Heuristic-based query complexity detection (placeholder for future Not Diamond integration)
+- **Complexity Classification**: Heuristic-based with optional Not Diamond API integration
 
 **Domain Categories:**
 | Domain | Description | Specialist Models |
@@ -549,6 +552,44 @@ export LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED=true
 ```
 
 This applies per-model prompt formatting. Claude receives XML-structured prompts, while other providers receive their preferred format.
+
+**Enable confidence-gated fast path:**
+
+```bash
+export LLM_COUNCIL_FAST_PATH_ENABLED=true
+export LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD=0.92  # default
+```
+
+When enabled, simple queries are routed to a single model. If the model's confidence is below the threshold, the query automatically escalates to the full council. This can reduce costs by 45-55% on simple queries while maintaining quality.
+
+**Fast Path Quality Monitoring:**
+
+The fast path includes built-in quality monitoring:
+
+| Metric | Threshold | Action |
+|--------|-----------|--------|
+| Shadow disagreement rate | > 8% | Automatic rollback |
+| User escalation rate | > 15% | Automatic rollback |
+| Error rate | > 1.5x baseline | Automatic rollback |
+
+Configure monitoring:
+
+```bash
+export LLM_COUNCIL_SHADOW_SAMPLE_RATE=0.05  # 5% shadow sampling
+export LLM_COUNCIL_ROLLBACK_ENABLED=true
+export LLM_COUNCIL_ROLLBACK_WINDOW=100  # rolling window size
+```
+
+**Optional Not Diamond Integration:**
+
+For advanced model routing, integrate with [Not Diamond](https://notdiamond.ai):
+
+```bash
+export NOT_DIAMOND_API_KEY="your-key"
+export LLM_COUNCIL_USE_NOT_DIAMOND=true
+```
+
+When Not Diamond is unavailable, the system gracefully falls back to heuristic-based classification.
 
 The triage layer is currently **opt-in** (default: disabled) for backward compatibility.
 
@@ -587,6 +628,19 @@ The triage layer is currently **opt-in** (default: disabled) for backward compat
 | `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker (ADR-023) | false |
 | `LLM_COUNCIL_WILDCARD_ENABLED` | Enable wildcard specialist selection (ADR-020) | false |
 | `LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED` | Enable per-model prompt optimization (ADR-020) | false |
+| `LLM_COUNCIL_FAST_PATH_ENABLED` | Enable confidence-gated fast path (ADR-020) | false |
+| `LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD` | Confidence threshold for fast path (0.0-1.0) | 0.92 |
+| `LLM_COUNCIL_FAST_PATH_MODEL` | Model for fast path routing | auto |
+| `LLM_COUNCIL_SHADOW_SAMPLE_RATE` | Shadow sampling rate (0.0-1.0) | 0.05 |
+| `LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD` | Disagreement threshold for shadow samples | 0.08 |
+| `LLM_COUNCIL_ROLLBACK_ENABLED` | Enable rollback metric tracking | true |
+| `LLM_COUNCIL_ROLLBACK_WINDOW` | Rolling window size for metrics | 100 |
+| `LLM_COUNCIL_ROLLBACK_DISAGREEMENT_THRESHOLD` | Shadow disagreement rollback threshold | 0.08 |
+| `LLM_COUNCIL_ROLLBACK_ESCALATION_THRESHOLD` | User escalation rollback threshold | 0.15 |
+| `NOT_DIAMOND_API_KEY` | Not Diamond API key (optional) | - |
+| `LLM_COUNCIL_USE_NOT_DIAMOND` | Enable Not Diamond API integration | false |
+| `LLM_COUNCIL_NOT_DIAMOND_TIMEOUT` | Not Diamond API timeout in seconds | 5.0 |
+| `LLM_COUNCIL_NOT_DIAMOND_CACHE_TTL` | Not Diamond response cache TTL in seconds | 300 |
 
 ## Credits & Attribution
 
