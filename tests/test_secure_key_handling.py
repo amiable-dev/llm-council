@@ -130,11 +130,10 @@ class TestKeyringOptional:
         """Should handle ImportError when keyring not installed."""
         from llm_council.config import _get_api_key_from_keychain
 
-        with patch.dict(sys.modules, {'keyring': None}):
-            # Force ImportError
-            with patch('llm_council.config.keyring', side_effect=ImportError):
-                result = _get_api_key_from_keychain()
-                assert result is None
+        # Patch keyring to None to simulate it not being installed
+        with patch('llm_council.config.keyring', None):
+            result = _get_api_key_from_keychain()
+            assert result is None
 
     def test_keyring_fail_backend_returns_none(self):
         """Should return None when keyring has fail backend (headless)."""

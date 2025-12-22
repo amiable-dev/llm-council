@@ -262,7 +262,7 @@ async def test_consult_council_with_context_progress():
     mock_ctx.report_progress = AsyncMock()
 
     # Mock run_council_with_fallback to call the on_progress callback
-    async def mock_council_fn(query, on_progress=None, synthesis_deadline=None):
+    async def mock_council_fn(query, on_progress=None, synthesis_deadline=None, **kwargs):
         if on_progress:
             await on_progress(0, 5, "Starting...")
             await on_progress(5, 5, "Complete")
