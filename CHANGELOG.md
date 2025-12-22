@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2025-12-22
+
+### Added
+
+- **Layer Interface Contracts (ADR-024 Phase 3)**: Formal layer boundaries with validation
+  - `llm_council.layer_contracts` module formalizing L1→L2→L3→L4 boundaries
+  - Re-exports all layer interface types (TierContract, TriageResult, GatewayRequest)
+  - `validate_tier_contract()`, `validate_triage_result()`, `validate_gateway_request()`
+  - `validate_l1_to_l2_boundary()`, `validate_l2_to_l3_boundary()`, `validate_l3_to_l4_boundary()`
+
+- **Observability Hooks at Layer Boundaries**:
+  - `LayerEvent` and `LayerEventType` for event emission
+  - `emit_layer_event()`, `get_layer_events()`, `clear_layer_events()`
+  - Event types: L1_TIER_SELECTED, L2_TRIAGE_COMPLETE, L4_GATEWAY_REQUEST, etc.
+  - Escalation events: L1_TIER_ESCALATION, L2_DELIBERATION_ESCALATION, L4_GATEWAY_FALLBACK
+
+- **Boundary Crossing Helpers**:
+  - `cross_l1_to_l2()`, `cross_l2_to_l3()`, `cross_l3_to_l4()`
+  - Combined validation + event emission for audit trail
+
+### Changed
+
+- 31 new tests for layer contracts (TDD approach)
+
 ## [0.9.0] - 2025-12-22
 
 ### Added

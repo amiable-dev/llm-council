@@ -49,6 +49,30 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   3. `~/.config/llm-council/llm_council.yaml`
 - **Environment Variable Substitution**: Supports `${VAR_NAME}` syntax in YAML
 
+**`layer_contracts.py`** - ADR-024 Layer Interface Contracts
+- Formalizes L1→L2→L3→L4 layer boundaries with validation and observability
+- **Re-exports all layer interface types**:
+  - L1: `TierContract`, `create_tier_contract`
+  - L2: `TriageResult`, `TriageRequest`, `DomainCategory`, `WildcardConfig`
+  - L4: `GatewayRequest`, `GatewayResponse`, `CanonicalMessage`, `ContentBlock`
+- **Validation Functions**:
+  - `validate_tier_contract()`, `validate_triage_result()`, `validate_gateway_request()`
+  - `validate_l1_to_l2_boundary()`, `validate_l2_to_l3_boundary()`, `validate_l3_to_l4_boundary()`
+- **Observability Hooks**:
+  - `LayerEventType`: Enum with L1/L2/L3/L4 event types
+  - `LayerEvent`: Dataclass with event_type, data, timestamp
+  - `emit_layer_event()`, `get_layer_events()`, `clear_layer_events()`
+- **Boundary Crossing Helpers** (validate + emit event):
+  - `cross_l1_to_l2(contract, query)` - L1→L2 with L1_TIER_SELECTED event
+  - `cross_l2_to_l3(result, tier_contract)` - L2→L3 with L2_TRIAGE_COMPLETE event
+  - `cross_l3_to_l4(request)` - L3→L4 with L4_GATEWAY_REQUEST event
+- **Architectural Principles** (per ADR-024):
+  - Layer Sovereignty: Each layer owns its decision
+  - Explicit Escalation: All escalations logged and auditable
+  - Failure Isolation: Gateway failures don't cascade to tier changes
+  - Constraint Propagation: Tier constraints flow down
+  - Observability by Default: Every layer emits events
+
 **`triage/`** - ADR-020 Query Triage Layer
 - **`types.py`**: Core types for triage
   - `TriageResult`: resolved_models, optimized_prompts, fast_path, escalation fields
