@@ -5,12 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2025-12-22
+
+### Changed
+
+- **Doubled Reasoning Tier Timeouts**: Increased from 300s/150s to 600s/300s (total/per-model)
+  - Addresses timeout issues with deep reasoning models (GPT-5.2-pro, o1)
+  - 10-minute total timeout allows complex multi-model deliberation to complete
+
 ## [0.5.0] - 2025-12-19
 
 ### Added
 
 - **Tier-Sovereign Timeout Architecture (ADR-012 Section 5)**: Configurable per-tier timeouts for reasoning models
-  - New `reasoning` confidence tier: 300s total, 150s per-model (supports GPT-5.2-pro, o1, o1-preview)
+  - New `reasoning` confidence tier: 600s total, 300s per-model (supports GPT-5.2-pro, o1, o1-preview)
   - Existing tiers updated: quick (30s/20s), balanced (90s/45s), high (180s/90s)
   - `get_tier_timeout()`: Retrieves timeout config with environment variable overrides
   - `infer_tier_from_models()`: Auto-selects tier based on slowest model in council

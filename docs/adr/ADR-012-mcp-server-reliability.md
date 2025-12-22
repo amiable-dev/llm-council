@@ -282,7 +282,7 @@ async def race_council(query: str, target_responses: int = 3):
 | **quick** | 30s | 20s | GPT-4o-mini, Haiku | Fast answers, fewer models |
 | **balanced** | 90s | 45s | Sonnet 3.5, GPT-4o | Most models respond |
 | **high** | 180s | 90s | Full council (non-reasoning) | Complete deliberation |
-| **reasoning** | 300s | 150s | o1, GPT-5.2-pro | Deep reasoning models |
+| **reasoning** | 600s | 300s | o1, GPT-5.2-pro | Deep reasoning models (doubled 2025-12-22) |
 
 **Configuration via Environment Variables:**
 
@@ -291,13 +291,13 @@ async def race_council(query: str, target_responses: int = 3):
 LLM_COUNCIL_TIMEOUT_QUICK=30
 LLM_COUNCIL_TIMEOUT_BALANCED=90
 LLM_COUNCIL_TIMEOUT_HIGH=180
-LLM_COUNCIL_TIMEOUT_REASONING=300
+LLM_COUNCIL_TIMEOUT_REASONING=600
 
 # Per-tier per-model timeout (seconds)
 LLM_COUNCIL_MODEL_TIMEOUT_QUICK=20
 LLM_COUNCIL_MODEL_TIMEOUT_BALANCED=45
 LLM_COUNCIL_MODEL_TIMEOUT_HIGH=90
-LLM_COUNCIL_MODEL_TIMEOUT_REASONING=150
+LLM_COUNCIL_MODEL_TIMEOUT_REASONING=300
 
 # Global multiplier (emergency override)
 LLM_COUNCIL_TIMEOUT_MULTIPLIER=1.0
@@ -311,7 +311,7 @@ DEFAULT_TIER_TIMEOUTS = {
     "quick": {"total": 30, "per_model": 20},
     "balanced": {"total": 90, "per_model": 45},
     "high": {"total": 180, "per_model": 90},
-    "reasoning": {"total": 300, "per_model": 150},
+    "reasoning": {"total": 600, "per_model": 300},
 }
 
 def get_tier_timeout(tier: str) -> dict:
@@ -465,7 +465,7 @@ If implemented later, use in-memory job tracking with TTL (jobs expire after 5 m
 | Optimal deadline? | **40-45s** (not 55s). Tiered per-model deadlines preferred over single global. |
 | Indicate which models responded? | **Yes, explicitly.** Structured metadata with per-model status is essential. |
 | Fast mode valuable? | **Yes, as "confidence levels"** (quick/balanced/high) mapping to model count + timeout. |
-| Reasoning model timeouts? (2025-12-19) | **Tier-Sovereign architecture.** 4 tiers with per-tier configurable timeouts. Reasoning tier: 300s total, 150s per-model. |
+| Reasoning model timeouts? (2025-12-19) | **Tier-Sovereign architecture.** 4 tiers with per-tier configurable timeouts. Reasoning tier: 600s total, 300s per-model (doubled 2025-12-22). |
 | Per-tier vs global timeout config? (2025-12-19) | **Per-tier configuration.** Global overrides are dangerous; use per-tier env vars with optional multiplier. |
 
 ---

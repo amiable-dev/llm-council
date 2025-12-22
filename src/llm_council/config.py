@@ -483,7 +483,7 @@ DEFAULT_TIER_TIMEOUTS = {
     "quick": {"total": 30, "per_model": 20},
     "balanced": {"total": 90, "per_model": 45},
     "high": {"total": 180, "per_model": 90},
-    "reasoning": {"total": 300, "per_model": 150},
+    "reasoning": {"total": 600, "per_model": 300},  # 10min total for deep reasoning models
 }
 
 # Models that require the reasoning tier
