@@ -1,6 +1,6 @@
 # ADR-022: Tiered Model Selection for Confidence Levels
 
-**Status:** Proposed (Council: Conditional Approval)
+**Status:** Phase 1 Implemented (Council: Conditional Approval)
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded
@@ -169,15 +169,18 @@ async def route_query(query: str, confidence: str = "auto") -> Response:
 
 ## Implementation Phases
 
-### Phase 1: Default Tier Pools (1 week)
-- [ ] Add `TIER_MODEL_POOLS` to config.py
-- [ ] Update `run_council_with_fallback()` to use tier-appropriate models
-- [ ] Add environment variable overrides
+### Phase 1: Default Tier Pools - COMPLETE
+- [x] Add `TIER_MODEL_POOLS` to config.py
+- [x] Update `run_council_with_fallback()` to use tier-appropriate models
+- [x] Add environment variable overrides
+- [x] Create `TierContract` dataclass with `create_tier_contract()` factory
+- [x] Update `consult_council` MCP tool to use tier contracts
+- [x] Add tier info to response metadata
 
-### Phase 2: MCP Integration (1 week)
-- [ ] Update `consult_council` tool to use tier pools
-- [ ] Add `models` parameter for explicit override
-- [ ] Update health check to verify tier-specific models
+### Phase 2: MCP Integration - COMPLETE (merged into Phase 1)
+- [x] Update `consult_council` tool to use tier pools
+- [x] Add `models` parameter for explicit override
+- [x] Metadata includes tier information
 
 ### Phase 3: Auto-Tier Selection (Future, with ADR-020)
 - [ ] Integrate Not Diamond complexity classification

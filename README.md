@@ -164,9 +164,10 @@ Ask the LLM council a question and get synthesized guidance.
 **Arguments:**
 - `query` (string, required): The question to ask the council
 - `confidence` (string, optional): Response quality level (default: "high")
-  - `"quick"`: 2 models, ~10 seconds - fast responses for simple questions
-  - `"balanced"`: 3 models, ~25 seconds - good balance of speed and quality
-  - `"high"`: Full council (~45 seconds) - comprehensive deliberation
+  - `"quick"`: Fast models (mini/flash/haiku), ~30 seconds - fast responses for simple questions
+  - `"balanced"`: Mid-tier models (GPT-4o, Sonnet), ~90 seconds - good balance of speed and quality
+  - `"high"`: Full council (Opus, GPT-4o), ~180 seconds - comprehensive deliberation
+  - `"reasoning"`: Deep thinking models (GPT-5.2, o1, DeepSeek-R1), ~600 seconds - complex reasoning
 - `include_details` (boolean, optional): Include individual model responses and rankings (default: false)
 
 **Example:**
@@ -460,6 +461,10 @@ llm-council bias-report --sessions 50
 | `LLM_COUNCIL_MIN_BIAS_SESSIONS` | Minimum sessions for aggregation analysis | 20 |
 | `LLM_COUNCIL_HASH_SECRET` | Secret for query hashing (RESEARCH consent only) | dev-secret |
 | `LLM_COUNCIL_SUPPRESS_WARNINGS` | Suppress security warnings | false |
+| `LLM_COUNCIL_MODELS_QUICK` | Models for quick tier (ADR-022) | gpt-4o-mini, haiku, gemini-flash |
+| `LLM_COUNCIL_MODELS_BALANCED` | Models for balanced tier (ADR-022) | gpt-4o, sonnet, gemini-pro |
+| `LLM_COUNCIL_MODELS_HIGH` | Models for high tier (ADR-022) | gpt-4o, opus, gemini-3-pro, grok-4 |
+| `LLM_COUNCIL_MODELS_REASONING` | Models for reasoning tier (ADR-022) | gpt-5.2-pro, opus, o1-preview, deepseek-r1 |
 
 ## Credits & Attribution
 

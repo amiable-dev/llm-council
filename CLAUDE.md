@@ -13,8 +13,22 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 **`config.py`**
 - Contains `COUNCIL_MODELS` (list of OpenRouter model identifiers)
 - Contains `CHAIRMAN_MODEL` (model that synthesizes final answer)
+- **ADR-022**: Contains `TIER_MODEL_POOLS` and `DEFAULT_TIER_MODEL_POOLS` for per-tier model selection
+- `get_tier_models(tier)`: Returns models for a tier, with env var override support
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
+
+**`tier_contract.py`** - ADR-022 Tier Contract
+- `TierContract`: Frozen dataclass defining tier execution parameters
+  - `tier`: Confidence level (quick|balanced|high|reasoning)
+  - `deadline_ms`, `per_model_timeout_ms`: Timeout configuration
+  - `token_budget`, `max_attempts`: Resource limits
+  - `requires_peer_review`, `requires_verifier`: Stage flags
+  - `allowed_models`, `aggregator_model`: Model configuration
+  - `override_policy`: Escalation rules
+- `create_tier_contract(tier)`: Factory function to create contracts
+- `TIER_AGGREGATORS`: Speed-matched aggregator models per tier
+- `DEFAULT_TIER_CONTRACTS`: Pre-built contracts for all tiers
 
 **`openrouter.py`**
 - `query_model()`: Single async model query

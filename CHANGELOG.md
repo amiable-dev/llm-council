@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-12-22
+
+### Added
+
+- **Tier-Appropriate Model Selection (ADR-022)**: Each confidence level now uses optimized model pools
+  - `quick`: Fast models (gpt-4o-mini, claude-haiku, gemini-flash) for ~30s responses
+  - `balanced`: Mid-tier models (gpt-4o, claude-sonnet, gemini-pro) for ~90s responses
+  - `high`: Full council (gpt-4o, claude-opus, gemini-3-pro, grok-4) for ~180s responses
+  - `reasoning`: Deep thinking models (gpt-5.2-pro, claude-opus, o1-preview, deepseek-r1) for ~600s responses
+
+- **TierContract Dataclass**: Immutable contract defining tier execution parameters
+  - `tier`, `deadline_ms`, `per_model_timeout_ms`, `token_budget`, `max_attempts`
+  - `requires_peer_review`, `requires_verifier`, `allowed_models`, `aggregator_model`
+  - `create_tier_contract()` factory function for easy creation
+  - `TIER_AGGREGATORS`: Speed-matched aggregator models per tier
+
+- **New Environment Variables**:
+  - `LLM_COUNCIL_MODELS_QUICK`: Override quick tier models
+  - `LLM_COUNCIL_MODELS_BALANCED`: Override balanced tier models
+  - `LLM_COUNCIL_MODELS_HIGH`: Override high tier models
+  - `LLM_COUNCIL_MODELS_REASONING`: Override reasoning tier models
+
+### Changed
+
+- `run_council_with_fallback()` now accepts `models` and `tier_contract` parameters
+- MCP `consult_council` creates TierContract from confidence level
+- Response metadata includes `tier` field when tier_contract provided
+
 ## [0.5.1] - 2025-12-22
 
 ### Changed
