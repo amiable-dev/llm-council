@@ -1,9 +1,17 @@
 # ADR-020: Not Diamond Integration Strategy for LLM Council Ecosystem
 
-**Status:** Proposed
-**Date:** 2025-12-19
+**Status:** Tier 3 Implemented (v0.8.0) - Tier 1-2 Pending
+**Date:** 2025-12-19 (Updated: 2025-12-22)
 **Decision Makers:** Engineering, Architecture
-**Council Review:** Pending (GPT-5.2-pro, Claude Opus 4.5, Gemini 3 Pro, Grok-4)
+**Council Review:** Completed (GPT-5.2-pro, Claude Opus 4.5, Gemini 3 Pro, Grok-4)
+
+### Implementation Status
+
+| Tier | Component | Status |
+|------|-----------|--------|
+| Tier 3 | Wildcard Selection | **Implemented (v0.8.0)** |
+| Tier 2 | Prompt Optimization | **Implemented (v0.8.0)** |
+| Tier 1 | Complexity Triage | Placeholder (Not Diamond integration pending) |
 
 ---
 

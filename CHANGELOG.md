@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-12-22
+
+### Added
+
+- **Triage Layer (ADR-020 Phase 3)**: Query classification and model selection optimization
+  - `llm_council.triage` package with modular components
+  - `TriageResult`, `TriageRequest`, `WildcardConfig`, `DomainCategory` types
+  - Wildcard selection: Adds domain-specialized models based on query classification
+  - Prompt optimization: Per-model prompt adaptation (Claude XML, etc.)
+  - Complexity classifier: Heuristic-based with Not Diamond placeholder
+
+- **Domain-Specialized Model Selection**:
+  - CODE: DeepSeek, Codestral for programming queries
+  - REASONING: o1-preview, DeepSeek-R1 for math/logic
+  - CREATIVE: Claude Opus, Command-R+ for fiction/poetry
+  - MULTILINGUAL: GPT-4o, Command-R+ for translation
+  - GENERAL: Llama 3 fallback
+
+- **Council Integration**:
+  - `use_wildcard` parameter for `run_council_with_fallback()`
+  - `optimize_prompts` parameter for per-model adaptation
+  - Triage metadata included in council results
+
+- **New Environment Variables**:
+  - `LLM_COUNCIL_WILDCARD_ENABLED`: Enable wildcard selection (default: false)
+  - `LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED`: Enable prompt optimization (default: false)
+
+### Changed
+
+- Triage layer is opt-in for backward compatibility
+- 111 new tests for triage package (TDD approach)
+
 ## [0.7.0] - 2025-12-22
 
 ### Added

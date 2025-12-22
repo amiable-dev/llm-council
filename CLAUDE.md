@@ -30,6 +30,26 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `TIER_AGGREGATORS`: Speed-matched aggregator models per tier
 - `DEFAULT_TIER_CONTRACTS`: Pre-built contracts for all tiers
 
+**`triage/`** - ADR-020 Query Triage Layer
+- **`types.py`**: Core types for triage
+  - `TriageResult`: resolved_models, optimized_prompts, fast_path, escalation fields
+  - `TriageRequest`: query with optional tier_contract and domain_hint
+  - `WildcardConfig`: specialist pools, fallback model, diversity constraints
+  - `DomainCategory`: CODE, REASONING, CREATIVE, MULTILINGUAL, GENERAL
+  - `DEFAULT_SPECIALIST_POOLS`: Per-domain model recommendations
+- **`wildcard.py`**: Domain-specialized model selection
+  - `classify_query_domain()`: Keyword-based domain classification
+  - `select_wildcard()`: Select specialist from pool with diversity constraints
+- **`prompt_optimizer.py`**: Per-model prompt adaptation
+  - `PromptOptimizer`: Applies provider-specific formatting (Claude XML, etc.)
+  - `get_model_provider()`: Extract provider from model ID
+- **`complexity.py`**: Complexity classification (placeholder)
+  - `HeuristicComplexityClassifier`: Keyword/length-based heuristics
+  - `NotDiamondClassifier`: Placeholder for future integration
+  - `classify_complexity()`: Entry point for complexity classification
+- **`__init__.py`**: Exports `run_triage()` entry point
+- Configuration: `WILDCARD_ENABLED`, `PROMPT_OPTIMIZATION_ENABLED`
+
 **`openrouter.py`**
 - `query_model()`: Single async model query
 - `query_models_parallel()`: Parallel queries using `asyncio.gather()`

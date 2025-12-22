@@ -469,6 +469,41 @@ export LLM_COUNCIL_USE_GATEWAY=true
 
 The gateway layer is currently **opt-in** (default: disabled) for backward compatibility.
 
+### Triage Layer (ADR-020)
+
+The triage layer provides query classification and model selection optimizations:
+
+- **Wildcard Selection**: Adds domain-specialized models to the council based on query classification
+- **Prompt Optimization**: Per-model prompt adaptation (Claude gets XML, OpenAI gets Markdown)
+- **Complexity Classification**: Heuristic-based query complexity detection (placeholder for future Not Diamond integration)
+
+**Domain Categories:**
+| Domain | Description | Specialist Models |
+|--------|-------------|-------------------|
+| CODE | Programming, debugging, algorithms | DeepSeek, Codestral |
+| REASONING | Math, logic, proofs | o1-preview, DeepSeek-R1 |
+| CREATIVE | Stories, poems, fiction | Claude Opus, Command-R+ |
+| MULTILINGUAL | Translation, language | GPT-4o, Command-R+ |
+| GENERAL | General knowledge | Llama 3 (fallback) |
+
+**Enable wildcard selection:**
+
+```bash
+export LLM_COUNCIL_WILDCARD_ENABLED=true
+```
+
+This automatically adds a domain specialist to the council based on query classification. For example, a Python coding question will add a DeepSeek model alongside the default council.
+
+**Enable prompt optimization:**
+
+```bash
+export LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED=true
+```
+
+This applies per-model prompt formatting. Claude receives XML-structured prompts, while other providers receive their preferred format.
+
+The triage layer is currently **opt-in** (default: disabled) for backward compatibility.
+
 ### All Environment Variables
 
 | Variable | Description | Default |
@@ -502,6 +537,8 @@ The gateway layer is currently **opt-in** (default: disabled) for backward compa
 | `LLM_COUNCIL_MODELS_HIGH` | Models for high tier (ADR-022) | gpt-4o, opus, gemini-3-pro, grok-4 |
 | `LLM_COUNCIL_MODELS_REASONING` | Models for reasoning tier (ADR-022) | gpt-5.2-pro, opus, o1-preview, deepseek-r1 |
 | `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker (ADR-023) | false |
+| `LLM_COUNCIL_WILDCARD_ENABLED` | Enable wildcard specialist selection (ADR-020) | false |
+| `LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED` | Enable per-model prompt optimization (ADR-020) | false |
 
 ## Credits & Attribution
 
