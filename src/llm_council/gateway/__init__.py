@@ -46,6 +46,7 @@ from .errors import (
     ContextLengthError,
 )
 from .openrouter import OpenRouterGateway
+from .circuit_breaker import CircuitBreaker, CircuitState
 
 __all__ = [
     # Types
@@ -71,4 +72,7 @@ __all__ = [
     "ContextLengthError",
     # Gateways
     "OpenRouterGateway",
+    # Circuit Breaker
+    "CircuitBreaker",
+    "CircuitState",
 ]
