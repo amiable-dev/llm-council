@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2025-12-22
+
+### Added
+
+- **Integration Testing (ADR-024 Phase 4)**: Comprehensive cross-layer testing
+  - 21 integration tests validating layer interactions
+  - Tier escalation paths (L1 → L2)
+  - Gateway failure isolation (L4 failures NEVER escalate tier)
+  - Auto-tier selection via complexity classification
+  - End-to-end flow through all four layers
+  - Circuit breaker behavior validation
+  - Rollback trigger tracking (escalation_rate, fallback_rate)
+
+### Key Invariants Tested
+
+- Gateway failures trigger L4 fallback, NOT L1 tier escalation
+- Tier escalation is explicit and logged via LayerEvent
+- Layer sovereignty: each layer owns its decision
+- Events emitted in layer order (L1 → L2 → L4)
+
 ## [0.10.0] - 2025-12-22
 
 ### Added
