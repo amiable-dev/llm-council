@@ -69,6 +69,79 @@ DEFAULT_COUNCIL_MODELS = [
     "x-ai/grok-4",
 ]
 
+# =============================================================================
+# ADR-022: Tier-Specific Model Pools
+# =============================================================================
+# Each confidence tier uses models optimized for its latency and capability
+# requirements. Quick tier uses fast models, reasoning tier uses deep thinkers.
+#
+# Environment variable overrides:
+#   LLM_COUNCIL_MODELS_QUICK=model1,model2,...
+#   LLM_COUNCIL_MODELS_BALANCED=model1,model2,...
+#   LLM_COUNCIL_MODELS_HIGH=model1,model2,...
+#   LLM_COUNCIL_MODELS_REASONING=model1,model2,...
+
+DEFAULT_TIER_MODEL_POOLS = {
+    "quick": [
+        "openai/gpt-4o-mini",
+        "anthropic/claude-3-5-haiku-20241022",
+        "google/gemini-2.0-flash-001",
+    ],
+    "balanced": [
+        "openai/gpt-4o",
+        "anthropic/claude-3-5-sonnet-20241022",
+        "google/gemini-1.5-pro",
+    ],
+    "high": [
+        "openai/gpt-4o",
+        "anthropic/claude-opus-4-5-20250514",
+        "google/gemini-3-pro",
+        "x-ai/grok-4",
+    ],
+    "reasoning": [
+        "openai/gpt-5.2-pro",
+        "anthropic/claude-opus-4-5-20250514",
+        "openai/o1-preview",
+        "deepseek/deepseek-r1",
+    ],
+}
+
+
+def get_tier_models(tier: str) -> list:
+    """
+    Get model pool for a specific tier, with environment variable override.
+
+    Args:
+        tier: One of "quick", "balanced", "high", "reasoning"
+
+    Returns:
+        List of model identifiers for the tier
+
+    Priority:
+        1. Environment variable LLM_COUNCIL_MODELS_<TIER>
+        2. Default tier pool
+        3. Fall back to "high" tier for unknown tiers
+    """
+    tier_lower = tier.lower()
+    tier_upper = tier.upper()
+    env_key = f"LLM_COUNCIL_MODELS_{tier_upper}"
+
+    # Check for per-tier env override
+    env_models = os.getenv(env_key)
+    if env_models:
+        return [m.strip() for m in env_models.split(",")]
+
+    # Fall back to defaults, with unknown tiers using "high"
+    return DEFAULT_TIER_MODEL_POOLS.get(tier_lower, DEFAULT_TIER_MODEL_POOLS["high"])
+
+
+# Computed tier model pools (evaluated at import time)
+# These can be overridden per-tier via environment variables
+TIER_MODEL_POOLS = {
+    tier: get_tier_models(tier)
+    for tier in ["quick", "balanced", "high", "reasoning"]
+}
+
 # Default Chairman model - synthesizes final response
 DEFAULT_CHAIRMAN_MODEL = "google/gemini-3-pro-preview"
 
