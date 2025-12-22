@@ -612,3 +612,17 @@ def infer_tier_from_models(models: list) -> str:
     if any(m in REASONING_MODELS for m in models):
         return "reasoning"
     return "high"
+
+
+# =============================================================================
+# ADR-023: Gateway Layer Configuration
+# =============================================================================
+# When enabled, uses the gateway layer for LLM requests instead of direct
+# openrouter module calls. This enables circuit breakers, fallback chains,
+# and multi-gateway routing.
+#
+# Environment variables:
+#   LLM_COUNCIL_USE_GATEWAY=true|false  - Enable gateway layer (default: false)
+
+_use_gateway_env = os.getenv("LLM_COUNCIL_USE_GATEWAY", "false").lower()
+USE_GATEWAY_LAYER = _use_gateway_env in ("true", "1", "yes")
