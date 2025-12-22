@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2025-12-22
+
+### Added
+
+- **Confidence-Gated Fast Path (ADR-020 Tier 1, Issue #57)**: Route simple queries to single model
+  - `FastPathRouter`: Routes queries based on complexity classification
+  - `FastPathConfig`: Configuration for confidence threshold (default: 0.92), model selection
+  - `ConfidenceExtractor`: Extracts confidence scores from model responses
+  - `FastPathResult`: Structured result with confidence, escalation status
+  - Graceful escalation to full council when confidence is below threshold
+  - Environment variables: `LLM_COUNCIL_FAST_PATH_ENABLED`, `LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD`
+
+- **Shadow Council Sampling (ADR-020 Tier 1, Issue #58)**: Quality validation for fast path
+  - `ShadowSampler`: Random 5% sampling of fast-path queries through full council
+  - `DisagreementDetector`: Text similarity comparison (word-based Jaccard)
+  - `ShadowMetricStore`: JSONL persistence for disagreement tracking
+  - `ShadowSampleResult`: Structured result with agreement score and analysis
+  - Configurable sampling rate and disagreement threshold
+  - Environment variables: `LLM_COUNCIL_SHADOW_SAMPLE_RATE`, `LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD`
+
+- **Rollback Metric Tracking (ADR-020 Tier 1, Issue #60)**: Automatic rollback triggers
+  - `RollbackMonitor`: Tracks metrics and checks thresholds for automatic rollback
+  - `RollbackMetricStore`: JSONL persistence with rolling window
+  - `MetricType`: Shadow disagreement, user escalation, error rate, wildcard timeout
+  - `RollbackEvent`: Structured event with breach detection
+  - Council-defined thresholds: 8% disagreement, 15% escalation
+  - Environment variables: `LLM_COUNCIL_ROLLBACK_ENABLED`, `LLM_COUNCIL_ROLLBACK_WINDOW`
+
+- **Not Diamond API Integration (ADR-020 Tier 1, Issue #59)**: Optional external routing
+  - `NotDiamondClient`: API client with caching and graceful fallback
+  - `NotDiamondClassifier`: Complexity classification with heuristic fallback
+  - `NotDiamondRouter`: Model routing with tier constraint support
+  - `NotDiamondConfig`: Configuration from environment variables
+  - Graceful degradation to heuristics when API unavailable
+  - Environment variables: `NOT_DIAMOND_API_KEY`, `LLM_COUNCIL_USE_NOT_DIAMOND`
+
+### Changed
+
+- 73 new tests for ADR-020 Tier 1 (TDD approach)
+- Triage package exports updated with all new modules
+
 ## [0.11.1] - 2025-12-22
 
 ### Fixed

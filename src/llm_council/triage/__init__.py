@@ -4,6 +4,7 @@ This package handles query classification, model selection, and prompt optimizat
 before council execution.
 
 Features:
+- Fast path: Confidence-gated routing for simple queries (Issue #57)
 - Wildcard selection: Adds domain specialist to council (Issue #48)
 - Prompt optimizer: Per-model prompt adaptation (Issue #49)
 - Complexity classifier: Tier escalation detection (Issue #50)
@@ -23,6 +24,42 @@ from .types import (
 )
 from .wildcard import classify_query_domain, select_wildcard
 from .prompt_optimizer import PromptOptimizer, get_model_provider
+from .fast_path import (
+    FastPathRouter,
+    FastPathResult,
+    FastPathConfig,
+    ConfidenceExtractor,
+    get_fast_path_router,
+    is_fast_path_enabled,
+)
+from .shadow_sampling import (
+    ShadowSampler,
+    ShadowSamplingConfig,
+    ShadowSampleResult,
+    DisagreementDetector,
+    ShadowMetricStore,
+    get_shadow_sampler,
+    get_shadow_store,
+)
+from .rollback_metrics import (
+    RollbackMonitor,
+    RollbackConfig,
+    RollbackMetricStore,
+    MetricType,
+    RollbackEvent,
+    get_rollback_monitor,
+    should_disable_fast_path,
+)
+from .not_diamond import (
+    NotDiamondConfig,
+    NotDiamondClient,
+    NotDiamondClassifier,
+    NotDiamondRouter,
+    RouteResult,
+    is_not_diamond_available,
+    get_not_diamond_config,
+    get_not_diamond_client,
+)
 
 __all__ = [
     "run_triage",
@@ -35,6 +72,38 @@ __all__ = [
     "select_wildcard",
     "PromptOptimizer",
     "get_model_provider",
+    # Fast path (Issue #57)
+    "FastPathRouter",
+    "FastPathResult",
+    "FastPathConfig",
+    "ConfidenceExtractor",
+    "get_fast_path_router",
+    "is_fast_path_enabled",
+    # Shadow sampling (Issue #58)
+    "ShadowSampler",
+    "ShadowSamplingConfig",
+    "ShadowSampleResult",
+    "DisagreementDetector",
+    "ShadowMetricStore",
+    "get_shadow_sampler",
+    "get_shadow_store",
+    # Rollback metrics (Issue #60)
+    "RollbackMonitor",
+    "RollbackConfig",
+    "RollbackMetricStore",
+    "MetricType",
+    "RollbackEvent",
+    "get_rollback_monitor",
+    "should_disable_fast_path",
+    # Not Diamond integration (Issue #59)
+    "NotDiamondConfig",
+    "NotDiamondClient",
+    "NotDiamondClassifier",
+    "NotDiamondRouter",
+    "RouteResult",
+    "is_not_diamond_available",
+    "get_not_diamond_config",
+    "get_not_diamond_client",
 ]
 
 
