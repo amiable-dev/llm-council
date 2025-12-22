@@ -83,7 +83,55 @@ export LLM_COUNCIL_MODELS="openai/gpt-4,anthropic/claude-3-opus,google/gemini-pr
 export LLM_COUNCIL_CHAIRMAN="anthropic/claude-3-opus"
 ```
 
-#### Option 2: Configuration File
+#### Option 2: YAML Configuration (Recommended)
+
+Create `llm_council.yaml` in your project root or `~/.config/llm-council/llm_council.yaml`:
+
+```yaml
+council:
+  # Tier configuration (ADR-022)
+  tiers:
+    default: high
+    pools:
+      quick:
+        models:
+          - openai/gpt-4o-mini
+          - anthropic/claude-3-5-haiku-20241022
+        timeout_seconds: 30
+      balanced:
+        models:
+          - openai/gpt-4o
+          - anthropic/claude-3-5-sonnet-20241022
+        timeout_seconds: 90
+      high:
+        models:
+          - openai/gpt-4o
+          - anthropic/claude-opus-4-5-20250514
+          - google/gemini-3-pro
+        timeout_seconds: 180
+
+  # Triage configuration (ADR-020)
+  triage:
+    enabled: false
+    wildcard:
+      enabled: true
+    prompt_optimization:
+      enabled: true
+
+  # Gateway configuration (ADR-023)
+  gateways:
+    default: openrouter
+    fallback:
+      enabled: true
+      chain: [openrouter, requesty, direct]
+
+  observability:
+    log_escalations: true
+```
+
+**Priority**: YAML config > Environment variables > Defaults
+
+#### Option 3: JSON Configuration (Legacy)
 
 Create `~/.config/llm-council/config.json`:
 
@@ -103,7 +151,7 @@ Create `~/.config/llm-council/config.json`:
 }
 ```
 
-#### Option 3: Use Defaults
+#### Option 4: Use Defaults
 
 If you don't configure anything, these defaults are used:
 - Council: GPT-5.1, Gemini 3 Pro, Claude Sonnet 4.5, Grok 4

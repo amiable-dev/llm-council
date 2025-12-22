@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-12-22
+
+### Added
+
+- **Unified YAML Configuration (ADR-024 Phase 2)**: Single source of truth for all settings
+  - `llm_council.yaml` file support with Pydantic validation
+  - Consolidates settings from ADR-020, ADR-022, ADR-023
+  - Environment variable substitution with `${VAR_NAME}` syntax
+  - Automatic config discovery in current directory and `~/.config/llm-council/`
+
+- **`llm_council.unified_config` module**:
+  - `UnifiedConfig`: Main configuration class with all settings
+  - `TierConfig`, `TriageConfig`, `GatewayConfig`: Sub-configurations
+  - `load_config()`: Load from YAML file with validation
+  - `get_effective_config()`: Get config with env var overrides applied
+  - `get_config()`, `reload_config()`: Global configuration management
+
+- **Configuration Priority**: YAML > Environment Variables > Defaults
+  - All existing environment variables continue to work
+  - New YAML configuration is optional and additive
+
+- **Schema Validation**:
+  - Invalid tier names rejected (must be: quick, balanced, high, reasoning)
+  - Invalid gateway names rejected (must be: openrouter, requesty, direct, auto)
+  - Confidence thresholds validated (0.0-1.0 range)
+  - Escalation limits validated (0-5 range)
+
+### Changed
+
+- PyYAML added as dependency
+- 36 new tests for unified configuration (TDD approach)
+
 ## [0.8.0] - 2025-12-22
 
 ### Added
