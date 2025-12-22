@@ -1,6 +1,6 @@
 # ADR-024: Unified Routing Architecture
 
-**Status:** Proposed (Council: Approved with Modifications)
+**Status:** Phase 1 Implemented (Council: Approved with Modifications)
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)
@@ -701,10 +701,10 @@ Gateway C [CLOSED] → try request
 
 ## Implementation Strategy
 
-### Phase 1: Documentation Alignment
-- [ ] Add cross-references between ADR-020, ADR-022, ADR-023
-- [ ] Update each ADR with layer assignment and interaction rules
-- [ ] Standardize terminology across all three
+### Phase 1: Documentation Alignment - COMPLETE
+- [x] Add cross-references between ADR-020, ADR-022, ADR-023
+- [x] Update each ADR with layer assignment and interaction rules
+- [x] Standardize terminology across all three
 
 ### Phase 2: Unified Configuration
 - [ ] Implement `llm_council.yaml` parser

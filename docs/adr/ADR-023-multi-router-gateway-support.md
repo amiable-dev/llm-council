@@ -4,6 +4,27 @@
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)
+**Layer Assignment:** Layer 4 - Gateway Routing (per ADR-024)
+
+---
+
+## Layer Context (ADR-024)
+
+This ADR operates at **Layer 4** in the unified routing architecture:
+
+| Layer | ADR | Responsibility |
+|-------|-----|----------------|
+| L1 | ADR-022 | Tier Selection (quick/balanced/high/reasoning) |
+| L2 | ADR-020 | Query Triage & Model Selection |
+| L3 | Core | Council Execution (Stage 1-3) |
+| **L4** | **ADR-023** | **Gateway Routing** |
+
+**Interaction Rules:**
+- Layer 4 receives resolved model IDs and `CanonicalMessage` from Layer 3
+- Gateway selection is based on model → gateway mapping
+- Gateway fallback is for infrastructure failures only (timeout, 5xx, rate limit)
+- Gateway failures NEVER trigger tier escalation (per ADR-024 council decision)
+- All gateways exhausted → raise `TransportFailure` with clear error
 
 ---
 
@@ -1034,8 +1055,12 @@ automatic_rollback:
 
 ## References
 
+### Related ADRs (Unified Routing Architecture)
+- [ADR-020: Not Diamond Integration Strategy](./ADR-020-not-diamond-integration-strategy.md) - Layer 2 (Query Triage)
+- [ADR-022: Tiered Model Selection](./ADR-022-tiered-model-selection.md) - Layer 1 (Tier Selection)
+- [ADR-024: Unified Routing Architecture](./ADR-024-unified-routing-architecture.md) - Coordination layer
+
+### Other References
 - [ADR-013: Secure API Key Handling](./ADR-013-secure-api-key-handling.md)
-- [ADR-020: Not Diamond Integration Strategy](./ADR-020-not-diamond-integration-strategy.md)
-- [ADR-022: Tiered Model Selection](./ADR-022-tiered-model-selection.md)
 - [OpenRouter Documentation](https://openrouter.ai/docs/quickstart)
 - [Requesty Documentation](https://docs.requesty.ai/quickstart)

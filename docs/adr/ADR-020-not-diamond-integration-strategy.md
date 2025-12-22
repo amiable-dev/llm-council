@@ -4,6 +4,28 @@
 **Date:** 2025-12-19 (Updated: 2025-12-22)
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed (GPT-5.2-pro, Claude Opus 4.5, Gemini 3 Pro, Grok-4)
+**Layer Assignment:** Layer 2 - Query Triage & Model Selection (per ADR-024)
+
+---
+
+## Layer Context (ADR-024)
+
+This ADR operates at **Layer 2** in the unified routing architecture:
+
+| Layer | ADR | Responsibility |
+|-------|-----|----------------|
+| L1 | ADR-022 | Tier Selection (quick/balanced/high/reasoning) |
+| **L2** | **ADR-020** | **Query Triage & Model Selection** |
+| L3 | Core | Council Execution (Stage 1-3) |
+| L4 | ADR-023 | Gateway Routing |
+
+**Interaction Rules:**
+- Layer 2 receives `TierContract` from Layer 1 (models MUST come from `TierContract.allowed_pools`)
+- Layer 2 can RECOMMEND tier escalation, not force it
+- Escalation requires explicit user notification
+- Layer 2 outputs `TriageResult` to Layer 3
+
+---
 
 ### Implementation Status
 
@@ -403,6 +425,12 @@ automatic_rollback:
 
 ## References
 
+### Related ADRs (Unified Routing Architecture)
+- [ADR-022: Tiered Model Selection](./ADR-022-tiered-model-selection.md) - Layer 1 (Tier Selection)
+- [ADR-023: Multi-Router Gateway Support](./ADR-023-multi-router-gateway-support.md) - Layer 4 (Gateway Routing)
+- [ADR-024: Unified Routing Architecture](./ADR-024-unified-routing-architecture.md) - Coordination layer
+
+### Other References
 - [Not Diamond Documentation](https://docs.notdiamond.ai/docs/what-is-not-diamond)
 - [Not Diamond API Reference](https://docs.notdiamond.ai/reference/adapt_prompt_v2_prompt_adapt_post)
 - [ADR-012: MCP Server Reliability](./ADR-012-mcp-server-reliability.md)

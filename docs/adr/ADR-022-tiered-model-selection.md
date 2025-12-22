@@ -4,6 +4,26 @@
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded
+**Layer Assignment:** Layer 1 - Tier Selection (per ADR-024)
+
+---
+
+## Layer Context (ADR-024)
+
+This ADR operates at **Layer 1** in the unified routing architecture:
+
+| Layer | ADR | Responsibility |
+|-------|-----|----------------|
+| **L1** | **ADR-022** | **Tier Selection (quick/balanced/high/reasoning)** |
+| L2 | ADR-020 | Query Triage & Model Selection |
+| L3 | Core | Council Execution (Stage 1-3) |
+| L4 | ADR-023 | Gateway Routing |
+
+**Interaction Rules:**
+- Layer 1 creates `TierContract` defining allowed models, timeouts, and constraints
+- Layer 1 supports explicit tier selection (user specifies) or auto mode (defers to Layer 2)
+- Tier escalation is explicit and logged; never silent
+- Layer 1 outputs `TierContract` to Layer 2
 
 ---
 
@@ -416,6 +436,11 @@ automatic_rollback:
 
 ## References
 
+### Related ADRs (Unified Routing Architecture)
+- [ADR-020: Not Diamond Integration Strategy](./ADR-020-not-diamond-integration-strategy.md) - Layer 2 (Query Triage)
+- [ADR-023: Multi-Router Gateway Support](./ADR-023-multi-router-gateway-support.md) - Layer 4 (Gateway Routing)
+- [ADR-024: Unified Routing Architecture](./ADR-024-unified-routing-architecture.md) - Coordination layer
+
+### Other References
 - [ADR-012: MCP Server Reliability](./ADR-012-mcp-server-reliability.md)
-- [ADR-020: Not Diamond Integration Strategy](./ADR-020-not-diamond-integration-strategy.md)
 - [OpenRouter Model Pricing](https://openrouter.ai/models)
