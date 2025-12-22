@@ -3,10 +3,10 @@
 This package handles query classification, model selection, and prompt optimization
 before council execution.
 
-Current implementation is a passthrough stub that will be enhanced with:
-- Wildcard selection (Issue #48)
-- Prompt optimizer (Issue #49)
-- Complexity classifier (Issue #50)
+Features:
+- Wildcard selection: Adds domain specialist to council (Issue #48)
+- Prompt optimizer: Per-model prompt adaptation (Issue #49)
+- Complexity classifier: Tier escalation detection (Issue #50)
 """
 
 from typing import Optional
@@ -21,6 +21,7 @@ from .types import (
     TriageResult,
     WildcardConfig,
 )
+from .wildcard import classify_query_domain, select_wildcard
 
 __all__ = [
     "run_triage",
@@ -29,6 +30,8 @@ __all__ = [
     "WildcardConfig",
     "DomainCategory",
     "DEFAULT_SPECIALIST_POOLS",
+    "classify_query_domain",
+    "select_wildcard",
 ]
 
 
@@ -36,32 +39,47 @@ def run_triage(
     query: str,
     tier_contract: Optional[TierContract] = None,
     domain_hint: Optional[DomainCategory] = None,
+    include_wildcard: bool = False,
+    wildcard_config: Optional[WildcardConfig] = None,
 ) -> TriageResult:
     """Run query triage to determine models and optimize prompts.
 
-    This is currently a passthrough stub that:
-    - Uses tier_contract's allowed_models if provided, else COUNCIL_MODELS
-    - Passes through query unchanged to all models
-    - Sets passthrough mode in metadata
-
-    Future enhancements (per ADR-020):
-    - Wildcard selection from specialist pools
-    - Per-model prompt optimization
-    - Complexity classification for tier escalation
+    Performs domain classification and optional wildcard selection
+    to add specialist models to the council.
 
     Args:
         query: The user query to triage
         tier_contract: Optional tier contract constraining model selection
         domain_hint: Optional domain hint for specialist selection
+        include_wildcard: Whether to add a wildcard specialist model
+        wildcard_config: Optional custom wildcard configuration
 
     Returns:
         TriageResult with resolved models and prompts
     """
-    # Determine models to use
+    # Determine base models to use
     if tier_contract is not None:
         models = list(tier_contract.allowed_models)
     else:
         models = list(COUNCIL_MODELS)
+
+    metadata = {"mode": "passthrough"}
+
+    # Optionally add wildcard specialist
+    if include_wildcard:
+        domain = classify_query_domain(query, domain_hint=domain_hint)
+        wildcard = select_wildcard(
+            domain,
+            exclude_models=models,
+            config=wildcard_config,
+            tier_contract=tier_contract,
+        )
+        models = models + [wildcard]
+        metadata = {
+            "mode": "wildcard",
+            "domain": domain.value,
+            "wildcard": wildcard,
+        }
 
     # Passthrough: use original query for all models
     optimized_prompts = {model: query for model in models}
@@ -71,5 +89,5 @@ def run_triage(
         optimized_prompts=optimized_prompts,
         fast_path=False,
         escalation_recommended=False,
-        metadata={"mode": "passthrough"},
+        metadata=metadata,
     )
