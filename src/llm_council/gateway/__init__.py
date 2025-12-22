@@ -46,6 +46,8 @@ from .errors import (
     ContextLengthError,
 )
 from .openrouter import OpenRouterGateway
+from .requesty import RequestyGateway
+from .direct import DirectGateway
 from .circuit_breaker import CircuitBreaker, CircuitState
 from .router import GatewayRouter
 
@@ -73,6 +75,8 @@ __all__ = [
     "ContextLengthError",
     # Gateways
     "OpenRouterGateway",
+    "RequestyGateway",
+    "DirectGateway",
     # Circuit Breaker
     "CircuitBreaker",
     "CircuitState",

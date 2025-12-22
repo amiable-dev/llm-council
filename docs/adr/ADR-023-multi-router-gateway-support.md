@@ -1,6 +1,6 @@
 # ADR-023: Multi-Router Gateway Support (OpenRouter, Requesty, Direct APIs)
 
-**Status:** Implemented (Fallback Logic Added v0.11.2) - Requesty/Direct APIs Deferred
+**Status:** COMPLETE (All Gateways Implemented v0.12.2)
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)
@@ -385,17 +385,19 @@ router = get_router("openrouter")
 await router.query(model, messages)
 ```
 
-### Phase 2: Requesty Integration (Week 2-3)
+### Phase 2: Requesty Integration - COMPLETE (v0.12.2, Issue #66)
 
-1. Implement `RequestyGateway` with BYOK support
-2. Add fallback chain logic
-3. Implement per-model routing
+1. [x] Implement `RequestyGateway` with BYOK support
+2. [x] Add fallback chain logic (integrated with GatewayRouter)
+3. [x] Implement per-model routing
+4. [x] 20 TDD tests for RequestyGateway
 
-### Phase 3: Direct API Support (Week 3-4)
+### Phase 3: Direct API Support - COMPLETE (v0.12.2, Issue #67)
 
-1. Implement `DirectAPIGateway` for Anthropic, OpenAI, Google
-2. Handle provider-specific message formats
-3. Add Anthropic Messages API support (differs from OpenAI format)
+1. [x] Implement `DirectGateway` for Anthropic, OpenAI, Google
+2. [x] Handle provider-specific message formats (OpenAI, Anthropic, Google)
+3. [x] Add Anthropic Messages API support (differs from OpenAI format)
+4. [x] 24 TDD tests for DirectGateway
 
 ### Phase 4: Configuration UI (Future)
 

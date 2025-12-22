@@ -483,23 +483,46 @@ llm-council bias-report --sessions 50
 
 ### Gateway Layer (ADR-023)
 
-The gateway layer provides an optional abstraction over LLM API requests with:
-- **Circuit Breaker**: Prevents cascading failures by temporarily blocking requests to failing services
-- **Fault Tolerance**: Automatic state machine (CLOSED → OPEN → HALF_OPEN → CLOSED)
-- **Per-Gateway Metrics**: Track failure counts, latency, and health status
-- **Extensible Architecture**: Foundation for multi-gateway routing (future: Requesty, direct APIs)
+The gateway layer provides an abstraction over LLM API requests with multiple gateway options:
 
-When enabled, the gateway layer intercepts all LLM requests through the `GatewayRouter`:
+**Available Gateways:**
+| Gateway | Description | Key Features |
+|---------|-------------|--------------|
+| `OpenRouterGateway` | Routes through OpenRouter | 100+ models, single API key |
+| `RequestyGateway` | Routes through Requesty | BYOK support, analytics |
+| `DirectGateway` | Direct provider APIs | Anthropic, OpenAI, Google |
+
+**Core Features:**
+- **Circuit Breaker**: Prevents cascading failures (CLOSED → OPEN → HALF_OPEN → CLOSED)
+- **Fallback Chains**: Automatic retry with secondary gateways on failure
+- **Per-Gateway Metrics**: Track failure counts, latency, and health status
+- **BYOK Support**: Bring Your Own Key for Requesty and Direct gateways
+
+**Basic Usage:**
 
 ```python
-from llm_council.gateway import GatewayRouter, GatewayRequest, CanonicalMessage, ContentBlock
+from llm_council.gateway import (
+    GatewayRouter, GatewayRequest, CanonicalMessage, ContentBlock,
+    OpenRouterGateway, RequestyGateway, DirectGateway
+)
 
+# Single gateway (OpenRouter)
 router = GatewayRouter()
+
+# Multi-gateway with fallback
+router = GatewayRouter(
+    gateways={
+        "openrouter": OpenRouterGateway(),
+        "requesty": RequestyGateway(byok_enabled=True, byok_keys={"anthropic": "sk-ant-..."}),
+        "direct": DirectGateway(provider_keys={"openai": "sk-..."}),
+    },
+    default_gateway="openrouter",
+    fallback_chains={"openrouter": ["requesty", "direct"]}
+)
+
 request = GatewayRequest(
     model="openai/gpt-4o",
-    messages=[
-        CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
-    ]
+    messages=[CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])]
 )
 response = await router.complete(request)
 ```
@@ -508,12 +531,19 @@ response = await router.complete(request)
 
 ```bash
 export LLM_COUNCIL_USE_GATEWAY=true
+
+# Optional: Configure specific gateways
+export REQUESTY_API_KEY=your-requesty-key    # For Requesty
+export ANTHROPIC_API_KEY=sk-ant-...           # For Direct (Anthropic)
+export OPENAI_API_KEY=sk-...                  # For Direct (OpenAI)
+export GOOGLE_API_KEY=...                     # For Direct (Google)
 ```
 
 **Circuit Breaker Behavior:**
 - Default: 5 failures to trip the circuit
 - Recovery timeout: 60 seconds
 - Half-open state allows test requests to check recovery
+- Open circuits are skipped in fallback chain
 
 The gateway layer is currently **opt-in** (default: disabled) for backward compatibility.
 

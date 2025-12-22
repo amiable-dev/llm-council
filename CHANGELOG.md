@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2] - 2025-12-22
+
+### Added
+
+- **RequestyGateway (ADR-023 Phase 2, Issue #66)**: Requesty API integration with BYOK support
+  - `RequestyGateway` class implementing `BaseRouter` protocol
+  - BYOK (Bring Your Own Key) for provider API keys
+  - Full message format conversion and health checking
+  - Integration with `GatewayRouter` fallback chains
+  - 20 TDD tests
+
+- **DirectGateway (ADR-023 Phase 3, Issue #67)**: Direct provider API access
+  - `DirectGateway` class implementing `BaseRouter` protocol
+  - Direct API calls to Anthropic, OpenAI, and Google
+  - Provider-specific message format handling
+  - Anthropic Messages API support (differs from OpenAI format)
+  - Google Gemini API support
+  - 24 TDD tests
+
+### Changed
+
+- ADR-023 status updated to COMPLETE (all gateways implemented)
+- Gateway package now exports `RequestyGateway` and `DirectGateway`
+- 44 new tests for gateway implementations
+
 ## [0.12.1] - 2025-12-22
 
 ### Added
