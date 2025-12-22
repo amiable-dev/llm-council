@@ -25,20 +25,45 @@ pip install llm-council-core
 
 ## Setup
 
-### 1. Get an OpenRouter API Key
+### 1. Choose Your Gateway
 
-The council uses [OpenRouter](https://openrouter.ai/) to access multiple LLMs:
-1. Sign up at [openrouter.ai](https://openrouter.ai/)
-2. Add credits or enable auto-top-up
-3. Get your API key from the dashboard
+The council supports three gateway options for accessing LLMs:
 
-### 2. Store Your API Key Securely
+| Gateway | Best For | API Keys Needed |
+|---------|----------|-----------------|
+| **OpenRouter** (default) | Easiest setup, 100+ models via single key | `OPENROUTER_API_KEY` |
+| **Requesty** | BYOK mode, analytics, cost tracking | `REQUESTY_API_KEY` + provider keys |
+| **Direct** | Maximum control, direct provider APIs | Provider keys (Anthropic, OpenAI, Google) |
+
+**Quick Start (OpenRouter):**
+```bash
+# Sign up at openrouter.ai and get your API key
+export OPENROUTER_API_KEY="sk-or-v1-..."
+```
+
+**Direct Provider Access:**
+```bash
+# Use your existing provider API keys directly
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="..."
+export LLM_COUNCIL_DEFAULT_GATEWAY=direct
+```
+
+**Requesty with BYOK:**
+```bash
+export REQUESTY_API_KEY="..."
+export ANTHROPIC_API_KEY="sk-ant-..."  # Your own key, routed through Requesty
+export LLM_COUNCIL_DEFAULT_GATEWAY=requesty
+```
+
+### 2. Store Your API Keys Securely
 
 Choose one of these options (in order of recommendation):
 
 #### Option A: System Keychain (Most Secure)
 
-Store your key encrypted in your OS keychain:
+Store keys encrypted in your OS keychain:
 
 ```bash
 # Install with keychain support
@@ -51,12 +76,18 @@ llm-council setup-key
 echo "$OPENROUTER_API_KEY" | llm-council setup-key --stdin
 ```
 
-#### Option B: Environment Variable
+#### Option B: Environment Variables
 
 Set in your shell profile (`~/.zshrc`, `~/.bashrc`):
 
 ```bash
+# OpenRouter (default gateway)
 export OPENROUTER_API_KEY="sk-or-v1-..."
+
+# Or use direct provider APIs
+export ANTHROPIC_API_KEY="sk-ant-..."
+export OPENAI_API_KEY="sk-..."
+export GOOGLE_API_KEY="..."
 ```
 
 #### Option C: Environment File
@@ -64,7 +95,16 @@ export OPENROUTER_API_KEY="sk-or-v1-..."
 Create a `.env` file (ensure it's in `.gitignore`):
 
 ```bash
+# For OpenRouter
 echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+
+# Or for direct APIs
+cat > .env << 'EOF'
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+LLM_COUNCIL_DEFAULT_GATEWAY=direct
+EOF
 ```
 
 > **Security Note**: Never put API keys in command-line arguments or JSON config files that might be committed to version control.
@@ -159,7 +199,11 @@ If you don't configure anything, these defaults are used:
 - Mode: consensus
 - Self-vote exclusion: enabled
 
-**Finding Models**: Browse available models at [openrouter.ai/models](https://openrouter.ai/models)
+**Finding Models**:
+- OpenRouter: [openrouter.ai/models](https://openrouter.ai/models)
+- Anthropic: [docs.anthropic.com/models](https://docs.anthropic.com/en/docs/about-claude/models)
+- OpenAI: [platform.openai.com/docs/models](https://platform.openai.com/docs/models)
+- Google: [ai.google.dev/gemini-api/docs/models](https://ai.google.dev/gemini-api/docs/models/gemini)
 
 ## Usage
 
@@ -625,9 +669,22 @@ The triage layer is currently **opt-in** (default: disabled) for backward compat
 
 ### All Environment Variables
 
+#### Gateway Configuration (ADR-023)
+
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `OPENROUTER_API_KEY` | OpenRouter API key | Required |
+| `OPENROUTER_API_KEY` | OpenRouter API key | Required for OpenRouter gateway |
+| `REQUESTY_API_KEY` | Requesty API key | Required for Requesty gateway |
+| `ANTHROPIC_API_KEY` | Anthropic API key | Required for Direct gateway (Anthropic) |
+| `OPENAI_API_KEY` | OpenAI API key | Required for Direct gateway (OpenAI) |
+| `GOOGLE_API_KEY` | Google API key | Required for Direct gateway (Google) |
+| `LLM_COUNCIL_DEFAULT_GATEWAY` | Default gateway (openrouter/requesty/direct) | openrouter |
+| `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker | false |
+
+#### Council Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `LLM_COUNCIL_MODELS` | Comma-separated model list | GPT-5.1, Gemini 3 Pro, Claude 4.5, Grok 4 |
 | `LLM_COUNCIL_CHAIRMAN` | Chairman model | google/gemini-3-pro-preview |
 | `LLM_COUNCIL_MODE` | `consensus` or `debate` | consensus |
@@ -655,7 +712,6 @@ The triage layer is currently **opt-in** (default: disabled) for backward compat
 | `LLM_COUNCIL_MODELS_BALANCED` | Models for balanced tier (ADR-022) | gpt-4o, sonnet, gemini-pro |
 | `LLM_COUNCIL_MODELS_HIGH` | Models for high tier (ADR-022) | gpt-4o, opus, gemini-3-pro, grok-4 |
 | `LLM_COUNCIL_MODELS_REASONING` | Models for reasoning tier (ADR-022) | gpt-5.2-pro, opus, o1-preview, deepseek-r1 |
-| `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker (ADR-023) | false |
 | `LLM_COUNCIL_WILDCARD_ENABLED` | Enable wildcard specialist selection (ADR-020) | false |
 | `LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED` | Enable per-model prompt optimization (ADR-020) | false |
 | `LLM_COUNCIL_FAST_PATH_ENABLED` | Enable confidence-gated fast path (ADR-020) | false |
