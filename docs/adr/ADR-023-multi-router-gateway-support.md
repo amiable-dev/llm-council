@@ -1,6 +1,6 @@
 # ADR-023: Multi-Router Gateway Support (OpenRouter, Requesty, Direct APIs)
 
-**Status:** Proposed (Council: Accept with Modifications)
+**Status:** OpenRouter Implemented (v0.7.0) - Requesty/Direct APIs Deferred
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)

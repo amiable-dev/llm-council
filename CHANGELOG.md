@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-12-22
+
+### Added
+
+- **Gateway Abstraction Layer (ADR-023)**: Multi-router support with fault tolerance
+  - `llm_council.gateway` package with provider-agnostic types
+  - `OpenRouterGateway`: BaseRouter implementation for OpenRouter
+  - `CircuitBreaker`: State machine (CLOSED → OPEN → HALF_OPEN) for fault tolerance
+  - `GatewayRouter`: Orchestrates requests with circuit breaker integration
+  - Canonical message formats: `CanonicalMessage`, `ContentBlock`, `GatewayRequest`, `GatewayResponse`
+  - Error taxonomy: `TransportFailure`, `RateLimitError`, `AuthenticationError`, `CircuitOpenError`
+
+- **Gateway Adapter Module**: Unified interface for council operations
+  - `gateway_adapter.py` provides same interface as `openrouter` module
+  - Automatically uses gateway layer when `USE_GATEWAY_LAYER=true`
+  - Full backward compatibility when disabled (default)
+
+- **New Environment Variables**:
+  - `LLM_COUNCIL_USE_GATEWAY`: Enable gateway layer (default: false)
+
+### Changed
+
+- Gateway layer is opt-in via `LLM_COUNCIL_USE_GATEWAY=true`
+- 88 new tests for gateway package (TDD approach)
+
 ## [0.6.0] - 2025-12-22
 
 ### Added

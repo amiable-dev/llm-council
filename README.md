@@ -433,6 +433,42 @@ llm-council bias-report --sessions 50
 | 20-49 | Moderate | CIs displayed |
 | N >= 50 | High | Full analysis |
 
+### Gateway Layer (ADR-023)
+
+The gateway layer provides an optional abstraction over LLM API requests with:
+- **Circuit Breaker**: Prevents cascading failures by temporarily blocking requests to failing services
+- **Fault Tolerance**: Automatic state machine (CLOSED → OPEN → HALF_OPEN → CLOSED)
+- **Per-Gateway Metrics**: Track failure counts, latency, and health status
+- **Extensible Architecture**: Foundation for multi-gateway routing (future: Requesty, direct APIs)
+
+When enabled, the gateway layer intercepts all LLM requests through the `GatewayRouter`:
+
+```python
+from llm_council.gateway import GatewayRouter, GatewayRequest, CanonicalMessage, ContentBlock
+
+router = GatewayRouter()
+request = GatewayRequest(
+    model="openai/gpt-4o",
+    messages=[
+        CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+    ]
+)
+response = await router.complete(request)
+```
+
+**Enable the gateway layer:**
+
+```bash
+export LLM_COUNCIL_USE_GATEWAY=true
+```
+
+**Circuit Breaker Behavior:**
+- Default: 5 failures to trip the circuit
+- Recovery timeout: 60 seconds
+- Half-open state allows test requests to check recovery
+
+The gateway layer is currently **opt-in** (default: disabled) for backward compatibility.
+
 ### All Environment Variables
 
 | Variable | Description | Default |
@@ -465,6 +501,7 @@ llm-council bias-report --sessions 50
 | `LLM_COUNCIL_MODELS_BALANCED` | Models for balanced tier (ADR-022) | gpt-4o, sonnet, gemini-pro |
 | `LLM_COUNCIL_MODELS_HIGH` | Models for high tier (ADR-022) | gpt-4o, opus, gemini-3-pro, grok-4 |
 | `LLM_COUNCIL_MODELS_REASONING` | Models for reasoning tier (ADR-022) | gpt-5.2-pro, opus, o1-preview, deepseek-r1 |
+| `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker (ADR-023) | false |
 
 ## Credits & Attribution
 
