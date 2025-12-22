@@ -36,6 +36,7 @@ from llm_council.config import (
     SAFETY_GATE_ENABLED,
     SAFETY_SCORE_CAP,
 )
+from llm_council.tier_contract import TierContract
 from llm_council.rubric import (
     parse_rubric_evaluation,
     calculate_weighted_score,
@@ -152,6 +153,7 @@ async def stage1_collect_responses_with_status(
     timeout: float = TIMEOUT_PER_MODEL_HARD,
     on_progress: Optional[ProgressCallback] = None,
     shared_raw_responses: Optional[Dict[str, Dict[str, Any]]] = None,
+    models: Optional[List[str]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, Dict[str, Any]]]:
     """
     Stage 1: Collect individual responses with per-model status tracking (ADR-012).
@@ -168,6 +170,7 @@ async def stage1_collect_responses_with_status(
         shared_raw_responses: Optional dict that gets populated incrementally as models
             respond. Used for preserving diagnostic state when outer timeout cancels
             this function before it returns.
+        models: Optional list of models to query (defaults to COUNCIL_MODELS)
 
     Returns:
         Tuple of:
@@ -175,12 +178,13 @@ async def stage1_collect_responses_with_status(
         - usage dict: Aggregated token counts
         - model_statuses dict: Per-model status information
     """
+    council_models = models if models is not None else COUNCIL_MODELS
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models with progress tracking
     # Pass shared_raw_responses so results are preserved even if we're cancelled
     responses = await query_models_with_progress(
-        COUNCIL_MODELS,
+        council_models,
         messages,
         on_progress=on_progress,
         timeout=timeout,
@@ -323,6 +327,8 @@ async def run_council_with_fallback(
     on_progress: Optional[ProgressCallback] = None,
     synthesis_deadline: float = TIMEOUT_SYNTHESIS_TRIGGER,
     per_model_timeout: float = TIMEOUT_PER_MODEL_HARD,
+    models: Optional[List[str]] = None,
+    tier_contract: Optional[TierContract] = None,
 ) -> Dict[str, Any]:
     """
     Run the council with timeout handling and fallback synthesis (ADR-012).
@@ -333,6 +339,7 @@ async def run_council_with_fallback(
     - Provides fallback synthesis when full pipeline can't complete
     - Tracks per-model status throughout
     - Supports tier-sovereign timeouts (ADR-012 Section 5)
+    - Supports tier-appropriate model selection (ADR-022)
 
     Args:
         user_query: The user's question
@@ -340,6 +347,8 @@ async def run_council_with_fallback(
         on_progress: Optional async callback for progress updates
         synthesis_deadline: Time limit before triggering fallback synthesis
         per_model_timeout: Time limit per individual model query (default: 25s, reasoning: 150s)
+        models: Optional list of model identifiers to use (overrides tier_contract and COUNCIL_MODELS)
+        tier_contract: Optional TierContract for tier-appropriate execution (ADR-022)
 
     Returns:
         Dict with ADR-012 structured schema:
@@ -352,11 +361,20 @@ async def run_council_with_fallback(
                 "requested_models": int,
                 "synthesis_type": "full" | "partial" | "stage1_only",
                 "warning": str | None,
+                "tier": str | None (when tier_contract provided),
                 ...
             }
         }
     """
-    requested_models = len(COUNCIL_MODELS)
+    # Determine models to use: explicit > tier_contract > default
+    if models is not None:
+        council_models = models
+    elif tier_contract is not None:
+        council_models = tier_contract.allowed_models
+    else:
+        council_models = COUNCIL_MODELS
+
+    requested_models = len(council_models)
 
     # Initialize result structure per ADR-012 schema
     result: Dict[str, Any] = {
@@ -368,6 +386,7 @@ async def run_council_with_fallback(
             "requested_models": requested_models,
             "synthesis_type": "full",
             "warning": None,
+            "tier": tier_contract.tier if tier_contract else None,
         }
     }
 
@@ -403,6 +422,7 @@ async def run_council_with_fallback(
             timeout=per_model_timeout,  # ADR-012 Section 5: Tier-sovereign timeout
             on_progress=stage1_progress,
             shared_raw_responses=shared_raw_responses,  # Preserve state on timeout
+            models=council_models,  # ADR-022: Use tier-appropriate models
         )
 
         result["model_responses"] = model_statuses
@@ -469,7 +489,7 @@ async def run_council_with_fallback(
                 "type": "council_completed",
                 "session_id": session_id,  # Shared with bias persistence
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "council_size": len(COUNCIL_MODELS),
+                "council_size": len(council_models),
                 "responses_received": len(stage1_results),
                 "synthesis_mode": SYNTHESIS_MODE,
                 "rankings": [
@@ -518,7 +538,7 @@ async def run_council_with_fallback(
                 successful_responses[model] = response.get("content", "")
 
         # Mark models that didn't respond as timeout
-        for model in COUNCIL_MODELS:
+        for model in council_models:
             if model not in model_statuses:
                 model_statuses[model] = {
                     "status": MODEL_STATUS_TIMEOUT,

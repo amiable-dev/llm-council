@@ -166,7 +166,7 @@ async def test_run_council_with_fallback_partial_on_timeout():
         return [], {}, {}
 
     # Mock stage1 that also populates shared_raw_responses for timeout handling
-    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None):
+    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None):
         # Simulate the shared dict being populated (for timeout diagnostic preservation)
         if shared_raw_responses is not None:
             shared_raw_responses["model-a"] = {"status": "ok", "content": "A", "latency_ms": 100}
@@ -325,7 +325,7 @@ async def test_full_council_fallback_stage1_only():
         await asyncio.sleep(100)
 
     # Mock stage1 that also populates shared_raw_responses for timeout handling
-    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None):
+    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None):
         # Simulate the shared dict being populated (for timeout diagnostic preservation)
         if shared_raw_responses is not None:
             shared_raw_responses["a"] = {"status": "ok", "content": "A", "latency_ms": 100}
