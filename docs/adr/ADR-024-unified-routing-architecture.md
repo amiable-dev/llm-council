@@ -1,6 +1,6 @@
 # ADR-024: Unified Routing Architecture
 
-**Status:** Phase 1 Implemented (Council: Approved with Modifications)
+**Status:** Phase 2 Implemented (Council: Approved with Modifications)
 **Date:** 2025-12-22
 **Decision Makers:** Engineering, Architecture
 **Council Review:** Completed - All 4 models responded (Reasoning Tier)
@@ -706,10 +706,12 @@ Gateway C [CLOSED] → try request
 - [x] Update each ADR with layer assignment and interaction rules
 - [x] Standardize terminology across all three
 
-### Phase 2: Unified Configuration
-- [ ] Implement `llm_council.yaml` parser
-- [ ] Add validation schema
-- [ ] Maintain backwards compatibility with env vars
+### Phase 2: Unified Configuration - COMPLETE
+- [x] Implement `llm_council.yaml` parser with Pydantic
+- [x] Add validation schema for tiers, gateways, triage
+- [x] Maintain backwards compatibility with env vars
+- [x] Environment variable substitution (`${VAR_NAME}` syntax)
+- [x] Automatic config discovery (cwd, ~/.config/llm-council/)
 
 ### Phase 3: Layer Interfaces
 - [ ] Define `TierContract` dataclass

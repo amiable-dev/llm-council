@@ -30,6 +30,25 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `TIER_AGGREGATORS`: Speed-matched aggregator models per tier
 - `DEFAULT_TIER_CONTRACTS`: Pre-built contracts for all tiers
 
+**`unified_config.py`** - ADR-024 Unified YAML Configuration
+- Single source of truth consolidating ADR-020, ADR-022, ADR-023 settings
+- Pydantic-based schema with validation
+- **Main Classes**:
+  - `UnifiedConfig`: Root configuration with tiers, triage, gateways
+  - `TierConfig`: Tier pools, defaults, escalation settings
+  - `TriageConfig`: Wildcard, prompt optimization, fast path settings
+  - `GatewayConfig`: Default gateway, providers, model routing, fallback chain
+- **Key Functions**:
+  - `load_config(path)`: Load from YAML file with validation
+  - `get_effective_config()`: Get config with env var overrides applied
+  - `get_config()`, `reload_config()`: Global configuration management
+- **Configuration Priority**: YAML file > Environment variables > Defaults
+- **YAML File Locations** (searched in order):
+  1. `LLM_COUNCIL_CONFIG` environment variable
+  2. `./llm_council.yaml` (current directory)
+  3. `~/.config/llm-council/llm_council.yaml`
+- **Environment Variable Substitution**: Supports `${VAR_NAME}` syntax in YAML
+
 **`triage/`** - ADR-020 Query Triage Layer
 - **`types.py`**: Core types for triage
   - `TriageResult`: resolved_models, optimized_prompts, fast_path, escalation fields
