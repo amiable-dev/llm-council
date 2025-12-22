@@ -65,7 +65,8 @@ POST /v1/council/run
 |-------|------|----------|-------------|
 | `prompt` | string | Yes | The question for the council to deliberate |
 | `models` | string[] | No | Specific models to use (defaults to configured council) |
-| `api_key` | string | No | OpenRouter API key (falls back to `OPENROUTER_API_KEY` env var) |
+| `api_key` | string | No | API key for the default gateway (falls back to env vars) |
+| `gateway` | string | No | Gateway to use: `openrouter`, `requesty`, or `direct` |
 
 **Response:**
 ```json
@@ -112,12 +113,33 @@ POST /v1/council/run
 
 ## Authentication
 
-The local development server uses BYOK (Bring Your Own Keys):
+The local development server uses BYOK (Bring Your Own Keys) with multiple gateway options:
 
-1. **In request body**: Pass `api_key` field
-2. **Environment variable**: Set `OPENROUTER_API_KEY`
+### Gateway Options
 
-Request body takes precedence over environment variable.
+| Gateway | Environment Variable | Description |
+|---------|---------------------|-------------|
+| OpenRouter (default) | `OPENROUTER_API_KEY` | 100+ models via single key |
+| Requesty | `REQUESTY_API_KEY` | BYOK mode, analytics |
+| Direct | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY` | Direct provider APIs |
+
+### Configuration
+
+1. **In request body**: Pass `api_key` field (OpenRouter key)
+2. **Environment variables**: Set gateway-specific keys
+
+```bash
+# OpenRouter (default)
+export OPENROUTER_API_KEY=sk-or-v1-...
+
+# Or use direct provider APIs
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=...
+export LLM_COUNCIL_DEFAULT_GATEWAY=direct
+```
+
+Request body takes precedence over environment variables.
 
 ## Protocol Compatibility
 
