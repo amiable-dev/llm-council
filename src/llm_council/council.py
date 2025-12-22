@@ -57,6 +57,7 @@ from llm_council.telemetry import get_telemetry
 from llm_council.telemetry import get_telemetry
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
 from llm_council.bias_persistence import persist_session_bias_data
+from llm_council.triage import run_triage
 
 
 # =============================================================================
@@ -329,6 +330,8 @@ async def run_council_with_fallback(
     per_model_timeout: float = TIMEOUT_PER_MODEL_HARD,
     models: Optional[List[str]] = None,
     tier_contract: Optional[TierContract] = None,
+    use_wildcard: bool = False,
+    optimize_prompts: bool = False,
 ) -> Dict[str, Any]:
     """
     Run the council with timeout handling and fallback synthesis (ADR-012).
@@ -340,6 +343,7 @@ async def run_council_with_fallback(
     - Tracks per-model status throughout
     - Supports tier-sovereign timeouts (ADR-012 Section 5)
     - Supports tier-appropriate model selection (ADR-022)
+    - Supports triage layer with wildcard and optimization (ADR-020)
 
     Args:
         user_query: The user's question
@@ -349,6 +353,8 @@ async def run_council_with_fallback(
         per_model_timeout: Time limit per individual model query (default: 25s, reasoning: 150s)
         models: Optional list of model identifiers to use (overrides tier_contract and COUNCIL_MODELS)
         tier_contract: Optional TierContract for tier-appropriate execution (ADR-022)
+        use_wildcard: If True, add domain specialist via triage (ADR-020)
+        optimize_prompts: If True, apply per-model prompt optimization (ADR-020)
 
     Returns:
         Dict with ADR-012 structured schema:
@@ -362,12 +368,25 @@ async def run_council_with_fallback(
                 "synthesis_type": "full" | "partial" | "stage1_only",
                 "warning": str | None,
                 "tier": str | None (when tier_contract provided),
+                "triage": dict | None (when triage used),
                 ...
             }
         }
     """
+    triage_metadata = None
+
+    # ADR-020: Apply triage if wildcard or optimization enabled
+    if use_wildcard or optimize_prompts:
+        triage_result = run_triage(
+            user_query,
+            tier_contract=tier_contract,
+            include_wildcard=use_wildcard,
+            optimize_prompts=optimize_prompts,
+        )
+        council_models = triage_result.resolved_models
+        triage_metadata = triage_result.metadata
     # Determine models to use: explicit > tier_contract > default
-    if models is not None:
+    elif models is not None:
         council_models = models
     elif tier_contract is not None:
         council_models = tier_contract.allowed_models
@@ -387,6 +406,7 @@ async def run_council_with_fallback(
             "synthesis_type": "full",
             "warning": None,
             "tier": tier_contract.tier if tier_contract else None,
+            "triage": triage_metadata,
         }
     }
 

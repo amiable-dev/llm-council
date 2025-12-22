@@ -328,6 +328,44 @@ CACHE_DIR = (
 )
 
 # =============================================================================
+# ADR-020: Triage Layer Configuration
+# =============================================================================
+# Controls wildcard selection and prompt optimization in the triage layer.
+
+
+def get_bool_config(env_var: str, default: bool = False) -> bool:
+    """Get boolean configuration from environment variable.
+
+    Args:
+        env_var: Environment variable name
+        default: Default value if not set
+
+    Returns:
+        Boolean configuration value
+    """
+    value = os.getenv(env_var)
+    if value is None:
+        return default
+    return value.lower() in ('true', '1', 'yes')
+
+
+# Wildcard selection - adds domain specialist to council
+DEFAULT_WILDCARD_ENABLED = False
+_wildcard_env = os.getenv("LLM_COUNCIL_WILDCARD_ENABLED")
+WILDCARD_ENABLED = (
+    _wildcard_env.lower() in ('true', '1', 'yes') if _wildcard_env else
+    _user_config.get("wildcard_enabled", DEFAULT_WILDCARD_ENABLED)
+)
+
+# Prompt optimization - per-model prompt adaptation
+DEFAULT_PROMPT_OPTIMIZATION_ENABLED = False
+_prompt_opt_env = os.getenv("LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED")
+PROMPT_OPTIMIZATION_ENABLED = (
+    _prompt_opt_env.lower() in ('true', '1', 'yes') if _prompt_opt_env else
+    _user_config.get("prompt_optimization_enabled", DEFAULT_PROMPT_OPTIMIZATION_ENABLED)
+)
+
+# =============================================================================
 # ADR-016: Structured Rubric Scoring Configuration
 # =============================================================================
 # Multi-dimensional evaluation with accuracy ceiling mechanism.
