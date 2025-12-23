@@ -1,27 +1,42 @@
 # ADR-026: Dynamic Model Intelligence and Benchmark-Driven Selection
 
-**Status:** CONDITIONALLY APPROVED (Council Review Complete)
+**Status:** APPROVED (Full Council Quorum)
 **Date:** 2025-12-23
 **Decision Makers:** Engineering, Architecture
-**Council Review:** 2025-12-23 (Reasoning Tier: Claude Opus 4.5, Gemini 3 Pro, Grok 4.1)
+**Council Review:** 2025-12-23 (Full Quorum: 4/4 Models)
 **Layer Assignment:** Cross-cutting (L1-L4 integration)
 
 ---
 
 ## Council Review Summary
 
-### Verdict: CONDITIONAL APPROVAL
+### Verdict: APPROVED ✅
 
-The LLM Council (reasoning tier) reviewed this ADR on 2025-12-23 with **3/4 models responding** (GPT-5.2-pro returned error).
+**Full Quorum Review (2025-12-23)**
+
+| Model | Verdict | Rank | Response Time |
+|-------|---------|------|---------------|
+| Claude Opus 4.5 | CONDITIONAL APPROVAL | #1 | 23.4s |
+| Gemini 3 Pro | APPROVE | #2 | 31.4s |
+| Grok 4 | APPROVE | #3 | 59.6s |
+| GPT-4o | APPROVE | #4 | 9.8s |
+
+**Chairman Synthesis:** APPROVED (100% confidence)
+
+> "The council successfully identified Response C (Claude) as the superior review, noting its crucial detection of mathematical flaws (Borda normalization with variable pool sizes) and logical gaps (Cold Start) missed by other responses."
+
+### First Review (2025-12-23, 3/4 models)
+
+The initial review resulted in CONDITIONAL APPROVAL with modifications that were incorporated before the full quorum review.
 
 **Approved Components:**
 - Dynamic metadata integration via OpenRouter API (pricing, availability, capability detection)
 - Reasoning parameter optimization (`reasoning_effort`, `budget_tokens`)
 - Integration points with existing L1-L4 architecture
 
-**Returned for Revision:**
-- Benchmark scraping strategy (high-risk maintenance burden)
-- Single scoring algorithm with "magic number" weights
+**Returned for Revision (Now Resolved):**
+- ~~Benchmark scraping strategy~~ → Deferred to Phase 4, use Internal Performance Tracker
+- ~~Single scoring algorithm with "magic number" weights~~ → Tier-Specific Weighting Matrices
 
 ### Key Council Recommendations
 
@@ -29,9 +44,12 @@ The LLM Council (reasoning tier) reviewed this ADR on 2025-12-23 with **3/4 mode
 |----------------|--------|----------|
 | Add Context Window as hard constraint | ✅ Incorporated | Critical |
 | Replace single scoring with Tier-Specific Weighting | ✅ Incorporated | High |
-| Defer benchmark scraping to optional Phase 3 | ✅ Incorporated | High |
+| Defer benchmark scraping to optional Phase 4 | ✅ Incorporated | High |
 | Add Anti-Herding logic | ✅ Incorporated | Medium |
 | Implement Internal Performance Tracker | ✅ Incorporated | Medium |
+| Cold Start handling for new models | 📋 Documented | Medium |
+| Borda score normalization | 📋 Documented | Medium |
+| Anti-Herding edge case (<3 models) | 📋 Documented | Low |
 
 ### Council Consensus Points
 
@@ -40,6 +58,7 @@ The LLM Council (reasoning tier) reviewed this ADR on 2025-12-23 with **3/4 mode
 3. **Benchmark scraping is high-risk** - external APIs change frequently, creates maintenance nightmare
 4. **Internal performance data is more valuable** - track actual council session outcomes
 5. **Phased approach required** - decouple metadata (proven value) from benchmark intelligence (speculative)
+6. **Cold Start needs exploration strategy** - new models need "audition" mechanism (Phase 3)
 
 ---
 
@@ -891,6 +910,44 @@ def select_tier_models(tier: str, ...) -> List[str]:
 3. **How to bootstrap Internal Performance Tracker?**
    - Run shadow sessions with all available models?
    - Start with static config and learn incrementally?
+
+### Issues Identified in Full Quorum Review
+
+**A. Cold Start Problem** (Claude, Gemini)
+> "When a new model appears in OpenRouter, it has zero internal performance data."
+
+**Recommended Solutions:**
+- Assign temporary "phantom score" equivalent to tier average until 10+ samples
+- Implement Epsilon-Greedy exploration (small % of requests try new models)
+- Minimum sessions required before model enters regular rotation
+- Manual allowlist for high-profile new releases
+
+**B. Borda Score Normalization** (Claude)
+> "A 5-model session gives max score of 4; an 8-model session gives max of 7."
+
+**Solution:** Normalize to percentile rank (0.0-1.0) rather than raw Borda counts:
+```python
+normalized_rank = (council_size - borda_position) / council_size
+```
+
+**C. Parse Success Definition** (Claude)
+Define parse success as ALL of:
+- Valid JSON returned (if JSON expected)
+- Schema-compliant response
+- Extractable vote/rationale for Stage 2
+
+**D. Anti-Herding Edge Case** (Gemini)
+> "If only 2 models pass hard constraints, the system might oscillate wildly."
+
+**Solution:** Disable Anti-Herding when eligible model count < 3.
+
+**E. Degradation Behavior** (Claude)
+> "What happens when ALL eligible models for a tier fall below acceptable thresholds?"
+
+**Fallback Chain:**
+1. Warn user and proceed with best-available
+2. Escalate to adjacent tier (quick→balanced, balanced→high)
+3. Fall back to static config as last resort
 
 ---
 
