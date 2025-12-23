@@ -1,10 +1,13 @@
 """TDD tests for ADR-026: Metadata Integration.
 
-End-to-end integration tests for the metadata system.
+End-to-end integration tests for the metadata system including:
+- Static registry provider (blocking conditions)
+- Dynamic metadata provider (Phase 1)
+- Tier selection integration (Phase 1)
 """
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 import os
 
 
@@ -207,3 +210,162 @@ class TestModelInfoContent:
         # Local models should have zero pricing
         assert info.pricing.get("prompt", 0) == 0
         assert info.pricing.get("completion", 0) == 0
+
+
+# =============================================================================
+# ADR-026 Phase 1: Dynamic Provider Integration Tests
+# =============================================================================
+
+
+class TestDynamicProviderIntegration:
+    """Test DynamicMetadataProvider integration with the system."""
+
+    def test_dynamic_provider_enabled_via_env(self):
+        """Dynamic provider should activate with LLM_COUNCIL_MODEL_INTELLIGENCE=true."""
+        from llm_council.metadata import get_provider, reload_provider
+        from llm_council.metadata.dynamic_provider import DynamicMetadataProvider
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            if "LLM_COUNCIL_OFFLINE" in os.environ:
+                del os.environ["LLM_COUNCIL_OFFLINE"]
+            reload_provider()
+            provider = get_provider()
+            assert isinstance(provider, DynamicMetadataProvider)
+
+    def test_offline_mode_overrides_dynamic_provider(self):
+        """Offline mode should force static provider even when intelligence enabled."""
+        from llm_council.metadata import get_provider, reload_provider
+        from llm_council.metadata.static_registry import StaticRegistryProvider
+
+        with patch.dict(os.environ, {
+            "LLM_COUNCIL_MODEL_INTELLIGENCE": "true",
+            "LLM_COUNCIL_OFFLINE": "true",
+        }):
+            reload_provider()
+            provider = get_provider()
+            assert isinstance(provider, StaticRegistryProvider)
+
+    def test_dynamic_provider_falls_back_to_static(self):
+        """Dynamic provider should use static registry as fallback."""
+        from llm_council.metadata import reload_provider
+        from llm_council.metadata.dynamic_provider import DynamicMetadataProvider
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            if "LLM_COUNCIL_OFFLINE" in os.environ:
+                del os.environ["LLM_COUNCIL_OFFLINE"]
+            reload_provider()
+
+            provider = DynamicMetadataProvider()
+            # Without cache populated, should use static fallback
+            window = provider.get_context_window("openai/gpt-4o")
+            assert window >= 4096
+
+    def test_dynamic_provider_lists_static_models(self):
+        """Dynamic provider should list models from static registry."""
+        from llm_council.metadata.dynamic_provider import DynamicMetadataProvider
+
+        provider = DynamicMetadataProvider()
+        models = provider.list_available_models()
+
+        # Should include static registry models
+        assert "openai/gpt-4o" in models
+        assert "anthropic/claude-opus-4.5" in models
+
+
+class TestTierSelectionIntegration:
+    """Test tier selection integration with metadata system."""
+
+    def test_select_tier_models_returns_models(self):
+        """select_tier_models should return model IDs."""
+        from llm_council.metadata.selection import select_tier_models
+
+        models = select_tier_models(tier="high")
+
+        assert isinstance(models, list)
+        assert len(models) == 4
+        assert all(isinstance(m, str) for m in models)
+
+    def test_select_tier_models_all_tiers(self):
+        """select_tier_models should work for all tiers."""
+        from llm_council.metadata.selection import select_tier_models
+
+        for tier in ["quick", "balanced", "high", "reasoning"]:
+            models = select_tier_models(tier=tier)
+            assert len(models) > 0, f"No models for tier {tier}"
+
+    def test_tier_contract_uses_selection(self):
+        """TierContract should use dynamic selection when enabled."""
+        from llm_council.tier_contract import create_tier_contract
+
+        # Without intelligence enabled, uses static pools
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "false"}):
+            contract = create_tier_contract("high")
+            assert len(contract.allowed_models) > 0
+
+    def test_tier_contract_accepts_task_domain(self):
+        """TierContract should accept task_domain parameter."""
+        from llm_council.tier_contract import create_tier_contract
+
+        contract = create_tier_contract(tier="high", task_domain="coding")
+        assert contract is not None
+        assert len(contract.allowed_models) > 0
+
+
+class TestUnifiedConfigModelIntelligence:
+    """Test ModelIntelligenceConfig in UnifiedConfig."""
+
+    def test_unified_config_has_model_intelligence(self):
+        """UnifiedConfig should have model_intelligence section."""
+        from llm_council.unified_config import UnifiedConfig
+
+        config = UnifiedConfig()
+        assert hasattr(config, "model_intelligence")
+
+    def test_model_intelligence_defaults(self):
+        """model_intelligence should have correct defaults."""
+        from llm_council.unified_config import UnifiedConfig
+
+        config = UnifiedConfig()
+        mi = config.model_intelligence
+
+        assert mi.enabled is False
+        assert mi.refresh.registry_ttl == 3600
+        assert mi.refresh.availability_ttl == 300
+        assert mi.selection.min_providers == 2
+        assert mi.anti_herding.enabled is True
+        assert mi.anti_herding.traffic_threshold == 0.30
+
+    def test_model_intelligence_env_override(self):
+        """model_intelligence.enabled should be overrideable via env."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            reload_config()
+            config = get_effective_config()
+            assert config.model_intelligence.enabled is True
+
+
+class TestCacheIntegration:
+    """Test cache integration with providers."""
+
+    def test_cache_ttl_is_configurable(self):
+        """Cache TTL should be configurable via DynamicMetadataProvider."""
+        from llm_council.metadata.dynamic_provider import DynamicMetadataProvider
+
+        provider = DynamicMetadataProvider(
+            registry_ttl=7200,
+            availability_ttl=600,
+        )
+
+        assert provider._cache.registry_cache.ttl == 7200
+        assert provider._cache.availability_cache.ttl == 600
+
+    def test_cache_stats_available(self):
+        """Cache stats should be available."""
+        from llm_council.metadata.dynamic_provider import DynamicMetadataProvider
+
+        provider = DynamicMetadataProvider()
+        stats = provider.get_cache_stats()
+
+        assert "registry" in stats
+        assert "availability" in stats

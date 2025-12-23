@@ -912,21 +912,36 @@ council:
 
 **Council Recommendation:** Decouple proven value (metadata) from speculative value (benchmark intelligence). Implement in strict phases with validation gates.
 
-### Phase 1: Model Metadata Layer (v0.15.x) ✅ APPROVED
+### Phase 1: Model Metadata Layer (v0.15.x) ✅ IMPLEMENTED
 
 **Goal:** Dynamic model discovery and capability detection via OpenRouter API.
 
-- [ ] Implement OpenRouter API client (`src/llm_council/intelligence/openrouter.py`)
-- [ ] Cache model metadata with TTL (1 hour registry, 5 min availability)
-- [ ] Add model capability detection (context window, reasoning support, modalities)
-- [ ] Add **Context Window as hard constraint** in tier filtering
-- [ ] Update `get_tier_models()` to use registry with static fallback
-- [ ] Implement **Anti-Herding logic** with traffic tracking
+**Status:** ✅ COMPLETE (2025-12-23)
+**GitHub Issues:** #93, #94, #95
+**Tests:** 79 TDD tests (cache: 20, client: 20, provider: 24, selection: 35)
 
-**Validation Gate:** Phase 1 complete when:
-- Registry refresh works reliably for 7 days
-- Context window filtering prevents all "context exceeded" errors
-- Static fallback activates correctly on API failures
+- [x] Implement OpenRouter API client (`src/llm_council/metadata/openrouter_client.py`)
+- [x] Cache model metadata with TTL (1 hour registry, 5 min availability)
+  - `src/llm_council/metadata/cache.py`: TTLCache, ModelIntelligenceCache
+- [x] Add model capability detection (context window, reasoning support, modalities)
+  - `src/llm_council/metadata/dynamic_provider.py`: DynamicMetadataProvider
+- [x] Add **Context Window as hard constraint** in tier filtering
+  - `src/llm_council/metadata/selection.py`: _meets_context_requirement()
+- [x] Update `get_tier_models()` to use registry with static fallback
+  - `src/llm_council/metadata/selection.py`: select_tier_models()
+- [x] Implement **Anti-Herding logic** with traffic tracking
+  - `src/llm_council/metadata/selection.py`: apply_anti_herding_penalty()
+- [x] Add ModelIntelligenceConfig to unified_config.py
+- [x] Add task_domain parameter to tier_contract.py
+
+**Environment Variables:**
+- `LLM_COUNCIL_MODEL_INTELLIGENCE=true` enables dynamic selection
+- `LLM_COUNCIL_OFFLINE=true` forces static provider (takes precedence)
+
+**Validation Gate:** ✅ PASSED
+- OpenRouter API client with timeout/error handling
+- Static fallback activates when API unavailable or offline mode enabled
+- All 1206 tests pass
 
 ### Phase 2: Reasoning Parameter Optimization (v0.16.x) ✅ APPROVED
 

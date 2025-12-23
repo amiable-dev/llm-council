@@ -26,18 +26,65 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `requires_peer_review`, `requires_verifier`: Stage flags
   - `allowed_models`, `aggregator_model`: Model configuration
   - `override_policy`: Escalation rules
-- `create_tier_contract(tier)`: Factory function to create contracts
+- `create_tier_contract(tier, task_domain)`: Factory function to create contracts
+  - **ADR-026**: Now accepts optional `task_domain` parameter for dynamic selection
+  - Uses `select_tier_models()` when `LLM_COUNCIL_MODEL_INTELLIGENCE=true`
 - `TIER_AGGREGATORS`: Speed-matched aggregator models per tier
 - `DEFAULT_TIER_CONTRACTS`: Pre-built contracts for all tiers
 
+**`metadata/`** - ADR-026 Model Intelligence Layer
+- Provides model metadata abstraction for the Model Intelligence Layer
+- Supports offline operation (StaticRegistryProvider) and dynamic metadata (DynamicMetadataProvider)
+
+- **`types.py`**: Core types
+  - `ModelInfo`: Frozen dataclass with id, context_window, pricing, modalities, quality_tier
+  - `QualityTier`: Enum (FRONTIER, STANDARD, ECONOMY, LOCAL)
+  - `Modality`: Enum (TEXT, VISION, AUDIO, etc.)
+- **`protocol.py`**: `MetadataProvider` Protocol (interface)
+  - `get_model_info()`, `get_context_window()`, `get_pricing()`
+  - `supports_reasoning()`, `list_available_models()`
+- **`static_registry.py`**: `StaticRegistryProvider` (31 models from YAML)
+  - Offline-safe provider using bundled registry + LiteLLM fallback
+  - Registry at `src/llm_council/models/registry.yaml`
+- **`dynamic_provider.py`**: `DynamicMetadataProvider` (ADR-026 Phase 1)
+  - Fetches metadata from OpenRouter API with TTL caching
+  - Falls back to StaticRegistryProvider when cache empty or offline
+- **`cache.py`**: TTL caching infrastructure
+  - `TTLCache`: Thread-safe cache with LRU eviction
+  - `ModelIntelligenceCache`: Composite (registry 1hr, availability 5min TTL)
+- **`openrouter_client.py`**: Async OpenRouter API client
+  - `fetch_models()`: Fetches model metadata from OpenRouter
+  - `transform_api_model()`: Transforms API response to ModelInfo
+- **`selection.py`**: Tier selection algorithm (ADR-026 Phase 1)
+  - `TIER_WEIGHTS`: Per-tier weight matrices (quick→latency, reasoning→quality)
+  - `ModelCandidate`: Dataclass for model scoring
+  - `apply_anti_herding_penalty()`: Penalizes models with >30% traffic
+  - `select_with_diversity()`: Enforces provider diversity (min 2 providers)
+  - `select_tier_models()`: Main entry point for dynamic selection
+- **`offline.py`**: Offline mode detection
+  - `is_offline_mode()`: Checks `LLM_COUNCIL_OFFLINE` env var
+- **`__init__.py`**: `get_provider()` singleton factory
+  - Returns `StaticRegistryProvider` by default
+  - Returns `DynamicMetadataProvider` when `LLM_COUNCIL_MODEL_INTELLIGENCE=true`
+  - Offline mode (`LLM_COUNCIL_OFFLINE=true`) forces static provider
+
+**Environment Variables (ADR-026):**
+- `LLM_COUNCIL_MODEL_INTELLIGENCE=true`: Enable dynamic model selection
+- `LLM_COUNCIL_OFFLINE=true`: Force offline mode (static provider only)
+
 **`unified_config.py`** - ADR-024 Unified YAML Configuration
-- Single source of truth consolidating ADR-020, ADR-022, ADR-023 settings
+- Single source of truth consolidating ADR-020, ADR-022, ADR-023, ADR-026 settings
 - Pydantic-based schema with validation
 - **Main Classes**:
-  - `UnifiedConfig`: Root configuration with tiers, triage, gateways
+  - `UnifiedConfig`: Root configuration with tiers, triage, gateways, model_intelligence
   - `TierConfig`: Tier pools, defaults, escalation settings
   - `TriageConfig`: Wildcard, prompt optimization, fast path settings
   - `GatewayConfig`: Default gateway, providers, model routing, fallback chain
+  - `ModelIntelligenceConfig` (ADR-026): Dynamic model selection settings
+    - `enabled`: Whether dynamic selection is active (default: false)
+    - `refresh`: Cache TTL settings (registry_ttl, availability_ttl)
+    - `selection`: Selection algorithm settings (min_providers, default_count)
+    - `anti_herding`: Traffic concentration prevention (enabled, threshold, penalty)
 - **Key Functions**:
   - `load_config(path)`: Load from YAML file with validation
   - `get_effective_config()`: Get config with env var overrides applied
