@@ -90,18 +90,18 @@ DEFAULT_TIER_MODEL_POOLS = {
     "balanced": [
         "openai/gpt-4o",
         "anthropic/claude-3-5-sonnet-20241022",
-        "google/gemini-1.5-pro",
+        "google/gemini-2.5-pro-preview",  # Fixed: was gemini-1.5-pro (404)
     ],
     "high": [
         "openai/gpt-4o",
-        "anthropic/claude-opus-4-5-20250514",
-        "google/gemini-3-pro",
+        "anthropic/claude-opus-4.5",  # Fixed: was claude-opus-4-5-20250514 (400)
+        "google/gemini-3-pro-preview",  # Fixed: was gemini-3-pro (400)
         "x-ai/grok-4",
     ],
     "reasoning": [
         "openai/gpt-5.2-pro",
-        "anthropic/claude-opus-4-5-20250514",
-        "openai/o1-preview",
+        "anthropic/claude-opus-4.5",  # Fixed: was claude-opus-4-5-20250514 (400)
+        "openai/o1",  # Fixed: was o1-preview (404)
         "deepseek/deepseek-r1",
     ],
 }
