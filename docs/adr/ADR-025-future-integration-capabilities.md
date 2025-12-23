@@ -368,7 +368,8 @@ LLM_COUNCIL_DIRECT_ENDPOINT=http://localhost:4000/v1/chat/completions
 **Status:** APPROVED WITH MODIFICATIONS
 **Date:** 2025-12-23
 **Tier:** High (Reasoning)
-**Responding Models:** GPT-4o, Grok-4
+**Sessions:** 2 deliberation sessions conducted
+**Responding Models:** GPT-4o, Grok-4 (consistent across both sessions)
 **Non-Responding Models:** Gemini-3-Pro (error), Claude Opus 4.5 (error)
 
 ---
@@ -410,25 +411,30 @@ Both models advise **against starting with LiteLLM**.
 | Native OllamaGateway | Simpler, reliable, privacy-aligned | Less extensible initially |
 | LiteLLM | 100+ providers, faster expansion | External dependency, complexity |
 
-#### 3. Webhook Architecture: **OPTION B - EVENT-BASED** (Unanimous)
+#### 3. Webhook Architecture: **HYBRID B + D (EVENT-BASED + SSE)** (Unanimous)
 
-Strong agreement that **Event-based granular notifications** are the superior choice.
+Strong agreement that **Event-based granular notifications** combined with **SSE for streaming** is the superior choice.
 
 **Reasoning:**
-- Simple POSTs (Option A) lack flexibility
-- WebSockets (Option C) add unnecessary complexity for simple automation
-- SSE (Option D) is progressive but less interactive
+- Simple POSTs (Option A) lack flexibility for multi-stage processes
+- WebSockets (Option C) are resource-heavy (persistent connections)
+- **Event-based (B):** Enables granular lifecycle tracking
+- **SSE (D):** Lightweight unidirectional streaming, perfect for text generation
 
-**Specific Advice (Grok-4):** Start with event-based hooks (e.g., `council.stage1.complete`) and layer WebSockets later only if real-time UI feedback becomes a blocker.
+**Chairman's Decision:** Implement Event-Based Webhooks as default, with optional SSE for real-time token streaming.
 
-**Recommended Events:**
+**Recommended Webhook Events:**
 ```
-council.started
+council.deliberation_start
 council.stage1.complete
+model.vote_cast
 council.stage2.complete
+consensus.reached
 council.complete
 council.error
 ```
+
+**Payload Requirements:** Include timestamps, error codes, and metadata for n8n integration.
 
 #### 4. Fully Local Council: **YES, WITH HARDWARE DOCUMENTATION** (Unanimous)
 
@@ -436,14 +442,18 @@ Both models support this but urge caution regarding hardware realities.
 
 **Assessment:** High-value feature for regulated industries (healthcare/finance).
 
-**Hardware Requirements (Grok-4):**
-| Deployment | Minimum Specs |
-|------------|---------------|
-| Single model | 16GB RAM, consumer GPU |
-| Full council | 64GB+ RAM, NVIDIA GPU (RTX 3060+) |
-| Chairman + ensemble | Multi-GPU or cloud fallback |
+**Hardware Requirements (Council Consensus):**
 
-**Recommendation:** Document as an "Advanced" or "niche" deployment scenario. Make "Local Mode" optional/configurable.
+| Profile | Hardware | Models Supported | Use Case |
+|---------|----------|------------------|----------|
+| **Minimum** | 8+ core CPU, 16GB RAM, SSD | Quantized 7B (Llama 3.X, Mistral) | Development/testing |
+| **Recommended** | Apple M-series Pro/Max, 32GB unified | Quantized 7B-13B models | Small local council |
+| **Professional** | 2x NVIDIA RTX 4090/5090, 64GB+ RAM | 70B models via offloading | Full production council |
+| **Enterprise** | Mac Studio 64GB+ or multi-GPU server | Multiple concurrent 70B | Air-gapped deployments |
+
+**Chairman's Note:** Documentation must clearly state that a "Local Council" implies quantization (4-bit or 8-bit) for most users.
+
+**Recommendation:** Document as an "Advanced" deployment scenario. Make "Local Mode" optional/configurable with cloud fallbacks.
 
 #### 5. Agentic Positioning: **YES - "JURY" CONCEPT** (Unanimous)
 
@@ -466,12 +476,30 @@ The models align on the following critical path:
 | Phase | Scope | Duration | Priority |
 |-------|-------|----------|----------|
 | **Phase 1** | Native OllamaGateway | 4-6 weeks | **IMMEDIATE** |
-| **Phase 2** | Event-Based Webhooks | 3-4 weeks | HIGH |
-| **Phase 3** | Streaming API | 2-3 weeks | MEDIUM |
-| **Phase 4** | Fully Local Council Mode | 4-6 weeks | MEDIUM |
-| **Phase 5** | LiteLLM (optional) | 4-8 weeks | LOW |
+| **Phase 2** | Event-Based Webhooks + SSE | 3-4 weeks | HIGH |
+| **Phase 3** | MCP Server Enhancement | 2-3 weeks | **MEDIUM-HIGH** |
+| **Phase 4** | Streaming API | 2-3 weeks | MEDIUM |
+| **Phase 5** | Fully Local Council Mode | 3-4 weeks | MEDIUM |
+| **Phase 6** | LiteLLM (optional) | 4-6 weeks | LOW |
 
 **Total Timeline:** 3-6 months depending on team size.
+
+#### Chairman's Detailed Roadmap (12-Week Plan)
+
+**Phase 1 (Weeks 1-4): core-native-gateway**
+- Build `OllamaGateway` adapter with OpenAI-compatible API
+- Define Council Hardware Profiles (Low/Mid/High)
+- *Risk Mitigation:* Pin Ollama API versions for stability
+
+**Phase 2 (Weeks 5-8): connectivity-layer**
+- Implement Event-based Webhooks with granular lifecycle events
+- Implement SSE for token streaming (lighter than WebSockets)
+- *Risk Mitigation:* API keys + localhost binding by default
+
+**Phase 3 (Weeks 9-12): interoperability**
+- Implement basic MCP Server capability (Council as callable tool)
+- Release "Jury Mode" marketing and templates
+- Agentic positioning materials
 
 ---
 
@@ -513,9 +541,12 @@ The models align on the following critical path:
 |----------|---------|------------|
 | OllamaGateway priority | **TOP PRIORITY** | High |
 | Native vs LiteLLM | **Native first** | High |
-| Webhook architecture | **Event-based (Option B)** | High |
+| Webhook architecture | **Hybrid B+D (Event + SSE)** | High |
+| MCP Enhancement | **MEDIUM-HIGH** (new) | High |
 | Fully local council | **Yes, with docs** | High |
 | Agentic positioning | **Yes, as "Jury"** | High |
+
+**Chairman's Closing Ruling:** Proceed with ADR-025 utilizing the Native Gateway approach. Revise specifications to include strict webhook payload definitions and add a dedicated workstream for hardware benchmarking.
 
 ---
 
@@ -531,13 +562,17 @@ The models align on the following critical path:
 
 ### Action Items
 
-Based on council feedback:
+Based on council feedback (both sessions):
 
 - [ ] **P0:** Implement OllamaGateway with OpenAI-compatible API format
 - [ ] **P0:** Add model identifier format `ollama/model-name`
+- [ ] **P0:** Define Council Hardware Profiles (Minimum/Recommended/Professional/Enterprise)
 - [ ] **P1:** Implement event-based webhook system with HMAC authentication
+- [ ] **P1:** Implement SSE for real-time token streaming
 - [ ] **P1:** Document hardware requirements for fully local council
+- [ ] **P1:** Enhance MCP Server capability (Council as callable tool by other agents)
 - [ ] **P2:** Add streaming API support
 - [ ] **P2:** Create n8n integration example/template
+- [ ] **P2:** Release "Jury Mode" marketing materials and templates
 - [ ] **P3:** Document LiteLLM as alternative deployment path
-- [ ] **P3:** Prototype "agent jury" concept for agentic positioning
+- [ ] **P3:** Prototype "agent jury" governance layer concept
