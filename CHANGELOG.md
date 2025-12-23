@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2025-12-23
+
+### Added
+
+- **ADR-025b Jury Mode**: Transform the council from "Summary Generator" to "Decision Engine"
+  - **Binary Verdict Mode**: Go/no-go decisions with confidence scores (0.0-1.0)
+    - `verdict_type="binary"` returns `{verdict: "approved"|"rejected", confidence, rationale}`
+    - Confidence derived from council ranking agreement
+    - Use cases: CI/CD gates, PR reviews, policy enforcement
+  - **Tie-Breaker Mode**: Chairman resolves deadlocked decisions
+    - Auto-escalates when top Borda scores within 0.1 threshold
+    - `deadlocked: true` flag indicates chairman intervention
+    - Explicit rationale for tie-breaker decisions
+  - **Constructive Dissent**: Extract minority opinions from Stage 2
+    - `include_dissent=True` surfaces outlier evaluations
+    - Statistical detection: score < median - 1.5 × std
+    - Formatted as "Minority perspective: ..." in output
+
+- **New Files**:
+  - `src/llm_council/verdict.py`: VerdictType enum, VerdictResult dataclass
+  - `src/llm_council/dissent.py`: Dissent extraction from Stage 2 evaluations
+  - `tests/test_verdict.py`: 8 TDD tests for verdict functionality
+  - `tests/test_dissent.py`: 15 TDD tests for dissent extraction
+
+- **API Changes**:
+  - `consult_council` MCP tool: Added `verdict_type` and `include_dissent` parameters
+  - `run_full_council()`: Added `verdict_type` and `include_dissent` parameters
+  - `run_council_with_fallback()`: Added `verdict_type` and `include_dissent` parameters
+  - HTTP API `/v1/council/run`: Added `verdict_type` and `include_dissent` fields
+
+### Changed
+
+- README.md: Added comprehensive Jury Mode documentation section
+- ADR-025: Updated with ADR-025b implementation status (100% complete)
+- `webhooks/__init__.py`: Updated docstring to include EventBridge examples
+
+### Documentation
+
+- Jury Mode section in README with:
+  - Verdict types table (synthesis, binary, tie_breaker)
+  - Code examples for each mode
+  - CI/CD gate integration example
+  - Environment variables reference
+- Updated `consult_council` tool documentation with new parameters
+- ADR-025b implementation status with files created/modified
+
 ## [0.12.3] - 2025-12-23
 
 ### Added

@@ -29,7 +29,7 @@ class TestTelemetryUnification:
             # Setup minimal working mocks
             mock_stage1.return_value = ([{"model": "m", "response": "r"}], {}, {"m": {"status": "ok"}})
             mock_stage2.return_value = ([], {}, {})
-            mock_stage3.return_value = ({"response": "synthesis"}, {})
+            mock_stage3.return_value = ({"response": "synthesis"}, {}, None)
             
             # Run the council
             await run_council_with_fallback("test query")

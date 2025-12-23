@@ -141,7 +141,7 @@ async def test_run_council_with_fallback_returns_structured_metadata():
         )
         mock_s15.return_value = (mock_stage1, {})
         mock_s2.return_value = (mock_stage2, {"Response A": "test"}, {})
-        mock_s3.return_value = (mock_stage3, {})
+        mock_s3.return_value = (mock_stage3, {}, None)
         mock_agg.return_value = []
 
         result = await run_council_with_fallback("test query")
@@ -218,7 +218,7 @@ async def test_run_council_with_fallback_includes_model_statuses():
         )
         mock_s15.return_value = ([{"model": "model-a", "response": "A"}], {})
         mock_s2.return_value = ([], {"Response A": "model-a"}, {})
-        mock_s3.return_value = ({"model": "chairman", "response": "Synthesis"}, {})
+        mock_s3.return_value = ({"model": "chairman", "response": "Synthesis"}, {}, None)
         mock_agg.return_value = []
 
         result = await run_council_with_fallback("test query")
@@ -377,7 +377,7 @@ async def test_full_council_returns_complete_on_success():
         )
         mock_s15.return_value = ([{"model": "a", "response": "A"}, {"model": "b", "response": "B"}], {})
         mock_s2.return_value = ([{"model": "a", "ranking": "R", "parsed_ranking": {}}], {"Response A": "a"}, {})
-        mock_s3.return_value = ({"model": "chair", "response": "Full synthesis"}, {})
+        mock_s3.return_value = ({"model": "chair", "response": "Full synthesis"}, {}, None)
         mock_agg.return_value = []
 
         result = await run_council_with_fallback("test")
@@ -441,7 +441,7 @@ async def test_council_with_progress_callback():
         mock_s1.return_value = ([{"model": "a", "response": "A"}], {}, {"a": {"status": "ok"}})
         mock_s15.return_value = ([{"model": "a", "response": "A"}], {})
         mock_s2.return_value = ([], {"Response A": "a"}, {})
-        mock_s3.return_value = ({"model": "chair", "response": "S"}, {})
+        mock_s3.return_value = ({"model": "chair", "response": "S"}, {}, None)
         mock_agg.return_value = []
 
         result = await run_council_with_fallback("test", on_progress=track_progress)

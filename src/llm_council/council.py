@@ -69,6 +69,16 @@ from llm_council.webhooks import (
     EventBridge,
     DispatchMode,
 )
+from llm_council.verdict import (
+    VerdictType,
+    VerdictResult,
+    get_chairman_prompt,
+    parse_binary_verdict,
+    parse_tie_breaker_verdict,
+    detect_deadlock,
+    calculate_borda_spread,
+)
+from llm_council.dissent import extract_dissent_from_stage2
 
 
 # =============================================================================
@@ -345,6 +355,8 @@ async def run_council_with_fallback(
     optimize_prompts: bool = False,
     *,
     webhook_config: Optional[WebhookConfig] = None,
+    verdict_type: VerdictType = VerdictType.SYNTHESIS,
+    include_dissent: bool = False,
 ) -> Dict[str, Any]:
     """
     Run the council with timeout handling and fallback synthesis (ADR-012).
@@ -358,6 +370,7 @@ async def run_council_with_fallback(
     - Supports tier-appropriate model selection (ADR-022)
     - Supports triage layer with wildcard and optimization (ADR-020)
     - Supports webhook notifications via EventBridge (ADR-025a)
+    - Supports Jury Mode verdict types (ADR-025b)
 
     Args:
         user_query: The user's question
@@ -370,6 +383,11 @@ async def run_council_with_fallback(
         use_wildcard: If True, add domain specialist via triage (ADR-020)
         optimize_prompts: If True, apply per-model prompt optimization (ADR-020)
         webhook_config: Optional WebhookConfig for real-time event notifications (ADR-025a)
+        verdict_type: Type of verdict to render (ADR-025b Jury Mode):
+            - SYNTHESIS: Default behavior, unstructured natural language synthesis
+            - BINARY: Go/no-go decision (approved/rejected)
+            - TIE_BREAKER: Chairman resolves deadlocked decisions
+        include_dissent: If True, extract minority opinions from Stage 2 (ADR-025b)
 
     Returns:
         Dict with ADR-012 structured schema:
@@ -385,6 +403,7 @@ async def run_council_with_fallback(
                 "tier": str | None (when tier_contract provided),
                 "triage": dict | None (when triage used),
                 "webhooks_enabled": bool (when webhook_config provided),
+                "verdict": dict | None (when verdict_type is BINARY/TIE_BREAKER),
                 ...
             }
         }
@@ -438,6 +457,7 @@ async def run_council_with_fallback(
             "tier": tier_contract.tier if tier_contract else None,
             "triage": triage_metadata,
             "webhooks_enabled": webhook_config is not None,
+            "include_dissent": include_dissent,  # ADR-025b: Dissent extraction enabled
         }
     }
 
@@ -558,19 +578,60 @@ async def run_council_with_fallback(
         except Exception:
             pass  # Webhook failure shouldn't block council execution
 
-        # Stage 3: Full synthesis
-        stage3_result, stage3_usage = await stage3_synthesize_final(
+        # ADR-025b: Detect deadlock and escalate to TIE_BREAKER if needed
+        effective_verdict_type = verdict_type
+        deadlock_detected = False
+        if verdict_type == VerdictType.BINARY and aggregate_rankings:
+            borda_scores = [
+                r.get('borda_score', 0.0)
+                for r in aggregate_rankings
+                if 'borda_score' in r
+            ]
+            if detect_deadlock(borda_scores, threshold=0.1):
+                deadlock_detected = True
+                effective_verdict_type = VerdictType.TIE_BREAKER
+                import logging
+                logging.getLogger(__name__).info(
+                    "Deadlock detected. Escalating from BINARY to TIE_BREAKER."
+                )
+
+        # Stage 3: Full synthesis (with verdict type support)
+        stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
             user_query,
             stage1_results,
             stage2_results,
-            aggregate_rankings
+            aggregate_rankings,
+            verdict_type=effective_verdict_type,
         )
+
+        # If we escalated due to deadlock, update the verdict result
+        if deadlock_detected and verdict_result is not None:
+            verdict_result.deadlocked = True
 
         result["synthesis"] = stage3_result.get("response", "")
         result["metadata"]["status"] = "complete"
         result["metadata"]["synthesis_type"] = "full"
         result["metadata"]["aggregate_rankings"] = aggregate_rankings
         result["metadata"]["label_to_model"] = label_to_model
+        result["metadata"]["verdict_type"] = verdict_type.value
+        result["metadata"]["effective_verdict_type"] = effective_verdict_type.value
+        result["metadata"]["deadlock_detected"] = deadlock_detected
+
+        # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
+        if verdict_result is not None:
+            result["metadata"]["verdict"] = verdict_result.to_dict()
+
+        # ADR-025b: Extract constructive dissent from Stage 2 if requested
+        if include_dissent and stage2_results:
+            dissent_text = extract_dissent_from_stage2(stage2_results)
+            if dissent_text:
+                if verdict_result is not None:
+                    verdict_result.dissent = dissent_text
+                    # Update the verdict dict with dissent
+                    result["metadata"]["verdict"] = verdict_result.to_dict()
+                else:
+                    # Add dissent to metadata directly for SYNTHESIS mode
+                    result["metadata"]["dissent"] = dissent_text
 
         # Add warning if some models failed
         warning = generate_partial_warning(model_statuses, requested_models)
@@ -1101,23 +1162,27 @@ async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
     stage2_results: List[Dict[str, Any]],
-    aggregate_rankings: Optional[List[Dict[str, Any]]] = None
-) -> Tuple[Dict[str, Any], Dict[str, int]]:
+    aggregate_rankings: Optional[List[Dict[str, Any]]] = None,
+    verdict_type: VerdictType = VerdictType.SYNTHESIS,
+) -> Tuple[Dict[str, Any], Dict[str, int], Optional[VerdictResult]]:
     """
     Stage 3: Chairman synthesizes final response.
 
-    Supports two modes:
+    Supports multiple modes:
     - "consensus": Synthesize a single best answer (default)
     - "debate": Highlight key disagreements and present trade-offs
+    - VerdictType.BINARY: Go/no-go decision (approved/rejected)
+    - VerdictType.TIE_BREAKER: Chairman resolves deadlocked decisions
 
     Args:
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
         aggregate_rankings: Optional aggregate rankings for context
+        verdict_type: Type of verdict to render (ADR-025b Jury Mode)
 
     Returns:
-        Tuple of (result dict with 'model' and 'response', usage dict)
+        Tuple of (result dict with 'model' and 'response', usage dict, optional VerdictResult)
     """
     # Build comprehensive context for chairman
     stage1_text = "\n\n".join([
@@ -1139,9 +1204,30 @@ async def stage3_synthesize_final(
         ])
         rankings_context = f"\n\nAGGREGATE RANKINGS (after excluding self-votes):\n{rankings_list}"
 
-    # Mode-specific instructions
-    if SYNTHESIS_MODE == "debate":
-        mode_instructions = """Your task as Chairman is to present a STRUCTURED ANALYSIS with clear sections.
+    # ADR-025b: Jury Mode verdict type handling
+    # For BINARY or TIE_BREAKER, use verdict-specific prompts
+    if verdict_type in (VerdictType.BINARY, VerdictType.TIE_BREAKER):
+        # Build top candidates string for tie-breaker mode
+        top_candidates = ""
+        if verdict_type == VerdictType.TIE_BREAKER and aggregate_rankings:
+            top_candidates = "\n".join([
+                f"  - {r['model']}: Borda score {r.get('borda_score', 'N/A')}"
+                for r in aggregate_rankings[:3]  # Top 3 for context
+            ])
+
+        # Combine rankings info for verdict prompt
+        rankings_summary = f"{stage2_text}{rankings_context}"
+
+        chairman_prompt = get_chairman_prompt(
+            verdict_type=verdict_type,
+            query=user_query,
+            rankings=rankings_summary,
+            top_candidates=top_candidates,
+        )
+    else:
+        # Mode-specific instructions for SYNTHESIS mode
+        if SYNTHESIS_MODE == "debate":
+            mode_instructions = """Your task as Chairman is to present a STRUCTURED ANALYSIS with clear sections.
 
 You MUST include ALL of these sections in your response, using EXACTLY these headers:
 
@@ -1168,15 +1254,15 @@ Are there valuable insights from lower-ranked responses that shouldn't be discar
 Your overall recommendation, with explicit acknowledgment of trade-offs. Be clear about WHICH position you favor and WHY, while validating the merits of alternatives.
 
 IMPORTANT: Do NOT flatten nuance into a single "best" answer. The user benefits from seeing structured disagreement. Include ALL 6 sections."""
-    else:  # consensus mode (default)
-        mode_instructions = """Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+        else:  # consensus mode (default)
+            mode_instructions = """Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
 - The individual responses and their insights
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
 
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom."""
 
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+        chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
 Original Question: {user_query}
 
@@ -1201,7 +1287,7 @@ STAGE 2 - Peer Rankings:
         return {
             "model": CHAIRMAN_MODEL,
             "response": "Error: Unable to generate final synthesis."
-        }, total_usage
+        }, total_usage, None
 
     # Capture usage
     usage = response.get('usage', {})
@@ -1209,10 +1295,43 @@ STAGE 2 - Peer Rankings:
     total_usage["completion_tokens"] = usage.get('completion_tokens', 0)
     total_usage["total_tokens"] = usage.get('total_tokens', 0)
 
+    response_content = response.get('content', '')
+
+    # ADR-025b: Parse verdict for BINARY/TIE_BREAKER modes
+    verdict_result: Optional[VerdictResult] = None
+    if verdict_type == VerdictType.BINARY:
+        try:
+            verdict_result = parse_binary_verdict(response_content)
+            # Calculate Borda spread if we have aggregate rankings
+            if aggregate_rankings:
+                borda_scores = {
+                    r['model']: r.get('borda_score', 0.0)
+                    for r in aggregate_rankings
+                    if 'borda_score' in r
+                }
+                verdict_result.borda_spread = calculate_borda_spread(borda_scores)
+        except ValueError as e:
+            # Log parsing error but don't fail - return raw response
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to parse binary verdict: {e}")
+    elif verdict_type == VerdictType.TIE_BREAKER:
+        try:
+            verdict_result = parse_tie_breaker_verdict(response_content)
+            if aggregate_rankings:
+                borda_scores = {
+                    r['model']: r.get('borda_score', 0.0)
+                    for r in aggregate_rankings
+                    if 'borda_score' in r
+                }
+                verdict_result.borda_spread = calculate_borda_spread(borda_scores)
+        except ValueError as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to parse tie-breaker verdict: {e}")
+
     return {
         "model": CHAIRMAN_MODEL,
-        "response": response.get('content', '')
-    }, total_usage
+        "response": response_content
+    }, total_usage, verdict_result
 
 
 def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bool:
@@ -1526,6 +1645,8 @@ async def run_full_council(
     models: Optional[List[str]] = None,
     *,
     webhook_config: Optional[WebhookConfig] = None,
+    verdict_type: VerdictType = VerdictType.SYNTHESIS,
+    include_dissent: bool = False,
 ) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process.
@@ -1534,16 +1655,22 @@ async def run_full_council(
     1. Stage 1: Collect individual responses from all council models
     2. Stage 1.5 (optional): Normalize response styles if STYLE_NORMALIZATION is enabled
     3. Stage 2: Anonymous peer review with JSON-based rankings
-    4. Stage 3: Chairman synthesis (consensus or debate mode)
+    4. Stage 3: Chairman synthesis (consensus, debate, or verdict mode)
 
     Args:
         user_query: The user's question
         bypass_cache: If True, skip cache lookup and force fresh query
         models: Optional list of model identifiers to use (overrides COUNCIL_MODELS)
         webhook_config: Optional WebhookConfig for real-time event notifications (ADR-025a)
+        verdict_type: Type of verdict to render (ADR-025b Jury Mode):
+            - SYNTHESIS: Default behavior, unstructured natural language synthesis
+            - BINARY: Go/no-go decision (approved/rejected)
+            - TIE_BREAKER: Chairman resolves deadlocked decisions
+        include_dissent: If True, extract minority opinions from Stage 2 (ADR-025b)
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
+        For BINARY/TIE_BREAKER modes, metadata includes 'verdict' with VerdictResult
     """
     # ADR-025a: Initialize EventBridge for webhook notifications
     event_bridge: Optional[EventBridge] = None
@@ -1650,6 +1777,25 @@ async def run_full_council(
     total_usage["stage1_5"] = stage1_5_usage
     total_usage["stage2"] = stage2_usage
 
+    # ADR-025b: Detect deadlock and escalate to TIE_BREAKER if needed
+    effective_verdict_type = verdict_type
+    deadlock_detected = False
+    if verdict_type == VerdictType.BINARY and aggregate_rankings:
+        # Extract Borda scores for deadlock detection
+        borda_scores = [
+            r.get('borda_score', 0.0)
+            for r in aggregate_rankings
+            if 'borda_score' in r
+        ]
+        if detect_deadlock(borda_scores, threshold=0.1):
+            deadlock_detected = True
+            effective_verdict_type = VerdictType.TIE_BREAKER
+            import logging
+            logging.getLogger(__name__).info(
+                f"Deadlock detected (top 2 within threshold). "
+                f"Escalating from BINARY to TIE_BREAKER mode."
+            )
+
     # ADR-015: Run bias audit if enabled
     bias_audit_result = None
     if BIAS_AUDIT_ENABLED and len(stage2_results) > 0:
@@ -1664,14 +1810,26 @@ async def run_full_council(
             position_mapping=position_mapping
         )
 
-    # Stage 3: Synthesize final answer (with mode support)
-    stage3_result, stage3_usage = await stage3_synthesize_final(
+    # Stage 3: Synthesize final answer (with mode and verdict type support)
+    stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
         user_query,
         stage1_results,  # Use original responses for synthesis context
         stage2_results,
-        aggregate_rankings
+        aggregate_rankings,
+        verdict_type=effective_verdict_type,  # May be escalated to TIE_BREAKER
     )
     total_usage["stage3"] = stage3_usage
+
+    # If we escalated due to deadlock, update the verdict result
+    if deadlock_detected and verdict_result is not None:
+        verdict_result.deadlocked = True
+
+    # ADR-025b: Extract constructive dissent from Stage 2 if requested
+    dissent_text = None
+    if include_dissent and stage2_results:
+        dissent_text = extract_dissent_from_stage2(stage2_results)
+        if dissent_text and verdict_result is not None:
+            verdict_result.dissent = dissent_text
 
     # Calculate grand total
     grand_total = {
@@ -1707,13 +1865,25 @@ async def run_full_council(
             "max_reviewers": MAX_REVIEWERS,
             "council_size": len(COUNCIL_MODELS),
             "responses_received": num_responses,
-            "chairman": CHAIRMAN_MODEL
+            "chairman": CHAIRMAN_MODEL,
+            "verdict_type": verdict_type.value,  # ADR-025b: Requested verdict type
+            "effective_verdict_type": effective_verdict_type.value,  # ADR-025b: Actual type used
+            "deadlock_detected": deadlock_detected,  # ADR-025b: True if escalated to TIE_BREAKER
+            "include_dissent": include_dissent,  # ADR-025b: Dissent extraction enabled
         },
         "usage": {
             "by_stage": total_usage,
             "total": grand_total
         }
     }
+
+    # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
+    if verdict_result is not None:
+        metadata["verdict"] = verdict_result.to_dict()
+
+    # ADR-025b: Add dissent to metadata if extracted (even without verdict)
+    if dissent_text and verdict_result is None:
+        metadata["dissent"] = dissent_text
 
     # Add abstention info if any reviewers abstained
     if abstentions:
