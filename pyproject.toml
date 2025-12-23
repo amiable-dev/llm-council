@@ -44,6 +44,8 @@ http = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
 mcp = ["mcp>=1.22.0"]
 # Secure key storage via system keychain - install with: pip install "llm-council-core[secure]"
 secure = ["keyring>=23.0.0"]
+# Ollama local LLM support via LiteLLM - install with: pip install "llm-council-core[ollama]"
+ollama = ["litellm>=1.50.0"]
 # All server dependencies
 all = ["llm-council-core[http,mcp]"]
 # Development dependencies

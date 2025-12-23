@@ -432,3 +432,307 @@ council:
         config = UnifiedConfig()
         gateway = config.get_gateway_for_model("unknown/model")
         assert gateway == config.gateways.default
+
+
+# =============================================================================
+# ADR-025a Configuration Alignment Tests (TDD - RED Phase)
+# =============================================================================
+
+
+class TestOllamaProviderConfig:
+    """Test OllamaProviderConfig for local Ollama integration (ADR-025a)."""
+
+    def test_ollama_config_defaults(self):
+        """OllamaProviderConfig should have sensible defaults."""
+        from llm_council.unified_config import OllamaProviderConfig
+
+        config = OllamaProviderConfig()
+        assert config.enabled is True
+        assert config.base_url == "http://localhost:11434"
+        assert config.timeout_seconds == 120.0
+        assert config.hardware_profile is None
+
+    def test_ollama_config_from_yaml(self, tmp_path):
+        """Should load Ollama config from YAML under gateways.providers.ollama."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  gateways:
+    providers:
+      ollama:
+        enabled: true
+        base_url: http://192.168.1.100:11434
+        timeout_seconds: 300.0
+        hardware_profile: professional
+""")
+        config = load_config(config_file)
+        assert "ollama" in config.gateways.providers
+        ollama_config = config.gateways.providers["ollama"]
+        assert ollama_config.base_url == "http://192.168.1.100:11434"
+        assert ollama_config.timeout_seconds == 300.0
+        assert ollama_config.hardware_profile == "professional"
+
+    def test_ollama_config_env_override(self, tmp_path):
+        """Environment variables should override YAML for Ollama config."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  gateways:
+    providers:
+      ollama:
+        base_url: http://localhost:11434
+        timeout_seconds: 120.0
+""")
+        with patch.dict(os.environ, {
+            "LLM_COUNCIL_OLLAMA_BASE_URL": "http://custom:11434",
+            "LLM_COUNCIL_OLLAMA_TIMEOUT": "600.0"
+        }):
+            config = get_effective_config(config_file)
+            ollama_config = config.gateways.providers["ollama"]
+            assert ollama_config.base_url == "http://custom:11434"
+            assert ollama_config.timeout_seconds == 600.0
+
+    def test_ollama_timeout_validation(self):
+        """Ollama timeout should be within valid range (1-3600 seconds)."""
+        from llm_council.unified_config import OllamaProviderConfig
+
+        # Valid timeout
+        config = OllamaProviderConfig(timeout_seconds=500.0)
+        assert config.timeout_seconds == 500.0
+
+        # Too low
+        with pytest.raises(ValueError):
+            OllamaProviderConfig(timeout_seconds=0.5)
+
+        # Too high
+        with pytest.raises(ValueError):
+            OllamaProviderConfig(timeout_seconds=4000.0)
+
+    def test_ollama_hardware_profile_validation(self):
+        """Hardware profile should be one of the valid options."""
+        from llm_council.unified_config import OllamaProviderConfig
+
+        # Valid profiles
+        for profile in ["minimum", "recommended", "professional", "enterprise"]:
+            config = OllamaProviderConfig(hardware_profile=profile)
+            assert config.hardware_profile == profile
+
+        # Invalid profile
+        with pytest.raises(ValueError):
+            OllamaProviderConfig(hardware_profile="invalid")
+
+
+class TestWebhookConfig:
+    """Test WebhookConfig for webhook notifications (ADR-025a)."""
+
+    def test_webhook_config_defaults(self):
+        """WebhookConfig should have sensible defaults."""
+        from llm_council.unified_config import WebhookConfig
+
+        config = WebhookConfig()
+        assert config.enabled is False  # Opt-in
+        assert config.timeout_seconds == 5.0
+        assert config.max_retries == 3
+        assert config.https_only is True
+        assert config.default_events == ["council.complete", "council.error"]
+
+    def test_webhook_config_from_yaml(self, tmp_path):
+        """Should load webhook config from YAML at top level."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  webhooks:
+    enabled: true
+    timeout_seconds: 10.0
+    max_retries: 5
+    https_only: false
+    default_events:
+      - council.complete
+      - council.error
+      - model.response
+""")
+        config = load_config(config_file)
+        assert config.webhooks.enabled is True
+        assert config.webhooks.timeout_seconds == 10.0
+        assert config.webhooks.max_retries == 5
+        assert config.webhooks.https_only is False
+        assert "model.response" in config.webhooks.default_events
+
+    def test_webhook_config_env_override(self, tmp_path):
+        """Environment variables should override YAML for webhook config."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  webhooks:
+    enabled: false
+    timeout_seconds: 5.0
+""")
+        with patch.dict(os.environ, {
+            "LLM_COUNCIL_WEBHOOKS_ENABLED": "true",
+            "LLM_COUNCIL_WEBHOOK_TIMEOUT": "15.0",
+            "LLM_COUNCIL_WEBHOOK_RETRIES": "7"
+        }):
+            config = get_effective_config(config_file)
+            assert config.webhooks.enabled is True
+            assert config.webhooks.timeout_seconds == 15.0
+            assert config.webhooks.max_retries == 7
+
+    def test_webhook_timeout_validation(self):
+        """Webhook timeout should be within valid range (0.1-60 seconds)."""
+        from llm_council.unified_config import WebhookConfig
+
+        # Valid timeout
+        config = WebhookConfig(timeout_seconds=30.0)
+        assert config.timeout_seconds == 30.0
+
+        # Too low
+        with pytest.raises(ValueError):
+            WebhookConfig(timeout_seconds=0.05)
+
+        # Too high
+        with pytest.raises(ValueError):
+            WebhookConfig(timeout_seconds=120.0)
+
+    def test_webhook_retries_validation(self):
+        """Webhook retries should be within valid range (0-10)."""
+        from llm_council.unified_config import WebhookConfig
+
+        # Valid retries
+        config = WebhookConfig(max_retries=5)
+        assert config.max_retries == 5
+
+        # Zero is valid (no retries)
+        config = WebhookConfig(max_retries=0)
+        assert config.max_retries == 0
+
+        # Negative invalid
+        with pytest.raises(ValueError):
+            WebhookConfig(max_retries=-1)
+
+        # Too high
+        with pytest.raises(ValueError):
+            WebhookConfig(max_retries=15)
+
+    def test_webhook_default_events(self):
+        """Default events should be customizable."""
+        from llm_council.unified_config import WebhookConfig
+
+        config = WebhookConfig(default_events=["custom.event"])
+        assert config.default_events == ["custom.event"]
+
+
+class TestGatewayConfigOllama:
+    """Test GatewayConfig integration with Ollama (ADR-025a)."""
+
+    def test_ollama_in_valid_gateways(self, tmp_path):
+        """'ollama' should be a valid gateway name."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  gateways:
+    default: ollama
+""")
+        # Should not raise - ollama is valid
+        config = load_config(config_file, strict=True)
+        assert config.gateways.default == "ollama"
+
+    def test_ollama_default_provider_exists(self):
+        """Default config should include ollama provider."""
+        config = UnifiedConfig()
+        assert "ollama" in config.gateways.providers
+        ollama = config.gateways.providers["ollama"]
+        assert ollama.enabled is True
+        assert ollama.base_url == "http://localhost:11434"
+
+    def test_ollama_provider_config_type(self):
+        """Ollama provider should use OllamaProviderConfig type."""
+        from llm_council.unified_config import OllamaProviderConfig
+
+        config = UnifiedConfig()
+        ollama = config.gateways.providers["ollama"]
+        # Should be typed correctly (either OllamaProviderConfig or has ollama-specific fields)
+        assert hasattr(ollama, "timeout_seconds") or isinstance(ollama, OllamaProviderConfig)
+
+    def test_ollama_in_fallback_chain(self, tmp_path):
+        """Ollama should be usable in fallback chain."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  gateways:
+    fallback:
+      chain: [openrouter, ollama]
+""")
+        config = load_config(config_file)
+        assert "ollama" in config.gateways.fallback.chain
+
+
+class TestConfigDeprecation:
+    """Test deprecation bridge for config.py constants (ADR-025a)."""
+
+    def test_deprecated_ollama_base_url_warns(self):
+        """Accessing config.OLLAMA_BASE_URL should emit deprecation warning."""
+        import warnings
+        from llm_council import config
+
+        # Reset the warning cache to ensure we see the warning
+        config._deprecated_warned.discard("OLLAMA_BASE_URL")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            # Access deprecated constant
+            _ = config.OLLAMA_BASE_URL
+            # Should have deprecation warning
+            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+            assert any("unified_config" in str(warning.message).lower() or
+                      "deprecated" in str(warning.message).lower()
+                      for warning in w)
+
+    def test_deprecated_webhook_timeout_warns(self):
+        """Accessing config.WEBHOOK_TIMEOUT should emit deprecation warning."""
+        import warnings
+        from llm_council import config
+
+        # Reset the warning cache to ensure we see the warning
+        config._deprecated_warned.discard("WEBHOOK_TIMEOUT")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _ = config.WEBHOOK_TIMEOUT
+            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+
+    def test_deprecated_attrs_return_correct_values(self):
+        """Deprecated config attrs should return values from unified_config."""
+        from llm_council import config
+        from llm_council.unified_config import get_config
+        import warnings
+
+        # Suppress warnings for this test
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+        unified = get_config()
+        ollama_config = unified.gateways.providers.get("ollama")
+        if ollama_config:
+            # Value from deprecated constant should match unified config
+            assert config.OLLAMA_BASE_URL == ollama_config.base_url
+
+
+class TestUnifiedConfigWithWebhooks:
+    """Test UnifiedConfig includes webhooks field."""
+
+    def test_unified_config_has_webhooks(self):
+        """UnifiedConfig should have webhooks field."""
+        config = UnifiedConfig()
+        assert hasattr(config, "webhooks")
+        assert config.webhooks is not None
+
+    def test_webhooks_serializes_to_yaml(self):
+        """Webhooks should be included in YAML serialization."""
+        config = UnifiedConfig()
+        yaml_str = config.to_yaml()
+        assert "webhooks:" in yaml_str
+
+    def test_webhooks_serializes_to_dict(self):
+        """Webhooks should be included in dict serialization."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+        assert "webhooks" in config_dict

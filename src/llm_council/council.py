@@ -58,10 +58,16 @@ from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
 from llm_council.bias_persistence import persist_session_bias_data
 from llm_council.triage import run_triage
 from llm_council.layer_contracts import (
+    LayerEvent,
     LayerEventType,
     emit_layer_event,
     cross_l1_to_l2,
     cross_l2_to_l3,
+)
+from llm_council.webhooks import (
+    WebhookConfig,
+    EventBridge,
+    DispatchMode,
 )
 
 
@@ -337,6 +343,8 @@ async def run_council_with_fallback(
     tier_contract: Optional[TierContract] = None,
     use_wildcard: bool = False,
     optimize_prompts: bool = False,
+    *,
+    webhook_config: Optional[WebhookConfig] = None,
 ) -> Dict[str, Any]:
     """
     Run the council with timeout handling and fallback synthesis (ADR-012).
@@ -349,6 +357,7 @@ async def run_council_with_fallback(
     - Supports tier-sovereign timeouts (ADR-012 Section 5)
     - Supports tier-appropriate model selection (ADR-022)
     - Supports triage layer with wildcard and optimization (ADR-020)
+    - Supports webhook notifications via EventBridge (ADR-025a)
 
     Args:
         user_query: The user's question
@@ -360,6 +369,7 @@ async def run_council_with_fallback(
         tier_contract: Optional TierContract for tier-appropriate execution (ADR-022)
         use_wildcard: If True, add domain specialist via triage (ADR-020)
         optimize_prompts: If True, apply per-model prompt optimization (ADR-020)
+        webhook_config: Optional WebhookConfig for real-time event notifications (ADR-025a)
 
     Returns:
         Dict with ADR-012 structured schema:
@@ -374,11 +384,18 @@ async def run_council_with_fallback(
                 "warning": str | None,
                 "tier": str | None (when tier_contract provided),
                 "triage": dict | None (when triage used),
+                "webhooks_enabled": bool (when webhook_config provided),
                 ...
             }
         }
     """
     triage_metadata = None
+
+    # ADR-025a: Initialize EventBridge for webhook notifications
+    event_bridge = EventBridge(
+        webhook_config=webhook_config,
+        mode=DispatchMode.SYNC,  # Use sync mode for deterministic event ordering
+    )
 
     # ADR-024 (Observability): Record L1 -> L2 boundary
     if tier_contract:
@@ -408,19 +425,6 @@ async def run_council_with_fallback(
 
     requested_models = len(council_models)
 
-    # ADR-024: Emit L3 Start Event
-    emit_layer_event(
-        LayerEventType.L3_COUNCIL_START,
-        {
-            "model_count": requested_models,
-            "models": council_models,
-            "tier": tier_contract.tier if tier_contract else None,
-            "triage_metadata": triage_metadata,
-        },
-        layer_from="L2",  # Or L1 if skipped
-        layer_to="L3",
-    )
-
     # Initialize result structure per ADR-012 schema
     result: Dict[str, Any] = {
         "synthesis": "",
@@ -433,8 +437,34 @@ async def run_council_with_fallback(
             "warning": None,
             "tier": tier_contract.tier if tier_contract else None,
             "triage": triage_metadata,
+            "webhooks_enabled": webhook_config is not None,
         }
     }
+
+    # ADR-025a: Start EventBridge for webhook notifications
+    try:
+        await event_bridge.start()
+
+        # ADR-024: Emit L3 Start Event
+        start_event = LayerEvent(
+            event_type=LayerEventType.L3_COUNCIL_START,
+            data={
+                "model_count": requested_models,
+                "models": council_models,
+                "tier": tier_contract.tier if tier_contract else None,
+                "triage_metadata": triage_metadata,
+            },
+        )
+        emit_layer_event(
+            LayerEventType.L3_COUNCIL_START,
+            start_event.data,
+            layer_from="L2",
+            layer_to="L3",
+        )
+        # ADR-025a: Also emit to webhook bridge
+        await event_bridge.emit(start_event)
+    except Exception:
+        pass  # Bridge start/emit failure shouldn't block council execution
 
     # Shared dict for incremental model responses - survives timeout cancellation
     # This fixes ADR-012 diagnostic loss: even if the pipeline is cancelled by
@@ -485,6 +515,16 @@ async def run_council_with_fallback(
 
         await report_progress(requested_models, total_steps, "Stage 1 complete, starting peer review...")
 
+        # ADR-025a: Emit Stage 1 complete webhook event
+        try:
+            stage1_event = LayerEvent(
+                event_type=LayerEventType.L3_STAGE_COMPLETE,
+                data={"stage": 1, "responses": len(stage1_results)},
+            )
+            await event_bridge.emit(stage1_event)
+        except Exception:
+            pass  # Webhook failure shouldn't block council execution
+
         # Stage 1.5: Style normalization (if enabled)
         responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
 
@@ -507,6 +547,16 @@ async def run_council_with_fallback(
         )
 
         await report_progress(requested_models * 2, total_steps, "Stage 2 complete, synthesizing...")
+
+        # ADR-025a: Emit Stage 2 complete webhook event
+        try:
+            stage2_event = LayerEvent(
+                event_type=LayerEventType.L3_STAGE_COMPLETE,
+                data={"stage": 2, "rankings": len(stage2_results)},
+            )
+            await event_bridge.emit(stage2_event)
+        except Exception:
+            pass  # Webhook failure shouldn't block council execution
 
         # Stage 3: Full synthesis
         stage3_result, stage3_usage = await stage3_synthesize_final(
@@ -556,17 +606,28 @@ async def run_council_with_fallback(
             asyncio.create_task(telemetry.send_event(telemetry_event))
 
         # ADR-024: Emit L3 Complete Event
+        complete_event_data = {
+            "status": result["metadata"].get("status", "ok"),
+            "synthesis_type": result["metadata"].get("synthesis_type"),
+            "model_count": len(result.get("model_responses", {})),
+            "tier": tier_contract.tier if tier_contract else None,
+        }
         emit_layer_event(
             LayerEventType.L3_COUNCIL_COMPLETE,
-            {
-                "status": result["metadata"].get("status", "ok"),
-                "synthesis_type": result["metadata"].get("synthesis_type"),
-                "model_count": len(result.get("model_responses", {})),
-                "tier": tier_contract.tier if tier_contract else None,
-            },
+            complete_event_data,
             layer_from="L3",
             layer_to="L2",
         )
+
+        # ADR-025a: Emit council complete webhook event
+        try:
+            complete_event = LayerEvent(
+                event_type=LayerEventType.L3_COUNCIL_COMPLETE,
+                data=complete_event_data,
+            )
+            await event_bridge.emit(complete_event)
+        except Exception:
+            pass  # Webhook failure shouldn't block council completion
 
         await report_progress(total_steps, total_steps, "Complete")
         return result
@@ -666,6 +727,13 @@ async def run_council_with_fallback(
 
         await report_progress(total_steps, total_steps, f"Failed: {e}")
         return result
+
+    finally:
+        # ADR-025a: Always shutdown EventBridge to ensure cleanup
+        try:
+            await event_bridge.shutdown()
+        except Exception:
+            pass  # Shutdown failure shouldn't raise
 
 
 def should_normalize_styles(responses: List[str]) -> bool:
@@ -1454,7 +1522,10 @@ Title:"""
 
 async def run_full_council(
     user_query: str,
-    bypass_cache: bool = False
+    bypass_cache: bool = False,
+    models: Optional[List[str]] = None,
+    *,
+    webhook_config: Optional[WebhookConfig] = None,
 ) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process.
@@ -1468,10 +1539,28 @@ async def run_full_council(
     Args:
         user_query: The user's question
         bypass_cache: If True, skip cache lookup and force fresh query
+        models: Optional list of model identifiers to use (overrides COUNCIL_MODELS)
+        webhook_config: Optional WebhookConfig for real-time event notifications (ADR-025a)
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
+    # ADR-025a: Initialize EventBridge for webhook notifications
+    event_bridge: Optional[EventBridge] = None
+    if webhook_config:
+        event_bridge = EventBridge(
+            webhook_config=webhook_config,
+            mode=DispatchMode.SYNC,
+        )
+        await event_bridge.start()
+
+        # Emit council start event
+        from llm_council.layer_contracts import LayerEventType, LayerEvent
+        await event_bridge.emit(LayerEvent(
+            event_type=LayerEventType.L3_COUNCIL_START,
+            data={"query": user_query[:100], "models": models or COUNCIL_MODELS}
+        ))
+
     # Check cache first (unless bypassed)
     cache_key = get_cache_key(user_query)
     if CACHE_ENABLED and not bypass_cache:
