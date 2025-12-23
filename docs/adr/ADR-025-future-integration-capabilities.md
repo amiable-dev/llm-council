@@ -3,7 +3,7 @@
 **Status:** APPROVED WITH MODIFICATIONS
 **Date:** 2025-12-23
 **Decision Makers:** Engineering, Architecture
-**Council Review:** Completed - High Tier (GPT-4o, Grok-4 responded)
+**Council Review:** Completed - Reasoning Tier (4/4 models: GPT-4o, Gemini-3-Pro, Claude Opus 4.5, Grok-4)
 
 ---
 
@@ -365,18 +365,29 @@ LLM_COUNCIL_DIRECT_ENDPOINT=http://localhost:4000/v1/chat/completions
 
 ## Council Review
 
-**Status:** APPROVED WITH MODIFICATIONS
+**Status:** APPROVED WITH ARCHITECTURAL MODIFICATIONS
 **Date:** 2025-12-23
 **Tier:** High (Reasoning)
-**Sessions:** 2 deliberation sessions conducted
-**Responding Models:** GPT-4o, Grok-4 (consistent across both sessions)
-**Non-Responding Models:** Gemini-3-Pro (error), Claude Opus 4.5 (error)
+**Sessions:** 3 deliberation sessions conducted
+**Final Session:** Full council (4/4 models responded)
+
+| Model | Status | Latency |
+|-------|--------|---------|
+| GPT-4o | ✓ ok | 15.8s |
+| Gemini-3-Pro-Preview | ✓ ok | 31.6s |
+| Claude Opus 4.5 | ✓ ok | 48.5s |
+| Grok-4 | ✓ ok | 72.6s |
 
 ---
 
 ### Executive Summary
 
-The Council provided **unanimous consensus** that the proposed priorities are largely correct, with a specific mandate to prioritize a **Native OllamaGateway** immediately. Both responding models view the shift toward local, privacy-focused AI as the critical driver for 2025. They also strongly support positioning the Council as a "Jury" mechanism for the emerging Agentic AI market.
+The full Council **APPROVES** the strategic direction of ADR-025, specifically the shift toward **Privacy-First (Local)** and **Agentic Orchestration**. However, significant architectural modifications are required:
+
+1. **"Jury Mode" is the Killer Feature** - Every reviewer identified this as the primary differentiator
+2. **Unified Gateway Approach** - Strong dissent (Gemini/Claude) against building proprietary native gateway
+3. **Scope Reduction Required** - Split into ADR-025a (Committed) and ADR-025b (Exploratory)
+4. **Quality Degradation Notices** - Required for local model usage
 
 ---
 
@@ -394,22 +405,33 @@ Both models agree that **OllamaGateway must be the top priority**.
 
 **Council Recommendation:** Proceed immediately with OllamaGateway implementation.
 
-#### 2. Integration Strategy: **NATIVE GATEWAY FIRST** (Unanimous)
+#### 2. Integration Strategy: **UNIFIED GATEWAY** (Split Decision)
 
-Both models advise **against starting with LiteLLM**.
+**Significant Dissent on Implementation Approach:**
 
-**Recommendation:** Build a **Native OllamaGateway** to:
-- Maintain a lean codebase
-- Avoid external dependencies
-- Focus strictly on the privacy value proposition
+| Model | Position |
+|-------|----------|
+| GPT-4o | Native gateway for control |
+| Grok-4 | Native gateway, LiteLLM as optional module |
+| **Gemini** | **DISSENT**: Use LiteLLM as engine, not custom build |
+| **Claude** | **DISSENT**: Start with LiteLLM as bridge, build native when hitting limitations |
 
-**Caveat:** LiteLLM should only be considered later as a "Phase 2" extension if users explicitly demand a wider variety of cloud providers.
+**Gemini's Argument (Strong Dissent):**
+> "Do not build a proprietary Native Gateway. In late 2025, maintaining a custom adapter layer for the fragmenting model market is a waste of resources. Use LiteLLM as the engine for your 'OllamaGateway' - it already standardizes headers for Ollama, vLLM, OpenAI, and Anthropic."
 
-**Key Trade-offs Identified:**
-| Approach | Pros | Cons |
-|----------|------|------|
-| Native OllamaGateway | Simpler, reliable, privacy-aligned | Less extensible initially |
-| LiteLLM | 100+ providers, faster expansion | External dependency, complexity |
+**Claude's Analysis:**
+
+| Factor | Native Gateway | LiteLLM |
+|--------|---------------|---------|
+| Maintenance burden | Higher | Lower |
+| Dependency risk | None | Medium |
+| Feature velocity | Self-controlled | Dependent |
+| Initial dev time | ~40 hours | ~8 hours |
+
+**Chairman's Synthesis:** Adopt a **Unified Gateway** approach:
+- Wrap LiteLLM *inside* the Council's "OllamaGateway" interface
+- Satisfies user need for "native" experience without maintenance burden
+- Move LiteLLM from LOW to CORE priority
 
 #### 3. Webhook Architecture: **HYBRID B + D (EVENT-BASED + SSE)** (Unanimous)
 
@@ -457,7 +479,7 @@ Both models support this but urge caution regarding hardware realities.
 
 #### 5. Agentic Positioning: **YES - "JURY" CONCEPT** (Unanimous)
 
-Both models enthusiastically support positioning LLM Council as a consensus mechanism for agents.
+All four models enthusiastically support positioning LLM Council as a consensus mechanism for agents.
 
 **Strategy:**
 - Differentiate from single-agent tools (like Auto-GPT)
@@ -466,6 +488,54 @@ Both models enthusiastically support positioning LLM Council as a consensus mech
 - Integrate with MCP for standardized context sharing
 
 **Unique Value Proposition:** Multi-agent systems need reliable consensus mechanisms. Council deliberation can serve as a "jury" for decisions requiring human-level judgment.
+
+**Jury Mode Verdict Types (Gemini's Framework):**
+
+| Verdict Type | Use Case | Output |
+|--------------|----------|--------|
+| **Binary** | Go/no-go decisions | Single approved/rejected verdict |
+| **Constructive Dissent** | Complex tradeoffs | Majority + minority opinion recorded |
+| **Tie-Breaker** | Deadlocked decisions | Chairman casts deciding vote with rationale |
+
+---
+
+#### 6. Quality Degradation Notices: **REQUIRED** (Claude)
+
+Claude (Evelyn) emphasized that local model usage requires explicit quality warnings:
+
+**Requirement:** When using local models (Ollama), the council MUST:
+1. Detect when local models are in use
+2. Display quality degradation warning in output
+3. Offer cloud fallback option when quality thresholds not met
+4. Log quality metrics for comparison
+
+**Example Warning:**
+```
+⚠️ LOCAL COUNCIL MODE
+Using quantized local models. Response quality may be degraded compared to cloud models.
+Models: ollama/llama3.2 (4-bit), ollama/mistral (4-bit)
+For higher quality, set LLM_COUNCIL_DEFAULT_GATEWAY=openrouter
+```
+
+---
+
+#### 7. Scope Split Recommendation: **ADR-025a vs ADR-025b**
+
+The council recommends splitting this ADR to separate committed work from exploratory:
+
+**ADR-025a (Committed) - Ship in v0.13.x:**
+- OllamaGateway implementation
+- Event-based webhooks
+- Hardware documentation
+- Basic local council support
+
+**ADR-025b (Exploratory) - Research/RFC Phase:**
+- Full "Jury Mode" agentic framework
+- MCP task abstraction
+- LiteLLM alternative path
+- Multi-council federation
+
+**Rationale:** Prevents scope creep while maintaining ambitious vision. Core functionality ships fast; advanced features get proper RFC process.
 
 ---
 
@@ -537,16 +607,22 @@ The models align on the following critical path:
 
 ### Council Recommendations Summary
 
-| Decision | Verdict | Confidence |
-|----------|---------|------------|
-| OllamaGateway priority | **TOP PRIORITY** | High |
-| Native vs LiteLLM | **Native first** | High |
-| Webhook architecture | **Hybrid B+D (Event + SSE)** | High |
-| MCP Enhancement | **MEDIUM-HIGH** (new) | High |
-| Fully local council | **Yes, with docs** | High |
-| Agentic positioning | **Yes, as "Jury"** | High |
+| Decision | Verdict | Confidence | Dissent |
+|----------|---------|------------|---------|
+| OllamaGateway priority | **TOP PRIORITY** | High | None |
+| Native vs LiteLLM | **Unified Gateway** (wrap LiteLLM) | Medium | Gemini/Claude favor LiteLLM-first |
+| Webhook architecture | **Hybrid B+D (Event + SSE)** | High | None |
+| MCP Enhancement | **MEDIUM-HIGH** (new) | High | None |
+| Fully local council | **Yes, with hardware docs** | High | None |
+| Agentic positioning | **Yes, as "Jury Mode"** | High | None |
+| Quality degradation notices | **Required for local** | High | None |
+| Scope split (025a/025b) | **Recommended** | High | None |
 
-**Chairman's Closing Ruling:** Proceed with ADR-025 utilizing the Native Gateway approach. Revise specifications to include strict webhook payload definitions and add a dedicated workstream for hardware benchmarking.
+**Chairman's Closing Ruling:** Proceed with ADR-025 utilizing the Unified Gateway approach (LiteLLM wrapped in native interface). Revise specifications to include:
+1. Strict webhook payload definitions with HMAC authentication
+2. Dedicated workstream for hardware benchmarking
+3. Quality degradation notices for local model usage
+4. Scope split into ADR-025a (committed) and ADR-025b (exploratory)
 
 ---
 
@@ -562,17 +638,23 @@ The models align on the following critical path:
 
 ### Action Items
 
-Based on council feedback (both sessions):
+Based on council feedback (3 deliberation sessions, 4 models):
 
-- [ ] **P0:** Implement OllamaGateway with OpenAI-compatible API format
+**ADR-025a (Committed - v0.13.x):**
+- [ ] **P0:** Implement OllamaGateway with OpenAI-compatible API format (wrap LiteLLM)
 - [ ] **P0:** Add model identifier format `ollama/model-name`
+- [ ] **P0:** Implement quality degradation notices for local model usage
 - [ ] **P0:** Define Council Hardware Profiles (Minimum/Recommended/Professional/Enterprise)
 - [ ] **P1:** Implement event-based webhook system with HMAC authentication
 - [ ] **P1:** Implement SSE for real-time token streaming
 - [ ] **P1:** Document hardware requirements for fully local council
+- [ ] **P2:** Create n8n integration example/template
+
+**ADR-025b (Exploratory - RFC Phase):**
 - [ ] **P1:** Enhance MCP Server capability (Council as callable tool by other agents)
 - [ ] **P2:** Add streaming API support
-- [ ] **P2:** Create n8n integration example/template
-- [ ] **P2:** Release "Jury Mode" marketing materials and templates
+- [ ] **P2:** Design "Jury Mode" verdict types (Binary, Constructive Dissent, Tie-Breaker)
+- [ ] **P2:** Release "Jury Mode" positioning materials and templates
 - [ ] **P3:** Document LiteLLM as alternative deployment path
 - [ ] **P3:** Prototype "agent jury" governance layer concept
+- [ ] **P3:** Investigate multi-council federation architecture
