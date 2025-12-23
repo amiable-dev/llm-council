@@ -178,6 +178,52 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 llm-council bias-report [--input FILE] [--sessions N] [--days N] [--format text|json] [--verbose]
 ```
 
+**`metadata/`** - ADR-026 Model Metadata Provider
+- **`types.py`**: Core data structures
+  - `ModelInfo`: Frozen dataclass with id, context_window, pricing, supported_parameters, modalities, quality_tier
+  - `QualityTier`: Enum (FRONTIER, STANDARD, ECONOMY, LOCAL)
+  - `Modality`: Enum (TEXT, VISION, AUDIO)
+- **`protocol.py`**: Abstract protocol definition
+  - `MetadataProvider`: `@runtime_checkable` Protocol with 5 methods
+    - `get_model_info(model_id)` → Optional[ModelInfo]
+    - `get_context_window(model_id)` → int (default 4096)
+    - `get_pricing(model_id)` → Dict[str, float]
+    - `supports_reasoning(model_id)` → bool
+    - `list_available_models()` → List[str]
+- **`static_registry.py`**: Offline-safe provider
+  - `StaticRegistryProvider`: Implements MetadataProvider
+  - Priority chain: local registry > LiteLLM > 4096 default
+  - Loads bundled `models/registry.yaml` (31 models)
+- **`litellm_adapter.py`**: LiteLLM metadata extraction
+  - Lazy import prevents startup failures
+  - Model ID normalization (openai/gpt-4o → gpt-4o)
+- **`offline.py`**: Offline mode management
+  - `is_offline_mode()`: Checks `LLM_COUNCIL_OFFLINE` env var
+  - `check_offline_mode_startup()`: Logs INFO about offline mode
+  - Truthy values: "true", "1", "yes", "on"
+- **`__init__.py`**: Module exports and factory
+  - `get_provider()`: Returns singleton StaticRegistryProvider
+  - `reload_provider()`: Refreshes cached instance (for testing)
+  - Exports: ModelInfo, QualityTier, Modality, MetadataProvider
+
+**Offline Mode** - ADR-026 "Sovereign Orchestrator" Philosophy
+```bash
+# Force offline operation - all core operations work without external calls
+export LLM_COUNCIL_OFFLINE=true
+```
+
+When offline:
+1. Uses StaticRegistryProvider exclusively
+2. Disables external metadata/routing calls
+3. Logs INFO about limited/stale metadata
+4. All core council operations succeed
+
+**Bundled Registry** (`src/llm_council/models/registry.yaml`)
+- 31 models from 8 providers
+- OpenAI, Anthropic, Google, xAI, DeepSeek, Meta, Mistral, Ollama
+- Includes reasoning models (o1, o3-mini, deepseek-r1)
+- Local models have LOCAL quality tier and $0 pricing
+
 **Enhanced `label_to_model` Format (v0.3.0+)**
 Per council recommendation for robustness, anonymization now uses explicit position indices:
 ```python
