@@ -1,18 +1,168 @@
 # ADR-026: Dynamic Model Intelligence and Benchmark-Driven Selection
 
-**Status:** APPROVED (Full Council Quorum)
+**Status:** CONDITIONAL APPROVAL (Pending Abstraction Layer)
 **Date:** 2025-12-23
 **Decision Makers:** Engineering, Architecture
-**Council Review:** 2025-12-23 (Full Quorum: 4/4 Models)
+**Council Review:** 2025-12-23 (Strategic + Technical Reviews)
 **Layer Assignment:** Cross-cutting (L1-L4 integration)
 
 ---
 
-## Council Review Summary
+## ⚠️ CRITICAL: Strategic Council Review - Vendor Dependency Risk
 
-### Verdict: APPROVED ✅
+### Verdict: CONDITIONAL APPROVAL
 
-**Full Quorum Review (2025-12-23)**
+**ADR-026 is NOT APPROVED in its current form.** The council identified critical vendor dependency risks that must be addressed before implementation.
+
+> "We cannot build the core 'brain' of an open-source project on proprietary APIs that we do not control." — Council Consensus
+
+### The "Sovereign Orchestrator" Philosophy
+
+The council unanimously adopts this architectural principle:
+
+> **The open-source version of LLM Council must function as a complete, independent utility. External services (like OpenRouter or Not Diamond) must be treated as PLUGINS, not foundations.**
+>
+> If the internet is disconnected or if an API key is revoked, the software must still boot, run, and perform its core function (orchestrating LLMs), even if quality is degraded.
+
+### Blocking Conditions for Approval
+
+| # | Condition | Status | Priority |
+|---|-----------|--------|----------|
+| 1 | **Add `ModelMetadataProvider` abstraction interface** | 📋 REQUIRED | **BLOCKING** |
+| 2 | **Implement `StaticRegistryProvider` (30+ models)** | 📋 REQUIRED | **BLOCKING** |
+| 3 | **Add offline mode (`LLM_COUNCIL_OFFLINE=true`)** | 📋 REQUIRED | **BLOCKING** |
+| 4 | **Evaluate LiteLLM as unified abstraction** | 📋 REQUIRED | High |
+| 5 | Document degraded vs. enhanced feature matrix | 📋 Required | Medium |
+
+### Strategic Decision: Option C+D (Hybrid + Abstraction)
+
+| Feature | OSS (Self-Hosted) | Council Cloud (Commercial) |
+|---------|-------------------|---------------------------|
+| **Model Metadata** | Static library (LiteLLM) + Manual YAML config | Real-time dynamic sync via OpenRouter |
+| **Routing** | Heuristic rules (latency/cost-based) | Intelligent ML-based (Not Diamond) |
+| **Integrations** | BYOK (Bring Your Own Keys) | Managed Fleet (one bill, instant access) |
+| **Operations** | `localhost` / Individual instance | Team governance, analytics, SSO |
+
+### Vendor Dependency Analysis
+
+| Service | Current Role | Risk Level | Required Mitigation |
+|---------|--------------|------------|---------------------|
+| **OpenRouter** | Metadata API, Gateway | HIGH | Static fallback + LiteLLM |
+| **Not Diamond** | Model routing, Classification | MEDIUM | Heuristic fallback (exists) |
+| **Requesty** | Alternative gateway | LOW | Already optional |
+
+### Affiliate/Reseller Model: NOT VIABLE
+
+> "Reliance on affiliate revenue or tight coupling creates **Platform Risk**. If OpenRouter releases 'OpenRouter Agents,' Council becomes obsolete instantly. Furthermore, council-cloud cannot withstand margin compression." — Council
+
+**Decision:** Use external services to lower the *User's* barrier to entry, not as the backbone of the *Product's* value.
+
+---
+
+## Required Abstraction Architecture
+
+### MetadataProvider Interface (MANDATORY)
+
+```python
+from typing import Protocol, Optional, Dict, List
+from dataclasses import dataclass
+
+@dataclass
+class ModelInfo:
+    id: str
+    context_window: int
+    pricing: Dict[str, float]  # {"prompt": 0.01, "completion": 0.03}
+    supported_parameters: List[str]
+    modalities: List[str]
+    quality_tier: str  # "frontier" | "standard" | "economy"
+
+class MetadataProvider(Protocol):
+    """Abstract interface for model metadata sources."""
+
+    def get_model_info(self, model_id: str) -> Optional[ModelInfo]: ...
+    def get_context_window(self, model_id: str) -> int: ...
+    def get_pricing(self, model_id: str) -> Dict[str, float]: ...
+    def supports_reasoning(self, model_id: str) -> bool: ...
+    def list_available_models(self) -> List[str]: ...
+
+class StaticRegistryProvider(MetadataProvider):
+    """Default: Offline-safe provider using bundled registry + LiteLLM."""
+
+    def __init__(self, registry_path: Path = None):
+        self.registry = self._load_registry(registry_path)
+        self.litellm_data = self._load_litellm_model_map()
+
+    def get_context_window(self, model_id: str) -> int:
+        # 1. Check local config override
+        if model_id in self.registry:
+            return self.registry[model_id].context_window
+        # 2. Check LiteLLM library
+        if model_id in self.litellm_data:
+            return self.litellm_data[model_id].context_window
+        # 3. Safe default
+        return 4096
+
+class DynamicMetadataProvider(MetadataProvider):
+    """Optional: Real-time metadata from OpenRouter API."""
+
+    async def refresh(self) -> None:
+        """Fetch latest model data - requires API key."""
+        ...
+```
+
+### Static Registry Schema (MANDATORY)
+
+```yaml
+# models/registry.yaml - Shipped with OSS
+version: "1.0"
+updated: "2025-12-23"
+models:
+  - id: "openai/gpt-4o"
+    context_window: 128000
+    pricing:
+      prompt: 0.0025
+      completion: 0.01
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "anthropic/claude-opus-4.5"
+    context_window: 200000
+    pricing:
+      prompt: 0.015
+      completion: 0.075
+    supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "ollama/llama3.2"
+    provider: "ollama"
+    context_window: 128000
+    pricing:
+      prompt: 0
+      completion: 0
+    modalities: ["text"]
+    quality_tier: "local"
+```
+
+### Offline Mode (MANDATORY)
+
+```bash
+# Force offline operation - MUST work without any external calls
+export LLM_COUNCIL_OFFLINE=true
+```
+
+When offline mode is enabled:
+1. Use `StaticRegistryProvider` exclusively
+2. Disable all external metadata/routing calls
+3. Log INFO message about limited/stale metadata
+4. **All core council operations MUST succeed**
+
+---
+
+## Technical Council Review Summary
+
+### Technical Review (2025-12-23) - Full Quorum
 
 | Model | Verdict | Rank | Response Time |
 |-------|---------|------|---------------|
@@ -21,13 +171,9 @@
 | Grok 4 | APPROVE | #3 | 59.6s |
 | GPT-4o | APPROVE | #4 | 9.8s |
 
-**Chairman Synthesis:** APPROVED (100% confidence)
-
 > "The council successfully identified Response C (Claude) as the superior review, noting its crucial detection of mathematical flaws (Borda normalization with variable pool sizes) and logical gaps (Cold Start) missed by other responses."
 
-### First Review (2025-12-23, 3/4 models)
-
-The initial review resulted in CONDITIONAL APPROVAL with modifications that were incorporated before the full quorum review.
+### First Technical Review (2025-12-23, 3/4 models)
 
 **Approved Components:**
 - Dynamic metadata integration via OpenRouter API (pricing, availability, capability detection)
@@ -38,7 +184,7 @@ The initial review resulted in CONDITIONAL APPROVAL with modifications that were
 - ~~Benchmark scraping strategy~~ → Deferred to Phase 4, use Internal Performance Tracker
 - ~~Single scoring algorithm with "magic number" weights~~ → Tier-Specific Weighting Matrices
 
-### Key Council Recommendations
+### Key Technical Recommendations
 
 | Recommendation | Status | Priority |
 |----------------|--------|----------|
@@ -59,6 +205,7 @@ The initial review resulted in CONDITIONAL APPROVAL with modifications that were
 4. **Internal performance data is more valuable** - track actual council session outcomes
 5. **Phased approach required** - decouple metadata (proven value) from benchmark intelligence (speculative)
 6. **Cold Start needs exploration strategy** - new models need "audition" mechanism (Phase 3)
+7. **LiteLLM strongly recommended** - use as library for metadata, not just proxy
 
 ---
 
