@@ -294,6 +294,50 @@ class CredentialsConfig(BaseModel):
     google: Optional[str] = None
 
 
+# =============================================================================
+# Model Intelligence Configuration (ADR-026)
+# =============================================================================
+
+
+class ModelIntelligenceRefreshConfig(BaseModel):
+    """Configuration for model intelligence cache refresh."""
+
+    registry_ttl: int = Field(default=3600, ge=60, le=86400)  # 1 hour default
+    availability_ttl: int = Field(default=300, ge=30, le=3600)  # 5 min default
+
+
+class ModelIntelligenceSelectionConfig(BaseModel):
+    """Configuration for model selection algorithm."""
+
+    min_providers: int = Field(default=2, ge=1, le=5)
+    default_count: int = Field(default=4, ge=1, le=10)
+
+
+class AntiHerdingConfig(BaseModel):
+    """Configuration for anti-herding penalties."""
+
+    enabled: bool = True
+    traffic_threshold: float = Field(default=0.30, ge=0.0, le=1.0)
+    max_penalty: float = Field(default=0.35, ge=0.0, le=1.0)
+
+
+class ModelIntelligenceConfig(BaseModel):
+    """Configuration for Model Intelligence Layer (ADR-026).
+
+    Controls dynamic model metadata fetching, caching, and selection.
+    Disabled by default (opt-in via LLM_COUNCIL_MODEL_INTELLIGENCE=true).
+    """
+
+    enabled: bool = False  # Opt-in; requires API connectivity
+    refresh: ModelIntelligenceRefreshConfig = Field(
+        default_factory=ModelIntelligenceRefreshConfig
+    )
+    selection: ModelIntelligenceSelectionConfig = Field(
+        default_factory=ModelIntelligenceSelectionConfig
+    )
+    anti_herding: AntiHerdingConfig = Field(default_factory=AntiHerdingConfig)
+
+
 class ObservabilityConfig(BaseModel):
     """Configuration for observability settings."""
 
@@ -310,7 +354,7 @@ class ObservabilityConfig(BaseModel):
 class UnifiedConfig(BaseModel):
     """Unified configuration for LLM Council (ADR-024).
 
-    This consolidates settings from ADR-020, ADR-022, and ADR-023 into
+    This consolidates settings from ADR-020, ADR-022, ADR-023, and ADR-026 into
     a single configuration object with YAML file support.
     """
 
@@ -320,6 +364,9 @@ class UnifiedConfig(BaseModel):
     credentials: CredentialsConfig = Field(default_factory=CredentialsConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     webhooks: WebhookConfig = Field(default_factory=WebhookConfig)
+    model_intelligence: ModelIntelligenceConfig = Field(
+        default_factory=ModelIntelligenceConfig
+    )
 
     def get_tier_contract(self, tier: str) -> TierContract:
         """Get TierContract for a specific tier.
@@ -561,6 +608,11 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     webhook_retries = os.getenv("LLM_COUNCIL_WEBHOOK_RETRIES")
     if webhook_retries:
         config_dict.setdefault("webhooks", {})["max_retries"] = int(webhook_retries)
+
+    # Model Intelligence overrides (ADR-026)
+    model_intelligence_enabled = os.getenv("LLM_COUNCIL_MODEL_INTELLIGENCE")
+    if model_intelligence_enabled:
+        config_dict.setdefault("model_intelligence", {})["enabled"] = model_intelligence_enabled.lower() in ("true", "1", "yes")
 
     return UnifiedConfig(**config_dict)
 
