@@ -283,6 +283,11 @@ Ask the LLM council a question and get synthesized guidance.
   - `"high"`: Full council (Opus, GPT-4o), ~180 seconds - comprehensive deliberation
   - `"reasoning"`: Deep thinking models (GPT-5.2, o1, DeepSeek-R1), ~600 seconds - complex reasoning
 - `include_details` (boolean, optional): Include individual model responses and rankings (default: false)
+- `verdict_type` (string, optional): Type of verdict to render (default: "synthesis")
+  - `"synthesis"`: Free-form natural language synthesis
+  - `"binary"`: Go/no-go decision (approved/rejected) with confidence score
+  - `"tie_breaker"`: Chairman resolves deadlocked decisions
+- `include_dissent` (boolean, optional): Extract minority opinions from Stage 2 (default: false)
 
 **Example:**
 ```
@@ -292,6 +297,11 @@ Use consult_council to ask: "What are the trade-offs between microservices and m
 **Example with confidence level:**
 ```
 Use consult_council with confidence="quick" to ask: "What's the syntax for a Python list comprehension?"
+```
+
+**Example with Jury Mode (binary verdict):**
+```
+Use consult_council with verdict_type="binary" and include_dissent=true to ask: "Should we approve this PR that adds caching?"
 ```
 
 ### `council_health_check`
@@ -412,6 +422,124 @@ The council includes built-in reliability features for long-running operations:
 ✓ claude-opus-4.5 (1/4) | waiting: gpt-5.1, gemini-3-pro, grok-4
 ✓ gemini-3-pro (2/4) | waiting: gpt-5.1, grok-4
 ```
+
+### Jury Mode (ADR-025b)
+
+Transform the council from a "summary generator" to a "decision engine" with structured verdicts.
+
+**Verdict Types:**
+
+| Mode | Output | Use Case |
+|------|--------|----------|
+| `synthesis` (default) | Free-form synthesis | General questions, exploration |
+| `binary` | approved/rejected + confidence | CI/CD gates, PR reviews, policy checks |
+| `tie_breaker` | Chairman decides on deadlock | Contentious decisions |
+
+**Binary Verdict Mode:**
+
+Returns structured go/no-go decisions with confidence scores:
+
+```python
+# MCP Tool
+result = await consult_council(
+    query="Should we approve this architectural change?",
+    verdict_type="binary"
+)
+
+# Returns:
+{
+  "verdict": "approved",      # or "rejected"
+  "confidence": 0.75,         # 0.0-1.0 based on council agreement
+  "rationale": "Council agreed the change improves modularity..."
+}
+```
+
+**Tie-Breaker Mode:**
+
+When the council is deadlocked (top scores within 0.1 of each other), the chairman casts the deciding vote:
+
+```python
+result = await consult_council(
+    query="Option A vs Option B for caching strategy?",
+    verdict_type="binary"
+)
+
+# If deadlocked, returns:
+{
+  "verdict": "approved",
+  "confidence": 0.60,
+  "rationale": "Chairman resolved deadlock based on...",
+  "deadlocked": true  # Flag indicates tie-breaker was needed
+}
+```
+
+**Constructive Dissent:**
+
+Extract minority opinions from Stage 2 peer reviews:
+
+```python
+result = await consult_council(
+    query="Should we migrate to microservices?",
+    verdict_type="binary",
+    include_dissent=True
+)
+
+# Returns:
+{
+  "verdict": "approved",
+  "confidence": 0.70,
+  "rationale": "Majority supports migration...",
+  "dissent": "Minority perspective: One reviewer noted scalability concerns with current team size."
+}
+```
+
+**Dissent Algorithm:**
+1. Collect all scores from Stage 2 peer reviews
+2. Calculate median and standard deviation per response
+3. Identify outliers (score < median - 1.5 × std)
+4. Extract evaluation text from outliers
+5. Format as minority perspective
+
+**Example: CI/CD Gate Integration:**
+
+```python
+import asyncio
+from llm_council.council import run_full_council
+from llm_council.verdict import VerdictType
+
+async def review_pull_request(pr_diff: str, pr_description: str):
+    """Use LLM Council as a PR review gate."""
+    query = f"""
+    Review this pull request and determine if it should be approved.
+
+    Description: {pr_description}
+
+    Changes:
+    {pr_diff}
+    """
+
+    stage1, stage2, stage3, metadata = await run_full_council(
+        query,
+        verdict_type=VerdictType.BINARY,
+        include_dissent=True
+    )
+
+    verdict = metadata.get("verdict", {})
+
+    if verdict.get("verdict") == "approved" and verdict.get("confidence", 0) >= 0.7:
+        return True, verdict.get("rationale")
+    else:
+        return False, f"{verdict.get('rationale')}\n\nDissent: {verdict.get('dissent', 'None')}"
+```
+
+**Environment Variables:**
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LLM_COUNCIL_VERDICT_TYPE` | Default verdict type | synthesis |
+| `LLM_COUNCIL_DEADLOCK_THRESHOLD` | Borda score difference for deadlock | 0.1 |
+| `LLM_COUNCIL_DISSENT_THRESHOLD` | Std deviations below median for outlier | 1.5 |
+| `LLM_COUNCIL_MIN_BORDA_SPREAD` | Minimum spread to surface dissent | 0.0 |
 
 ### Structured Rubric Scoring (ADR-016)
 

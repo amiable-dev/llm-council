@@ -19,6 +19,7 @@ from llm_council.council import (
     run_council_with_fallback,
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
+from llm_council.verdict import VerdictType
 from llm_council.config import (
     COUNCIL_MODELS,
     CHAIRMAN_MODEL,
@@ -74,6 +75,8 @@ async def consult_council(
     query: str,
     confidence: str = "high",
     include_details: bool = False,
+    verdict_type: str = "synthesis",
+    include_dissent: bool = False,
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -83,8 +86,18 @@ async def consult_council(
         query: The question to ask the council.
         confidence: Response quality level - "quick" (2 models, ~10s), "balanced" (3 models, ~25s), or "high" (full council, ~45s).
         include_details: If True, includes individual model responses and rankings.
+        verdict_type: Type of verdict to render (ADR-025b Jury Mode):
+            - "synthesis": Default behavior, unstructured natural language synthesis
+            - "binary": Go/no-go decision (approved/rejected) with confidence score
+            - "tie_breaker": Chairman resolves deadlocked decisions
+        include_dissent: If True, extract minority opinions from Stage 2 evaluations (ADR-025b).
         ctx: MCP context for progress reporting (injected automatically).
     """
+    # Parse verdict_type string to enum
+    try:
+        verdict_type_enum = VerdictType(verdict_type.lower())
+    except ValueError:
+        verdict_type_enum = VerdictType.SYNTHESIS
     # Get confidence configuration (ADR-012 Section 5: Tier-Sovereign Timeouts)
     config = CONFIDENCE_CONFIGS.get(confidence, CONFIDENCE_CONFIGS["high"])
     total_timeout = config.get("total", TIMEOUT_SYNTHESIS_TRIGGER)
@@ -102,18 +115,21 @@ async def consult_council(
             except Exception:
                 pass  # Progress reporting is best-effort
 
-    # Run the council with ADR-012 and ADR-022 features:
+    # Run the council with ADR-012, ADR-022, and ADR-025b features:
     # - Tier-sovereign timeouts (per-tier total and per-model)
     # - Tier-appropriate model selection (ADR-022)
     # - Partial results on timeout
     # - Fallback synthesis
     # - Per-model status tracking
+    # - Jury Mode verdict types (ADR-025b)
     council_result = await run_council_with_fallback(
         query,
         on_progress=on_progress,
         synthesis_deadline=total_timeout,
         per_model_timeout=per_model_timeout,
         tier_contract=tier_contract,
+        verdict_type=verdict_type_enum,
+        include_dissent=include_dissent,
     )
 
     # Extract results from ADR-012 structured response
@@ -138,6 +154,18 @@ async def consult_council(
         result += f"\n*Council status: {status} ({synthesis_type} synthesis{tier_info})*\n"
     elif tier_used:
         result += f"\n*Tier: {tier_used}*\n"
+
+    # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
+    verdict = metadata.get("verdict")
+    if verdict:
+        result += "\n### Verdict\n"
+        result += f"**Decision**: {verdict.get('verdict', 'unknown').upper()}\n"
+        result += f"**Confidence**: {verdict.get('confidence', 0):.0%}\n"
+        result += f"**Rationale**: {verdict.get('rationale', 'No rationale provided')}\n"
+        if verdict.get("deadlocked"):
+            result += f"\n> *Note: Council was deadlocked. Chairman cast deciding vote.*\n"
+        if verdict.get("dissent"):
+            result += f"\n**Dissent**: {verdict.get('dissent')}\n"
 
     # Add council rankings if available
     aggregate = metadata.get("aggregate_rankings", [])

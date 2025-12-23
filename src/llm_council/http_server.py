@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 from llm_council.council import run_full_council
 from llm_council.webhooks.sse import council_event_generator, get_sse_headers
 from llm_council.webhooks.types import WebhookConfig
+from llm_council.verdict import VerdictType
 
 # FastAPI app instance
 app = FastAPI(
@@ -60,6 +61,15 @@ class CouncilRequest(BaseModel):
     )
     webhook_secret: Optional[str] = Field(
         default=None, description="HMAC secret for webhook signature verification"
+    )
+    # ADR-025b Jury Mode
+    verdict_type: Optional[str] = Field(
+        default="synthesis",
+        description="Type of verdict: 'synthesis' (default), 'binary' (approved/rejected), or 'tie_breaker'"
+    )
+    include_dissent: Optional[bool] = Field(
+        default=False,
+        description="Extract minority opinions from Stage 2 evaluations (ADR-025b)"
     )
 
 
@@ -121,12 +131,20 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
             secret=request.webhook_secret,
         )
 
+    # Parse verdict_type (ADR-025b)
+    try:
+        verdict_type_enum = VerdictType(request.verdict_type.lower() if request.verdict_type else "synthesis")
+    except ValueError:
+        verdict_type_enum = VerdictType.SYNTHESIS
+
     try:
         # Run the full council deliberation
         stage1, stage2, stage3, metadata = await run_full_council(
             request.prompt,
             models=request.models,
             webhook_config=webhook_config,
+            verdict_type=verdict_type_enum,
+            include_dissent=request.include_dissent or False,
         )
 
         return CouncilResponse(

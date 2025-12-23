@@ -96,7 +96,7 @@ async def test_council_emits_layer_events():
          
         # Setup mocks
         mock_query.return_value = {}
-        mock_synth.return_value = ({"response": "Synthesis"}, {})
+        mock_synth.return_value = ({"response": "Synthesis"}, {}, None)
         mock_stage2.return_value = ([], {}, {})
         mock_stage15_normalize_styles.return_value = ([], {})
 

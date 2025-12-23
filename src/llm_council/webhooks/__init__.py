@@ -1,13 +1,15 @@
 """Webhook support for LLM Council (ADR-025).
 
-This package provides webhook delivery and SSE streaming for
-real-time council deliberation updates.
+This package provides webhook delivery, SSE streaming, and event bridging
+for real-time council deliberation updates.
 
 Example usage:
     from llm_council.webhooks import (
         WebhookConfig,
         WebhookPayload,
         WebhookDispatcher,
+        EventBridge,
+        DispatchMode,
         format_sse_event,
     )
 
@@ -18,9 +20,15 @@ Example usage:
         secret="my-hmac-secret"
     )
 
-    # Dispatch webhook
+    # Dispatch webhook directly
     dispatcher = WebhookDispatcher()
     result = await dispatcher.dispatch(config, payload)
+
+    # Or use EventBridge for automatic layer event → webhook mapping
+    bridge = EventBridge(webhook_config=config, mode=DispatchMode.ASYNC)
+    await bridge.start()
+    await bridge.emit(layer_event)
+    await bridge.shutdown()
 """
 
 from .types import (

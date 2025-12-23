@@ -876,3 +876,201 @@ SSE streaming implementation completed with:
 | n8n integration example | ❌ Pending | - |
 
 **ADR-025a Readiness:** 100% (was 60% before gap remediation)
+
+---
+
+## ADR-025b Council Validation: Jury Mode Features
+
+**Date:** 2025-12-23
+**Status:** VALIDATED WITH SCOPE MODIFICATIONS
+**Council:** Reasoning Tier (4/4 models: Claude Opus 4.5, Gemini-3-Pro, GPT-4o, Grok-4)
+**Consensus Level:** High
+**Primary Author:** Claude Opus 4.5 (ranked #1)
+
+### Executive Summary
+
+> "The core value of ADR-025b is transforming the system from a **'Summary Generator'** to a **'Decision Engine.'** Prioritize features that enforce structured, programmatic outcomes (Binary Verdicts, MCP Schemas) and cut features that add architectural noise (Federation)."
+
+### Council Verdicts by Feature
+
+| Original Feature | Original Priority | Council Verdict | New Priority |
+|------------------|-------------------|-----------------|--------------|
+| MCP Enhancement | P1 | **DEPRIORITIZE** | P3 |
+| Streaming API | P2 | **REMOVE** | N/A |
+| Jury Mode Design (Binary) | P2 | **COMMIT** | **P1** |
+| Jury Mode Design (Tie-Breaker) | P2 | **COMMIT** | **P1** |
+| Jury Mode Design (Constructive Dissent) | P2 | **COMMIT (minimal)** | P2 |
+| Jury Mode Materials | P2 | **COMMIT** | P2 |
+| LiteLLM Documentation | P3 | **COMMIT** | P2 |
+| Federation RFC | P3 | **REMOVE** | N/A |
+
+### Key Architectural Findings
+
+#### 1. Streaming API: Architecturally Impossible (Unanimous)
+
+Token-level streaming is fundamentally incompatible with the Map-Reduce deliberation pattern:
+
+```
+User Request
+    ↓
+Stage 1: N models generate (parallel, 10-30s) → No tokens yet
+    ↓
+Stage 2: N models review (parallel, 15-40s) → No tokens yet
+    ↓
+Stage 3: Chairman synthesizes → Tokens ONLY HERE
+```
+
+**Resolution:** Existing SSE stage-level events (`council.stage1.complete`, etc.) are the honest representation. Do not implement token streaming.
+
+#### 2. Constructive Dissent: Option B (Extract from Stage 2)
+
+The council evaluated four approaches:
+
+| Option | Description | Verdict |
+|--------|-------------|---------|
+| A | Separate synthesis from lowest-ranked | **REJECT** (cherry-picking) |
+| **B** | Extract dissenting points from Stage 2 | **ACCEPT** |
+| C | Additional synthesis pass | **REJECT** (latency cost) |
+| D | Not worth implementing | **REJECT** (real demand) |
+
+**Implementation:** Extract outlier evaluations (score < median - 1 std) from existing Stage 2 data. Only surface when Borda spread > 2 points.
+
+#### 3. Federation: Removed for Scope Discipline
+
+| Issue | Impact |
+|-------|--------|
+| Latency explosion | 3-9x (45-90 seconds per call) |
+| Governance complexity | Debugging nested decisions impossible |
+| Scope creep | Diverts from core positioning |
+
+#### 4. MCP Enhancement: Existing Tools Sufficient
+
+Current `consult_council` tool adequately supports agent-to-council delegation. Enhancement solves theoretical problem (context passing) better addressed via documentation.
+
+### Jury Mode Implementation
+
+#### Binary Verdict Mode
+
+Transforms chairman synthesis into structured decision output:
+
+```python
+class VerdictType(Enum):
+    SYNTHESIS = "synthesis"      # Default (current behavior)
+    BINARY = "binary"            # approved/rejected
+    TIE_BREAKER = "tie_breaker"  # Chairman decides on deadlock
+
+@dataclass
+class VerdictResult:
+    verdict_type: VerdictType
+    verdict: str                        # "approved"|"rejected"|synthesis
+    confidence: float                   # 0.0-1.0
+    rationale: str
+    dissent: Optional[str] = None       # Minority opinion
+    deadlocked: bool = False
+    borda_spread: float = 0.0
+```
+
+#### Use Cases Enabled
+
+| Verdict Type | Use Case | Output |
+|--------------|----------|--------|
+| **Binary** | CI/CD gates, policy enforcement, compliance checks | `{verdict: "approved"/"rejected", confidence, rationale}` |
+| **Tie-Breaker** | Deadlocked decisions, edge cases | Chairman decision with explicit rationale |
+| **Constructive Dissent** | Architecture reviews, strategy decisions | Majority + minority opinion |
+
+### Revised ADR-025b Action Items
+
+**Committed (v0.14.x):**
+- [x] **P1:** Implement Binary verdict mode (VerdictType enum, VerdictResult dataclass) ✅ *Completed 2025-12-23*
+- [x] **P1:** Implement Tie-Breaker mode with deadlock detection ✅ *Completed 2025-12-23*
+- [x] **P2:** Implement Constructive Dissent extraction from Stage 2 ✅ *Completed 2025-12-23*
+- [x] **P2:** Create Jury Mode positioning materials and examples ✅ *README updated 2025-12-23*
+- [ ] **P2:** Document LiteLLM as alternative deployment path
+
+**Exploratory (RFC):**
+- [ ] **P3:** Document MCP context-rich invocation patterns
+
+**Removed:**
+- ~~P2: Streaming API~~ (architecturally impossible)
+- ~~P3: Federation RFC~~ (scope creep)
+
+### Architectural Principles Established
+
+1. **Decision Engine > Summary Generator:** Jury Mode enforces structured outputs
+2. **Honest Representation:** Stage-level events reflect true system state
+3. **Minimal Complexity:** Extract dissent from existing data, don't generate
+4. **Scope Discipline:** Remove features that add noise without value
+5. **Backward Compatibility:** Verdict typing is opt-in, synthesis remains default
+
+### Council Evidence
+
+| Model | Latency | Key Contribution |
+|-------|---------|------------------|
+| Claude Opus 4.5 | 58.5s | 3-analyst deliberation framework, Option B recommendation |
+| Gemini-3-Pro | 31.2s | "Decision Engineering" framing, verdict schema |
+| Grok-4 | 74.8s | Scope assessment, MCP demotion validation |
+| GPT-4o | 18.0s | Selective feature promotion |
+
+**Consensus Points:**
+1. Streaming is architecturally impossible (4/4)
+2. Federation is scope creep (4/4)
+3. Binary + Tie-Breaker are high-value/low-effort (4/4)
+4. MCP enhancement is overprioritized (3/4)
+5. Constructive Dissent via extraction is correct approach (3/4)
+
+---
+
+## ADR-025b Implementation Status
+
+**Date:** 2025-12-23
+**Status:** COMPLETE (Core Features)
+**Tests:** 1021 passing
+
+### Files Created/Modified
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/llm_council/verdict.py` | CREATE | VerdictType enum, VerdictResult dataclass |
+| `src/llm_council/dissent.py` | CREATE | Constructive Dissent extraction from Stage 2 |
+| `src/llm_council/council.py` | MODIFY | verdict_type, include_dissent parameters |
+| `src/llm_council/mcp_server.py` | MODIFY | verdict_type, include_dissent in consult_council |
+| `src/llm_council/http_server.py` | MODIFY | verdict_type, include_dissent in CouncilRequest |
+| `tests/test_verdict.py` | CREATE | TDD tests for verdict functionality |
+| `tests/test_dissent.py` | CREATE | TDD tests for dissent extraction |
+| `README.md` | MODIFY | Jury Mode section added |
+
+### Feature Summary
+
+| Feature | Status | GitHub Issue |
+|---------|--------|--------------|
+| Binary Verdict Mode | ✅ Complete | #85 (closed) |
+| Tie-Breaker Mode | ✅ Complete | #86 (closed) |
+| Constructive Dissent | ✅ Complete | #87 (closed) |
+| Jury Mode Documentation | ✅ Complete | #88 (closed) |
+
+### API Changes
+
+**New Parameters:**
+- `verdict_type`: "synthesis" | "binary" | "tie_breaker"
+- `include_dissent`: boolean (extract minority opinions from Stage 2)
+
+**New Response Fields:**
+- `metadata.verdict`: VerdictResult object (when verdict_type != synthesis)
+- `metadata.dissent`: string (when include_dissent=True in synthesis mode)
+
+### Test Coverage
+
+- **verdict.py**: 8 tests
+- **dissent.py**: 15 tests
+- **Total test suite**: 1021 tests passing
+
+### ADR-025 Overall Status
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| ADR-025a | Local LLM + Webhooks + SSE | ✅ Complete (100%) |
+| ADR-025b | Jury Mode Features | ✅ Complete (Core Features) |
+
+**Remaining Work:**
+- P2: Document LiteLLM as alternative deployment path
+- P3: Document MCP context-rich invocation patterns

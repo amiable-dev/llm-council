@@ -147,6 +147,7 @@ class TestWebhookEventEmission:
             mock_stage3.return_value = (
                 {"model": "chairman/model", "response": "Final synthesis"},
                 {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
+                None,  # verdict_result (ADR-025b)
             )
 
             # Patch the dispatcher's dispatch method at the module level
@@ -208,6 +209,7 @@ class TestWebhookEventEmission:
             mock_stage3.return_value = (
                 {"model": "chairman/model", "response": "Final synthesis"},
                 {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
+                None,  # verdict_result (ADR-025b)
             )
 
             # Patch the dispatcher's dispatch method at the module level
@@ -452,6 +454,7 @@ class TestIntegrationWithExistingLayerEvents:
             mock_stage3.return_value = (
                 {"model": "chairman/model", "response": "Final synthesis"},
                 {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
+                None,  # verdict_result (ADR-025b)
             )
 
             await run_council_with_fallback(
