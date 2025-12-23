@@ -158,12 +158,34 @@ council:
     prompt_optimization:
       enabled: true
 
-  # Gateway configuration (ADR-023)
+  # Gateway configuration (ADR-023, ADR-025a)
   gateways:
     default: openrouter
     fallback:
       enabled: true
-      chain: [openrouter, requesty, direct]
+      chain: [openrouter, ollama]  # Can use Ollama as fallback
+
+    # Provider-specific configuration
+    providers:
+      ollama:
+        enabled: true
+        base_url: http://localhost:11434
+        timeout_seconds: 120.0
+        hardware_profile: recommended  # minimum|recommended|professional|enterprise
+
+      openrouter:
+        enabled: true
+        base_url: https://openrouter.ai/api/v1/chat/completions
+
+  # Webhook notifications (ADR-025a)
+  webhooks:
+    enabled: false  # Opt-in
+    timeout_seconds: 5.0
+    max_retries: 3
+    https_only: true
+    default_events:
+      - council.complete
+      - council.error
 
   observability:
     log_escalations: true
@@ -535,6 +557,7 @@ The gateway layer provides an abstraction over LLM API requests with multiple ga
 | `OpenRouterGateway` | Routes through OpenRouter | 100+ models, single API key |
 | `RequestyGateway` | Routes through Requesty | BYOK support, analytics |
 | `DirectGateway` | Direct provider APIs | Anthropic, OpenAI, Google |
+| `OllamaGateway` | Local LLMs via Ollama | Air-gapped, cost-free, privacy-first |
 
 **Core Features:**
 - **Circuit Breaker**: Prevents cascading failures (CLOSED → OPEN → HALF_OPEN → CLOSED)
@@ -667,6 +690,176 @@ When Not Diamond is unavailable, the system gracefully falls back to heuristic-b
 
 The triage layer is currently **opt-in** (default: disabled) for backward compatibility.
 
+### Local LLM Support (ADR-025)
+
+Run council deliberations entirely on local hardware using Ollama:
+
+```bash
+# Install with Ollama support
+pip install "llm-council-core[ollama]"
+
+# Start Ollama (if not already running)
+ollama serve
+
+# Pull a model
+ollama pull llama3.2
+```
+
+**Use local models in your council:**
+
+```bash
+# Mix local and cloud models
+export LLM_COUNCIL_MODELS="ollama/llama3.2,openai/gpt-4o,anthropic/claude-3-5-sonnet"
+
+# Or use only local models (air-gapped mode)
+export LLM_COUNCIL_MODELS="ollama/llama3.2,ollama/mistral,ollama/codellama"
+export LLM_COUNCIL_CHAIRMAN="ollama/llama3.2"
+```
+
+**Hardware Requirements:**
+
+| Profile | Hardware | Models | Use Case |
+|---------|----------|--------|----------|
+| Minimum | 8+ core CPU, 16GB RAM | 7B quantized | Dev/testing |
+| Recommended | M-series Pro, 32GB unified | 7B-13B | Small council |
+| Professional | 2x RTX 4090, 64GB+ | 70B quantized | Production |
+| Enterprise | Mac Studio 64GB+ | Multiple 70B | Air-gapped |
+
+**Quality Degradation Notice**: Local models typically have reduced capabilities compared to cloud-hosted frontier models. The gateway includes quality notices in responses to inform users when local models are used.
+
+**Configuration:**
+
+```bash
+# Ollama endpoint (default: http://localhost:11434)
+export LLM_COUNCIL_OLLAMA_BASE_URL=http://localhost:11434
+
+# Timeout for local models (default: 120s - first load can be slow)
+export LLM_COUNCIL_OLLAMA_TIMEOUT=120.0
+```
+
+### Webhook Notifications (ADR-025)
+
+Receive real-time notifications as the council deliberates:
+
+```python
+from llm_council.webhooks import WebhookConfig, WebhookDispatcher, WebhookPayload
+
+# Configure webhook endpoint
+config = WebhookConfig(
+    url="https://your-server.com/webhook",
+    events=["council.complete", "council.error"],
+    secret="your-hmac-secret"  # Optional, for signature verification
+)
+
+# Dispatch events (used internally by council)
+dispatcher = WebhookDispatcher()
+result = await dispatcher.dispatch(config, payload)
+```
+
+**Event Types:**
+
+| Event | Description | Payload |
+|-------|-------------|---------|
+| `council.deliberation_start` | Council begins | request_id, models |
+| `council.stage1.complete` | All initial responses received | response_count |
+| `model.vote_cast` | A model submitted rankings | voter, ranking |
+| `council.stage2.complete` | All rankings complete | aggregate_rankings |
+| `council.complete` | Final answer ready | stage3_response, duration_ms |
+| `council.error` | Error occurred | error, partial_results |
+
+**HMAC Signature Verification:**
+
+Webhooks are signed using HMAC-SHA256 for security:
+
+```python
+from llm_council.webhooks import verify_webhook_request
+
+# Verify incoming webhook (in your server)
+is_valid = verify_webhook_request(
+    payload=request.body,
+    headers=request.headers,
+    secret="your-hmac-secret"
+)
+```
+
+Headers included:
+- `X-Council-Signature`: `sha256=<hex-digest>`
+- `X-Council-Timestamp`: Unix timestamp
+- `X-Council-Version`: `1.0`
+
+**Configuration:**
+
+```bash
+# Webhook timeout (default: 5s)
+export LLM_COUNCIL_WEBHOOK_TIMEOUT=5.0
+
+# Max retry attempts (default: 3)
+export LLM_COUNCIL_WEBHOOK_RETRIES=3
+
+# Require HTTPS (except localhost) - default: true
+export LLM_COUNCIL_WEBHOOK_HTTPS_ONLY=true
+```
+
+### SSE Streaming (ADR-025)
+
+Stream council events in real-time using Server-Sent Events.
+
+**Built-in HTTP Server:**
+
+The library includes a built-in HTTP server with SSE streaming:
+
+```bash
+# Install with HTTP server support
+pip install "llm-council-core[http]"
+
+# Start the server
+llm-council serve
+```
+
+The SSE endpoint is available at `GET /v1/council/stream`:
+
+```bash
+# Stream council deliberation
+curl -N "http://localhost:8000/v1/council/stream?prompt=What+is+AI"
+```
+
+**Custom Integration:**
+
+For custom FastAPI/Starlette applications:
+
+```python
+from llm_council.webhooks import (
+    council_event_generator,
+    SSE_CONTENT_TYPE,
+    get_sse_headers
+)
+
+# In your FastAPI/Starlette endpoint
+@app.get("/v1/council/stream")
+async def stream_council(prompt: str):
+    return StreamingResponse(
+        council_event_generator(prompt, models=None, api_key=None),
+        media_type=SSE_CONTENT_TYPE,
+        headers=get_sse_headers()
+    )
+```
+
+**Client-side (JavaScript):**
+
+```javascript
+const source = new EventSource('/v1/council/stream?prompt=...');
+
+source.addEventListener('council.deliberation_start', (e) => {
+  console.log('Started:', JSON.parse(e.data));
+});
+
+source.addEventListener('council.complete', (e) => {
+  const result = JSON.parse(e.data);
+  console.log('Final answer:', result.stage3_response);
+  source.close();
+});
+```
+
 ### All Environment Variables
 
 #### Gateway Configuration (ADR-023)
@@ -680,6 +873,22 @@ The triage layer is currently **opt-in** (default: disabled) for backward compat
 | `GOOGLE_API_KEY` | Google API key | Required for Direct gateway (Google) |
 | `LLM_COUNCIL_DEFAULT_GATEWAY` | Default gateway (openrouter/requesty/direct) | openrouter |
 | `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker | false |
+
+#### Ollama Configuration (ADR-025)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LLM_COUNCIL_OLLAMA_BASE_URL` | Ollama API endpoint | http://localhost:11434 |
+| `LLM_COUNCIL_OLLAMA_TIMEOUT` | Timeout for Ollama requests (seconds) | 120.0 |
+| `LLM_COUNCIL_USE_LITELLM` | Enable LiteLLM wrapper for Ollama | true |
+
+#### Webhook Configuration (ADR-025)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LLM_COUNCIL_WEBHOOK_TIMEOUT` | Webhook POST timeout (seconds) | 5.0 |
+| `LLM_COUNCIL_WEBHOOK_RETRIES` | Max retry attempts | 3 |
+| `LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` | Require HTTPS (except localhost) | true |
 
 #### Council Configuration
 

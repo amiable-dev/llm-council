@@ -32,7 +32,7 @@ import os
 import re
 from dataclasses import field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -184,6 +184,37 @@ class GatewayProviderConfig(BaseModel):
     byok: Optional[Dict[str, str]] = None
 
 
+class OllamaProviderConfig(BaseModel):
+    """Configuration for Ollama provider (ADR-025a).
+
+    Lives inside gateways.providers.ollama per council decision.
+    Extends GatewayProviderConfig with Ollama-specific settings.
+    """
+
+    enabled: bool = True
+    base_url: str = Field(default="http://localhost:11434")
+    timeout_seconds: float = Field(default=120.0, ge=1.0, le=3600.0)
+    hardware_profile: Optional[
+        Literal["minimum", "recommended", "professional", "enterprise"]
+    ] = None
+
+
+class WebhookConfig(BaseModel):
+    """Configuration for webhook notifications (ADR-025a).
+
+    Top-level system service (like ObservabilityConfig).
+    Note: url and secret are runtime-only, not stored in config.
+    """
+
+    enabled: bool = False  # Opt-in
+    timeout_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
+    max_retries: int = Field(default=3, ge=0, le=10)
+    https_only: bool = True
+    default_events: List[str] = Field(
+        default_factory=lambda: ["council.complete", "council.error"]
+    )
+
+
 class FallbackConfig(BaseModel):
     """Configuration for gateway fallback behavior."""
 
@@ -201,22 +232,36 @@ class GatewayConfig(BaseModel):
     """Configuration for gateway routing (ADR-023, Layer 4)."""
 
     default: str = Field(default="openrouter")
-    providers: Dict[str, GatewayProviderConfig] = Field(default_factory=dict)
+    providers: Dict[str, Union[GatewayProviderConfig, OllamaProviderConfig]] = Field(
+        default_factory=dict
+    )
     model_routing: Dict[str, str] = Field(default_factory=dict)
     fallback: FallbackConfig = Field(default_factory=FallbackConfig)
 
     @field_validator("default")
     @classmethod
     def validate_gateway_name(cls, v: str) -> str:
-        valid_gateways = {"openrouter", "requesty", "direct", "auto"}
+        valid_gateways = {"openrouter", "requesty", "direct", "auto", "ollama"}
         if v not in valid_gateways:
             raise ValueError(f"invalid gateway '{v}', must be one of {valid_gateways}")
         return v
 
+    @model_validator(mode="before")
+    @classmethod
+    def convert_ollama_provider(cls, data: Any) -> Any:
+        """Convert ollama provider dict to OllamaProviderConfig."""
+        if isinstance(data, dict) and "providers" in data:
+            providers = data.get("providers", {})
+            if isinstance(providers, dict) and "ollama" in providers:
+                ollama_data = providers["ollama"]
+                if isinstance(ollama_data, dict) and not isinstance(ollama_data, OllamaProviderConfig):
+                    providers["ollama"] = OllamaProviderConfig(**ollama_data)
+        return data
+
     @model_validator(mode="after")
     def ensure_default_providers(self) -> "GatewayConfig":
         """Ensure all standard gateway providers exist."""
-        default_providers = {
+        default_providers: Dict[str, Union[GatewayProviderConfig, OllamaProviderConfig]] = {
             "openrouter": GatewayProviderConfig(
                 enabled=True,
                 base_url="https://openrouter.ai/api/v1/chat/completions",
@@ -226,6 +271,11 @@ class GatewayConfig(BaseModel):
                 base_url="https://router.requesty.ai/v1/chat/completions",
             ),
             "direct": GatewayProviderConfig(enabled=True),
+            "ollama": OllamaProviderConfig(
+                enabled=True,
+                base_url="http://localhost:11434",
+                timeout_seconds=120.0,
+            ),
         }
         for name, provider in default_providers.items():
             if name not in self.providers:
@@ -269,6 +319,7 @@ class UnifiedConfig(BaseModel):
     gateways: GatewayConfig = Field(default_factory=GatewayConfig)
     credentials: CredentialsConfig = Field(default_factory=CredentialsConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    webhooks: WebhookConfig = Field(default_factory=WebhookConfig)
 
     def get_tier_contract(self, tier: str) -> TierContract:
         """Get TierContract for a specific tier.
@@ -491,6 +542,25 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     not_diamond_key = os.getenv("NOT_DIAMOND_API_KEY")
     if not_diamond_key:
         config_dict.setdefault("credentials", {})["not_diamond"] = not_diamond_key
+
+    # Ollama overrides (ADR-025a)
+    ollama_base_url = os.getenv("LLM_COUNCIL_OLLAMA_BASE_URL")
+    if ollama_base_url:
+        config_dict.setdefault("gateways", {}).setdefault("providers", {}).setdefault("ollama", {})["base_url"] = ollama_base_url
+    ollama_timeout = os.getenv("LLM_COUNCIL_OLLAMA_TIMEOUT")
+    if ollama_timeout:
+        config_dict.setdefault("gateways", {}).setdefault("providers", {}).setdefault("ollama", {})["timeout_seconds"] = float(ollama_timeout)
+
+    # Webhook overrides (ADR-025a)
+    webhooks_enabled = os.getenv("LLM_COUNCIL_WEBHOOKS_ENABLED")
+    if webhooks_enabled:
+        config_dict.setdefault("webhooks", {})["enabled"] = webhooks_enabled.lower() in ("true", "1", "yes")
+    webhook_timeout = os.getenv("LLM_COUNCIL_WEBHOOK_TIMEOUT")
+    if webhook_timeout:
+        config_dict.setdefault("webhooks", {})["timeout_seconds"] = float(webhook_timeout)
+    webhook_retries = os.getenv("LLM_COUNCIL_WEBHOOK_RETRIES")
+    if webhook_retries:
+        config_dict.setdefault("webhooks", {})["max_retries"] = int(webhook_retries)
 
     return UnifiedConfig(**config_dict)
 
