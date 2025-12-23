@@ -101,8 +101,8 @@ DEFAULT_TIER_MODEL_POOLS = {
     "reasoning": [
         "openai/gpt-5.2-pro",
         "anthropic/claude-opus-4.5",  # Fixed: was claude-opus-4-5-20250514 (400)
-        "openai/o1",  # Fixed: was o1-preview (404)
-        "deepseek/deepseek-r1",
+        "google/gemini-3-pro-preview",  # Fixed: was o1-preview (404)
+        "x-ai/grok-4.1-fast",
     ],
 }
 
