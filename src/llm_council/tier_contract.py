@@ -2,10 +2,14 @@
 
 Defines the contract for each confidence tier, including timeouts, model pools,
 and execution policies. Created per council consultation request.
+
+ADR-026 Extension: When model intelligence is enabled, uses dynamic model
+selection via select_tier_models() instead of static TIER_MODEL_POOLS.
 """
 
+import os
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .config import TIER_MODEL_POOLS, get_tier_timeout
 
@@ -49,11 +53,42 @@ class TierContract:
     override_policy: Dict[str, bool]
 
 
-def create_tier_contract(tier: str) -> TierContract:
+def _is_model_intelligence_enabled() -> bool:
+    """Check if model intelligence (dynamic selection) is enabled."""
+    value = os.environ.get("LLM_COUNCIL_MODEL_INTELLIGENCE", "").lower()
+    return value in {"true", "1", "yes", "on"}
+
+
+def _get_allowed_models(tier: str, task_domain: Optional[str] = None) -> List[str]:
+    """Get allowed models for a tier, using dynamic selection if enabled.
+
+    Args:
+        tier: Confidence tier
+        task_domain: Optional domain hint for selection
+
+    Returns:
+        List of model IDs
+    """
+    if _is_model_intelligence_enabled():
+        # Lazy import to avoid circular dependencies
+        from .metadata.selection import select_tier_models
+        return select_tier_models(tier=tier, task_domain=task_domain)
+
+    # Fall back to static pools
+    return TIER_MODEL_POOLS[tier]
+
+
+def create_tier_contract(
+    tier: str,
+    task_domain: Optional[str] = None,
+) -> TierContract:
     """Factory function to create a TierContract from a confidence tier.
 
     Args:
         tier: Confidence level ('quick', 'balanced', 'high', 'reasoning')
+        task_domain: Optional domain hint for model selection (e.g., 'coding',
+                     'creative', 'reasoning'). Used when model intelligence is
+                     enabled (ADR-026).
 
     Returns:
         TierContract with appropriate defaults for the tier
@@ -107,6 +142,9 @@ def create_tier_contract(tier: str) -> TierContract:
 
     config = tier_configs[tier_lower]
 
+    # Get allowed models - uses dynamic selection if intelligence enabled (ADR-026)
+    allowed_models = _get_allowed_models(tier_lower, task_domain)
+
     return TierContract(
         tier=tier_lower,
         deadline_ms=deadline_ms,
@@ -115,7 +153,7 @@ def create_tier_contract(tier: str) -> TierContract:
         max_attempts=config["max_attempts"],
         requires_peer_review=config["requires_peer_review"],
         requires_verifier=config["requires_verifier"],
-        allowed_models=TIER_MODEL_POOLS[tier_lower],
+        allowed_models=allowed_models,
         aggregator_model=TIER_AGGREGATORS[tier_lower],
         override_policy=config["override_policy"],
     )
