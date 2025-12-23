@@ -48,6 +48,7 @@ from .errors import (
 from .openrouter import OpenRouterGateway
 from .requesty import RequestyGateway
 from .direct import DirectGateway
+from .ollama import OllamaGateway, QualityDegradationNotice
 from .circuit_breaker import CircuitBreaker, CircuitState
 from .router import GatewayRouter
 
@@ -77,6 +78,8 @@ __all__ = [
     "OpenRouterGateway",
     "RequestyGateway",
     "DirectGateway",
+    "OllamaGateway",
+    "QualityDegradationNotice",
     # Circuit Breaker
     "CircuitBreaker",
     "CircuitState",

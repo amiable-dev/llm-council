@@ -225,3 +225,151 @@ class TestStatelessDesign:
 
         # No session cookies should be set
         assert "set-cookie" not in response.headers
+
+
+class TestWebhookIntegration:
+    """Tests for webhook parameter support in HTTP API (Issue #76)."""
+
+    def test_accepts_webhook_url_parameter(self):
+        """CouncilRequest should accept webhook_url parameter."""
+        from llm_council.http_server import app
+
+        mock_result = ([], [], {}, {})
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
+            mock.return_value = mock_result
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={
+                    "prompt": "test",
+                    "api_key": "sk-test",
+                    "webhook_url": "https://example.com/webhook",
+                },
+            )
+
+            assert response.status_code == 200
+
+    def test_accepts_webhook_events_parameter(self):
+        """CouncilRequest should accept webhook_events parameter."""
+        from llm_council.http_server import app
+
+        mock_result = ([], [], {}, {})
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
+            mock.return_value = mock_result
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={
+                    "prompt": "test",
+                    "api_key": "sk-test",
+                    "webhook_url": "https://example.com/webhook",
+                    "webhook_events": ["council.complete", "council.error"],
+                },
+            )
+
+            assert response.status_code == 200
+
+    def test_accepts_webhook_secret_parameter(self):
+        """CouncilRequest should accept webhook_secret parameter."""
+        from llm_council.http_server import app
+
+        mock_result = ([], [], {}, {})
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
+            mock.return_value = mock_result
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={
+                    "prompt": "test",
+                    "api_key": "sk-test",
+                    "webhook_url": "https://example.com/webhook",
+                    "webhook_secret": "my-hmac-secret",
+                },
+            )
+
+            assert response.status_code == 200
+
+    def test_webhook_config_passed_to_council(self):
+        """Webhook config should be passed to run_full_council."""
+        from llm_council.http_server import app
+
+        mock_result = ([], [], {}, {})
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
+            mock.return_value = mock_result
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={
+                    "prompt": "test",
+                    "api_key": "sk-test",
+                    "webhook_url": "https://example.com/webhook",
+                    "webhook_events": ["council.complete"],
+                    "webhook_secret": "secret123",
+                },
+            )
+
+            assert response.status_code == 200
+
+            # Verify webhook_config was passed
+            mock.assert_called_once()
+            call_kwargs = mock.call_args.kwargs
+            assert "webhook_config" in call_kwargs
+            webhook_config = call_kwargs["webhook_config"]
+            assert webhook_config.url == "https://example.com/webhook"
+            assert webhook_config.events == ["council.complete"]
+            assert webhook_config.secret == "secret123"
+
+    def test_webhook_url_without_events_uses_defaults(self):
+        """If webhook_url provided without events, use default events."""
+        from llm_council.http_server import app
+
+        mock_result = ([], [], {}, {})
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
+            mock.return_value = mock_result
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={
+                    "prompt": "test",
+                    "api_key": "sk-test",
+                    "webhook_url": "https://example.com/webhook",
+                },
+            )
+
+            assert response.status_code == 200
+
+            # Verify default events were used
+            call_kwargs = mock.call_args.kwargs
+            webhook_config = call_kwargs.get("webhook_config")
+            assert webhook_config is not None
+            # Default events should include at least council.complete
+            assert "council.complete" in webhook_config.events
+
+    def test_no_webhook_config_when_url_not_provided(self):
+        """If no webhook_url, webhook_config should be None."""
+        from llm_council.http_server import app
+
+        mock_result = ([], [], {}, {})
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
+            mock.return_value = mock_result
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={
+                    "prompt": "test",
+                    "api_key": "sk-test",
+                },
+            )
+
+            assert response.status_code == 200
+
+            # webhook_config should be None or not passed
+            call_kwargs = mock.call_args.kwargs
+            webhook_config = call_kwargs.get("webhook_config")
+            assert webhook_config is None

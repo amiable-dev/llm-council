@@ -664,3 +664,151 @@ def infer_tier_from_models(models: list) -> str:
 
 _use_gateway_env = os.getenv("LLM_COUNCIL_USE_GATEWAY", "false").lower()
 USE_GATEWAY_LAYER = _use_gateway_env in ("true", "1", "yes")
+
+
+# =============================================================================
+# ADR-025: Ollama Local LLM Configuration
+# =============================================================================
+# Support for local LLM inference via Ollama using LiteLLM as the adapter.
+# This enables air-gapped deployments, cost-free testing, and privacy-first
+# deployments without external API dependencies.
+#
+# Environment variables:
+#   LLM_COUNCIL_OLLAMA_BASE_URL=http://localhost:11434  - Ollama endpoint
+#   LLM_COUNCIL_USE_LITELLM=true|false                  - Enable LiteLLM wrapper
+#   LLM_COUNCIL_OLLAMA_TIMEOUT=120.0                    - Default timeout (seconds)
+#
+# Model format: "ollama/<model-name>" (e.g., "ollama/llama3.2", "ollama/qwen2.5:14b")
+
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_OLLAMA_TIMEOUT = 120.0  # Local models can be slow on first load
+
+# Ollama base URL - DEPRECATED: use unified_config.gateways.providers.ollama.base_url
+# Kept as _LEGACY_* for backwards compat; access via OLLAMA_BASE_URL triggers __getattr__
+_LEGACY_OLLAMA_BASE_URL = os.getenv("LLM_COUNCIL_OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL)
+
+# LiteLLM wrapper enabled - priority: env var > default
+_use_litellm_env = os.getenv("LLM_COUNCIL_USE_LITELLM", "true").lower()
+USE_LITELLM = _use_litellm_env in ("true", "1", "yes")
+
+# Ollama timeout - DEPRECATED: use unified_config.gateways.providers.ollama.timeout_seconds
+_ollama_timeout_env = os.getenv("LLM_COUNCIL_OLLAMA_TIMEOUT")
+_LEGACY_OLLAMA_TIMEOUT = float(_ollama_timeout_env) if _ollama_timeout_env else DEFAULT_OLLAMA_TIMEOUT
+
+# Hardware profiles for deployment guidance (per ADR-025)
+# These are recommendations, not enforced requirements
+OLLAMA_HARDWARE_PROFILES = {
+    "minimum": {
+        "description": "8+ core CPU, 16GB RAM, SSD",
+        "models": ["7b-q4"],
+        "use_case": "Development/testing only",
+    },
+    "recommended": {
+        "description": "Apple M-series Pro/Max, 32GB unified memory",
+        "models": ["7b", "13b-q4"],
+        "use_case": "Small council (2-3 local models)",
+    },
+    "professional": {
+        "description": "2x RTX 4090/5090, 64GB+ system RAM",
+        "models": ["70b-q4", "70b"],
+        "use_case": "Production single-tenant",
+    },
+    "enterprise": {
+        "description": "Mac Studio 64GB+ / multi-GPU workstation",
+        "models": ["70b concurrent", "multiple 13b"],
+        "use_case": "Air-gapped production, multi-model council",
+    },
+}
+
+
+# =============================================================================
+# ADR-025: Webhook Configuration
+# =============================================================================
+# Webhook delivery settings for external integrations (n8n, Zapier, etc.).
+#
+# Environment variables:
+#   LLM_COUNCIL_WEBHOOK_TIMEOUT=5.0      - POST timeout in seconds
+#   LLM_COUNCIL_WEBHOOK_RETRIES=3        - Max retry attempts
+#   LLM_COUNCIL_WEBHOOK_HTTPS_ONLY=true  - Require HTTPS (except localhost)
+
+DEFAULT_WEBHOOK_TIMEOUT = 5.0
+DEFAULT_WEBHOOK_MAX_RETRIES = 3
+DEFAULT_WEBHOOK_HTTPS_ONLY = True
+
+# Webhook timeout - DEPRECATED: use unified_config.webhooks.timeout_seconds
+_webhook_timeout_env = os.getenv("LLM_COUNCIL_WEBHOOK_TIMEOUT")
+_LEGACY_WEBHOOK_TIMEOUT = float(_webhook_timeout_env) if _webhook_timeout_env else DEFAULT_WEBHOOK_TIMEOUT
+
+# Webhook max retries - DEPRECATED: use unified_config.webhooks.max_retries
+_webhook_retries_env = os.getenv("LLM_COUNCIL_WEBHOOK_RETRIES")
+_LEGACY_WEBHOOK_MAX_RETRIES = int(_webhook_retries_env) if _webhook_retries_env else DEFAULT_WEBHOOK_MAX_RETRIES
+
+# Webhook HTTPS only - DEPRECATED: use unified_config.webhooks.https_only
+_webhook_https_env = os.getenv("LLM_COUNCIL_WEBHOOK_HTTPS_ONLY", "true").lower()
+_LEGACY_WEBHOOK_HTTPS_ONLY = _webhook_https_env in ("true", "1", "yes")
+
+
+# =============================================================================
+# ADR-025a: Deprecation Bridge to UnifiedConfig
+# =============================================================================
+# Per council recommendation, these constants are deprecated in favor of
+# unified_config.py. Access will emit DeprecationWarning while returning
+# values from the new configuration system.
+#
+# Migration:
+#   OLD: from llm_council.config import OLLAMA_BASE_URL
+#   NEW: from llm_council.unified_config import get_config
+#        config = get_config()
+#        url = config.gateways.providers["ollama"].base_url
+
+# Track which attributes have already warned (avoid repeated warnings)
+_deprecated_warned: set = set()
+
+# Mapping from deprecated names to unified_config paths
+_DEPRECATED_ATTRS = {
+    "OLLAMA_BASE_URL": "gateways.providers.ollama.base_url",
+    "OLLAMA_TIMEOUT": "gateways.providers.ollama.timeout_seconds",
+    "WEBHOOK_TIMEOUT": "webhooks.timeout_seconds",
+    "WEBHOOK_MAX_RETRIES": "webhooks.max_retries",
+    "WEBHOOK_HTTPS_ONLY": "webhooks.https_only",
+}
+
+
+def _get_deprecated_value(attr_name: str):
+    """Get value from unified_config for a deprecated attribute."""
+    from .unified_config import get_config
+
+    config = get_config()
+    path = _DEPRECATED_ATTRS[attr_name]
+
+    # Navigate the path
+    obj = config
+    for part in path.split("."):
+        if hasattr(obj, part):
+            obj = getattr(obj, part)
+        elif isinstance(obj, dict) and part in obj:
+            obj = obj[part]
+        else:
+            return None
+    return obj
+
+
+def __getattr__(name: str):
+    """Module-level __getattr__ for deprecation warnings (PEP 562)."""
+    import warnings
+
+    if name in _DEPRECATED_ATTRS:
+        # Emit deprecation warning (once per attribute per session)
+        if name not in _deprecated_warned:
+            _deprecated_warned.add(name)
+            new_path = _DEPRECATED_ATTRS[name]
+            warnings.warn(
+                f"config.{name} is deprecated. Use unified_config: "
+                f"get_config().{new_path}",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        # Return value from unified_config
+        return _get_deprecated_value(name)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
