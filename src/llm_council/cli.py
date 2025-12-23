@@ -11,6 +11,8 @@ Usage:
 import argparse
 import sys
 
+from llm_council import __version__
+
 # Optional keyring import - may not be installed
 keyring = None
 try:
@@ -36,6 +38,11 @@ def main():
     parser = argparse.ArgumentParser(
         prog="llm-council",
         description="LLM Council - Multi-model deliberation system",
+    )
+    parser.add_argument(
+        "--version", "-V",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     subparsers = parser.add_subparsers(dest="command")
 
