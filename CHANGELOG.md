@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.3] - 2025-12-23
+
+### Added
+
+- **ADR-025: Future Integration Capabilities**: Strategic roadmap for 2025+ integrations
+  - Industry landscape analysis (Agentic AI, MCP adoption, Local LLM trends)
+  - Council-reviewed priorities for OllamaGateway, webhooks, streaming API
+  - Consensus: Native OllamaGateway as top priority for privacy/compliance
+  - Agentic positioning as "agent jury" for multi-agent consensus
+
+- **CLI Version Flag**: `llm-council --version` / `llm-council -V`
+  - Displays installed package version
+
+### Documentation
+
+- Comprehensive industry analysis with December 2025 trends
+- Council review with unanimous verdicts on all 5 key questions
+- Phased implementation roadmap (3-6 months)
+- Hardware requirements for fully local council deployment
+
 ## [0.12.2] - 2025-12-22
 
 ### Added
