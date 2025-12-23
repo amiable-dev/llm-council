@@ -988,6 +988,57 @@ source.addEventListener('council.complete', (e) => {
 });
 ```
 
+### Offline Mode (ADR-026)
+
+Run LLM Council without any external metadata calls using the bundled model registry:
+
+```bash
+# Enable offline mode
+export LLM_COUNCIL_OFFLINE=true
+```
+
+When offline mode is enabled:
+- Uses `StaticRegistryProvider` exclusively with 31 bundled models
+- No external API calls for metadata (context windows, pricing, capabilities)
+- All core council operations continue to work
+- Unknown models use safe defaults (4096 context window)
+
+This implements the "Sovereign Orchestrator" philosophy: the system must function as a complete, independent utility without external dependencies.
+
+**Bundled Models (31 total):**
+
+| Provider | Count | Examples |
+|----------|-------|----------|
+| OpenAI | 7 | gpt-4o, gpt-4o-mini, o1, o1-preview, o1-mini, o3-mini, gpt-5.2-pro |
+| Anthropic | 5 | claude-opus-4.5, claude-3-5-sonnet, claude-3-5-haiku |
+| Google | 5 | gemini-3-pro, gemini-2.5-pro, gemini-2.0-flash, gemini-1.5-pro |
+| xAI | 2 | grok-4, grok-4.1-fast |
+| DeepSeek | 2 | deepseek-r1, deepseek-chat |
+| Meta | 2 | llama-3.3-70b, llama-3.1-405b |
+| Mistral | 2 | mistral-large-2411, mistral-medium |
+| Ollama | 6 | llama3.2, mistral, qwen2.5:14b, codellama, phi3 |
+
+**Model Metadata API:**
+
+```python
+from llm_council.metadata import get_provider
+
+# Get the metadata provider
+provider = get_provider()
+
+# Query model information
+info = provider.get_model_info("openai/gpt-4o")
+print(f"Context window: {info.context_window}")  # 128000
+print(f"Quality tier: {info.quality_tier}")      # frontier
+
+# Check capabilities
+window = provider.get_context_window("anthropic/claude-opus-4.5")  # 200000
+supports = provider.supports_reasoning("openai/o1")  # True
+
+# List all available models
+models = provider.list_available_models()  # 31 models
+```
+
 ### All Environment Variables
 
 #### Gateway Configuration (ADR-023)

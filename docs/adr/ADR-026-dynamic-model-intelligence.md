@@ -1,10 +1,11 @@
 # ADR-026: Dynamic Model Intelligence and Benchmark-Driven Selection
 
-**Status:** CONDITIONAL APPROVAL (Pending Abstraction Layer)
+**Status:** APPROVED (Blocking Conditions Implemented)
 **Date:** 2025-12-23
 **Decision Makers:** Engineering, Architecture
 **Council Review:** 2025-12-23 (Strategic + Technical Reviews)
 **Layer Assignment:** Cross-cutting (L1-L4 integration)
+**Implementation:** 2025-12-23 (Blocking Conditions 1-3)
 
 ---
 
@@ -28,11 +29,42 @@ The council unanimously adopts this architectural principle:
 
 | # | Condition | Status | Priority |
 |---|-----------|--------|----------|
-| 1 | **Add `ModelMetadataProvider` abstraction interface** | 📋 REQUIRED | **BLOCKING** |
-| 2 | **Implement `StaticRegistryProvider` (30+ models)** | 📋 REQUIRED | **BLOCKING** |
-| 3 | **Add offline mode (`LLM_COUNCIL_OFFLINE=true`)** | 📋 REQUIRED | **BLOCKING** |
-| 4 | **Evaluate LiteLLM as unified abstraction** | 📋 REQUIRED | High |
+| 1 | **Add `ModelMetadataProvider` abstraction interface** | ✅ COMPLETED | **BLOCKING** |
+| 2 | **Implement `StaticRegistryProvider` (30+ models)** | ✅ COMPLETED (31 models) | **BLOCKING** |
+| 3 | **Add offline mode (`LLM_COUNCIL_OFFLINE=true`)** | ✅ COMPLETED | **BLOCKING** |
+| 4 | **Evaluate LiteLLM as unified abstraction** | ✅ COMPLETED (as fallback) | High |
 | 5 | Document degraded vs. enhanced feature matrix | 📋 Required | Medium |
+
+### Implementation Notes (2025-12-23)
+
+The blocking conditions were implemented using TDD (Test-Driven Development) with 86 passing tests.
+
+**Module Structure:** `src/llm_council/metadata/`
+
+| File | Purpose |
+|------|---------|
+| `types.py` | `ModelInfo` frozen dataclass, `QualityTier` enum, `Modality` enum |
+| `protocol.py` | `MetadataProvider` `@runtime_checkable` Protocol |
+| `static_registry.py` | `StaticRegistryProvider` with YAML + LiteLLM fallback |
+| `litellm_adapter.py` | Lazy LiteLLM import for metadata extraction |
+| `offline.py` | `is_offline_mode()` and `check_offline_mode_startup()` |
+| `__init__.py` | `get_provider()` singleton factory, module exports |
+
+**Bundled Registry:** `src/llm_council/models/registry.yaml`
+
+31 models from 8 providers:
+- OpenAI (7): gpt-4o, gpt-4o-mini, gpt-5.2-pro, o1, o1-preview, o1-mini, o3-mini
+- Anthropic (5): claude-opus-4.5, claude-3-5-sonnet, claude-3-5-haiku, claude-3-opus, claude-3-sonnet
+- Google (5): gemini-3-pro-preview, gemini-2.5-pro, gemini-2.0-flash, gemini-1.5-pro, gemini-1.5-flash
+- xAI (2): grok-4, grok-4.1-fast
+- DeepSeek (2): deepseek-r1, deepseek-chat
+- Meta (2): llama-3.3-70b, llama-3.1-405b
+- Mistral (2): mistral-large-2411, mistral-medium
+- Ollama (6): llama3.2, mistral, qwen2.5:14b, codellama, phi3, deepseek-r1:8b
+
+**LiteLLM Integration:** Used as fallback in the priority chain (local registry > LiteLLM > 4096 default). Lazy import prevents startup failures when LiteLLM is not installed.
+
+**GitHub Issues:** #89-#92 (all completed)
 
 ### Strategic Decision: Option C+D (Hybrid + Abstraction)
 
