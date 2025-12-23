@@ -1,0 +1,319 @@
+# Model Registry for LLM Council (ADR-026)
+#
+# This file provides offline-safe model metadata for the StaticRegistryProvider.
+# It is the primary data source when LLM_COUNCIL_OFFLINE=true.
+#
+# Schema:
+#   id: Full model identifier (required)
+#   context_window: Maximum context length in tokens (required)
+#   pricing: Dict with "prompt" and "completion" costs per 1K tokens
+#   supported_parameters: List of supported API parameters
+#   modalities: List of input modalities (text, vision, audio)
+#   quality_tier: frontier | standard | economy | local
+
+version: "1.0"
+updated: "2025-12-23"
+
+models:
+  # ============================================================================
+  # OpenAI Models (7)
+  # ============================================================================
+  - id: "openai/gpt-4o"
+    context_window: 128000
+    pricing:
+      prompt: 0.0025
+      completion: 0.01
+    supported_parameters: ["temperature", "top_p", "tools", "json_mode"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "openai/gpt-4o-mini"
+    context_window: 128000
+    pricing:
+      prompt: 0.00015
+      completion: 0.0006
+    supported_parameters: ["temperature", "top_p", "tools", "json_mode"]
+    modalities: ["text", "vision"]
+    quality_tier: "economy"
+
+  - id: "openai/gpt-5.2-pro"
+    context_window: 256000
+    pricing:
+      prompt: 0.005
+      completion: 0.02
+    supported_parameters: ["temperature", "top_p", "tools", "json_mode", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "openai/o1"
+    context_window: 200000
+    pricing:
+      prompt: 0.015
+      completion: 0.06
+    supported_parameters: ["reasoning"]
+    modalities: ["text"]
+    quality_tier: "frontier"
+
+  - id: "openai/o1-preview"
+    context_window: 128000
+    pricing:
+      prompt: 0.015
+      completion: 0.06
+    supported_parameters: ["reasoning"]
+    modalities: ["text"]
+    quality_tier: "frontier"
+
+  - id: "openai/o1-mini"
+    context_window: 128000
+    pricing:
+      prompt: 0.003
+      completion: 0.012
+    supported_parameters: ["reasoning"]
+    modalities: ["text"]
+    quality_tier: "standard"
+
+  - id: "openai/o3-mini"
+    context_window: 200000
+    pricing:
+      prompt: 0.0011
+      completion: 0.0044
+    supported_parameters: ["reasoning"]
+    modalities: ["text"]
+    quality_tier: "standard"
+
+  # ============================================================================
+  # Anthropic Models (5)
+  # ============================================================================
+  - id: "anthropic/claude-opus-4.5"
+    context_window: 200000
+    pricing:
+      prompt: 0.015
+      completion: 0.075
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "anthropic/claude-3-5-sonnet-20241022"
+    context_window: 200000
+    pricing:
+      prompt: 0.003
+      completion: 0.015
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "anthropic/claude-3-5-haiku-20241022"
+    context_window: 200000
+    pricing:
+      prompt: 0.0008
+      completion: 0.004
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "economy"
+
+  - id: "anthropic/claude-3-opus-20240229"
+    context_window: 200000
+    pricing:
+      prompt: 0.015
+      completion: 0.075
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "anthropic/claude-3-sonnet-20240229"
+    context_window: 200000
+    pricing:
+      prompt: 0.003
+      completion: 0.015
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "standard"
+
+  # ============================================================================
+  # Google Models (5)
+  # ============================================================================
+  - id: "google/gemini-3-pro-preview"
+    context_window: 1000000
+    pricing:
+      prompt: 0.00125
+      completion: 0.005
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "google/gemini-2.5-pro-preview"
+    context_window: 1000000
+    pricing:
+      prompt: 0.00125
+      completion: 0.005
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "google/gemini-2.0-flash-001"
+    context_window: 1000000
+    pricing:
+      prompt: 0.0001
+      completion: 0.0004
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "economy"
+
+  - id: "google/gemini-1.5-pro"
+    context_window: 2000000
+    pricing:
+      prompt: 0.00125
+      completion: 0.005
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision", "audio"]
+    quality_tier: "frontier"
+
+  - id: "google/gemini-1.5-flash"
+    context_window: 1000000
+    pricing:
+      prompt: 0.000075
+      completion: 0.0003
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "economy"
+
+  # ============================================================================
+  # xAI Models (2)
+  # ============================================================================
+  - id: "x-ai/grok-4"
+    context_window: 131072
+    pricing:
+      prompt: 0.003
+      completion: 0.015
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "x-ai/grok-4.1-fast"
+    context_window: 131072
+    pricing:
+      prompt: 0.0005
+      completion: 0.002
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text"]
+    quality_tier: "economy"
+
+  # ============================================================================
+  # DeepSeek Models (2)
+  # ============================================================================
+  - id: "deepseek/deepseek-r1"
+    context_window: 128000
+    pricing:
+      prompt: 0.00055
+      completion: 0.00219
+    supported_parameters: ["temperature", "top_p", "reasoning"]
+    modalities: ["text"]
+    quality_tier: "frontier"
+
+  - id: "deepseek/deepseek-chat"
+    context_window: 128000
+    pricing:
+      prompt: 0.00014
+      completion: 0.00028
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "economy"
+
+  # ============================================================================
+  # Meta/Llama Models (2)
+  # ============================================================================
+  - id: "meta-llama/llama-3.3-70b-instruct"
+    context_window: 128000
+    pricing:
+      prompt: 0.00018
+      completion: 0.00018
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "standard"
+
+  - id: "meta-llama/llama-3.1-405b-instruct"
+    context_window: 128000
+    pricing:
+      prompt: 0.0018
+      completion: 0.0018
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "frontier"
+
+  # ============================================================================
+  # Mistral Models (2)
+  # ============================================================================
+  - id: "mistralai/mistral-large-2411"
+    context_window: 128000
+    pricing:
+      prompt: 0.002
+      completion: 0.006
+    supported_parameters: ["temperature", "top_p", "tools"]
+    modalities: ["text"]
+    quality_tier: "frontier"
+
+  - id: "mistralai/mistral-medium"
+    context_window: 32000
+    pricing:
+      prompt: 0.00275
+      completion: 0.0081
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "standard"
+
+  # ============================================================================
+  # Ollama Local Models (5)
+  # ============================================================================
+  - id: "ollama/llama3.2"
+    context_window: 128000
+    pricing:
+      prompt: 0
+      completion: 0
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "local"
+
+  - id: "ollama/llama3.2:7b"
+    context_window: 128000
+    pricing:
+      prompt: 0
+      completion: 0
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "local"
+
+  - id: "ollama/mistral"
+    context_window: 32000
+    pricing:
+      prompt: 0
+      completion: 0
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "local"
+
+  - id: "ollama/qwen2.5:14b"
+    context_window: 32000
+    pricing:
+      prompt: 0
+      completion: 0
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "local"
+
+  - id: "ollama/codellama"
+    context_window: 16384
+    pricing:
+      prompt: 0
+      completion: 0
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "local"
+
+  - id: "ollama/phi3"
+    context_window: 128000
+    pricing:
+      prompt: 0
+      completion: 0
+    supported_parameters: ["temperature", "top_p"]
+    modalities: ["text"]
+    quality_tier: "local"
