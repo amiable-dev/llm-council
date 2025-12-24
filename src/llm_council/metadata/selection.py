@@ -73,6 +73,14 @@ TIER_WEIGHTS: Dict[str, Dict[str, float]] = {
         "latency": 0.05,      # Speed not critical
         "cost": 0.05,         # Cost not a concern
     },
+    # Frontier tier: cutting-edge/preview models, quality above all else
+    "frontier": {
+        "quality": 0.70,      # Absolute best quality
+        "diversity": 0.15,    # Want variety of latest models
+        "availability": 0.10, # Accept some instability
+        "latency": 0.03,      # Speed least important
+        "cost": 0.02,         # Cost irrelevant for frontier
+    },
 }
 
 # Anti-herding configuration
