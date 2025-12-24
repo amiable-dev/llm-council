@@ -13,6 +13,12 @@ Usage:
     # Check effort level
     print(config.effort)  # ReasoningEffort.HIGH
     print(config.budget_tokens)  # 25600
+
+    # Track reasoning usage
+    from llm_council.reasoning import extract_reasoning_usage, aggregate_reasoning_usage
+
+    usage = extract_reasoning_usage(response, "openai/o1", budget=32000)
+    aggregated = aggregate_reasoning_usage([usage1, usage2, usage3])
 """
 
 from .types import (
@@ -21,10 +27,22 @@ from .types import (
     ReasoningEffort,
     should_apply_reasoning,
 )
+from .tracker import (
+    AggregatedUsage,
+    ReasoningUsage,
+    aggregate_reasoning_usage,
+    extract_reasoning_usage,
+)
 
 __all__ = [
+    # Types (types.py)
     "ReasoningEffort",
     "ReasoningConfig",
     "EFFORT_RATIOS",
     "should_apply_reasoning",
+    # Tracking (tracker.py)
+    "ReasoningUsage",
+    "AggregatedUsage",
+    "extract_reasoning_usage",
+    "aggregate_reasoning_usage",
 ]
