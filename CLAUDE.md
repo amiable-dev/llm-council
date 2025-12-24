@@ -57,10 +57,17 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `transform_api_model()`: Transforms API response to ModelInfo
 - **`selection.py`**: Tier selection algorithm (ADR-026 Phase 1)
   - `TIER_WEIGHTS`: Per-tier weight matrices (quick→latency, reasoning→quality)
+  - `QUALITY_TIER_SCORES`: QualityTier → float mapping (FRONTIER: 0.95, STANDARD: 0.75, ECONOMY: 0.55, LOCAL: 0.40)
+  - `COST_REFERENCE_HIGH`: Reference price for cost normalization (0.015 per 1K tokens)
   - `ModelCandidate`: Dataclass for model scoring
   - `apply_anti_herding_penalty()`: Penalizes models with >30% traffic
   - `select_with_diversity()`: Enforces provider diversity (min 2 providers)
   - `select_tier_models()`: Main entry point for dynamic selection
+  - **Metadata Integration Functions** (ADR-026 Phase 1 "Hollow" Fix):
+    - `_get_provider_safe()`: Get provider without crashing (returns None on failure)
+    - `_get_quality_score_from_metadata()`: Real QualityTier lookup (not regex)
+    - `_get_cost_score_from_metadata()`: Real pricing data (not regex)
+    - `_meets_context_requirement()`: Real context window filtering (not always True)
 - **`offline.py`**: Offline mode detection
   - `is_offline_mode()`: Checks `LLM_COUNCIL_OFFLINE` env var
 - **`__init__.py`**: `get_provider()` singleton factory

@@ -1,54 +1,59 @@
-# ADR-026 Implementation Gap Analysis
+# ADR-026 Implementation Gap Analysis (Re-Review)
 
-**Date:** 2025-12-23
+**Date:** 2025-12-24
 **Auditor:** Antigravity
-**Scope:** Codebase Review against ADR-026 (Dynamic Model Intelligence)
+**Scope:** Deep-Dive Codebase Review against ADR-026
 
 ## 1. Executive Summary
 
-**Status:** ⚠️ **PARTIALLY IMPLEMENTED**
+**Status:** ⚠️ **PARTIALLY IMPLEMENTED** (High Risk of Runtime Error)
 
-The "Blocking Conditions" required for approval (Sovereign Metadata Layer) are **fully implemented** and robust. However, the "Phase 1" dynamic features (Live OpenRouter Integration) are **completely missing**, despite the ADR implying they are part of the current release phase.
+A second, deeper review reveals a more nuanced state than "Missing". The "Sovereign" layer is perfect. The "Intelligence" layer exists but is incomplete ("Hollow"), and the "Reasoning" layer contains a **critical crash risk**.
 
-The system is currently in a safe, offline-capable state but lacks the dynamic intelligence promised by the ADR title.
+- **Blocking Conditions:** ✅ **COMPLETE** (Offline Safe)
+- **Phase 1 (Dynamic Intelligence):** ⚠️ **HOLLOW** (Wired but using static estimates)
+- **Phase 2 (Reasoning):** ❌ **BROKEN** (`reasoning.py` missing, import will crash)
+- **Phase 3 (Performance):** ✅ **COMPLETE** (Tracker implemented)
 
 ## 2. Detailed Verification
 
 ### A. Blocking Conditions (Sovereign Metadata)
-**Status:** ✅ **COMPLETE**
+**Status:** ✅ **Verified Complete**
+The system correctly prioritizes offline safety. `StaticRegistryProvider` and `registry.yaml` are robust.
 
-| Requirement | Evidence | Location |
-|-------------|----------|----------|
-| **Metadata Protocol** | `MetadataProvider` protocol exists | `src/llm_council/metadata/protocol.py` |
-| **Static Registry** | `StaticRegistryProvider` implemented | `src/llm_council/metadata/static_registry.py` |
-| **Offline Mode** | `LLM_COUNCIL_OFFLINE` logic exists | `src/llm_council/metadata/offline.py` |
-| **Bundled Data** | `registry.yaml` contains 30+ models | `src/llm_council/models/registry.yaml` |
-| **LiteLLM Fallback** | Adapter implemented & integrated | `src/llm_council/metadata/litellm_adapter.py` |
+### B. Phase 1: Dynamic Intelligence
+**Status:** ⚠️ **Hollow Implementation**
+The infrastructure exists but isn't fully "intelligent" yet.
 
-### B. Dynamic Intelligence (Phase 1)
-**Status:** ❌ **MISSING**
+| Component | Status | Finding |
+|-----------|--------|---------|
+| **OpenRouter Client** | ✅ Present | `src/llm_council/metadata/openrouter_client.py` |
+| **Provider Factory** | ✅ Present | `src/llm_council/metadata/__init__.py` |
+| **Selection Logic** | ⚠️ **Mocked** | `selection.py` uses `_estimate_quality_score` (hardcoded regex) instead of real metadata. |
+| **Context Awareness** | ❌ **TODO** | `_meets_context_requirement` has a `TODO` and returns `True` always. |
 
-The following components described in the ADR are absent:
+### C. Phase 2: Reasoning Parameters
+**Status:** ❌ **CRITICAL FAILURE**
 
-1.  **Dynamic Client:** No `src/llm_council/intelligence` directory.
-2.  **OpenRouter Client:** `src/llm_council/intelligence/openrouter.py` does not exist.
-3.  **Caching:** `ModelIntelligenceCache` is not implemented.
-4.  **Configuration:** `unified_config.py` has no `model_intelligence` section.
+The file `src/llm_council/tier_contract.py` attempts to import `ReasoningConfig` from `.reasoning` when intelligence is enabled:
+```python
+if _is_model_intelligence_enabled():
+    from .reasoning import ReasoningConfig  # <--- CRASH: File does not exist
+```
+**Impact:** Enabling `LLM_COUNCIL_MODEL_INTELLIGENCE=true` will cause the application to crash immediately.
 
-### C. Integration Points
-**Status:** ❌ **MISSING**
-
-The integration code examples in the ADR are not present in the codebase:
-
-1.  **Tier Selection:** `TierContract` (src/llm_council/tier_contract.py) still uses static `TIER_MODEL_POOLS` from `config.py`. It does NOT call `model_intelligence.select_tier_models()`.
-2.  **Routing:** No modifications to `not_diamond.py` or gateway logic to use dynamic metadata.
+### D. Phase 3: Internal Performance Tracker
+**Status:** ✅ **Verified Complete**
+Unexpectedly, this advanced phase is fully implemented in `src/llm_council/performance/`, including `tracker.py` and JSONL storage logic.
 
 ## 3. Discrepancy Findings
 
-The ADR states "Implementation: 2025-12-23 (Blocking Conditions 1-3)". It seems the team strictly interpreted this to *only* mean the blocking conditions, deferring the actual "Intelligence" features (Phase 1) to a later sprint, despite sections of the ADR implying Phase 1 was "APPROVED" for this release.
+The implementation is "front-heavy" (Metadata) and "back-heavy" (Performance Tracker), but the middle "Intelligence/Reasoning" layer is fragile.
+
+**Files Missing:** `src/llm_council/reasoning.py`
 
 ## 4. Recommendations
 
-1.  **Acknowledge Sovereignty Win:** The system is robustly offline-capable now, which was the Council's primary concern.
-2.  **Schedule Phase 1:** Create tickets to implement `src/llm_council/intelligence` and wire it into `unified_config.py` and `TierContract`.
-3.  **Update Configuration:** The `unified_config.py` schema needs to be updated to include the `model_intelligence` section defined in the ADR.
+1.  **Immediate Fix:** Create `src/llm_council/reasoning.py` to prevent crashes when intelligence is enabled.
+2.  **Fill the Hollow:** Update `src/llm_council/metadata/selection.py` to use actual data from `DynamicMetadataProvider` instead of regex estimates.
+3.  **Release Control:** Do NOT enable `LLM_COUNCIL_MODEL_INTELLIGENCE` by default until `reasoning.py` is fixed.

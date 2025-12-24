@@ -21,9 +21,25 @@ Example usage:
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
 from ..config import TIER_MODEL_POOLS
+from .types import QualityTier
+
+if TYPE_CHECKING:
+    from .protocol import MetadataProvider
+
+
+# Quality tier to numeric score mapping (ADR-026 Phase 1)
+QUALITY_TIER_SCORES: Dict[QualityTier, float] = {
+    QualityTier.FRONTIER: 0.95,
+    QualityTier.STANDARD: 0.75,
+    QualityTier.ECONOMY: 0.55,
+    QualityTier.LOCAL: 0.40,
+}
+
+# Cost normalization reference points (per 1K tokens)
+COST_REFERENCE_HIGH = 0.015  # Most expensive models (Claude Opus, o1)
 
 
 # Tier-specific weight matrices for model scoring
@@ -342,21 +358,131 @@ def _estimate_quality_score(model_id: str, tier: str) -> float:
     return 0.70  # Default
 
 
-def _meets_context_requirement(candidate: ModelCandidate, required: int) -> bool:
+def _get_provider_safe() -> Optional["MetadataProvider"]:
+    """Get metadata provider without crashing if unavailable.
+
+    Returns the singleton MetadataProvider instance, or None if
+    the provider cannot be imported or initialized.
+
+    This provides graceful degradation for selection algorithms -
+    if metadata is unavailable, callers can fall back to heuristics.
+
+    Returns:
+        MetadataProvider instance or None if unavailable
+    """
+    try:
+        from . import get_provider
+
+        return get_provider()
+    except Exception:
+        return None
+
+
+def _get_quality_score_from_metadata(
+    model_id: str,
+    provider: Optional["MetadataProvider"],
+) -> Optional[float]:
+    """Get quality score from real QualityTier metadata.
+
+    Converts QualityTier to a numeric score using QUALITY_TIER_SCORES.
+    Returns None if provider is unavailable or model is unknown,
+    allowing caller to fall back to heuristic estimation.
+
+    Args:
+        model_id: Full model identifier (e.g., 'openai/gpt-4o')
+        provider: MetadataProvider instance or None
+
+    Returns:
+        Quality score (0-1) or None if metadata unavailable
+    """
+    if provider is None:
+        return None
+
+    info = provider.get_model_info(model_id)
+    if info is None:
+        return None
+
+    return QUALITY_TIER_SCORES.get(info.quality_tier, 0.70)
+
+
+def _get_cost_score_from_metadata(
+    model_id: str,
+    provider: Optional["MetadataProvider"],
+) -> Optional[float]:
+    """Get cost efficiency score from real pricing data.
+
+    Normalizes pricing to a 0-1 score where higher = cheaper.
+    Free models (price=0) get a score of 1.0.
+    Expensive models (close to COST_REFERENCE_HIGH) get low scores.
+
+    Args:
+        model_id: Full model identifier
+        provider: MetadataProvider instance or None
+
+    Returns:
+        Cost score (0-1) or None if pricing unavailable
+    """
+    if provider is None:
+        return None
+
+    pricing = provider.get_pricing(model_id)
+    if not pricing:
+        return None
+
+    prompt_price = pricing.get("prompt", 0.0)
+    if prompt_price == 0.0:
+        return 1.0  # Free models get max score
+
+    # Normalize: 1.0 - (price / reference)
+    # Clamp to [0, 1] range
+    normalized = 1.0 - (prompt_price / COST_REFERENCE_HIGH)
+    return max(0.0, min(1.0, normalized))
+
+
+def _meets_context_requirement(
+    candidate: ModelCandidate,
+    required: int,
+    provider: Optional["MetadataProvider"] = None,
+) -> bool:
     """Check if a candidate meets context window requirement.
 
-    Future: Use actual context window from metadata.
-    For now, assume all models meet reasonable requirements.
+    Uses real context window from metadata provider when available.
+    Falls back to returning True (legacy behavior) when no provider.
+
+    Args:
+        candidate: ModelCandidate to check
+        required: Minimum context window required (tokens)
+        provider: Optional MetadataProvider (fetched if not provided)
+
+    Returns:
+        True if model meets requirement, False otherwise
     """
-    # TODO: Get actual context window from metadata provider
+    if provider is None:
+        provider = _get_provider_safe()
+
+    if provider is not None:
+        context_window = provider.get_context_window(candidate.model_id)
+        return context_window >= required
+
+    # Fallback: legacy behavior when no provider
     return True
 
 
 __all__ = [
+    # Constants
     "TIER_WEIGHTS",
+    "QUALITY_TIER_SCORES",
+    "COST_REFERENCE_HIGH",
+    # Types
     "ModelCandidate",
+    # Core functions
     "apply_anti_herding_penalty",
     "calculate_model_score",
     "select_with_diversity",
     "select_tier_models",
+    # Metadata integration (ADR-026 Phase 1)
+    "_get_provider_safe",
+    "_get_quality_score_from_metadata",
+    "_get_cost_score_from_metadata",
+    "_meets_context_requirement",
 ]
