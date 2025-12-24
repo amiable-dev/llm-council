@@ -2,10 +2,15 @@
 
 This module defines canonical message formats and request/response types
 that provide a provider-agnostic interface for LLM API interactions.
+
+ADR-026 Phase 2: Added ReasoningParams for reasoning parameter injection.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from ..reasoning import ReasoningConfig
 
 
 @dataclass
@@ -45,6 +50,43 @@ class UsageInfo:
 
 
 @dataclass
+class ReasoningParams:
+    """Reasoning parameters for OpenRouter API (ADR-026 Phase 2).
+
+    Controls reasoning behavior for models that support reasoning
+    (o1, o3, deepseek-r1, etc.).
+
+    Attributes:
+        effort: Reasoning effort level (minimal|low|medium|high|xhigh)
+        max_tokens: Maximum tokens allocated for reasoning
+        exclude: Whether to exclude reasoning from response (default False)
+    """
+
+    effort: str  # minimal|low|medium|high|xhigh
+    max_tokens: int  # Budget for reasoning tokens
+    exclude: bool = False  # Whether to exclude reasoning from response
+
+    @classmethod
+    def from_config(cls, config: "ReasoningConfig") -> Optional["ReasoningParams"]:
+        """Create ReasoningParams from a ReasoningConfig.
+
+        Args:
+            config: ReasoningConfig with effort and budget settings
+
+        Returns:
+            ReasoningParams if config is enabled, None otherwise
+        """
+        if not config.enabled:
+            return None
+
+        return cls(
+            effort=config.effort.value,
+            max_tokens=config.budget_tokens,
+            exclude=False,
+        )
+
+
+@dataclass
 class GatewayRequest:
     """Request to send to a gateway router.
 
@@ -58,6 +100,8 @@ class GatewayRequest:
     timeout: Optional[float] = None
     # Additional provider-specific parameters
     extra_params: Dict[str, Any] = field(default_factory=dict)
+    # Reasoning parameters for reasoning models (ADR-026 Phase 2)
+    reasoning_params: Optional[ReasoningParams] = None
 
 
 @dataclass
