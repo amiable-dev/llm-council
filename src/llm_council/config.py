@@ -147,7 +147,7 @@ def get_tier_models(tier: str) -> list:
 # These can be overridden per-tier via environment variables
 TIER_MODEL_POOLS = {
     tier: get_tier_models(tier)
-    for tier in ["quick", "balanced", "high", "reasoning"]
+    for tier in ["quick", "balanced", "high", "reasoning", "frontier"]
 }
 
 # Default Chairman model - synthesizes final response
@@ -603,6 +603,7 @@ DEFAULT_TIER_TIMEOUTS = {
     "balanced": {"total": 90, "per_model": 45},
     "high": {"total": 180, "per_model": 90},
     "reasoning": {"total": 600, "per_model": 300},  # 10min total for deep reasoning models
+    "frontier": {"total": 600, "per_model": 300},  # ADR-027: Long timeouts for preview/beta models
 }
 
 # Models that require the reasoning tier

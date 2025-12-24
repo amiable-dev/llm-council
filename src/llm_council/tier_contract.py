@@ -27,6 +27,7 @@ TIER_AGGREGATORS: Dict[str, str] = {
     "balanced": "openai/gpt-4o",  # Quality-matched
     "high": "openai/gpt-4o",  # Full capability
     "reasoning": "anthropic/claude-opus-4-5-20250514",  # Can understand o1 outputs
+    "frontier": "anthropic/claude-opus-4.5",  # Best available for cutting-edge synthesis (ADR-027)
 }
 
 
@@ -108,7 +109,7 @@ def create_tier_contract(
 
     if tier_lower not in TIER_MODEL_POOLS:
         raise ValueError(
-            f"Unknown tier: {tier}. Valid tiers: quick, balanced, high, reasoning"
+            f"Unknown tier: {tier}. Valid tiers: quick, balanced, high, reasoning, frontier"
         )
 
     # Get timeout config from ADR-012
@@ -142,6 +143,14 @@ def create_tier_contract(
         "reasoning": {
             "token_budget": 8192,
             "max_attempts": 2,
+            "requires_peer_review": True,
+            "requires_verifier": False,
+            "override_policy": {"can_escalate": False, "can_deescalate": True},
+        },
+        # ADR-027: Frontier tier for cutting-edge/preview models
+        "frontier": {
+            "token_budget": 8192,  # Allow large responses
+            "max_attempts": 2,  # Limited retries (preview APIs less stable)
             "requires_peer_review": True,
             "requires_verifier": False,
             "override_policy": {"can_escalate": False, "can_deescalate": True},
@@ -181,5 +190,5 @@ def create_tier_contract(
 
 # Pre-built default contracts for each tier
 DEFAULT_TIER_CONTRACTS: Dict[str, TierContract] = {
-    tier: create_tier_contract(tier) for tier in ["quick", "balanced", "high", "reasoning"]
+    tier: create_tier_contract(tier) for tier in ["quick", "balanced", "high", "reasoning", "frontier"]
 }

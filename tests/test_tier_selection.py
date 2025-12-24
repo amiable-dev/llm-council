@@ -14,13 +14,14 @@ class TestTierWeights:
     """Test tier-specific weighting matrices."""
 
     def test_tier_weights_exist_for_all_tiers(self):
-        """Weights should be defined for quick, balanced, high, reasoning."""
+        """Weights should be defined for quick, balanced, high, reasoning, frontier."""
         from llm_council.metadata.selection import TIER_WEIGHTS
 
         assert "quick" in TIER_WEIGHTS
         assert "balanced" in TIER_WEIGHTS
         assert "high" in TIER_WEIGHTS
         assert "reasoning" in TIER_WEIGHTS
+        assert "frontier" in TIER_WEIGHTS
 
     def test_tier_weights_sum_to_one(self):
         """Each tier's weights should sum to 1.0."""
@@ -68,6 +69,40 @@ class TestTierWeights:
         # No single weight should dominate excessively
         max_weight = max(balanced.values())
         assert max_weight <= 0.40
+
+    def test_frontier_tier_prioritizes_quality_above_all(self):
+        """Frontier tier should have quality as highest weight (>= 0.70)."""
+        from llm_council.metadata.selection import TIER_WEIGHTS
+
+        frontier = TIER_WEIGHTS["frontier"]
+        assert frontier["quality"] >= 0.70, "Frontier should prioritize quality >= 70%"
+        assert frontier["quality"] >= max(
+            frontier["latency"],
+            frontier["cost"],
+            frontier["diversity"],
+            frontier["availability"],
+        )
+
+    def test_frontier_tier_deprioritizes_cost_and_latency(self):
+        """Frontier tier should have very low cost and latency weights."""
+        from llm_council.metadata.selection import TIER_WEIGHTS
+
+        frontier = TIER_WEIGHTS["frontier"]
+        # Cost and latency should be minimal for frontier testing
+        assert frontier["cost"] <= 0.05, "Frontier should not care about cost"
+        assert frontier["latency"] <= 0.05, "Frontier should tolerate latency"
+
+    def test_frontier_differs_from_high(self):
+        """Frontier tier weights should differ from high tier."""
+        from llm_council.metadata.selection import TIER_WEIGHTS
+
+        high = TIER_WEIGHTS["high"]
+        frontier = TIER_WEIGHTS["frontier"]
+
+        # Frontier should have higher quality weight than high
+        assert frontier["quality"] > high["quality"], "Frontier should weight quality more than high"
+        # Frontier should care less about cost
+        assert frontier["cost"] <= high["cost"], "Frontier should not care about cost"
 
 
 class TestAntiHerding:
@@ -239,10 +274,10 @@ class TestSelectTierModels:
         assert len(models) == 3
 
     def test_returns_models_for_all_tiers(self):
-        """Should work for all tier levels."""
+        """Should work for all tier levels including frontier."""
         from llm_council.metadata.selection import select_tier_models
 
-        for tier in ["quick", "balanced", "high", "reasoning"]:
+        for tier in ["quick", "balanced", "high", "reasoning", "frontier"]:
             models = select_tier_models(tier=tier)
             assert len(models) > 0, f"No models for tier {tier}"
 
@@ -383,6 +418,97 @@ class TestUnifiedConfigIntegration:
         assert config.model_intelligence.enabled is False
 
 
+class TestFrontierTier:
+    """Test frontier tier behavior (ADR-027)."""
+
+    def test_frontier_tier_exists_in_static_pools(self):
+        """Frontier tier should be defined in static pools."""
+        from llm_council.config import TIER_MODEL_POOLS
+
+        assert "frontier" in TIER_MODEL_POOLS
+        assert len(TIER_MODEL_POOLS["frontier"]) > 0
+
+    def test_frontier_tier_select_returns_models(self):
+        """select_tier_models should return models for frontier tier."""
+        from llm_council.metadata.selection import select_tier_models
+
+        models = select_tier_models(tier="frontier", count=4)
+        assert isinstance(models, list)
+        assert len(models) > 0
+
+    def test_frontier_tier_uses_correct_weights(self):
+        """Frontier tier scoring should use correct weights."""
+        from llm_council.metadata.selection import (
+            calculate_model_score,
+            ModelCandidate,
+            TIER_WEIGHTS,
+        )
+
+        # High quality, slow, expensive model
+        candidate = ModelCandidate(
+            model_id="test/frontier-model",
+            latency_score=0.3,   # Slow
+            cost_score=0.2,      # Expensive
+            quality_score=0.99,  # Excellent
+            availability_score=0.8,  # Slightly unstable
+            diversity_score=0.5,
+        )
+
+        frontier_score = calculate_model_score(candidate, tier="frontier")
+        quick_score = calculate_model_score(candidate, tier="quick")
+
+        # Frontier should score this model higher than quick tier
+        # because it prioritizes quality over latency/cost
+        assert frontier_score > quick_score
+
+    def test_frontier_allows_preview_models_conceptually(self):
+        """Frontier tier should conceptually allow preview/beta models.
+
+        Note: This is a conceptual test. The actual filtering for
+        preview models happens in the discovery phase (ADR-027 Phase 2).
+        For now, we verify the tier exists and has appropriate weights.
+        """
+        from llm_council.metadata.selection import TIER_WEIGHTS
+
+        frontier = TIER_WEIGHTS["frontier"]
+
+        # Frontier should have low availability requirement (accepts instability)
+        assert frontier["availability"] <= 0.15, "Frontier should accept some instability"
+
+    def test_frontier_model_scoring_favors_quality(self):
+        """Compare two models: frontier should favor quality over cost."""
+        from llm_council.metadata.selection import (
+            calculate_model_score,
+            ModelCandidate,
+        )
+
+        # Model A: High quality, expensive
+        high_quality = ModelCandidate(
+            model_id="expensive/quality",
+            latency_score=0.4,
+            cost_score=0.2,      # Expensive
+            quality_score=0.98,  # Best quality
+            availability_score=0.9,
+            diversity_score=0.5,
+        )
+
+        # Model B: Moderate quality, cheap
+        budget_model = ModelCandidate(
+            model_id="cheap/budget",
+            latency_score=0.9,
+            cost_score=0.95,     # Cheap
+            quality_score=0.7,   # Lower quality
+            availability_score=0.95,
+            diversity_score=0.5,
+        )
+
+        frontier_a = calculate_model_score(high_quality, tier="frontier")
+        frontier_b = calculate_model_score(budget_model, tier="frontier")
+
+        # Frontier should prefer high quality model despite cost
+        assert frontier_a > frontier_b, "Frontier should prefer quality over cost"
+
+
 class TestTierContractIntegration:
     """Test tier_contract.py integration."""
 
@@ -412,3 +538,22 @@ class TestTierContractIntegration:
             # Should use static pools
             for model in contract.allowed_models:
                 assert model in TIER_MODEL_POOLS["high"]
+
+    def test_create_frontier_tier_contract(self):
+        """Should create tier contract for frontier tier (ADR-027)."""
+        from llm_council.tier_contract import create_tier_contract
+
+        contract = create_tier_contract(tier="frontier")
+        assert contract is not None
+        assert contract.tier == "frontier"
+        assert len(contract.allowed_models) > 0
+
+    def test_frontier_contract_has_appropriate_timeout(self):
+        """Frontier tier contract should have longer timeout (accepts latency)."""
+        from llm_council.tier_contract import create_tier_contract
+
+        frontier = create_tier_contract(tier="frontier")
+        quick = create_tier_contract(tier="quick")
+
+        # Frontier should have longer or equal timeout than quick
+        assert frontier.per_model_timeout_ms >= quick.per_model_timeout_ms
