@@ -943,6 +943,26 @@ council:
 - Static fallback activates when API unavailable or offline mode enabled
 - All 1206 tests pass
 
+**Phase 1 "Hollow" Fix (2025-12-24):**
+
+Initial Phase 1 implementation used regex pattern matching ("hollow" implementation).
+Fixed to use real metadata from providers (Issues #105-#108).
+
+| Function | Before | After |
+|----------|--------|-------|
+| `_get_provider_safe()` | N/A | Returns provider or None gracefully |
+| `_get_quality_score_from_metadata()` | Regex patterns | Real QualityTier lookup |
+| `_get_cost_score_from_metadata()` | Regex patterns | Real pricing data |
+| `_meets_context_requirement()` | Always True | Real context window filtering |
+
+**Quality Tier Scores:**
+- FRONTIER: 0.95
+- STANDARD: 0.75
+- ECONOMY: 0.55
+- LOCAL: 0.40
+
+**Graceful Degradation:** When metadata unavailable, falls back to heuristic estimates.
+
 ### Phase 2: Reasoning Parameter Optimization (v0.16.x) ✅ IMPLEMENTED
 
 **Goal:** Automatic reasoning parameter configuration for capable models.
