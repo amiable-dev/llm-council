@@ -321,6 +321,53 @@ class AntiHerdingConfig(BaseModel):
     max_penalty: float = Field(default=0.35, ge=0.0, le=1.0)
 
 
+class ReasoningStageConfig(BaseModel):
+    """Configuration for which council stages use reasoning parameters (ADR-026 Phase 2).
+
+    Controls where reasoning effort/budget is applied in the 3-stage council process.
+    """
+
+    stage1: bool = True  # Primary model responses (default ON)
+    stage2: bool = False  # Peer review evaluations (default OFF)
+    stage3: bool = True  # Chairman synthesis (default ON)
+
+
+class ReasoningEffortByTierConfig(BaseModel):
+    """Configuration for reasoning effort levels by tier (ADR-026 Phase 2)."""
+
+    quick: str = "minimal"
+    balanced: str = "low"
+    high: str = "medium"
+    reasoning: str = "high"
+
+
+class DomainOverridesConfig(BaseModel):
+    """Configuration for domain-specific reasoning effort overrides (ADR-026 Phase 2)."""
+
+    math: str = "high"
+    coding: str = "medium"
+    creative: str = "minimal"
+
+
+class ReasoningOptimizationConfig(BaseModel):
+    """Configuration for reasoning parameter optimization (ADR-026 Phase 2).
+
+    Controls automatic injection of reasoning parameters for models that
+    support reasoning (o1, o3, deepseek-r1, etc.).
+    """
+
+    enabled: bool = True  # Enabled by default when model intelligence is on
+    effort_by_tier: ReasoningEffortByTierConfig = Field(
+        default_factory=ReasoningEffortByTierConfig
+    )
+    domain_overrides: DomainOverridesConfig = Field(
+        default_factory=DomainOverridesConfig
+    )
+    stages: ReasoningStageConfig = Field(default_factory=ReasoningStageConfig)
+    max_budget_tokens: int = Field(default=32000, ge=1024, le=100000)
+    min_budget_tokens: int = Field(default=1024, ge=256, le=32000)
+
+
 class ModelIntelligenceConfig(BaseModel):
     """Configuration for Model Intelligence Layer (ADR-026).
 
@@ -336,6 +383,9 @@ class ModelIntelligenceConfig(BaseModel):
         default_factory=ModelIntelligenceSelectionConfig
     )
     anti_herding: AntiHerdingConfig = Field(default_factory=AntiHerdingConfig)
+    reasoning: ReasoningOptimizationConfig = Field(
+        default_factory=ReasoningOptimizationConfig
+    )
 
 
 class ObservabilityConfig(BaseModel):
@@ -613,6 +663,11 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     model_intelligence_enabled = os.getenv("LLM_COUNCIL_MODEL_INTELLIGENCE")
     if model_intelligence_enabled:
         config_dict.setdefault("model_intelligence", {})["enabled"] = model_intelligence_enabled.lower() in ("true", "1", "yes")
+
+    # Reasoning optimization overrides (ADR-026 Phase 2)
+    reasoning_enabled = os.getenv("LLM_COUNCIL_REASONING_ENABLED")
+    if reasoning_enabled:
+        config_dict.setdefault("model_intelligence", {}).setdefault("reasoning", {})["enabled"] = reasoning_enabled.lower() in ("true", "1", "yes")
 
     return UnifiedConfig(**config_dict)
 
