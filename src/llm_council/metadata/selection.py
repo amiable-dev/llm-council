@@ -228,6 +228,7 @@ def select_tier_models(
     task_domain: Optional[str] = None,
     count: int = 4,
     required_context: Optional[int] = None,
+    allow_preview: bool = False,
 ) -> List[str]:
     """Select optimal models for a tier using weighted scoring.
 
@@ -236,10 +237,11 @@ def select_tier_models(
     Otherwise, falls back to static TIER_MODEL_POOLS.
 
     Args:
-        tier: Tier name (quick, balanced, high, reasoning)
+        tier: Tier name (quick, balanced, high, reasoning, frontier)
         task_domain: Optional domain hint (coding, creative, etc.)
         count: Number of models to select
         required_context: Minimum context window required
+        allow_preview: Whether to allow preview models (ADR-027)
 
     Returns:
         List of model IDs selected for this tier
@@ -253,6 +255,13 @@ def select_tier_models(
 
     if not candidates:
         # Fallback to static pool directly
+        return static_pool[:count]
+
+    # Apply tier intersection filtering (ADR-027)
+    candidates = _filter_by_tier_intersection(candidates, tier, allow_preview)
+
+    if not candidates:
+        # Fallback if no candidates meet tier requirements
         return static_pool[:count]
 
     # Filter by context window if required
@@ -474,6 +483,87 @@ def _meets_context_requirement(
 
     # Fallback: legacy behavior when no provider
     return True
+
+
+def _filter_by_tier_intersection(
+    candidates: List[ModelCandidate],
+    tier: str,
+    allow_preview: bool = False,
+) -> List[ModelCandidate]:
+    """Filter candidates using tier intersection logic (ADR-027).
+
+    Uses resolve_tier_intersection() to determine if each candidate
+    qualifies for the requested tier based on its ModelInfo.
+
+    Args:
+        candidates: List of ModelCandidates to filter
+        tier: Requested tier (quick, balanced, high, reasoning, frontier)
+        allow_preview: Whether to allow preview models
+
+    Returns:
+        Filtered list of ModelCandidates that qualify for the tier
+    """
+    from .intersection import resolve_tier_intersection
+    from .types import ModelInfo, QualityTier
+
+    provider = _get_provider_safe()
+    filtered = []
+
+    for candidate in candidates:
+        # Get ModelInfo from provider
+        model_info = None
+        if provider is not None:
+            model_info = provider.get_model_info(candidate.model_id)
+
+        if model_info is None:
+            # No metadata available - create synthetic ModelInfo from heuristics
+            model_info = _create_synthetic_model_info(candidate.model_id)
+
+        # Apply tier intersection filter
+        if resolve_tier_intersection(tier, model_info, allow_preview=allow_preview):
+            filtered.append(candidate)
+
+    return filtered
+
+
+def _create_synthetic_model_info(model_id: str) -> "ModelInfo":
+    """Create synthetic ModelInfo from model ID heuristics.
+
+    When no metadata provider is available, we create a best-guess
+    ModelInfo based on common patterns in model naming.
+
+    Args:
+        model_id: Full model identifier (e.g., 'openai/gpt-4o')
+
+    Returns:
+        Synthetic ModelInfo with heuristic-based values
+    """
+    from .types import ModelInfo, QualityTier
+
+    model_lower = model_id.lower()
+
+    # Determine quality tier from model name
+    quality_tier = QualityTier.STANDARD
+    if any(x in model_lower for x in ["opus", "o1", "o3", "gpt-4", "claude-3-opus"]):
+        quality_tier = QualityTier.FRONTIER
+    elif any(x in model_lower for x in ["mini", "flash", "haiku"]):
+        quality_tier = QualityTier.ECONOMY
+    elif any(x in model_lower for x in ["ollama", "local"]):
+        quality_tier = QualityTier.LOCAL
+
+    # Detect preview/beta status
+    is_preview = any(x in model_lower for x in ["preview", "beta", "exp", "experimental"])
+
+    # Detect reasoning support
+    supports_reasoning = any(x in model_lower for x in ["o1", "o3", "deepseek-r1", "r1"])
+
+    return ModelInfo(
+        id=model_id,
+        context_window=128000,  # Default assumption
+        quality_tier=quality_tier,
+        is_preview=is_preview,
+        supports_reasoning=supports_reasoning,
+    )
 
 
 __all__ = [
