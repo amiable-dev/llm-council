@@ -368,6 +368,21 @@ class ReasoningOptimizationConfig(BaseModel):
     min_budget_tokens: int = Field(default=1024, ge=256, le=32000)
 
 
+class PerformanceTrackerConfig(BaseModel):
+    """Configuration for internal performance tracking (ADR-026 Phase 3).
+
+    Controls tracking of model performance from actual council sessions,
+    building an Internal Performance Index for model selection.
+    """
+
+    enabled: bool = True  # Enabled by default when model intelligence is on
+    store_path: str = "${HOME}/.llm-council/performance_metrics.jsonl"
+    decay_days: int = Field(default=30, ge=1, le=365)
+    min_samples_preliminary: int = Field(default=10, ge=1)
+    min_samples_moderate: int = Field(default=30, ge=1)
+    min_samples_high: int = Field(default=100, ge=1)
+
+
 class ModelIntelligenceConfig(BaseModel):
     """Configuration for Model Intelligence Layer (ADR-026).
 
@@ -385,6 +400,9 @@ class ModelIntelligenceConfig(BaseModel):
     anti_herding: AntiHerdingConfig = Field(default_factory=AntiHerdingConfig)
     reasoning: ReasoningOptimizationConfig = Field(
         default_factory=ReasoningOptimizationConfig
+    )
+    performance_tracker: PerformanceTrackerConfig = Field(
+        default_factory=PerformanceTrackerConfig
     )
 
 

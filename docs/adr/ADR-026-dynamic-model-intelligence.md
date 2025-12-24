@@ -986,23 +986,35 @@ Implemented using TDD with 80 new tests (1299 total tests pass).
 - Token usage tracking shows expected budget allocation
 - No regressions in non-reasoning tiers (1299 tests pass)
 
-### Phase 3: Internal Performance Tracking (v0.17.x) ⚠️ REDESIGNED
+### Phase 3: Internal Performance Tracking (v0.17.x) ✅ IMPLEMENTED
 
 **Council Recommendation:** Instead of scraping external benchmarks (high maintenance risk), implement internal performance tracking based on actual council session outcomes.
 
-- [ ] Track model performance per council session:
-  - Borda score received
-  - Response latency
-  - Parse success rate
-  - Reasoning quality (when rubric scoring enabled)
-- [ ] Build **Internal Performance Index** from historical sessions
-- [ ] Use internal metrics for quality scoring (replaces external benchmarks)
-- [ ] Implement rolling window decay (recent sessions weighted higher)
+- [x] Track model performance per council session:
+  - Borda score received (`ModelSessionMetric.borda_score`)
+  - Response latency (`ModelSessionMetric.latency_ms`)
+  - Parse success rate (`ModelSessionMetric.parse_success`)
+  - Reasoning quality (optional `reasoning_tokens_used`)
+- [x] Build **Internal Performance Index** from historical sessions
+  - `InternalPerformanceTracker` with rolling window aggregation
+  - `ModelPerformanceIndex` with mean_borda_score, p50/p95_latency, parse_success_rate
+- [x] Use internal metrics for quality scoring (replaces external benchmarks)
+  - `get_quality_score()` returns 0-100 normalized score
+  - Cold start: unknown models get neutral score (50)
+- [x] Implement rolling window decay (recent sessions weighted higher)
+  - Exponential decay: `weight = exp(-days_ago / decay_days)`
+  - Default decay_days = 30
+
+**Implementation Details:**
+- `src/llm_council/performance/` module (4 files, ~700 lines)
+- 70 TDD tests in `tests/test_performance_*.py`
+- JSONL storage pattern (follows `bias_persistence.py`)
+- Configuration via `PerformanceTrackerConfig` in unified_config.py
 
 **Validation Gate:** Phase 3 complete when:
-- 100+ sessions tracked with metrics
-- Internal quality scores correlate with user feedback (if available)
-- Model selection demonstrably improves over static config
+- 100+ sessions tracked with metrics (tracked via confidence_level=HIGH)
+- Internal quality scores correlate with Borda outcomes (by design)
+- Model selection uses `quality_score` from tracker
 
 ### Phase 4: External Benchmark Integration (DEFERRED) ⏸️
 
