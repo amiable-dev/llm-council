@@ -736,3 +736,161 @@ class TestUnifiedConfigWithWebhooks:
         config = UnifiedConfig()
         config_dict = config.to_dict()
         assert "webhooks" in config_dict
+
+
+class TestFrontierConfig:
+    """Test FrontierConfig and GraduationConfig (ADR-027)."""
+
+    def test_unified_config_has_frontier(self):
+        """UnifiedConfig should have frontier field."""
+        config = UnifiedConfig()
+        assert hasattr(config, "frontier")
+        assert config.frontier is not None
+
+    def test_frontier_defaults_match_adr027(self):
+        """Frontier config defaults should match ADR-027."""
+        config = UnifiedConfig()
+        assert config.frontier.voting_authority == "advisory"
+        assert config.frontier.cost_ceiling_multiplier == 5.0
+        assert config.frontier.fallback_tier == "high"
+
+    def test_graduation_defaults_match_adr027(self):
+        """Graduation config defaults should match ADR-027."""
+        config = UnifiedConfig()
+        assert config.frontier.graduation.min_age_days == 30
+        assert config.frontier.graduation.min_completed_sessions == 100
+        assert config.frontier.graduation.max_error_rate == 0.02
+        assert config.frontier.graduation.min_quality_percentile == 0.75
+
+    def test_frontier_tier_in_pools(self):
+        """Frontier tier should be in default pools."""
+        config = UnifiedConfig()
+        assert "frontier" in config.tiers.pools
+        assert len(config.tiers.pools["frontier"].models) > 0
+
+    def test_frontier_is_valid_tier(self, tmp_path):
+        """'frontier' should be a valid tier name."""
+        from llm_council.unified_config import load_config
+
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  tiers:
+    default: frontier
+""")
+        # Should not raise
+        load_config(config_file)
+
+    def test_frontier_voting_authority_validation(self):
+        """Invalid voting_authority should raise validation error."""
+        from llm_council.unified_config import FrontierConfig
+        import pytest
+
+        with pytest.raises(ValueError):
+            FrontierConfig(voting_authority="invalid")
+
+    def test_frontier_fallback_tier_validation(self):
+        """Invalid fallback_tier should raise validation error."""
+        from llm_council.unified_config import FrontierConfig
+        import pytest
+
+        with pytest.raises(ValueError):
+            FrontierConfig(fallback_tier="invalid")
+
+    def test_frontier_serializes_to_yaml(self):
+        """Frontier should be included in YAML serialization."""
+        config = UnifiedConfig()
+        yaml_str = config.to_yaml()
+        assert "frontier:" in yaml_str
+        assert "voting_authority:" in yaml_str
+        assert "graduation:" in yaml_str
+
+
+class TestDiscoveryConfig:
+    """Test DiscoveryConfig for dynamic candidate discovery (ADR-028)."""
+
+    def test_discovery_config_defaults(self):
+        """DiscoveryConfig should have sensible defaults per ADR-028."""
+        from llm_council.unified_config import DiscoveryConfig
+
+        config = DiscoveryConfig()
+
+        assert config.enabled is True
+        assert config.refresh_interval_seconds == 300  # 5 minutes
+        assert config.min_candidates_per_tier == 3
+        assert config.max_candidates_per_tier == 10
+        assert config.stale_threshold_minutes == 30
+        assert config.max_refresh_retries == 3
+        assert config.providers == {}
+
+    def test_discovery_config_validation(self):
+        """DiscoveryConfig should validate field ranges."""
+        from llm_council.unified_config import DiscoveryConfig
+        import pytest
+
+        # Valid config
+        config = DiscoveryConfig(
+            refresh_interval_seconds=600,
+            min_candidates_per_tier=5,
+            max_candidates_per_tier=20,
+        )
+        assert config.refresh_interval_seconds == 600
+
+        # Invalid: min > max candidates
+        with pytest.raises(ValueError, match="min_candidates_per_tier"):
+            DiscoveryConfig(
+                min_candidates_per_tier=15,
+                max_candidates_per_tier=10,
+            )
+
+        # Invalid: interval too short
+        with pytest.raises(ValueError):
+            DiscoveryConfig(refresh_interval_seconds=30)
+
+        # Invalid: interval too long
+        with pytest.raises(ValueError):
+            DiscoveryConfig(refresh_interval_seconds=7200)
+
+    def test_discovery_in_model_intelligence_config(self):
+        """ModelIntelligenceConfig should include discovery."""
+        from llm_council.unified_config import ModelIntelligenceConfig, DiscoveryConfig
+
+        config = ModelIntelligenceConfig()
+        assert hasattr(config, "discovery")
+        assert isinstance(config.discovery, DiscoveryConfig)
+
+    def test_discovery_env_var_overrides(self, monkeypatch):
+        """Environment variables should override discovery config."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_DISCOVERY_ENABLED", "false")
+        monkeypatch.setenv("LLM_COUNCIL_DISCOVERY_INTERVAL", "600")
+        monkeypatch.setenv("LLM_COUNCIL_DISCOVERY_MIN_CANDIDATES", "5")
+
+        reload_config()
+        config = get_effective_config()
+
+        assert config.model_intelligence.discovery.enabled is False
+        assert config.model_intelligence.discovery.refresh_interval_seconds == 600
+        assert config.model_intelligence.discovery.min_candidates_per_tier == 5
+
+    def test_discovery_provider_config(self):
+        """DiscoveryProviderConfig should have correct defaults."""
+        from llm_council.unified_config import DiscoveryProviderConfig
+
+        provider = DiscoveryProviderConfig()
+
+        assert provider.enabled is True
+        assert provider.rate_limit_rpm == 60
+        assert provider.timeout_seconds == 10.0
+
+    def test_discovery_serializes_to_dict(self):
+        """Discovery config should serialize to dict."""
+        from llm_council.unified_config import UnifiedConfig
+
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "model_intelligence" in config_dict
+        assert "discovery" in config_dict["model_intelligence"]
+        assert config_dict["model_intelligence"]["discovery"]["enabled"] is True

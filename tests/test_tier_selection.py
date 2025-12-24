@@ -258,12 +258,23 @@ class TestSelectTierModels:
         assert all(isinstance(m, str) for m in models)
 
     def test_returns_default_count_of_4(self):
-        """Should return 4 models by default."""
+        """Should return up to 4 models by default (after filtering).
+
+        Note: ADR-027 introduced preview model filtering. Models with 'preview'
+        in their name are excluded unless allow_preview=True. The static pool
+        may have fewer than 4 non-preview models.
+        """
         from llm_council.metadata.selection import select_tier_models
 
         models = select_tier_models(tier="high")
 
-        assert len(models) == 4
+        # Should return at least some models, up to 4
+        assert len(models) >= 1
+        assert len(models) <= 4
+
+        # With allow_preview=True, should get all 4
+        models_with_preview = select_tier_models(tier="high", allow_preview=True)
+        assert len(models_with_preview) == 4
 
     def test_respects_count_parameter(self):
         """Should return specified number of models."""

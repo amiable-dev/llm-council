@@ -32,10 +32,30 @@ from .types import (
     ModelInfo,
     QualityTier,
     Modality,
+    ModelStatus,
 )
 from .protocol import MetadataProvider
 from .static_registry import StaticRegistryProvider
 from .offline import is_offline_mode, check_offline_mode_startup
+from .registry import (
+    ModelRegistry,
+    RegistryEntry,
+    get_registry,
+    _reset_registry,
+)
+from .worker import run_discovery_worker
+from .discovery import (
+    discover_tier_candidates,
+    KNOWN_REASONING_FAMILIES,
+    _model_qualifies_for_tier,
+    _merge_deduplicate,
+    emit_discovery_fallback,
+)
+from .startup import (
+    start_discovery_worker,
+    stop_discovery_worker,
+    get_worker_status,
+)
 
 # Global provider instance (singleton)
 _provider: Optional[MetadataProvider] = None
@@ -93,10 +113,28 @@ __all__ = [
     "ModelInfo",
     "QualityTier",
     "Modality",
+    "ModelStatus",
     # Protocol
     "MetadataProvider",
     # Provider
     "StaticRegistryProvider",
+    # Registry (ADR-028)
+    "ModelRegistry",
+    "RegistryEntry",
+    "get_registry",
+    "_reset_registry",
+    # Worker (ADR-028)
+    "run_discovery_worker",
+    # Discovery (ADR-028)
+    "discover_tier_candidates",
+    "KNOWN_REASONING_FAMILIES",
+    "_model_qualifies_for_tier",
+    "_merge_deduplicate",
+    "emit_discovery_fallback",
+    # Startup (ADR-028)
+    "start_discovery_worker",
+    "stop_discovery_worker",
+    "get_worker_status",
     # Factory
     "get_provider",
     "reload_provider",

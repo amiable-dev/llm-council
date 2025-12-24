@@ -410,13 +410,13 @@ discovery.candidates_found{tier, source}       # Gauge: dynamic vs static
 
 ## Implementation Plan
 
-1. [ ] Implement `ModelRegistry` class with async lock
-2. [ ] Add `run_discovery_worker()` background task
-3. [ ] Integrate with application startup
-4. [ ] Revise `_model_qualifies_for_tier()` with council fixes
-5. [ ] Add metrics and structured logging
-6. [ ] Add integration tests with mock registry
-7. [ ] Add health check endpoint for registry status
+1. [x] Implement `ModelRegistry` class with async lock (Phase 1, Issue #120)
+2. [x] Add `run_discovery_worker()` background task (Phase 2, Issue #121)
+3. [x] Integrate with application startup (Phase 6, Issue #125)
+4. [x] Revise `_model_qualifies_for_tier()` with council fixes (Phase 3, Issue #122)
+5. [x] Add metrics and structured logging (Phase 7, Issue #126)
+6. [x] Add integration tests with mock registry (Phases 1-7)
+7. [x] Add health check endpoint for registry status (Phase 7, Issue #126)
 
 ---
 
