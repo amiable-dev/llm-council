@@ -40,6 +40,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `ModelInfo`: Frozen dataclass with id, context_window, pricing, modalities, quality_tier
   - `QualityTier`: Enum (FRONTIER, STANDARD, ECONOMY, LOCAL)
   - `Modality`: Enum (TEXT, VISION, AUDIO, etc.)
+  - `ModelStatus`: Enum (AVAILABLE, DEPRECATED, PREVIEW, BETA) - ADR-028
 - **`protocol.py`**: `MetadataProvider` Protocol (interface)
   - `get_model_info()`, `get_context_window()`, `get_pricing()`
   - `supports_reasoning()`, `list_available_models()`
@@ -70,14 +71,41 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
     - `_meets_context_requirement()`: Real context window filtering (not always True)
 - **`offline.py`**: Offline mode detection
   - `is_offline_mode()`: Checks `LLM_COUNCIL_OFFLINE` env var
+- **`registry.py`**: ADR-028 Model Registry (Background Registry Pattern)
+  - `ModelRegistry`: Thread-safe singleton cache with asyncio.Lock
+  - `RegistryEntry`: Cached model info with timestamp
+  - `get_registry()`: Singleton factory
+  - `refresh_registry()`: Background refresh with stale-while-revalidate
+  - `get_candidates()`: Read-only access for request-time filtering
+  - `get_health_status()`: Health check for observability
+- **`worker.py`**: ADR-028 Background Discovery Worker
+  - `run_discovery_worker()`: Periodic registry refresh task
+  - Exponential backoff on failures
+  - Graceful shutdown via asyncio.Event
+- **`discovery.py`**: ADR-028 Request-Time Discovery
+  - `discover_tier_candidates()`: In-memory filtering from cached registry
+  - `_model_qualifies_for_tier()`: Tier-specific qualification logic
+  - `KNOWN_REASONING_FAMILIES`: Set of reasoning model families
+  - `_merge_deduplicate()`: Merge dynamic and static candidates
+  - `emit_discovery_fallback()`: Emit fallback events
+- **`startup.py`**: ADR-028 Application Lifecycle Hooks
+  - `start_discovery_worker()`: Start worker at app startup
+  - `stop_discovery_worker()`: Graceful shutdown
+  - `get_worker_status()`: Health check for worker state
 - **`__init__.py`**: `get_provider()` singleton factory
   - Returns `StaticRegistryProvider` by default
   - Returns `DynamicMetadataProvider` when `LLM_COUNCIL_MODEL_INTELLIGENCE=true`
   - Offline mode (`LLM_COUNCIL_OFFLINE=true`) forces static provider
+  - ADR-028 exports: `get_registry`, `discover_tier_candidates`, lifecycle hooks
 
 **Environment Variables (ADR-026):**
 - `LLM_COUNCIL_MODEL_INTELLIGENCE=true`: Enable dynamic model selection
 - `LLM_COUNCIL_OFFLINE=true`: Force offline mode (static provider only)
+
+**Environment Variables (ADR-028 Discovery):**
+- `LLM_COUNCIL_DISCOVERY_ENABLED=true`: Enable background discovery
+- `LLM_COUNCIL_DISCOVERY_INTERVAL=300`: Refresh interval in seconds
+- `LLM_COUNCIL_DISCOVERY_MIN_CANDIDATES=3`: Minimum candidates before fallback
 
 **`performance/`** - ADR-026 Phase 3: Internal Performance Tracking
 - Tracks model performance from actual council sessions
@@ -143,9 +171,15 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `validate_tier_contract()`, `validate_triage_result()`, `validate_gateway_request()`
   - `validate_l1_to_l2_boundary()`, `validate_l2_to_l3_boundary()`, `validate_l3_to_l4_boundary()`
 - **Observability Hooks**:
-  - `LayerEventType`: Enum with L1/L2/L3/L4 event types
+  - `LayerEventType`: Enum with L1/L2/L3/L4/Discovery event types
   - `LayerEvent`: Dataclass with event_type, data, timestamp
   - `emit_layer_event()`, `get_layer_events()`, `clear_layer_events()`
+- **Discovery Events (ADR-028)**:
+  - `DISCOVERY_REFRESH_STARTED`: Emitted when registry refresh begins
+  - `DISCOVERY_REFRESH_COMPLETE`: Emitted on successful refresh with duration_ms
+  - `DISCOVERY_REFRESH_FAILED`: Emitted on refresh failure with error details
+  - `DISCOVERY_FALLBACK_TRIGGERED`: Emitted when static fallback is used
+  - `DISCOVERY_STALE_SERVE`: Emitted when serving stale data after failures
 - **Boundary Crossing Helpers** (validate + emit event):
   - `cross_l1_to_l2(contract, query)` - L1→L2 with L1_TIER_SELECTED event
   - `cross_l2_to_l3(result, tier_contract)` - L2→L3 with L2_TRIAGE_COMPLETE event

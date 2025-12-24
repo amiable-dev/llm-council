@@ -118,6 +118,13 @@ class LayerEventType(Enum):
     FRONTIER_GRADUATION_CANDIDATE = "frontier_graduation_candidate"
     FRONTIER_GRADUATION_PROMOTED = "frontier_graduation_promoted"
 
+    # Discovery Events (ADR-028)
+    DISCOVERY_REFRESH_STARTED = "discovery_refresh_started"
+    DISCOVERY_REFRESH_COMPLETE = "discovery_refresh_complete"
+    DISCOVERY_REFRESH_FAILED = "discovery_refresh_failed"
+    DISCOVERY_FALLBACK_TRIGGERED = "discovery_fallback_triggered"
+    DISCOVERY_STALE_SERVE = "discovery_stale_serve"
+
 
 @dataclass
 class LayerEvent:

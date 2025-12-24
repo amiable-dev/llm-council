@@ -223,6 +223,112 @@ def select_with_diversity(
     return selected
 
 
+def _is_discovery_enabled() -> bool:
+    """Check if dynamic discovery is enabled via configuration.
+
+    Returns:
+        True if model_intelligence.discovery.enabled is True
+    """
+    try:
+        from ..unified_config import get_config
+
+        config = get_config()
+        return (
+            config.model_intelligence.enabled
+            and config.model_intelligence.discovery.enabled
+        )
+    except Exception:
+        return False
+
+
+def _get_min_candidates_per_tier() -> int:
+    """Get minimum candidates per tier from configuration.
+
+    Returns:
+        Minimum candidates threshold (default: 3)
+    """
+    try:
+        from ..unified_config import get_config
+
+        config = get_config()
+        return config.model_intelligence.discovery.min_candidates_per_tier
+    except Exception:
+        return 3
+
+
+def _select_from_dynamic_discovery(
+    tier: str,
+    count: int,
+    required_context: Optional[int],
+    allow_preview: bool,
+) -> Optional[List[str]]:
+    """Try to select models using dynamic discovery from registry.
+
+    Args:
+        tier: Tier name
+        count: Number of models to select
+        required_context: Minimum context window required
+        allow_preview: Whether to allow preview models
+
+    Returns:
+        List of model IDs if successful, None to fall back to static
+    """
+    import logging
+
+    from .registry import get_registry
+    from .discovery import discover_tier_candidates
+
+    logger = logging.getLogger(__name__)
+    registry = get_registry()
+
+    # Check if registry is stale
+    if registry.is_stale:
+        logger.debug("Registry is stale, falling back to static selection")
+        return None
+
+    # Get candidates from registry
+    candidates = discover_tier_candidates(tier, registry, required_context)
+
+    # Check minimum candidates threshold
+    min_candidates = _get_min_candidates_per_tier()
+    if len(candidates) < min_candidates:
+        logger.debug(
+            f"Insufficient candidates ({len(candidates)} < {min_candidates}), "
+            "falling back to static selection"
+        )
+        return None
+
+    # Filter by preview status if needed (for tiers that exclude preview)
+    if not allow_preview and tier not in ("frontier",):
+        candidates = [c for c in candidates if not _is_preview_model(c.model_id)]
+
+    if not candidates:
+        return None
+
+    # Score and sort candidates
+    scored: List[Tuple[str, float]] = []
+    for candidate in candidates:
+        score = calculate_model_score(candidate, tier)
+        scored.append((candidate.model_id, score))
+
+    # Select with diversity enforcement
+    return select_with_diversity(scored, count=count, min_providers=2)
+
+
+def _is_preview_model(model_id: str) -> bool:
+    """Check if model is a preview model based on ID.
+
+    Args:
+        model_id: Model identifier
+
+    Returns:
+        True if model appears to be a preview/beta
+    """
+    model_lower = model_id.lower()
+    preview_indicators = ["preview", "beta", "experimental", "dev"]
+    return any(indicator in model_lower for indicator in preview_indicators)
+
+
 def select_tier_models(
     tier: str,
     task_domain: Optional[str] = None,
@@ -233,8 +339,9 @@ def select_tier_models(
     """Select optimal models for a tier using weighted scoring.
 
     This is the main entry point for tier-specific model selection.
-    When model intelligence is enabled, this uses dynamic scoring.
-    Otherwise, falls back to static TIER_MODEL_POOLS.
+    When model intelligence is enabled with discovery, uses dynamic
+    candidate selection from the cached registry. Otherwise, falls
+    back to static TIER_MODEL_POOLS.
 
     Args:
         tier: Tier name (quick, balanced, high, reasoning, frontier)
@@ -246,11 +353,18 @@ def select_tier_models(
     Returns:
         List of model IDs selected for this tier
     """
+    # ADR-028: Try dynamic discovery first
+    if _is_discovery_enabled():
+        dynamic_result = _select_from_dynamic_discovery(
+            tier, count, required_context, allow_preview
+        )
+        if dynamic_result:
+            return dynamic_result
+
     # Get static pool as baseline/fallback
     static_pool = TIER_MODEL_POOLS.get(tier, TIER_MODEL_POOLS.get("high", []))
 
-    # For now, create candidates from static pool with default scores
-    # Future: populate from DynamicMetadataProvider cache
+    # Create candidates from static pool with estimated scores
     candidates = _create_candidates_from_pool(static_pool, tier)
 
     if not candidates:

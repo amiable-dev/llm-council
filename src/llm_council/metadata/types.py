@@ -38,6 +38,19 @@ class Modality(Enum):
     AUDIO = "audio"  # Audio input/output support
 
 
+class ModelStatus(Enum):
+    """Model availability status for dynamic discovery (ADR-028).
+
+    Used to filter models during discovery and selection.
+    Models with DEPRECATED status are excluded from selection.
+    """
+
+    AVAILABLE = "available"  # Model is available for use
+    DEPRECATED = "deprecated"  # Model is deprecated, should not be selected
+    PREVIEW = "preview"  # Model is in preview, may be unstable
+    BETA = "beta"  # Model is in beta testing
+
+
 @dataclass(frozen=True)
 class ModelInfo:
     """Immutable model metadata information.

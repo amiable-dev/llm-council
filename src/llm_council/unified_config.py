@@ -75,11 +75,12 @@ class TierConfig(BaseModel):
     default: str = Field(default="high")
     pools: Dict[str, TierPoolConfig] = Field(default_factory=dict)
     escalation: EscalationConfig = Field(default_factory=EscalationConfig)
+    # Note: frontier field is populated by model_validator after class definitions
 
     @field_validator("default")
     @classmethod
     def validate_tier_name(cls, v: str) -> str:
-        valid_tiers = {"quick", "balanced", "high", "reasoning"}
+        valid_tiers = {"quick", "balanced", "high", "reasoning", "frontier"}
         if v not in valid_tiers:
             raise ValueError(f"invalid tier '{v}', must be one of {valid_tiers}")
         return v
@@ -119,6 +120,17 @@ class TierConfig(BaseModel):
                     "openai/gpt-5.2-pro",
                     "anthropic/claude-opus-4-5-20250514",
                     "openai/o1-preview",
+                    "deepseek/deepseek-r1",
+                ],
+                timeout_seconds=600,
+            ),
+            # ADR-027: Frontier tier for cutting-edge/preview models
+            "frontier": TierPoolConfig(
+                models=[
+                    "openai/gpt-5.2-pro",
+                    "anthropic/claude-opus-4.5",
+                    "google/gemini-3-pro-preview",
+                    "x-ai/grok-4",
                     "deepseek/deepseek-r1",
                 ],
                 timeout_seconds=600,
@@ -321,6 +333,76 @@ class AntiHerdingConfig(BaseModel):
     max_penalty: float = Field(default=0.35, ge=0.0, le=1.0)
 
 
+class DiscoveryProviderConfig(BaseModel):
+    """Provider-specific discovery settings (ADR-028)."""
+
+    enabled: bool = True
+    rate_limit_rpm: int = Field(default=60, ge=1, le=1000)
+    timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
+
+
+class DiscoveryConfig(BaseModel):
+    """Configuration for dynamic candidate discovery (ADR-028).
+
+    Controls background model registry refresh and request-time discovery.
+    """
+
+    enabled: bool = True  # Discovery enabled by default when model_intelligence is on
+    refresh_interval_seconds: int = Field(default=300, ge=60, le=3600)  # 5 minutes
+    min_candidates_per_tier: int = Field(default=3, ge=1, le=10)
+    max_candidates_per_tier: int = Field(default=10, ge=3, le=50)
+    stale_threshold_minutes: int = Field(default=30, ge=5, le=120)
+    max_refresh_retries: int = Field(default=3, ge=1, le=10)
+    providers: Dict[str, DiscoveryProviderConfig] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_candidates_range(self) -> "DiscoveryConfig":
+        """Ensure min_candidates <= max_candidates."""
+        if self.min_candidates_per_tier > self.max_candidates_per_tier:
+            raise ValueError(
+                f"min_candidates_per_tier ({self.min_candidates_per_tier}) "
+                f"must be <= max_candidates_per_tier ({self.max_candidates_per_tier})"
+            )
+        return self
+
+
+class GraduationConfig(BaseModel):
+    """Configuration for frontier model graduation criteria (ADR-027)."""
+
+    min_age_days: int = Field(default=30, ge=1)
+    min_completed_sessions: int = Field(default=100, ge=1)
+    max_error_rate: float = Field(default=0.02, ge=0.0, le=1.0)
+    min_quality_percentile: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
+class FrontierConfig(BaseModel):
+    """Configuration for frontier tier (ADR-027).
+
+    Controls Shadow Mode voting, cost ceiling, and hard fallback behavior.
+    """
+
+    voting_authority: str = Field(default="advisory")  # "full" or "advisory"
+    cost_ceiling_multiplier: float = Field(default=5.0, ge=1.0)
+    fallback_tier: str = Field(default="high")
+    graduation: GraduationConfig = Field(default_factory=GraduationConfig)
+
+    @field_validator("voting_authority")
+    @classmethod
+    def validate_voting_authority(cls, v: str) -> str:
+        valid = {"full", "advisory", "excluded"}
+        if v not in valid:
+            raise ValueError(f"invalid voting_authority '{v}', must be one of {valid}")
+        return v
+
+    @field_validator("fallback_tier")
+    @classmethod
+    def validate_fallback_tier(cls, v: str) -> str:
+        valid = {"quick", "balanced", "high", "reasoning"}
+        if v not in valid:
+            raise ValueError(f"invalid fallback_tier '{v}', must be one of {valid}")
+        return v
+
+
 class ReasoningStageConfig(BaseModel):
     """Configuration for which council stages use reasoning parameters (ADR-026 Phase 2).
 
@@ -398,6 +480,7 @@ class ModelIntelligenceConfig(BaseModel):
         default_factory=ModelIntelligenceSelectionConfig
     )
     anti_herding: AntiHerdingConfig = Field(default_factory=AntiHerdingConfig)
+    discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)  # ADR-028
     reasoning: ReasoningOptimizationConfig = Field(
         default_factory=ReasoningOptimizationConfig
     )
@@ -435,6 +518,7 @@ class UnifiedConfig(BaseModel):
     model_intelligence: ModelIntelligenceConfig = Field(
         default_factory=ModelIntelligenceConfig
     )
+    frontier: FrontierConfig = Field(default_factory=FrontierConfig)  # ADR-027
 
     def get_tier_contract(self, tier: str) -> TierContract:
         """Get TierContract for a specific tier.
@@ -686,6 +770,19 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     reasoning_enabled = os.getenv("LLM_COUNCIL_REASONING_ENABLED")
     if reasoning_enabled:
         config_dict.setdefault("model_intelligence", {}).setdefault("reasoning", {})["enabled"] = reasoning_enabled.lower() in ("true", "1", "yes")
+
+    # Discovery overrides (ADR-028)
+    discovery_enabled = os.getenv("LLM_COUNCIL_DISCOVERY_ENABLED")
+    if discovery_enabled:
+        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["enabled"] = discovery_enabled.lower() in ("true", "1", "yes")
+
+    discovery_interval = os.getenv("LLM_COUNCIL_DISCOVERY_INTERVAL")
+    if discovery_interval:
+        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["refresh_interval_seconds"] = int(discovery_interval)
+
+    discovery_min_candidates = os.getenv("LLM_COUNCIL_DISCOVERY_MIN_CANDIDATES")
+    if discovery_min_candidates:
+        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["min_candidates_per_tier"] = int(discovery_min_candidates)
 
     return UnifiedConfig(**config_dict)
 
