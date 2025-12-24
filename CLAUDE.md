@@ -253,6 +253,31 @@ llm-council bias-report [--input FILE] [--sessions N] [--days N] [--format text|
   - `reload_provider()`: Refreshes cached instance (for testing)
   - Exports: ModelInfo, QualityTier, Modality, MetadataProvider
 
+**`reasoning/`** - ADR-026 Phase 2 Reasoning Parameter Optimization
+- **`types.py`**: Core reasoning types
+  - `ReasoningEffort`: Enum (MINIMAL, LOW, MEDIUM, HIGH, XHIGH)
+  - `EFFORT_RATIOS`: Effort to ratio mapping (0.10, 0.20, 0.50, 0.80, 0.95)
+  - `ReasoningConfig`: Frozen dataclass with `for_tier()` factory method
+  - `should_apply_reasoning(stage, config)`: Check if reasoning applies to stage
+- **`tracker.py`**: Usage tracking
+  - `ReasoningUsage`: Per-model usage dataclass
+  - `AggregatedUsage`: Cross-model aggregation
+  - `extract_reasoning_usage()`: Parse OpenRouter response
+  - `aggregate_reasoning_usage()`: Combine multiple usages
+- **`__init__.py`**: Module exports
+
+**Reasoning Effort Levels:**
+- MINIMAL (10%): quick tier, creative tasks
+- LOW (20%): balanced tier
+- MEDIUM (50%): high tier, coding tasks
+- HIGH (80%): reasoning tier, math tasks
+- XHIGH (95%): explicit opt-in only
+
+**Stage Configuration:**
+- `stage1: true` (primary responses - default ON)
+- `stage2: false` (peer reviews - default OFF)
+- `stage3: true` (synthesis - default ON)
+
 **Offline Mode** - ADR-026 "Sovereign Orchestrator" Philosophy
 ```bash
 # Force offline operation - all core operations work without external calls
