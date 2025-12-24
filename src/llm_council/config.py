@@ -104,6 +104,14 @@ DEFAULT_TIER_MODEL_POOLS = {
         "google/gemini-3-pro-preview",  # Fixed: was o1-preview (404)
         "x-ai/grok-4.1-fast",
     ],
+    # Frontier tier: cutting-edge/preview models for testing latest capabilities
+    "frontier": [
+        "openai/gpt-5.2-pro",
+        "anthropic/claude-opus-4.5",
+        "google/gemini-3-pro-preview",
+        "x-ai/grok-4",
+        "deepseek/deepseek-r1",
+    ],
 }
 
 

@@ -3,6 +3,10 @@
 #
 # This configuration enables the Model Intelligence Layer (ADR-026)
 # with appropriate settings for development and self-improvement use cases.
+#
+# NOTE: These static pools are FALLBACKS for when dynamic selection is unavailable.
+# With model_intelligence.enabled=true, the system should dynamically select
+# the latest models. See GitHub Issue #109 for dynamic candidate discovery.
 
 council:
   # =========================================================================
@@ -10,9 +14,11 @@ council:
   # =========================================================================
   tiers:
     # Default to 'high' for quality council deliberations
+    # Use 'frontier' for cutting-edge/preview models
     default: high
 
     pools:
+      # QUICK: Fast models for simple queries (<5s latency)
       quick:
         models:
           - openai/gpt-4o-mini
@@ -20,6 +26,7 @@ council:
           - google/gemini-2.0-flash-001
         timeout_seconds: 30
 
+      # BALANCED: Good quality with reasonable latency
       balanced:
         models:
           - openai/gpt-4o
@@ -28,21 +35,37 @@ council:
           - x-ai/grok-2-1212
         timeout_seconds: 90
 
+      # HIGH: Full council deliberation with frontier models
       high:
         models:
-          - openai/gpt-4o
+          - openai/gpt-5.2-pro
           - anthropic/claude-opus-4-5-20250514
-          - google/gemini-2.5-pro-preview-06-05
-          - x-ai/grok-3-beta
+          - google/gemini-3-pro-preview
+          - x-ai/grok-4.1-fast
         timeout_seconds: 180
 
+      # REASONING: Deep reasoning with extended thinking
       reasoning:
         models:
           - openai/o1
           - anthropic/claude-opus-4-5-20250514
-          - google/gemini-2.5-pro-preview-06-05
+          - google/gemini-3-pro-preview
           - deepseek/deepseek-r1
         timeout_seconds: 600
+
+      # FRONTIER: Cutting-edge/preview models (may be unstable)
+      # Use for testing latest capabilities before promoting to 'high'
+      frontier:
+        models:
+          - openai/gpt-5.2-pro
+          - anthropic/claude-opus-4-5-20250514
+          - google/gemini-3-pro-preview
+          - x-ai/grok-4
+          - deepseek/deepseek-r1
+        timeout_seconds: 300
+        # Frontier-specific: accept higher latency/cost for newest models
+        allow_preview: true
+        allow_beta: true
 
     escalation:
       enabled: true
