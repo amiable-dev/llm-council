@@ -553,7 +553,18 @@ async def run_council_with_fallback(
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
             user_query, responses_for_review
         )
-        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+
+        # ADR-027: Track shadow votes for frontier tier
+        track_shadows = should_track_shadow_votes(tier_contract)
+        aggregate_rankings = calculate_aggregate_rankings(
+            stage2_results, label_to_model, return_shadow_votes=track_shadows
+        )
+
+        # ADR-027: Emit shadow vote events for observability
+        if track_shadows and aggregate_rankings:
+            shadow_votes = aggregate_rankings[0].get("shadow_votes", [])
+            consensus_winner = aggregate_rankings[0].get("model") if aggregate_rankings else None
+            emit_shadow_vote_events(shadow_votes, consensus_winner)
 
         # ADR-018: Persist bias data for cross-session analysis
         # Only if enabled in config (checked inside function)
@@ -1478,7 +1489,9 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
 
 def calculate_aggregate_rankings(
     stage2_results: List[Dict[str, Any]],
-    label_to_model: Dict[str, str]
+    label_to_model: Dict[str, str],
+    voting_authorities: Optional[Dict[str, "VotingAuthority"]] = None,
+    return_shadow_votes: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Calculate aggregate rankings using Normalized Borda Count method.
@@ -1495,14 +1508,22 @@ def calculate_aggregate_rankings(
     When EXCLUDE_SELF_VOTES is True, excludes votes where the reviewer
     is evaluating their own response (prevents self-preference bias).
 
+    ADR-027 Shadow Mode: When voting_authorities is provided, votes from models
+    with ADVISORY authority (Shadow Mode) are tracked but have zero weight in
+    the final rankings. EXCLUDED models are skipped entirely.
+
     Args:
         stage2_results: Rankings from each model (includes 'model' as reviewer)
         label_to_model: Mapping from anonymous labels to model names
+        voting_authorities: Optional dict mapping reviewer model IDs to VotingAuthority.
+                           If None, all voters have FULL authority (backward compatible).
+        return_shadow_votes: If True, include shadow_votes in result entries.
 
     Returns:
         List of dicts with model name, normalized Borda score [0,1], sorted best to worst
     """
     from collections import defaultdict
+    from .voting import VotingAuthority, get_vote_weight
 
     num_candidates = len(label_to_model)
 
@@ -1527,6 +1548,9 @@ def calculate_aggregate_rankings(
     model_positions = defaultdict(list)
     self_votes_excluded = 0
 
+    # ADR-027: Track shadow votes separately for observability
+    shadow_votes = []
+
     # Normalization factor: max possible Borda points
     max_borda = num_candidates - 1
 
@@ -1540,6 +1564,34 @@ def calculate_aggregate_rankings(
         if parsed.get('abstained'):
             continue
 
+        # ADR-027: Determine voting authority for this reviewer
+        if voting_authorities is not None:
+            authority = voting_authorities.get(reviewer_model, VotingAuthority.FULL)
+        else:
+            authority = VotingAuthority.FULL
+
+        # Skip EXCLUDED reviewers entirely
+        if authority == VotingAuthority.EXCLUDED:
+            continue
+
+        # Get vote weight (1.0 for FULL, 0.0 for ADVISORY)
+        vote_weight = get_vote_weight(authority)
+
+        # Track shadow votes for ADVISORY reviewers
+        if authority == VotingAuthority.ADVISORY and ranking_list:
+            # Get the top pick (first in ranking)
+            top_label = ranking_list[0]
+            if top_label in label_to_model:
+                top_model = _get_model_from_label_value(label_to_model[top_label])
+                shadow_votes.append({
+                    "reviewer": reviewer_model,
+                    "top_pick": top_model,
+                    "ranking": [
+                        _get_model_from_label_value(label_to_model[lbl])
+                        for lbl in ranking_list if lbl in label_to_model
+                    ],
+                })
+
         # Calculate normalized Borda scores from ranking positions
         for position, label in enumerate(ranking_list):
             if label in label_to_model:
@@ -1550,29 +1602,40 @@ def calculate_aggregate_rankings(
                     self_votes_excluded += 1
                     continue
 
-                # Raw Borda points: 1st = (N-1), 2nd = (N-2), last = 0
-                raw_borda = max_borda - position
-                # Normalize to [0, 1]: divide by max possible points
-                normalized_borda = raw_borda / max_borda
-                model_borda_scores[author_model].append(normalized_borda)
-                model_positions[author_model].append(position + 1)  # 1-indexed for display
+                # ADR-027: Only count votes with weight > 0 (FULL authority)
+                if vote_weight > 0:
+                    # Raw Borda points: 1st = (N-1), 2nd = (N-2), last = 0
+                    raw_borda = max_borda - position
+                    # Normalize to [0, 1]: divide by max possible points
+                    normalized_borda = raw_borda / max_borda
+                    model_borda_scores[author_model].append(normalized_borda)
+                    model_positions[author_model].append(position + 1)  # 1-indexed for display
 
         # Also track raw scores (as secondary signal, normalized to [0,1])
-        for label, score in scores.items():
-            if label in label_to_model:
-                author_model = _get_model_from_label_value(label_to_model[label])
+        # Only for FULL authority votes
+        if vote_weight > 0:
+            for label, score in scores.items():
+                if label in label_to_model:
+                    author_model = _get_model_from_label_value(label_to_model[label])
 
-                if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
-                    continue
+                    if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
+                        continue
 
-                # Normalize raw score to [0,1] (assuming 1-10 scale)
-                normalized_raw = score / 10.0 if isinstance(score, (int, float)) else None
-                if normalized_raw is not None:
-                    model_raw_scores[author_model].append(normalized_raw)
+                    # Normalize raw score to [0,1] (assuming 1-10 scale)
+                    normalized_raw = score / 10.0 if isinstance(score, (int, float)) else None
+                    if normalized_raw is not None:
+                        model_raw_scores[author_model].append(normalized_raw)
 
     # Calculate aggregates for each model
     aggregate = []
-    all_models = set(model_borda_scores.keys()) | set(model_raw_scores.keys())
+
+    # ADR-027: Include all candidate models, even those with 0 effective votes
+    # This ensures ADVISORY-only councils still return all candidates
+    all_candidate_models = {
+        _get_model_from_label_value(label_to_model[label])
+        for label in label_to_model
+    }
+    all_models = all_candidate_models | set(model_borda_scores.keys()) | set(model_raw_scores.keys())
 
     for model in all_models:
         borda_scores = model_borda_scores.get(model, [])
@@ -1589,6 +1652,11 @@ def calculate_aggregate_rankings(
             "vote_count": len(borda_scores),
             "self_votes_excluded": EXCLUDE_SELF_VOTES
         }
+
+        # ADR-027: Optionally include shadow votes for observability
+        if return_shadow_votes:
+            entry["shadow_votes"] = shadow_votes
+
         aggregate.append(entry)
 
     # Sort by Borda score (higher is better), then by raw score as tiebreaker
@@ -1599,6 +1667,56 @@ def calculate_aggregate_rankings(
         entry['rank'] = i
 
     return aggregate
+
+
+def should_track_shadow_votes(tier_contract: Optional["TierContract"]) -> bool:
+    """Determine if shadow votes should be tracked for this tier.
+
+    Per ADR-027, shadow vote tracking is enabled only for the frontier tier.
+    This avoids unnecessary overhead for non-frontier tiers.
+
+    Args:
+        tier_contract: Optional tier contract specifying the tier.
+
+    Returns:
+        True if shadow votes should be tracked, False otherwise.
+    """
+    if tier_contract is None:
+        return False
+    return tier_contract.tier == "frontier"
+
+
+def emit_shadow_vote_events(
+    shadow_votes: List[Dict[str, Any]],
+    consensus_winner: Optional[str] = None,
+) -> None:
+    """Emit FRONTIER_SHADOW_VOTE events for each shadow vote.
+
+    Per ADR-027, shadow votes from ADVISORY reviewers are logged
+    for observability and model evaluation.
+
+    Args:
+        shadow_votes: List of shadow vote dicts from calculate_aggregate_rankings.
+        consensus_winner: The model that won consensus (top of aggregate rankings).
+    """
+    from .layer_contracts import LayerEventType, emit_layer_event
+
+    for vote in shadow_votes:
+        reviewer = vote.get("reviewer", "unknown")
+        top_pick = vote.get("top_pick")
+
+        # Calculate agreement with consensus
+        agreed_with_consensus = top_pick == consensus_winner if consensus_winner else None
+
+        emit_layer_event(
+            LayerEventType.FRONTIER_SHADOW_VOTE,
+            {
+                "model_id": reviewer,
+                "top_pick": top_pick,
+                "agreed_with_consensus": agreed_with_consensus,
+                "ranking": vote.get("ranking", []),
+            },
+        )
 
 
 async def generate_conversation_title(user_query: str) -> str:

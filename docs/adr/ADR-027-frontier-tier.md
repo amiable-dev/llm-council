@@ -295,15 +295,24 @@ council:
 2. `src/llm_council/metadata/selection.py` - Add frontier to TIER_WEIGHTS (revised values)
 3. `src/llm_council/tier_contract.py` - Support frontier tier contracts
 4. `src/llm_council/council.py` - Implement Shadow Mode voting authority
+5. `src/llm_council/metadata/intersection.py` - NEW: Tier intersection logic
+6. `src/llm_council/metadata/types.py` - Add `is_preview`, `supports_reasoning` fields
+7. `src/llm_council/frontier_fallback.py` - Add event emission for fallbacks
 
 ### Validation
 - [x] Tests for `select_tier_models(tier="frontier")`
 - [x] Tests for frontier tier weights
 - [x] Tests for frontier tier contract creation
-- [ ] Tests for Shadow Mode voting
-- [ ] Tests for graduation criteria
-- [ ] Tests for cost ceiling
-- [ ] Document frontier tier in CLAUDE.md
+- [x] Tests for Shadow Mode voting (Issue #110, #111)
+- [x] Tests for graduation criteria (Issue #112)
+- [x] Tests for cost ceiling (Issue #113)
+- [x] Tests for hard fallback (Issue #114)
+- [x] Document frontier tier in CLAUDE.md
+
+### Gap Remediation (Peer Review 2025-12-24)
+- [x] Tier intersection logic (Issue #119) - `resolve_tier_intersection()` in `metadata/intersection.py`
+- [x] Shadow votes integration (Issue #117) - Wired into `run_council_with_fallback`, events emitted
+- [x] Fallback wrapper integration (Issue #118) - Event emission in `execute_with_fallback_detailed`
 
 ### Observability
 

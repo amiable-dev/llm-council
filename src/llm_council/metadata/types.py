@@ -52,6 +52,8 @@ class ModelInfo:
         supported_parameters: List of supported API parameters
         modalities: List of supported input modalities
         quality_tier: Classification of model quality level
+        is_preview: Whether model is in preview/beta status (ADR-027)
+        supports_reasoning: Whether model supports extended reasoning (ADR-027)
 
     Example:
         >>> info = ModelInfo(
@@ -70,6 +72,8 @@ class ModelInfo:
     supported_parameters: List[str] = field(default_factory=list)
     modalities: List[str] = field(default_factory=lambda: ["text"])
     quality_tier: QualityTier = QualityTier.STANDARD
+    is_preview: bool = False
+    supports_reasoning: bool = False
 
     def __post_init__(self):
         """Validate required fields."""

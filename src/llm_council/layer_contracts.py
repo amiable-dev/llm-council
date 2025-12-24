@@ -110,6 +110,14 @@ class LayerEventType(Enum):
     BOUNDARY_CROSSING = "boundary_crossing"
     VALIDATION_WARNING = "validation_warning"
 
+    # Frontier Tier Events (ADR-027)
+    FRONTIER_MODEL_SELECTED = "frontier_model_selected"
+    FRONTIER_SHADOW_VOTE = "frontier_shadow_vote"
+    FRONTIER_FALLBACK_TRIGGERED = "frontier_fallback_triggered"
+    FRONTIER_COST_CEILING_EXCEEDED = "frontier_cost_ceiling_exceeded"
+    FRONTIER_GRADUATION_CANDIDATE = "frontier_graduation_candidate"
+    FRONTIER_GRADUATION_PROMOTED = "frontier_graduation_promoted"
+
 
 @dataclass
 class LayerEvent:

@@ -157,6 +157,57 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Constraint Propagation: Tier constraints flow down
   - Observability by Default: Every layer emits events
 
+**`voting.py`** - ADR-027 Shadow Mode Voting Authority
+- Implements voting authority levels for the council's tier system
+- Frontier tier models operate in Shadow Mode by default
+- **`VotingAuthority` Enum**:
+  - `FULL`: Vote counts in consensus calculation (weight = 1.0)
+  - `ADVISORY`: Vote logged/evaluated but has zero weight (Shadow Mode)
+  - `EXCLUDED`: Model not included in deliberation
+- **`TIER_VOTING_AUTHORITY`**: Default authority by tier
+  - quick/balanced/high/reasoning: `VotingAuthority.FULL`
+  - frontier: `VotingAuthority.ADVISORY` (Shadow Mode by default)
+- **Key Functions**:
+  - `get_vote_weight(authority)`: Returns 1.0 for FULL, 0.0 for ADVISORY/EXCLUDED
+  - `get_model_voting_authority(model_id, tier, override)`: Get authority for model
+  - `calculate_shadow_agreement(consensus_winner, shadow_votes)`: Calculate agreement ratio
+- **Shadow Mode Purpose**: Prevents experimental/preview models from affecting production consensus while still logging their votes for evaluation
+
+**`graduation.py`** - ADR-027 Frontier Graduation Criteria
+- Determines when a frontier model is ready for promotion to high tier
+- **`GraduationCriteria`**: Frozen dataclass with ADR-027 defaults
+  - `min_age_days`: 30 (days of evaluation)
+  - `min_completed_sessions`: 100 (council sessions)
+  - `max_error_rate`: 0.02 (< 2% errors)
+  - `min_quality_percentile`: 0.75 (>= 75th percentile)
+- **`ModelStats`**: Tracked performance statistics for evaluation
+- **`should_graduate(stats, criteria)`**: Returns (passed, failures) tuple
+- **`get_graduation_candidates(tier)`**: Get all potential graduation candidates
+
+**`cost_ceiling.py`** - ADR-027 Cost Ceiling Protection
+- Prevents runaway costs for frontier tier models
+- **`FRONTIER_COST_MULTIPLIER`**: Default 5.0x multiplier
+- **`apply_cost_ceiling(model_id, model_cost, tier, high_tier_avg_cost)`**:
+  - Returns (allowed, reason) tuple
+  - Frontier models capped at 5x high-tier average cost
+  - Non-frontier tiers bypass check
+- **`check_model_cost_ceiling()`**: Convenience wrapper
+
+**`frontier_fallback.py`** - ADR-027 Hard Fallback
+- Automatic fallback from frontier tier to high tier on failure
+- **`RateLimitError`**, **`APIError`**: Exception classes
+- **`FallbackResult`**: Dataclass with response + fallback metadata
+- **`execute_with_fallback(query, frontier_model, fallback_tier="high")`**:
+  - Tries frontier model first
+  - Falls back on timeout/rate limit/API error
+  - Logs warning on fallback
+- **`execute_with_fallback_detailed()`**: Same as above but returns FallbackResult with metadata
+  - Emits `FRONTIER_FALLBACK_TRIGGERED` event on fallback
+- **`emit_fallback_event(frontier_model, fallback_model, reason)`**: Emit fallback event
+- **`should_use_fallback_wrapper(tier_contract)`**: Returns True for frontier tier only
+- **`get_fallback_tier_from_config()`**: Get fallback tier from unified config
+- **`DEFAULT_FRONTIER_TIMEOUT`**: 300 seconds
+
 **`triage/`** - ADR-020 Query Triage Layer
 - **`types.py`**: Core types for triage
   - `TriageResult`: resolved_models, optimized_prompts, fast_path, escalation fields
@@ -195,6 +246,13 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `stage3_synthesize_final()`: Chairman synthesizes from all responses + rankings
 - `parse_ranking_from_text()`: Extracts "FINAL RANKING:" section, handles both numbered lists and plain format
 - `calculate_aggregate_rankings()`: Computes average rank position across all peer evaluations
+  - **ADR-027**: Accepts optional `voting_authorities` dict mapping reviewer IDs to VotingAuthority
+  - **ADR-027**: Accepts optional `return_shadow_votes` bool to include shadow vote metadata
+  - ADVISORY votes (Shadow Mode) are tracked but have zero weight in rankings
+- **ADR-027 Shadow Vote Integration**:
+  - `should_track_shadow_votes(tier_contract)`: Returns True for frontier tier only
+  - `emit_shadow_vote_events(shadow_votes, consensus_winner)`: Emits FRONTIER_SHADOW_VOTE events
+  - Automatically enabled in `run_council_with_fallback` for frontier tier
 
 **`rubric.py`** - ADR-016 Structured Rubric Scoring
 - `RubricScore`: Dataclass for multi-dimensional scores (accuracy, relevance, completeness, conciseness, clarity)
@@ -264,9 +322,13 @@ llm-council bias-report [--input FILE] [--sessions N] [--days N] [--format text|
 
 **`metadata/`** - ADR-026 Model Metadata Provider
 - **`types.py`**: Core data structures
-  - `ModelInfo`: Frozen dataclass with id, context_window, pricing, supported_parameters, modalities, quality_tier
+  - `ModelInfo`: Frozen dataclass with id, context_window, pricing, supported_parameters, modalities, quality_tier, is_preview, supports_reasoning
   - `QualityTier`: Enum (FRONTIER, STANDARD, ECONOMY, LOCAL)
   - `Modality`: Enum (TEXT, VISION, AUDIO)
+- **`intersection.py`**: ADR-027 Tier intersection logic
+  - `resolve_tier_intersection(tier, model_info, allow_preview)`: Determine if model qualifies for tier
+  - Handles models belonging to multiple tiers (e.g., o1-preview is both reasoning and frontier)
+  - Precedence rules: frontier includes previews, reasoning excludes previews by default
 - **`protocol.py`**: Abstract protocol definition
   - `MetadataProvider`: `@runtime_checkable` Protocol with 5 methods
     - `get_model_info(model_id)` → Optional[ModelInfo]
