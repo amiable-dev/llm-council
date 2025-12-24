@@ -261,3 +261,115 @@ class TestTierContractPerModelTimeout:
             tier_timeout = get_tier_timeout(tier)
 
             assert contract.per_model_timeout_ms == tier_timeout["per_model"] * 1000
+
+
+# =============================================================================
+# ADR-026 Phase 2: Reasoning Configuration Integration (Issue #98)
+# =============================================================================
+
+
+class TestTierContractReasoningConfig:
+    """Test reasoning_config field in TierContract (ADR-026 Phase 2)."""
+
+    def test_tier_contract_has_reasoning_config_field(self):
+        """TierContract should have optional reasoning_config field."""
+        from llm_council.tier_contract import TierContract
+
+        contract = TierContract(
+            tier="high",
+            deadline_ms=180000,
+            per_model_timeout_ms=90000,
+            token_budget=4096,
+            max_attempts=3,
+            requires_peer_review=True,
+            requires_verifier=False,
+            allowed_models=["openai/gpt-4o"],
+            aggregator_model="openai/gpt-4o",
+            override_policy={"can_escalate": True, "can_deescalate": False},
+            reasoning_config=None,
+        )
+        assert hasattr(contract, "reasoning_config")
+        assert contract.reasoning_config is None
+
+    def test_tier_contract_reasoning_config_none_when_disabled(self):
+        """reasoning_config should be None when model intelligence disabled."""
+        from llm_council.tier_contract import create_tier_contract
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "false"}):
+            contract = create_tier_contract("high")
+            assert contract.reasoning_config is None
+
+    def test_tier_contract_reasoning_config_populated_when_enabled(self):
+        """reasoning_config should be populated when model intelligence enabled."""
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.reasoning import ReasoningConfig
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            contract = create_tier_contract("high")
+            assert contract.reasoning_config is not None
+            assert isinstance(contract.reasoning_config, ReasoningConfig)
+
+    def test_reasoning_tier_uses_high_effort(self):
+        """Reasoning tier should use HIGH effort."""
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.reasoning import ReasoningEffort
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            contract = create_tier_contract("reasoning")
+            assert contract.reasoning_config is not None
+            assert contract.reasoning_config.effort == ReasoningEffort.HIGH
+
+    def test_quick_tier_uses_minimal_effort(self):
+        """Quick tier should use MINIMAL effort."""
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.reasoning import ReasoningEffort
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            contract = create_tier_contract("quick")
+            assert contract.reasoning_config is not None
+            assert contract.reasoning_config.effort == ReasoningEffort.MINIMAL
+
+    def test_balanced_tier_uses_low_effort(self):
+        """Balanced tier should use LOW effort."""
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.reasoning import ReasoningEffort
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            contract = create_tier_contract("balanced")
+            assert contract.reasoning_config is not None
+            assert contract.reasoning_config.effort == ReasoningEffort.LOW
+
+    def test_high_tier_uses_medium_effort(self):
+        """High tier should use MEDIUM effort."""
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.reasoning import ReasoningEffort
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            contract = create_tier_contract("high")
+            assert contract.reasoning_config is not None
+            assert contract.reasoning_config.effort == ReasoningEffort.MEDIUM
+
+    def test_task_domain_overrides_tier_effort(self):
+        """task_domain should override tier-default effort."""
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.reasoning import ReasoningEffort
+        from unittest.mock import patch
+        import os
+
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}):
+            # Math domain should override quick tier's MINIMAL to HIGH
+            contract = create_tier_contract("quick", task_domain="math")
+            assert contract.reasoning_config is not None
+            assert contract.reasoning_config.effort == ReasoningEffort.HIGH

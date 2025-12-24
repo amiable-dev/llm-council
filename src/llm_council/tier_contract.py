@@ -5,13 +5,19 @@ and execution policies. Created per council consultation request.
 
 ADR-026 Extension: When model intelligence is enabled, uses dynamic model
 selection via select_tier_models() instead of static TIER_MODEL_POOLS.
+
+ADR-026 Phase 2: When model intelligence is enabled, populates reasoning_config
+with tier-appropriate reasoning parameters for models that support reasoning.
 """
 
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from .config import TIER_MODEL_POOLS, get_tier_timeout
+
+if TYPE_CHECKING:
+    from .reasoning import ReasoningConfig
 
 
 # Tier-appropriate aggregator models (ADR-022 council recommendation)
@@ -39,6 +45,7 @@ class TierContract:
     - allowed_models: Model pool for this tier
     - aggregator_model: Model used for synthesis/aggregation
     - override_policy: Escalation/de-escalation rules
+    - reasoning_config: Optional reasoning parameters (ADR-026 Phase 2)
     """
 
     tier: str
@@ -51,6 +58,7 @@ class TierContract:
     allowed_models: List[str]
     aggregator_model: str
     override_policy: Dict[str, bool]
+    reasoning_config: Optional["ReasoningConfig"] = None
 
 
 def _is_model_intelligence_enabled() -> bool:
@@ -145,6 +153,17 @@ def create_tier_contract(
     # Get allowed models - uses dynamic selection if intelligence enabled (ADR-026)
     allowed_models = _get_allowed_models(tier_lower, task_domain)
 
+    # Get reasoning config if model intelligence is enabled (ADR-026 Phase 2)
+    reasoning_config = None
+    if _is_model_intelligence_enabled():
+        # Lazy import to avoid circular dependencies
+        from .reasoning import ReasoningConfig
+
+        reasoning_config = ReasoningConfig.for_tier(
+            tier=tier_lower,
+            task_domain=task_domain,
+        )
+
     return TierContract(
         tier=tier_lower,
         deadline_ms=deadline_ms,
@@ -156,6 +175,7 @@ def create_tier_contract(
         allowed_models=allowed_models,
         aggregator_model=TIER_AGGREGATORS[tier_lower],
         override_policy=config["override_policy"],
+        reasoning_config=reasoning_config,
     )
 
 
