@@ -72,6 +72,36 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `LLM_COUNCIL_MODEL_INTELLIGENCE=true`: Enable dynamic model selection
 - `LLM_COUNCIL_OFFLINE=true`: Force offline mode (static provider only)
 
+**`performance/`** - ADR-026 Phase 3: Internal Performance Tracking
+- Tracks model performance from actual council sessions
+- Builds Internal Performance Index for quality scoring in model selection
+
+- **`types.py`**: Core types
+  - `ModelSessionMetric`: Per-session per-model performance data (session_id, model_id, latency_ms, borda_score, parse_success)
+  - `ModelPerformanceIndex`: Aggregated performance (mean_borda_score, p50/p95_latency_ms, parse_success_rate, confidence_level)
+- **`store.py`**: JSONL persistence (follows bias_persistence.py pattern)
+  - `append_performance_records()`: Atomic append to JSONL file
+  - `read_performance_records()`: Read with max_days and model_id filtering
+- **`tracker.py`**: Main tracker class
+  - `InternalPerformanceTracker`: Aggregates metrics with exponential decay
+  - `record_session()`: Record metrics from completed council session
+  - `get_model_index()`: Get aggregated ModelPerformanceIndex
+  - `get_quality_score()`: Get 0-100 normalized score for selection.py
+- **`integration.py`**: Council integration
+  - `persist_session_performance_data()`: Extract and persist session metrics
+  - `get_tracker()`: Singleton factory for tracker
+- **`__init__.py`**: Module exports
+
+**Performance Tracking Environment Variables:**
+- `LLM_COUNCIL_PERFORMANCE_TRACKING`: Enable/disable (default: true)
+- `LLM_COUNCIL_PERFORMANCE_STORE`: Custom store path
+
+**Confidence Levels (sample size thresholds):**
+- INSUFFICIENT: <10 samples
+- PRELIMINARY: 10-30 samples
+- MODERATE: 30-100 samples
+- HIGH: 100+ samples
+
 **`unified_config.py`** - ADR-024 Unified YAML Configuration
 - Single source of truth consolidating ADR-020, ADR-022, ADR-023, ADR-026 settings
 - Pydantic-based schema with validation
