@@ -943,21 +943,48 @@ council:
 - Static fallback activates when API unavailable or offline mode enabled
 - All 1206 tests pass
 
-### Phase 2: Reasoning Parameter Optimization (v0.16.x) ✅ APPROVED
+### Phase 2: Reasoning Parameter Optimization (v0.16.x) ✅ IMPLEMENTED
 
 **Goal:** Automatic reasoning parameter configuration for capable models.
 
-- [ ] Detect reasoning-capable models from registry metadata
-- [ ] Apply `reasoning_effort` parameter based on tier (quick=minimal, reasoning=high)
-- [ ] Calculate `budget_tokens` per effort level
-- [ ] Add task-specific parameter profiles (math→high effort, creative→minimal)
-- [ ] Update gateway to pass reasoning parameters to OpenRouter
-- [ ] Track reasoning token usage for cost optimization
+- [x] Detect reasoning-capable models from registry metadata
+- [x] Apply `reasoning_effort` parameter based on tier (quick=minimal, reasoning=high)
+- [x] Calculate `budget_tokens` per effort level
+- [x] Add task-specific parameter profiles (math→high effort, creative→minimal)
+- [x] Update gateway to pass reasoning parameters to OpenRouter
+- [x] Track reasoning token usage for cost optimization
 
-**Validation Gate:** Phase 2 complete when:
+**Implementation Details (2025-12-24):**
+
+Implemented using TDD with 80 new tests (1299 total tests pass).
+
+**Module Structure:** `src/llm_council/reasoning/`
+
+| File | Purpose |
+|------|---------|
+| `types.py` | `ReasoningEffort` enum, `ReasoningConfig` frozen dataclass, `should_apply_reasoning()` |
+| `tracker.py` | `ReasoningUsage`, `AggregatedUsage`, `extract_reasoning_usage()`, `aggregate_reasoning_usage()` |
+| `__init__.py` | Module exports |
+
+**Tier-Effort Mapping:**
+- quick → MINIMAL (10%)
+- balanced → LOW (20%)
+- high → MEDIUM (50%)
+- reasoning → HIGH (80%)
+
+**Domain Overrides:** math→HIGH, coding→MEDIUM, creative→MINIMAL
+
+**Stage Configuration:**
+- `stage1: true` (primary responses)
+- `stage2: false` (peer reviews)
+- `stage3: true` (synthesis)
+
+**GitHub Issues:** #97-#100 (all completed)
+
+**Validation Gate:** ✅ PASSED
 - Reasoning parameters correctly applied for all reasoning-tier queries
 - Token usage tracking shows expected budget allocation
-- No regressions in non-reasoning tiers
+- No regressions in non-reasoning tiers (1299 tests pass)
 
 ### Phase 3: Internal Performance Tracking (v0.17.x) ⚠️ REDESIGNED
 
