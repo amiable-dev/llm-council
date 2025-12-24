@@ -322,7 +322,7 @@ async def test_timeout_preserves_diagnostic_info():
     # Create a mock that simulates some models responding before timeout
     call_count = 0
 
-    async def mock_query_with_status(model, messages, timeout=None, disable_tools=False):
+    async def mock_query_with_status(model, messages, timeout=None, disable_tools=False, reasoning_params=None):
         nonlocal call_count
         call_count += 1
         # First model responds quickly

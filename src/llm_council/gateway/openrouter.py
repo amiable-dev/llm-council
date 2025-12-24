@@ -26,8 +26,61 @@ from .types import (
     ContentBlock,
     GatewayRequest,
     GatewayResponse,
+    ReasoningParams,
     UsageInfo,
 )
+
+
+def build_openrouter_payload(
+    model: str,
+    messages: List[Dict[str, Any]],
+    reasoning_params: Optional[ReasoningParams] = None,
+    max_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+    disable_tools: bool = False,
+) -> Dict[str, Any]:
+    """Build OpenRouter API payload with optional reasoning parameters.
+
+    Args:
+        model: Model identifier (e.g., "openai/o1")
+        messages: List of message dicts in OpenRouter format
+        reasoning_params: Optional reasoning parameters (ADR-026 Phase 2)
+        max_tokens: Optional max tokens for generation
+        temperature: Optional sampling temperature
+        disable_tools: Whether to disable tool calling
+
+    Returns:
+        Dict payload ready for OpenRouter API
+    """
+    payload: Dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+    }
+
+    if disable_tools:
+        payload["tools"] = []
+        payload["tool_choice"] = "none"
+
+    if max_tokens is not None:
+        payload["max_tokens"] = max_tokens
+
+    if temperature is not None:
+        payload["temperature"] = temperature
+
+    # Inject reasoning parameters for reasoning models (ADR-026 Phase 2)
+    if reasoning_params is not None:
+        # Check if model supports reasoning
+        from ..metadata import get_provider
+
+        provider = get_provider()
+        if provider.supports_reasoning(model):
+            payload["reasoning"] = {
+                "effort": reasoning_params.effort,
+                "max_tokens": reasoning_params.max_tokens,
+                "exclude": reasoning_params.exclude,
+            }
+
+    return payload
 
 
 class OpenRouterGateway(BaseRouter):

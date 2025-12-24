@@ -1,10 +1,16 @@
-"""OpenRouter API client for parallel LLM queries."""
+"""OpenRouter API client for parallel LLM queries.
+
+ADR-026 Phase 2: Added reasoning_params support for reasoning models.
+"""
 
 import httpx
 import asyncio
 import time
-from typing import List, Dict, Any, Optional, Callable, Awaitable
+from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 from llm_council.config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+
+if TYPE_CHECKING:
+    from llm_council.gateway.types import ReasoningParams
 
 
 # Status constants for structured results (ADR-012)
@@ -19,7 +25,8 @@ async def query_model(
     model: str,
     messages: List[Dict[str, str]],
     timeout: float = 120.0,
-    disable_tools: bool = False
+    disable_tools: bool = False,
+    reasoning_params: Optional["ReasoningParams"] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -29,11 +36,14 @@ async def query_model(
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
         disable_tools: If True, explicitly disable tool/function calling
+        reasoning_params: Optional reasoning parameters for reasoning models (ADR-026)
 
     Returns:
         Response dict with 'content', optional 'reasoning_details', and 'usage', or None if failed
     """
-    result = await query_model_with_status(model, messages, timeout, disable_tools)
+    result = await query_model_with_status(
+        model, messages, timeout, disable_tools, reasoning_params
+    )
     if result["status"] == STATUS_OK:
         return {
             "content": result.get("content"),
@@ -47,7 +57,8 @@ async def query_model_with_status(
     model: str,
     messages: List[Dict[str, str]],
     timeout: float = 120.0,
-    disable_tools: bool = False
+    disable_tools: bool = False,
+    reasoning_params: Optional["ReasoningParams"] = None,
 ) -> Dict[str, Any]:
     """
     Query a single model via OpenRouter API with structured status (ADR-012).
@@ -57,6 +68,7 @@ async def query_model_with_status(
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
         disable_tools: If True, explicitly disable tool/function calling
+        reasoning_params: Optional reasoning parameters for reasoning models (ADR-026)
 
     Returns:
         Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
@@ -66,15 +78,15 @@ async def query_model_with_status(
         "Content-Type": "application/json",
     }
 
-    payload = {
-        "model": model,
-        "messages": messages,
-    }
+    # Build payload using gateway function for reasoning injection (ADR-026)
+    from llm_council.gateway.openrouter import build_openrouter_payload
 
-    # Disable tools to prevent prompt injection via tool invocation
-    if disable_tools:
-        payload["tools"] = []
-        payload["tool_choice"] = "none"
+    payload = build_openrouter_payload(
+        model=model,
+        messages=messages,
+        reasoning_params=reasoning_params,
+        disable_tools=disable_tools,
+    )
 
     start_time = time.time()
 
@@ -145,6 +157,7 @@ async def query_models_parallel(
     messages: List[Dict[str, str]],
     disable_tools: bool = False,
     timeout: float = 120.0,
+    reasoning_params: Optional["ReasoningParams"] = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -154,12 +167,19 @@ async def query_models_parallel(
         messages: List of message dicts to send to each model
         disable_tools: If True, disable tool/function calling for all queries
         timeout: Per-model timeout in seconds
+        reasoning_params: Optional reasoning parameters for reasoning models (ADR-026)
 
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
     """
     # Create tasks for all models
-    tasks = [query_model(model, messages, timeout=timeout, disable_tools=disable_tools) for model in models]
+    tasks = [
+        query_model(
+            model, messages, timeout=timeout, disable_tools=disable_tools,
+            reasoning_params=reasoning_params
+        )
+        for model in models
+    ]
 
     # Wait for all to complete
     responses = await asyncio.gather(*tasks)
