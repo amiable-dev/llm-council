@@ -26,6 +26,7 @@ Usage:
 """
 
 from .store import append_performance_records, read_performance_records
+from .tracker import InternalPerformanceTracker
 from .types import ModelPerformanceIndex, ModelSessionMetric
 
 __all__ = [
@@ -35,4 +36,6 @@ __all__ = [
     # Storage (store.py)
     "append_performance_records",
     "read_performance_records",
+    # Tracker (tracker.py)
+    "InternalPerformanceTracker",
 ]
