@@ -25,6 +25,7 @@ Usage:
     records = read_performance_records(Path("metrics.jsonl"), max_days=30)
 """
 
+from .integration import get_tracker, persist_session_performance_data
 from .store import append_performance_records, read_performance_records
 from .tracker import InternalPerformanceTracker
 from .types import ModelPerformanceIndex, ModelSessionMetric
@@ -38,4 +39,7 @@ __all__ = [
     "read_performance_records",
     # Tracker (tracker.py)
     "InternalPerformanceTracker",
+    # Integration (integration.py)
+    "get_tracker",
+    "persist_session_performance_data",
 ]
