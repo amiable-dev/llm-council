@@ -894,3 +894,132 @@ class TestDiscoveryConfig:
         assert "model_intelligence" in config_dict
         assert "discovery" in config_dict["model_intelligence"]
         assert config_dict["model_intelligence"]["discovery"]["enabled"] is True
+
+
+class TestAuditionConfig:
+    """Test ADR-029 Audition Configuration."""
+
+    def test_audition_config_defaults(self):
+        """AuditionConfig should have correct defaults per ADR-029."""
+        from llm_council.unified_config import AuditionConfig
+
+        config = AuditionConfig()
+
+        assert config.enabled is True
+        assert config.max_audition_seats == 1
+
+        # Shadow phase defaults
+        assert config.shadow.min_sessions == 10
+        assert config.shadow.min_days == 3
+        assert config.shadow.max_failures == 3
+
+        # Probation phase defaults
+        assert config.probation.min_sessions == 25
+        assert config.probation.min_days == 7
+        assert config.probation.max_failures == 5
+
+        # Evaluation phase defaults
+        assert config.evaluation.min_sessions == 50
+        assert config.evaluation.min_quality_percentile == 0.75
+
+        # Quarantine defaults
+        assert config.quarantine.cooldown_hours == 24
+
+    def test_audition_config_validation(self):
+        """AuditionConfig should validate field constraints."""
+        from pydantic import ValidationError
+
+        from llm_council.unified_config import AuditionConfig
+
+        # Valid config
+        config = AuditionConfig(max_audition_seats=2)
+        assert config.max_audition_seats == 2
+
+        # Invalid: max_audition_seats too high
+        with pytest.raises(ValidationError):
+            AuditionConfig(max_audition_seats=5)
+
+        # Invalid: negative seats
+        with pytest.raises(ValidationError):
+            AuditionConfig(max_audition_seats=-1)
+
+    def test_audition_shadow_config_validation(self):
+        """ShadowPhaseConfig should validate constraints."""
+        from pydantic import ValidationError
+
+        from llm_council.unified_config import ShadowPhaseConfig
+
+        # Valid
+        config = ShadowPhaseConfig(min_sessions=5, min_days=2)
+        assert config.min_sessions == 5
+
+        # Invalid: min_sessions must be >= 1
+        with pytest.raises(ValidationError):
+            ShadowPhaseConfig(min_sessions=0)
+
+    def test_audition_evaluation_config_validation(self):
+        """EvaluationPhaseConfig should validate constraints."""
+        from pydantic import ValidationError
+
+        from llm_council.unified_config import EvaluationPhaseConfig
+
+        # Valid
+        config = EvaluationPhaseConfig(min_quality_percentile=0.80)
+        assert config.min_quality_percentile == 0.80
+
+        # Invalid: percentile > 1.0
+        with pytest.raises(ValidationError):
+            EvaluationPhaseConfig(min_quality_percentile=1.5)
+
+        # Invalid: percentile < 0.0
+        with pytest.raises(ValidationError):
+            EvaluationPhaseConfig(min_quality_percentile=-0.1)
+
+    def test_audition_in_model_intelligence_config(self):
+        """AuditionConfig should be in ModelIntelligenceConfig."""
+        from llm_council.unified_config import UnifiedConfig
+
+        config = UnifiedConfig()
+
+        assert hasattr(config.model_intelligence, "audition")
+        assert config.model_intelligence.audition.enabled is True
+        assert config.model_intelligence.audition.max_audition_seats == 1
+
+    def test_audition_config_from_yaml(self, tmp_path):
+        """AuditionConfig should load from YAML."""
+        yaml_content = """
+council:
+  model_intelligence:
+    audition:
+      enabled: false
+      max_audition_seats: 2
+      shadow:
+        min_sessions: 5
+        min_days: 2
+      evaluation:
+        min_quality_percentile: 0.80
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        from llm_council.unified_config import load_config
+
+        config = load_config(config_file)
+
+        assert config.model_intelligence.audition.enabled is False
+        assert config.model_intelligence.audition.max_audition_seats == 2
+        assert config.model_intelligence.audition.shadow.min_sessions == 5
+        assert config.model_intelligence.audition.shadow.min_days == 2
+        assert config.model_intelligence.audition.evaluation.min_quality_percentile == 0.80
+
+    def test_audition_serializes_to_dict(self):
+        """Audition config should serialize to dict."""
+        from llm_council.unified_config import UnifiedConfig
+
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "model_intelligence" in config_dict
+        assert "audition" in config_dict["model_intelligence"]
+        assert config_dict["model_intelligence"]["audition"]["enabled"] is True
+        assert config_dict["model_intelligence"]["audition"]["max_audition_seats"] == 1

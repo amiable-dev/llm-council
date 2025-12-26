@@ -125,6 +125,13 @@ class LayerEventType(Enum):
     DISCOVERY_FALLBACK_TRIGGERED = "discovery_fallback_triggered"
     DISCOVERY_STALE_SERVE = "discovery_stale_serve"
 
+    # Audition Events (ADR-029)
+    AUDITION_STATE_TRANSITION = "audition_state_transition"
+    AUDITION_MODEL_SELECTED = "audition_model_selected"
+    AUDITION_FAILURE_RECORDED = "audition_failure_recorded"
+    AUDITION_QUARANTINE_TRIGGERED = "audition_quarantine_triggered"
+    AUDITION_GRADUATION_COMPLETE = "audition_graduation_complete"
+
 
 @dataclass
 class LayerEvent:

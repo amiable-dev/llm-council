@@ -150,6 +150,10 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
     - `refresh`: Cache TTL settings (registry_ttl, availability_ttl)
     - `selection`: Selection algorithm settings (min_providers, default_count)
     - `anti_herding`: Traffic concentration prevention (enabled, threshold, penalty)
+    - `audition` (ADR-029): Model audition configuration
+      - `enabled`: Enable audition mechanism (default: true)
+      - `max_audition_seats`: Max audition models per session (default: 1)
+      - `shadow`/`probation`/`evaluation`/`quarantine`: Phase-specific settings
 - **Key Functions**:
   - `load_config(path)`: Load from YAML file with validation
   - `get_effective_config()`: Get config with env var overrides applied
@@ -241,6 +245,53 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - **`should_use_fallback_wrapper(tier_contract)`**: Returns True for frontier tier only
 - **`get_fallback_tier_from_config()`**: Get fallback tier from unified config
 - **`DEFAULT_FRONTIER_TIMEOUT`**: 300 seconds
+
+**`audition/`** - ADR-029 Model Audition Mechanism
+- Implements volume-based audition for newly discovered models
+- Solves the cold start problem: new models progress through states before voting
+- **State Machine**: SHADOW → PROBATION → EVALUATION → FULL (+ QUARANTINE for failures)
+- **`types.py`**: Core types
+  - `AuditionState`: Enum (SHADOW, PROBATION, EVALUATION, FULL, QUARANTINE)
+  - `AuditionStatus`: Dataclass tracking model progress (session_count, first_seen, consecutive_failures, quality_percentile)
+  - `AuditionCriteria`: Frozen dataclass with graduation thresholds
+  - `evaluate_state_transition()`: Determine if model should change states
+  - `record_session_result()`: Update status after session
+- **`tracker.py`**: Main tracker class
+  - `AuditionTracker`: In-memory cache + JSONL persistence
+  - `get_status(model_id)`: Get current audition status
+  - `record_session(model_id, success, criteria)`: Record session and check transitions
+  - `update_quality_percentile(model_id, percentile)`: Update quality score
+  - `check_transitions(criteria)`: Evaluate all models for state changes
+  - `get_audition_tracker()`: Singleton factory
+- **`selection.py`**: Selection weighting
+  - Weight progression: SHADOW/PROBATION=30%, EVALUATION=30-100%, FULL=100%, QUARANTINE=0%
+  - `get_selection_weight(status)`: Returns weight factor (0-1)
+  - `select_with_audition(candidates, tracker, count, max_audition_seats)`: Apply weights + seat limits
+  - `is_auditioning_model(status)`: Check if in audition state
+- **`voting.py`**: Voting integration
+  - `STATE_VOTING_AUTHORITY`: Maps AuditionState to VotingAuthority
+  - SHADOW/PROBATION/EVALUATION → ADVISORY (non-binding votes)
+  - FULL → FULL (binding votes), QUARANTINE → EXCLUDED
+  - `get_audition_voting_authority(model_id, tracker)`: Get authority for model
+- **`store.py`**: JSONL persistence
+  - `append_audition_record()`: Atomic append to JSONL
+  - `read_audition_records()`: Read with optional model_id filter
+- **Graduation Criteria** (per ADR-029):
+  - SHADOW → PROBATION: 10 sessions + 3 days
+  - PROBATION → EVALUATION: 25 sessions + 7 days
+  - EVALUATION → FULL: 50 sessions + quality ≥ 75th percentile
+  - Quarantine: consecutive failures exceed threshold (SHADOW: 3, PROBATION: 5)
+- **Environment Variables**:
+  - `LLM_COUNCIL_AUDITION_ENABLED`: Enable/disable audition (default: true)
+  - `LLM_COUNCIL_AUDITION_MAX_SEATS`: Max audition models per session (default: 1)
+  - `LLM_COUNCIL_AUDITION_SHADOW_SESSIONS`: Min sessions for SHADOW exit (default: 10)
+  - `LLM_COUNCIL_AUDITION_EVAL_SESSIONS`: Min sessions for EVALUATION exit (default: 50)
+- **Observability Events**:
+  - `AUDITION_STATE_TRANSITION`: Model changed state
+  - `AUDITION_MODEL_SELECTED`: Auditioning model selected for council
+  - `AUDITION_FAILURE_RECORDED`: Session failure recorded
+  - `AUDITION_QUARANTINE_TRIGGERED`: Model entered quarantine
+  - `AUDITION_GRADUATION_COMPLETE`: Model graduated to FULL
 
 **`triage/`** - ADR-020 Query Triage Layer
 - **`types.py`**: Core types for triage

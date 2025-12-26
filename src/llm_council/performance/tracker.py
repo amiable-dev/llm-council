@@ -220,3 +220,74 @@ class InternalPerformanceTracker:
 
         # Convert 0-1 Borda score to 0-100 scale
         return index.mean_borda_score * 100.0
+
+    def get_all_model_scores(self) -> dict[str, float]:
+        """Get quality scores for all tracked models with sufficient data.
+
+        Reads all records and returns mean Borda scores for models
+        with at least 10 samples (PRELIMINARY confidence).
+
+        Returns:
+            Dict mapping model_id to mean Borda score (0-1)
+        """
+        all_records = read_performance_records(self.store_path)
+
+        # Group by model_id
+        model_records: dict[str, List[ModelSessionMetric]] = {}
+        for record in all_records:
+            if record.model_id not in model_records:
+                model_records[record.model_id] = []
+            model_records[record.model_id].append(record)
+
+        # Calculate mean Borda for models with sufficient data
+        scores: dict[str, float] = {}
+        for model_id, records in model_records.items():
+            if len(records) < 10:  # Need PRELIMINARY confidence
+                continue
+
+            # Weighted mean with decay
+            total_weight = 0.0
+            weighted_sum = 0.0
+            for record in records:
+                weight = _calculate_decay_weight(record.timestamp, self.decay_days)
+                total_weight += weight
+                weighted_sum += record.borda_score * weight
+
+            if total_weight > 0:
+                scores[model_id] = weighted_sum / total_weight
+
+        return scores
+
+    def get_quality_percentile(self, model_id: str) -> Optional[float]:
+        """Calculate percentile rank of model quality among all models.
+
+        Ranks the model's mean Borda score against all other tracked models.
+        Returns None if the model has insufficient data.
+
+        For ADR-029 EVALUATION → FULL graduation, models need >= 75th percentile.
+
+        Args:
+            model_id: Full model identifier
+
+        Returns:
+            Percentile (0-1) where 0.75 = top 25%, None if insufficient data
+        """
+        # Get all model scores
+        all_scores = self.get_all_model_scores()
+
+        # Check if target model has sufficient data
+        if model_id not in all_scores:
+            return None
+
+        target_score = all_scores[model_id]
+
+        # Single model case
+        if len(all_scores) == 1:
+            return 1.0
+
+        # Calculate percentile: fraction of models this model beats or ties
+        scores_list = list(all_scores.values())
+        beaten_or_tied = sum(1 for s in scores_list if target_score >= s)
+        percentile = beaten_or_tied / len(scores_list)
+
+        return percentile
