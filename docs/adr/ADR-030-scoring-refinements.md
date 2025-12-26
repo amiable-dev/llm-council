@@ -506,14 +506,14 @@ class TestScoringRefinements:
 
 ## Implementation Plan
 
-1. [ ] Implement log-ratio cost scoring function
-2. [ ] Update QUALITY_TIER_SCORES with benchmark sources
-3. [ ] Implement CircuitBreaker class with state machine
-4. [ ] Add circuit breaker registry (per-model)
-5. [ ] Integrate circuit breaker with selection pipeline
-6. [ ] Add metrics and structured logging
-7. [ ] Make all parameters configurable via YAML
-8. [ ] Add comprehensive tests
+1. [x] Implement log-ratio cost scoring function (Issue #138)
+2. [x] Update QUALITY_TIER_SCORES with benchmark sources (Issue #139)
+3. [x] Implement CircuitBreaker class with state machine (Issue #140)
+4. [x] Add circuit breaker registry (per-model) (Issue #141)
+5. [x] Integrate circuit breaker with selection pipeline (Issue #142)
+6. [x] Add metrics and structured logging (L4_CIRCUIT_BREAKER_OPEN/CLOSE events)
+7. [x] Make all parameters configurable via YAML (ScoringConfig, CircuitBreakerConfig)
+8. [x] Add comprehensive tests (126 new tests across 4 test files)
 
 ---
 
