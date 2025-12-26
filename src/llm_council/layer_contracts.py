@@ -188,6 +188,15 @@ def emit_layer_event(
         data,
     )
 
+    # Notify subscribed metrics adapters (ADR-030)
+    # Lazy import to avoid circular dependency
+    try:
+        from .observability.metrics_adapter import _notify_adapters
+
+        _notify_adapters(event)
+    except ImportError:
+        pass  # Observability module not available
+
     return event
 
 
