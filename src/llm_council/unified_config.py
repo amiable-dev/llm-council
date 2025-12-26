@@ -465,6 +465,65 @@ class PerformanceTrackerConfig(BaseModel):
     min_samples_high: int = Field(default=100, ge=1)
 
 
+# =============================================================================
+# ADR-029: Model Audition Configuration
+# =============================================================================
+
+
+class ShadowPhaseConfig(BaseModel):
+    """Configuration for SHADOW phase of model audition."""
+
+    min_sessions: int = Field(default=10, ge=1)
+    min_days: int = Field(default=3, ge=1)
+    max_failures: int = Field(default=3, ge=0)
+
+
+class ProbationPhaseConfig(BaseModel):
+    """Configuration for PROBATION phase of model audition."""
+
+    min_sessions: int = Field(default=25, ge=1)
+    min_days: int = Field(default=7, ge=1)
+    max_failures: int = Field(default=5, ge=0)
+
+
+class EvaluationPhaseConfig(BaseModel):
+    """Configuration for EVALUATION phase of model audition."""
+
+    min_sessions: int = Field(default=50, ge=1)
+    min_quality_percentile: float = Field(default=0.75, ge=0.0, le=1.0)
+
+
+class QuarantinePhaseConfig(BaseModel):
+    """Configuration for QUARANTINE phase of model audition."""
+
+    cooldown_hours: int = Field(default=24, ge=1, le=168)
+
+
+class AuditionConfig(BaseModel):
+    """Configuration for Model Audition Mechanism (ADR-029).
+
+    Controls the volume-based audition process for newly discovered models.
+    New models progress through states: SHADOW → PROBATION → EVALUATION → FULL
+
+    Attributes:
+        enabled: Whether audition mechanism is active (default: True)
+        max_audition_seats: Maximum audition models per council session (default: 1)
+        shadow: SHADOW phase configuration
+        probation: PROBATION phase configuration
+        evaluation: EVALUATION phase configuration
+        quarantine: QUARANTINE phase configuration
+        store_path: Path to audition status JSONL file
+    """
+
+    enabled: bool = True
+    max_audition_seats: int = Field(default=1, ge=0, le=4)
+    shadow: ShadowPhaseConfig = Field(default_factory=ShadowPhaseConfig)
+    probation: ProbationPhaseConfig = Field(default_factory=ProbationPhaseConfig)
+    evaluation: EvaluationPhaseConfig = Field(default_factory=EvaluationPhaseConfig)
+    quarantine: QuarantinePhaseConfig = Field(default_factory=QuarantinePhaseConfig)
+    store_path: str = "${HOME}/.llm-council/audition_status.jsonl"
+
+
 class ModelIntelligenceConfig(BaseModel):
     """Configuration for Model Intelligence Layer (ADR-026).
 
@@ -487,6 +546,7 @@ class ModelIntelligenceConfig(BaseModel):
     performance_tracker: PerformanceTrackerConfig = Field(
         default_factory=PerformanceTrackerConfig
     )
+    audition: AuditionConfig = Field(default_factory=AuditionConfig)  # ADR-029
 
 
 class ObservabilityConfig(BaseModel):
@@ -783,6 +843,23 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     discovery_min_candidates = os.getenv("LLM_COUNCIL_DISCOVERY_MIN_CANDIDATES")
     if discovery_min_candidates:
         config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["min_candidates_per_tier"] = int(discovery_min_candidates)
+
+    # Audition overrides (ADR-029)
+    audition_enabled = os.getenv("LLM_COUNCIL_AUDITION_ENABLED")
+    if audition_enabled:
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {})["enabled"] = audition_enabled.lower() in ("true", "1", "yes")
+
+    audition_max_seats = os.getenv("LLM_COUNCIL_AUDITION_MAX_SEATS")
+    if audition_max_seats:
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {})["max_audition_seats"] = int(audition_max_seats)
+
+    audition_shadow_sessions = os.getenv("LLM_COUNCIL_AUDITION_SHADOW_SESSIONS")
+    if audition_shadow_sessions:
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault("shadow", {})["min_sessions"] = int(audition_shadow_sessions)
+
+    audition_eval_sessions = os.getenv("LLM_COUNCIL_AUDITION_EVAL_SESSIONS")
+    if audition_eval_sessions:
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault("evaluation", {})["min_sessions"] = int(audition_eval_sessions)
 
     return UnifiedConfig(**config_dict)
 
