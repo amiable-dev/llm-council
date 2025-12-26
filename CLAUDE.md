@@ -253,6 +253,29 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `_reset_registry()`: Clear registry (for testing)
 - **Event Emission**: Automatically emits L4_CIRCUIT_BREAKER_OPEN/CLOSE events on state transitions
 
+**`observability/`** - ADR-030 Metrics Export
+- Bridges internal LayerEvents to external metrics backends (Prometheus, StatsD)
+- **`metrics_adapter.py`**: Main adapter implementation
+  - `MetricsBackend`: Protocol for metrics backends (emit_counter, emit_gauge, emit_histogram)
+  - `NoOpBackend`: No-operation backend when metrics disabled
+  - `StatsDBackend`: UDP-based StatsD backend with DogStatsD tag support
+  - `PrometheusBackend`: In-memory Prometheus metrics with text format export
+  - `MetricsAdapter`: Translates LayerEvents to metrics
+    - Handles `L4_CIRCUIT_BREAKER_OPEN` → counter + failure_rate gauge
+    - Handles `L4_CIRCUIT_BREAKER_CLOSE` → counter with from_state tag
+  - `get_metrics_adapter()`: Factory function (uses config for backend selection)
+  - `subscribe_metrics_adapter()`: Subscribe to receive LayerEvents
+  - `unsubscribe_metrics_adapter()`: Unsubscribe from events
+  - `_notify_adapters()`: Internal hook called by `emit_layer_event()`
+- **Configuration** (in `unified_config.py`):
+  - `MetricsConfig`: enabled, backend, statsd_host, statsd_port, statsd_prefix, prometheus_port
+  - Defaults: disabled, backend="none", localhost:8125 for StatsD, port 9090 for Prometheus
+- **Environment Variables**:
+  - `LLM_COUNCIL_METRICS_ENABLED`: Enable/disable metrics export (default: false)
+  - `LLM_COUNCIL_METRICS_BACKEND`: Backend type (none, statsd, prometheus)
+  - `LLM_COUNCIL_STATSD_HOST`: StatsD server host
+  - `LLM_COUNCIL_STATSD_PORT`: StatsD server port
+
 **`voting.py`** - ADR-027 Shadow Mode Voting Authority
 - Implements voting authority levels for the council's tier system
 - Frontier tier models operate in Shadow Mode by default

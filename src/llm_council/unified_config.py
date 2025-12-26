@@ -592,12 +592,28 @@ class ModelIntelligenceConfig(BaseModel):
     audition: AuditionConfig = Field(default_factory=AuditionConfig)  # ADR-029
 
 
+class MetricsConfig(BaseModel):
+    """Configuration for external metrics export (ADR-030).
+
+    Bridges internal LayerEvents to external metrics backends (StatsD, Prometheus)
+    for observability dashboards. Disabled by default - opt-in via config or env var.
+    """
+
+    enabled: bool = False  # Opt-in; requires metrics backend
+    backend: Literal["none", "statsd", "prometheus"] = "none"
+    statsd_host: str = "localhost"
+    statsd_port: int = Field(default=8125, ge=1, le=65535)
+    statsd_prefix: str = "llm_council"
+    prometheus_port: int = Field(default=9090, ge=1, le=65535)
+
+
 class ObservabilityConfig(BaseModel):
     """Configuration for observability settings."""
 
     log_escalations: bool = True
     log_gateway_fallbacks: bool = True
     metrics_enabled: bool = True
+    metrics: MetricsConfig = Field(default_factory=MetricsConfig)  # ADR-030
 
 
 # =============================================================================
@@ -904,6 +920,23 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     discovery_min_candidates = os.getenv("LLM_COUNCIL_DISCOVERY_MIN_CANDIDATES")
     if discovery_min_candidates:
         config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["min_candidates_per_tier"] = int(discovery_min_candidates)
+
+    # Metrics overrides (ADR-030)
+    metrics_enabled = os.getenv("LLM_COUNCIL_METRICS_ENABLED")
+    if metrics_enabled:
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["enabled"] = metrics_enabled.lower() in ("true", "1", "yes")
+
+    metrics_backend = os.getenv("LLM_COUNCIL_METRICS_BACKEND")
+    if metrics_backend and metrics_backend.lower() in ("none", "statsd", "prometheus"):
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["backend"] = metrics_backend.lower()
+
+    statsd_host = os.getenv("LLM_COUNCIL_STATSD_HOST")
+    if statsd_host:
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["statsd_host"] = statsd_host
+
+    statsd_port = os.getenv("LLM_COUNCIL_STATSD_PORT")
+    if statsd_port:
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["statsd_port"] = int(statsd_port)
 
     # Audition overrides (ADR-029)
     audition_enabled = os.getenv("LLM_COUNCIL_AUDITION_ENABLED")

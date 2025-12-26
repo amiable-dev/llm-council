@@ -359,7 +359,8 @@ def _emit_circuit_event(event: str, model_id: str, failure_rate: Optional[float]
             "failure_rate": failure_rate,
         }
     )
-    # TODO: Emit to metrics system
+    # Metrics export: emit_layer_event() automatically notifies subscribed
+    # MetricsAdapters (see observability/metrics_adapter.py)
 ```
 
 ### Configuration
