@@ -333,6 +333,45 @@ class AntiHerdingConfig(BaseModel):
     max_penalty: float = Field(default=0.35, ge=0.0, le=1.0)
 
 
+class ScoringConfig(BaseModel):
+    """Configuration for cost scoring algorithms (ADR-030).
+
+    Controls how model costs are normalized into scores for selection.
+    Default is log_ratio which handles exponential price differences gracefully.
+    """
+
+    cost_scale: Literal["linear", "log_ratio", "exponential"] = "log_ratio"
+    cost_reference_high: float = Field(default=0.015, ge=0.0001, le=1.0)
+
+
+class CircuitBreakerConfig(BaseModel):
+    """Configuration for per-model circuit breakers (ADR-030).
+
+    Circuit breakers prevent cascade failures by temporarily excluding models
+    that are failing frequently. Uses sliding window failure tracking.
+    """
+
+    enabled: bool = True
+    failure_threshold: float = Field(
+        default=0.25, ge=0.0, le=1.0, description="Failure rate (0-1) to trigger circuit open"
+    )
+    min_requests: int = Field(
+        default=5, ge=1, description="Minimum requests before circuit can trip"
+    )
+    window_seconds: int = Field(
+        default=600, ge=60, description="Sliding window for failure tracking (10 min default)"
+    )
+    cooldown_seconds: int = Field(
+        default=1800, ge=60, description="Time before OPEN transitions to HALF_OPEN (30 min)"
+    )
+    half_open_max_requests: int = Field(
+        default=3, ge=1, description="Max probe requests in HALF_OPEN state"
+    )
+    half_open_success_threshold: float = Field(
+        default=0.67, ge=0.0, le=1.0, description="Success rate to close circuit"
+    )
+
+
 class DiscoveryProviderConfig(BaseModel):
     """Provider-specific discovery settings (ADR-028)."""
 
@@ -539,6 +578,10 @@ class ModelIntelligenceConfig(BaseModel):
         default_factory=ModelIntelligenceSelectionConfig
     )
     anti_herding: AntiHerdingConfig = Field(default_factory=AntiHerdingConfig)
+    scoring: ScoringConfig = Field(default_factory=ScoringConfig)  # ADR-030
+    circuit_breaker: CircuitBreakerConfig = Field(
+        default_factory=CircuitBreakerConfig
+    )  # ADR-030
     discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)  # ADR-028
     reasoning: ReasoningOptimizationConfig = Field(
         default_factory=ReasoningOptimizationConfig
@@ -830,6 +873,24 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     reasoning_enabled = os.getenv("LLM_COUNCIL_REASONING_ENABLED")
     if reasoning_enabled:
         config_dict.setdefault("model_intelligence", {}).setdefault("reasoning", {})["enabled"] = reasoning_enabled.lower() in ("true", "1", "yes")
+
+    # Scoring overrides (ADR-030)
+    cost_scale = os.getenv("LLM_COUNCIL_COST_SCALE")
+    if cost_scale and cost_scale.lower() in ("linear", "log_ratio", "exponential"):
+        config_dict.setdefault("model_intelligence", {}).setdefault("scoring", {})["cost_scale"] = cost_scale.lower()
+
+    # Circuit breaker overrides (ADR-030)
+    circuit_breaker_enabled = os.getenv("LLM_COUNCIL_CIRCUIT_BREAKER")
+    if circuit_breaker_enabled:
+        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})["enabled"] = circuit_breaker_enabled.lower() in ("true", "1", "yes")
+
+    circuit_threshold = os.getenv("LLM_COUNCIL_CIRCUIT_THRESHOLD")
+    if circuit_threshold:
+        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})["failure_threshold"] = float(circuit_threshold)
+
+    circuit_min_requests = os.getenv("LLM_COUNCIL_CIRCUIT_MIN_REQUESTS")
+    if circuit_min_requests:
+        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})["min_requests"] = int(circuit_min_requests)
 
     # Discovery overrides (ADR-028)
     discovery_enabled = os.getenv("LLM_COUNCIL_DISCOVERY_ENABLED")

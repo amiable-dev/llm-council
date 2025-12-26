@@ -31,11 +31,13 @@ if TYPE_CHECKING:
 
 
 # Quality tier to numeric score mapping (ADR-026 Phase 1)
+# Quality tier scores based on benchmark evidence (ADR-030)
+# See QUALITY_TIER_BENCHMARK_SOURCES in scoring.py for citations
 QUALITY_TIER_SCORES: Dict[QualityTier, float] = {
-    QualityTier.FRONTIER: 0.95,
-    QualityTier.STANDARD: 0.75,
-    QualityTier.ECONOMY: 0.55,
-    QualityTier.LOCAL: 0.40,
+    QualityTier.FRONTIER: 0.95,  # MMLU 87-90%
+    QualityTier.STANDARD: 0.85,  # MMLU 80-86% (+0.10 from 0.75)
+    QualityTier.ECONOMY: 0.70,   # MMLU 70-79% (+0.15 from 0.55)
+    QualityTier.LOCAL: 0.50,     # MMLU 55-80% (+0.10 from 0.40)
 }
 
 # Cost normalization reference points (per 1K tokens)
@@ -241,6 +243,58 @@ def _is_discovery_enabled() -> bool:
         return False
 
 
+def _is_circuit_breaker_enabled() -> bool:
+    """Check if circuit breaker is enabled via configuration or env var.
+
+    Priority: Environment variable > YAML config > Default (True)
+
+    Returns:
+        True if circuit breaker is enabled
+    """
+    import os
+
+    # Check environment variable first (highest priority)
+    env_val = os.getenv("LLM_COUNCIL_CIRCUIT_BREAKER")
+    if env_val is not None:
+        return env_val.lower() in ("true", "1", "yes")
+
+    # Check config
+    try:
+        from ..unified_config import get_config
+
+        config = get_config()
+        return config.model_intelligence.circuit_breaker.enabled
+    except Exception:
+        return True  # Default to enabled
+
+
+def _is_circuit_breaker_open(model_id: str) -> bool:
+    """Check if circuit breaker is open for a model.
+
+    Args:
+        model_id: Model identifier
+
+    Returns:
+        True if circuit is open (model should be excluded)
+        False if circuit is closed or half-open (model can be used)
+    """
+    # Check if circuit breaker is disabled
+    if not _is_circuit_breaker_enabled():
+        return False
+
+    try:
+        from ..gateway.circuit_breaker_registry import check_circuit_breaker
+
+        allowed, reason = check_circuit_breaker(model_id)
+        return not allowed  # Return True if circuit is OPEN (not allowed)
+    except ImportError:
+        # Circuit breaker registry not available
+        return False
+    except Exception:
+        # Any other error - fail open (allow the model)
+        return False
+
+
 def _get_min_candidates_per_tier() -> int:
     """Get minimum candidates per tier from configuration.
 
@@ -384,6 +438,13 @@ def select_tier_models(
 
     if not candidates:
         # Fallback if no candidates meet requirements
+        return static_pool[:count]
+
+    # ADR-030: Filter out models with open circuit breakers
+    candidates = [c for c in candidates if not _is_circuit_breaker_open(c.model_id)]
+
+    if not candidates:
+        # Fallback if all models have open circuits
         return static_pool[:count]
 
     # Score and sort candidates
@@ -544,7 +605,7 @@ def _get_cost_score_from_metadata(
 
     Normalizes pricing to a 0-1 score where higher = cheaper.
     Free models (price=0) get a score of 1.0.
-    Expensive models (close to COST_REFERENCE_HIGH) get low scores.
+    Uses configurable scoring algorithm (default: log_ratio per ADR-030).
 
     Args:
         model_id: Full model identifier
@@ -561,13 +622,11 @@ def _get_cost_score_from_metadata(
         return None
 
     prompt_price = pricing.get("prompt", 0.0)
-    if prompt_price == 0.0:
-        return 1.0  # Free models get max score
 
-    # Normalize: 1.0 - (price / reference)
-    # Clamp to [0, 1] range
-    normalized = 1.0 - (prompt_price / COST_REFERENCE_HIGH)
-    return max(0.0, min(1.0, normalized))
+    # Use the new scoring module (ADR-030)
+    from .scoring import get_cost_score_with_config
+
+    return get_cost_score_with_config(prompt_price, COST_REFERENCE_HIGH)
 
 
 def _meets_context_requirement(

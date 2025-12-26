@@ -97,10 +97,10 @@ class TestQualityScoreFromMetadata:
 
         score = _get_quality_score_from_metadata("anthropic/claude-3-5-sonnet", mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.STANDARD]
-        assert score == 0.75
+        assert score == 0.85  # ADR-030: Updated from 0.75
 
     def test_economy_tier_returns_lower_score(self):
-        """ECONOMY quality tier should return 0.55."""
+        """ECONOMY quality tier should return 0.70 (ADR-030: updated from 0.55)."""
         from llm_council.metadata.selection import (
             _get_quality_score_from_metadata,
             QUALITY_TIER_SCORES,
@@ -117,10 +117,10 @@ class TestQualityScoreFromMetadata:
 
         score = _get_quality_score_from_metadata("openai/gpt-4o-mini", mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.ECONOMY]
-        assert score == 0.55
+        assert score == 0.70  # ADR-030: Updated from 0.55
 
     def test_local_tier_returns_lowest_score(self):
-        """LOCAL quality tier should return 0.40."""
+        """LOCAL quality tier should return 0.50 (ADR-030: updated from 0.40)."""
         from llm_council.metadata.selection import (
             _get_quality_score_from_metadata,
             QUALITY_TIER_SCORES,
@@ -137,7 +137,7 @@ class TestQualityScoreFromMetadata:
 
         score = _get_quality_score_from_metadata("ollama/llama2", mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.LOCAL]
-        assert score == 0.40
+        assert score == 0.50  # ADR-030: Updated from 0.40
 
     def test_unknown_model_returns_none(self):
         """Unknown model should return None to trigger fallback."""
@@ -171,19 +171,25 @@ class TestCostScoreFromMetadata:
         assert score == 1.0
 
     def test_expensive_model_returns_low_score(self):
-        """Expensive models should return low score (<0.5)."""
+        """Expensive models (above reference) should return low score (<0.5).
+
+        With log-ratio algorithm (ADR-030):
+        - At reference price ($0.015): score = 0.5
+        - Above reference: score < 0.5
+        - Below reference: score > 0.5
+        """
         from llm_council.metadata.selection import (
             _get_cost_score_from_metadata,
             COST_REFERENCE_HIGH,
         )
 
         mock_provider = MagicMock()
-        # Very expensive: close to reference high
-        mock_provider.get_pricing.return_value = {"prompt": 0.012, "completion": 0.06}
+        # Expensive: 2x reference price
+        mock_provider.get_pricing.return_value = {"prompt": 0.030, "completion": 0.06}
 
         score = _get_cost_score_from_metadata("anthropic/claude-3-opus", mock_provider)
         assert score is not None
-        assert score < 0.5
+        assert score < 0.5  # Log-ratio: 2x reference returns ~0.425
 
     def test_cheap_model_returns_high_score(self):
         """Cheap models should return high score (>0.8)."""

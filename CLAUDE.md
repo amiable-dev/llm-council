@@ -58,7 +58,11 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `transform_api_model()`: Transforms API response to ModelInfo
 - **`selection.py`**: Tier selection algorithm (ADR-026 Phase 1)
   - `TIER_WEIGHTS`: Per-tier weight matrices (quick→latency, reasoning→quality)
-  - `QUALITY_TIER_SCORES`: QualityTier → float mapping (FRONTIER: 0.95, STANDARD: 0.75, ECONOMY: 0.55, LOCAL: 0.40)
+  - `QUALITY_TIER_SCORES`: QualityTier → float mapping (ADR-030 benchmark-justified):
+    - FRONTIER: 0.95 (MMLU 87-90%)
+    - STANDARD: 0.85 (MMLU 80-86%, +0.10 from 0.75)
+    - ECONOMY: 0.70 (MMLU 70-79%, +0.15 from 0.55)
+    - LOCAL: 0.50 (MMLU 55-80%, +0.10 from 0.40)
   - `COST_REFERENCE_HIGH`: Reference price for cost normalization (0.015 per 1K tokens)
   - `ModelCandidate`: Dataclass for model scoring
   - `apply_anti_herding_penalty()`: Penalizes models with >30% traffic
@@ -69,6 +73,17 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
     - `_get_quality_score_from_metadata()`: Real QualityTier lookup (not regex)
     - `_get_cost_score_from_metadata()`: Real pricing data (not regex)
     - `_meets_context_requirement()`: Real context window filtering (not always True)
+  - **Circuit Breaker Integration** (ADR-030):
+    - `_is_circuit_breaker_enabled()`: Check if circuit breaker is enabled (env > config > default)
+    - `_is_circuit_breaker_open(model_id)`: Check if model's circuit is open
+    - `select_tier_models()` filters out models with open circuit breakers
+- **`scoring.py`**: Cost scoring algorithms (ADR-030)
+  - `MIN_PRICE`: Floor to avoid log(0) ($0.0001)
+  - `CostScaleAlgorithm`: Literal["linear", "log_ratio", "exponential"]
+  - `get_cost_score_log_ratio()`: Log-ratio scoring for exponential price differences
+  - `get_cost_score_exponential()`: Exponential decay scoring
+  - `get_cost_score_with_config()`: Uses algorithm from config/env var
+  - `QUALITY_TIER_BENCHMARK_SOURCES`: Citation URLs for quality tier justification
 - **`offline.py`**: Offline mode detection
   - `is_offline_mode()`: Checks `LLM_COUNCIL_OFFLINE` env var
 - **`registry.py`**: ADR-028 Model Registry (Background Registry Pattern)
@@ -150,6 +165,17 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
     - `refresh`: Cache TTL settings (registry_ttl, availability_ttl)
     - `selection`: Selection algorithm settings (min_providers, default_count)
     - `anti_herding`: Traffic concentration prevention (enabled, threshold, penalty)
+    - `scoring` (ADR-030): Cost scoring algorithm configuration
+      - `cost_scale`: "linear" | "log_ratio" | "exponential" (default: "log_ratio")
+      - `cost_reference_high`: Reference expensive price (default: 0.015)
+    - `circuit_breaker` (ADR-030): Per-model circuit breaker configuration
+      - `enabled`: Enable circuit breaker (default: true)
+      - `failure_threshold`: Failure rate to trip (default: 0.25)
+      - `min_requests`: Min requests before evaluation (default: 5)
+      - `window_seconds`: Sliding window size (default: 600)
+      - `cooldown_seconds`: Cooldown when open (default: 1800)
+      - `half_open_max_requests`: Probe requests (default: 3)
+      - `half_open_success_threshold`: Success rate to close (default: 0.67)
     - `audition` (ADR-029): Model audition configuration
       - `enabled`: Enable audition mechanism (default: true)
       - `max_audition_seats`: Max audition models per session (default: 1)
@@ -184,6 +210,9 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - `DISCOVERY_REFRESH_FAILED`: Emitted on refresh failure with error details
   - `DISCOVERY_FALLBACK_TRIGGERED`: Emitted when static fallback is used
   - `DISCOVERY_STALE_SERVE`: Emitted when serving stale data after failures
+- **Circuit Breaker Events (ADR-030)**:
+  - `L4_CIRCUIT_BREAKER_OPEN`: Emitted when circuit trips (model_id, failure_rate, cooldown_seconds)
+  - `L4_CIRCUIT_BREAKER_CLOSE`: Emitted when circuit closes after recovery (model_id, from_state)
 - **Boundary Crossing Helpers** (validate + emit event):
   - `cross_l1_to_l2(contract, query)` - L1→L2 with L1_TIER_SELECTED event
   - `cross_l2_to_l3(result, tier_contract)` - L2→L3 with L2_TRIAGE_COMPLETE event
@@ -194,6 +223,35 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Failure Isolation: Gateway failures don't cascade to tier changes
   - Constraint Propagation: Tier constraints flow down
   - Observability by Default: Every layer emits events
+
+**`gateway/circuit_breaker.py`** - ADR-023/ADR-030 Circuit Breaker Implementation
+- Prevents cascading failures by temporarily blocking requests to failing models
+- **`CircuitState`**: Enum (CLOSED, OPEN, HALF_OPEN)
+- **`CircuitBreaker`**: Basic circuit breaker with absolute failure count (ADR-023)
+- **`EnhancedCircuitBreakerConfig`** (ADR-030):
+  - `failure_threshold`: 0.25 (25% failure rate)
+  - `min_requests`: 5 (minimum before evaluation)
+  - `window_seconds`: 600 (10 minute sliding window)
+  - `cooldown_seconds`: 1800 (30 minute cooldown)
+  - `half_open_max_requests`: 3 (probe requests)
+  - `half_open_success_threshold`: 0.67 (2/3 success to close)
+- **`EnhancedCircuitBreaker`** (ADR-030):
+  - Sliding window failure tracking with timestamp-based pruning
+  - `failure_rate()`: Current failure rate in window
+  - `request_count_in_window()`: Total requests in window
+  - `failure_count_in_window()`: Failed requests in window
+  - `allow_request()`: Check if request allowed (handles OPEN→HALF_OPEN transition)
+  - `record_success()` / `record_failure()`: Track request outcomes
+
+**`gateway/circuit_breaker_registry.py`** - ADR-030 Per-Model Circuit Breaker Registry
+- Thread-safe global registry for per-model circuit breakers
+- **Key Functions**:
+  - `get_circuit_breaker(model_id, config)`: Get or create breaker for model
+  - `check_circuit_breaker(model_id)`: Returns (allowed, reason) tuple
+  - `record_model_result(model_id, success)`: Record result with automatic event emission
+  - `get_all_breakers()`: Return all registered breakers (for monitoring)
+  - `_reset_registry()`: Clear registry (for testing)
+- **Event Emission**: Automatically emits L4_CIRCUIT_BREAKER_OPEN/CLOSE events on state transitions
 
 **`voting.py`** - ADR-027 Shadow Mode Voting Authority
 - Implements voting authority levels for the council's tier system
