@@ -13,10 +13,7 @@ from dataclasses import dataclass
 from statistics import mean, stdev, median, variance
 from typing import Dict, List, Optional, Tuple, Any
 
-from .config import (
-    LENGTH_CORRELATION_THRESHOLD,
-    POSITION_VARIANCE_THRESHOLD,
-)
+from .unified_config import get_config
 
 
 @dataclass
@@ -222,7 +219,8 @@ def calculate_position_bias(
 
     # Calculate variance of position means
     pos_variance = variance(position_means)
-    detected = pos_variance > POSITION_VARIANCE_THRESHOLD
+    config = get_config()
+    detected = pos_variance > config.evaluation.bias.position_variance_threshold
 
     return round(pos_variance, 3), detected
 
@@ -364,7 +362,8 @@ def run_bias_audit(
     """
     # Length correlation
     r, p = calculate_length_correlation(stage1_responses, stage2_scores)
-    length_bias = abs(r) > LENGTH_CORRELATION_THRESHOLD and p < 0.05
+    config = get_config()
+    length_bias = abs(r) > config.evaluation.bias.length_correlation_threshold and p < 0.05
 
     # Reviewer calibration
     calibration = audit_reviewer_calibration(stage2_scores)

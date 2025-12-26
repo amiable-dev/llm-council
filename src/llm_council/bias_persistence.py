@@ -31,26 +31,37 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Configuration (loaded from config module or defaults)
+# Configuration (loaded from unified_config - ADR-031)
 # =============================================================================
 
-try:
-    from llm_council.config import (
-        BIAS_PERSISTENCE_ENABLED,
-        BIAS_STORE_PATH,
-        BIAS_CONSENT_LEVEL,
-        BIAS_WINDOW_SESSIONS,
-        BIAS_WINDOW_DAYS,
-        MIN_BIAS_SESSIONS,
-    )
-except ImportError:
-    # Defaults for when config not available (e.g., testing in isolation)
-    BIAS_PERSISTENCE_ENABLED = False
-    BIAS_STORE_PATH = Path.home() / ".llm-council" / "bias_metrics.jsonl"
-    BIAS_CONSENT_LEVEL = 1
-    BIAS_WINDOW_SESSIONS = 100
-    BIAS_WINDOW_DAYS = 30
-    MIN_BIAS_SESSIONS = 20
+from .unified_config import get_config
+
+
+def _get_bias_persistence_enabled() -> bool:
+    """Get bias persistence enabled flag from unified config."""
+    try:
+        return get_config().evaluation.bias.persistence_enabled
+    except Exception:
+        return False
+
+
+def _get_bias_store_path() -> Path:
+    """Get bias store path from unified config."""
+    try:
+        path_str = get_config().evaluation.bias.store_path
+        return Path(path_str).expanduser()
+    except Exception:
+        return Path.home() / ".llm-council" / "bias_metrics.jsonl"
+
+
+def _get_bias_consent_level() -> int:
+    """Get bias consent level from unified config as integer."""
+    try:
+        consent_str = get_config().evaluation.bias.consent_level
+        consent_map = {"OFF": 0, "LOCAL_ONLY": 1, "ANONYMOUS": 2, "ENHANCED": 3, "RESEARCH": 4}
+        return consent_map.get(consent_str, 1)
+    except Exception:
+        return 1  # LOCAL_ONLY default
 
 # Hash secret from environment
 BIAS_HASH_SECRET = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
@@ -207,7 +218,7 @@ def append_bias_records(
 
     Args:
         records: List of BiasMetricRecord to append
-        store_path: Path to JSONL file (default: BIAS_STORE_PATH)
+        store_path: Path to JSONL file (default from config)
 
     Returns:
         Number of records written
@@ -216,7 +227,7 @@ def append_bias_records(
         return 0
 
     if store_path is None:
-        store_path = BIAS_STORE_PATH
+        store_path = _get_bias_store_path()
 
     # Ensure directory exists
     store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -241,7 +252,7 @@ def read_bias_records(
     Returns records in chronological order (oldest first).
 
     Args:
-        store_path: Path to JSONL file (default: BIAS_STORE_PATH)
+        store_path: Path to JSONL file (default from config)
         max_sessions: Limit to last N sessions
         max_days: Limit to last N days
         since: Only records after this datetime
@@ -250,7 +261,7 @@ def read_bias_records(
         List of BiasMetricRecord in chronological order
     """
     if store_path is None:
-        store_path = BIAS_STORE_PATH
+        store_path = _get_bias_store_path()
 
     if not store_path.exists():
         return []
@@ -328,14 +339,14 @@ def get_bias_store_stats(
     """Get statistics about the bias store.
 
     Args:
-        store_path: Path to JSONL file (default: BIAS_STORE_PATH)
+        store_path: Path to JSONL file (default from config)
 
     Returns:
         Dictionary with stats: total_records, unique_sessions,
         unique_reviewers, oldest_record, newest_record, file_size_bytes
     """
     if store_path is None:
-        store_path = BIAS_STORE_PATH
+        store_path = _get_bias_store_path()
 
     if not store_path.exists():
         return {
@@ -562,7 +573,7 @@ def persist_session_bias_data(
 ) -> int:
     """High-level integration point for council.py.
 
-    Called after Stage 2 completes if BIAS_PERSISTENCE_ENABLED.
+    Called after Stage 2 completes if bias persistence is enabled.
     Respects consent_level from config.
 
     Args:
@@ -575,16 +586,12 @@ def persist_session_bias_data(
     Returns:
         Number of records persisted (0 if disabled)
     """
-    # Use module-level variables (allows for patching in tests)
-    # These are imported/defaulted at module load time
-    import llm_council.bias_persistence as bp
-
-    if not bp.BIAS_PERSISTENCE_ENABLED:
+    if not _get_bias_persistence_enabled():
         return 0
 
     # Convert consent level int to enum
     try:
-        consent = ConsentLevel(bp.BIAS_CONSENT_LEVEL)
+        consent = ConsentLevel(_get_bias_consent_level())
     except ValueError:
         consent = ConsentLevel.LOCAL_ONLY
 
@@ -598,5 +605,5 @@ def persist_session_bias_data(
         consent_level=consent,
     )
 
-    # Persist
-    return append_bias_records(records, bp.BIAS_STORE_PATH)
+    # Persist (store_path comes from _get_bias_store_path() via append_bias_records)
+    return append_bias_records(records)

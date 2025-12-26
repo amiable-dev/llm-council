@@ -72,8 +72,8 @@ async def test_integration_persistence_enabled(temp_bias_store):
     
                 mock_query_single.side_effect = side_effect
                 
-                with patch("llm_council.bias_persistence.BIAS_PERSISTENCE_ENABLED", True):
-                    with patch("llm_council.bias_persistence.BIAS_STORE_PATH", temp_bias_store):
+                with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
+                    with patch("llm_council.bias_persistence._get_bias_store_path", return_value=temp_bias_store):
                         with patch("llm_council.council.COUNCIL_MODELS", ["model1", "model2"]):
                             # Run council
                             result = await run_council_with_fallback("Test query")
@@ -114,8 +114,8 @@ async def test_integration_persistence_disabled(temp_bias_store):
             with patch("llm_council.council.query_model", new_callable=AsyncMock) as mock_query_single:
                 mock_query_single.return_value = {"content": "Synthesis", "usage": {}}
                 
-                with patch("llm_council.bias_persistence.BIAS_PERSISTENCE_ENABLED", False):
-                    with patch("llm_council.bias_persistence.BIAS_STORE_PATH", temp_bias_store):
+                with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=False):
+                    with patch("llm_council.bias_persistence._get_bias_store_path", return_value=temp_bias_store):
                         with patch("llm_council.council.COUNCIL_MODELS", ["model1"]):
                             await run_council_with_fallback("Test query")
                             

@@ -1023,3 +1023,342 @@ council:
         assert "audition" in config_dict["model_intelligence"]
         assert config_dict["model_intelligence"]["audition"]["enabled"] is True
         assert config_dict["model_intelligence"]["audition"]["max_audition_seats"] == 1
+
+
+# =============================================================================
+# ADR-031 EvaluationConfig Tests (TDD - RED Phase)
+# =============================================================================
+
+
+class TestRubricConfig:
+    """Test RubricConfig for rubric-based scoring (ADR-016/ADR-031)."""
+
+    def test_rubric_config_defaults(self):
+        """RubricConfig should have correct defaults per config.py."""
+        from llm_council.unified_config import RubricConfig
+
+        config = RubricConfig()
+
+        assert config.enabled is False
+        assert config.accuracy_ceiling_enabled is True
+        assert config.weights == {
+            "accuracy": 0.35,
+            "relevance": 0.10,
+            "completeness": 0.20,
+            "conciseness": 0.15,
+            "clarity": 0.20,
+        }
+
+    def test_rubric_weights_sum_to_one(self):
+        """Rubric weights must sum to 1.0 (within tolerance)."""
+        from llm_council.unified_config import RubricConfig
+
+        # Valid weights summing to 1.0
+        config = RubricConfig(weights={
+            "accuracy": 0.40,
+            "relevance": 0.15,
+            "completeness": 0.20,
+            "conciseness": 0.10,
+            "clarity": 0.15,
+        })
+        assert sum(config.weights.values()) == pytest.approx(1.0, abs=0.01)
+
+        # Invalid: weights sum to 0.8
+        with pytest.raises(ValueError, match="sum to 1.0"):
+            RubricConfig(weights={
+                "accuracy": 0.30,
+                "relevance": 0.10,
+                "completeness": 0.20,
+                "conciseness": 0.10,
+                "clarity": 0.10,
+            })
+
+        # Invalid: weights sum to 1.2
+        with pytest.raises(ValueError, match="sum to 1.0"):
+            RubricConfig(weights={
+                "accuracy": 0.40,
+                "relevance": 0.20,
+                "completeness": 0.25,
+                "conciseness": 0.20,
+                "clarity": 0.15,
+            })
+
+    def test_rubric_weights_non_negative(self):
+        """Rubric weights cannot be negative."""
+        from llm_council.unified_config import RubricConfig
+
+        # Invalid: negative weight
+        with pytest.raises(ValueError, match="negative"):
+            RubricConfig(weights={
+                "accuracy": -0.10,
+                "relevance": 0.30,
+                "completeness": 0.30,
+                "conciseness": 0.25,
+                "clarity": 0.25,
+            })
+
+    def test_rubric_weights_required_dimensions(self):
+        """Rubric weights must include all 5 dimensions."""
+        from llm_council.unified_config import RubricConfig
+
+        # Invalid: missing clarity
+        with pytest.raises(ValueError, match="dimensions"):
+            RubricConfig(weights={
+                "accuracy": 0.35,
+                "relevance": 0.15,
+                "completeness": 0.25,
+                "conciseness": 0.25,
+            })
+
+        # Invalid: missing multiple dimensions
+        with pytest.raises(ValueError, match="dimensions"):
+            RubricConfig(weights={
+                "accuracy": 0.50,
+                "clarity": 0.50,
+            })
+
+
+class TestSafetyConfig:
+    """Test SafetyConfig for safety gate (ADR-016/ADR-031)."""
+
+    def test_safety_config_defaults(self):
+        """SafetyConfig should have correct defaults."""
+        from llm_council.unified_config import SafetyConfig
+
+        config = SafetyConfig()
+
+        assert config.enabled is False
+        assert config.score_cap == 0.0
+
+    def test_safety_score_cap_bounds(self):
+        """Safety score_cap must be in [0, 1] range."""
+        from llm_council.unified_config import SafetyConfig
+
+        # Valid bounds
+        config = SafetyConfig(score_cap=0.0)
+        assert config.score_cap == 0.0
+
+        config = SafetyConfig(score_cap=0.5)
+        assert config.score_cap == 0.5
+
+        config = SafetyConfig(score_cap=1.0)
+        assert config.score_cap == 1.0
+
+        # Invalid: below 0
+        with pytest.raises(ValueError):
+            SafetyConfig(score_cap=-0.1)
+
+        # Invalid: above 1
+        with pytest.raises(ValueError):
+            SafetyConfig(score_cap=1.1)
+
+
+class TestBiasConfig:
+    """Test BiasConfig for bias auditing (ADR-015/018/ADR-031)."""
+
+    def test_bias_config_defaults(self):
+        """BiasConfig should have correct defaults per config.py."""
+        from llm_council.unified_config import BiasConfig
+
+        config = BiasConfig()
+
+        assert config.audit_enabled is False
+        assert config.persistence_enabled is False
+        assert config.store_path == "data/bias_metrics.jsonl"
+        assert config.consent_level == "LOCAL_ONLY"
+        assert config.length_correlation_threshold == 0.3  # |r| above this = bias
+        assert config.position_variance_threshold == 0.5  # Match config.py default
+
+    def test_bias_length_correlation_threshold_bounds(self):
+        """Length correlation threshold must be in [0, 1] range."""
+        from llm_council.unified_config import BiasConfig
+
+        # Valid
+        config = BiasConfig(length_correlation_threshold=0.5)
+        assert config.length_correlation_threshold == 0.5
+
+        # Invalid: below 0
+        with pytest.raises(ValueError):
+            BiasConfig(length_correlation_threshold=-0.1)
+
+        # Invalid: above 1
+        with pytest.raises(ValueError):
+            BiasConfig(length_correlation_threshold=1.5)
+
+    def test_bias_position_variance_threshold_bounds(self):
+        """Position variance threshold must be >= 0."""
+        from llm_council.unified_config import BiasConfig
+
+        # Valid
+        config = BiasConfig(position_variance_threshold=3.0)
+        assert config.position_variance_threshold == 3.0
+
+        config = BiasConfig(position_variance_threshold=0.0)
+        assert config.position_variance_threshold == 0.0
+
+        # Invalid: negative
+        with pytest.raises(ValueError):
+            BiasConfig(position_variance_threshold=-1.0)
+
+    def test_bias_consent_level_validation(self):
+        """Consent level must be one of the valid options."""
+        from llm_council.unified_config import BiasConfig
+
+        # Valid options
+        for level in ["OFF", "LOCAL_ONLY", "ANONYMOUS", "ENHANCED", "RESEARCH"]:
+            config = BiasConfig(consent_level=level)
+            assert config.consent_level == level
+
+        # Invalid option
+        with pytest.raises(ValueError):
+            BiasConfig(consent_level="INVALID")
+
+
+class TestEvaluationConfig:
+    """Test EvaluationConfig container (ADR-031)."""
+
+    def test_evaluation_config_defaults(self):
+        """EvaluationConfig should have correct sub-config defaults."""
+        from llm_council.unified_config import EvaluationConfig
+
+        config = EvaluationConfig()
+
+        assert config.rubric.enabled is False
+        assert config.safety.enabled is False
+        assert config.bias.audit_enabled is False
+
+    def test_evaluation_config_in_unified_config(self):
+        """UnifiedConfig should include evaluation field."""
+        config = UnifiedConfig()
+
+        assert hasattr(config, "evaluation")
+        assert config.evaluation is not None
+        assert config.evaluation.rubric.enabled is False
+
+    def test_evaluation_config_from_yaml(self, tmp_path):
+        """EvaluationConfig should load from YAML."""
+        yaml_content = """
+council:
+  evaluation:
+    rubric:
+      enabled: true
+      accuracy_ceiling_enabled: false
+      weights:
+        accuracy: 0.40
+        relevance: 0.10
+        completeness: 0.20
+        conciseness: 0.15
+        clarity: 0.15
+    safety:
+      enabled: true
+      score_cap: 0.5
+    bias:
+      audit_enabled: true
+      persistence_enabled: true
+      consent_level: RESEARCH
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        config = load_config(config_file)
+
+        assert config.evaluation.rubric.enabled is True
+        assert config.evaluation.rubric.accuracy_ceiling_enabled is False
+        assert config.evaluation.rubric.weights["accuracy"] == 0.40
+        assert config.evaluation.safety.enabled is True
+        assert config.evaluation.safety.score_cap == 0.5
+        assert config.evaluation.bias.audit_enabled is True
+        assert config.evaluation.bias.persistence_enabled is True
+        assert config.evaluation.bias.consent_level == "RESEARCH"
+
+    def test_evaluation_serializes_to_dict(self):
+        """Evaluation config should serialize to dict."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "evaluation" in config_dict
+        assert "rubric" in config_dict["evaluation"]
+        assert "safety" in config_dict["evaluation"]
+        assert "bias" in config_dict["evaluation"]
+
+    def test_evaluation_serializes_to_yaml(self):
+        """Evaluation config should serialize to YAML."""
+        config = UnifiedConfig()
+        yaml_str = config.to_yaml()
+
+        assert "evaluation:" in yaml_str
+        assert "rubric:" in yaml_str
+        assert "safety:" in yaml_str
+        assert "bias:" in yaml_str
+
+
+class TestEvaluationEnvVarOverrides:
+    """Test environment variable overrides for EvaluationConfig (ADR-031)."""
+
+    def test_rubric_scoring_enabled_env(self, tmp_path, monkeypatch):
+        """RUBRIC_SCORING_ENABLED env var should enable rubric scoring."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  evaluation:
+    rubric:
+      enabled: false
+""")
+        monkeypatch.setenv("RUBRIC_SCORING_ENABLED", "true")
+        reload_config()
+        config = get_effective_config(config_file)
+
+        assert config.evaluation.rubric.enabled is True
+
+    def test_safety_gate_enabled_env(self, tmp_path, monkeypatch):
+        """SAFETY_GATE_ENABLED env var should enable safety gate."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  evaluation:
+    safety:
+      enabled: false
+""")
+        monkeypatch.setenv("SAFETY_GATE_ENABLED", "true")
+        reload_config()
+        config = get_effective_config(config_file)
+
+        assert config.evaluation.safety.enabled is True
+
+    def test_bias_audit_enabled_env(self, tmp_path, monkeypatch):
+        """BIAS_AUDIT_ENABLED env var should enable bias audit."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  evaluation:
+    bias:
+      audit_enabled: false
+""")
+        monkeypatch.setenv("BIAS_AUDIT_ENABLED", "true")
+        reload_config()
+        config = get_effective_config(config_file)
+
+        assert config.evaluation.bias.audit_enabled is True
+
+    def test_bias_persistence_enabled_env(self, tmp_path, monkeypatch):
+        """BIAS_PERSISTENCE_ENABLED env var should enable bias persistence."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  evaluation:
+    bias:
+      persistence_enabled: false
+""")
+        monkeypatch.setenv("BIAS_PERSISTENCE_ENABLED", "true")
+        reload_config()
+        config = get_effective_config(config_file)
+
+        assert config.evaluation.bias.persistence_enabled is True

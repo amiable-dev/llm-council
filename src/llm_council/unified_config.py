@@ -617,6 +617,102 @@ class ObservabilityConfig(BaseModel):
 
 
 # =============================================================================
+# ADR-031: EvaluationConfig (Rubric, Safety, Bias)
+# =============================================================================
+
+
+class RubricConfig(BaseModel):
+    """Rubric-based multi-dimensional scoring (ADR-016/ADR-031).
+
+    Controls structured rubric evaluation with weighted dimensions.
+    Weights must sum to 1.0 and include all 5 dimensions.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False, validation_alias="RUBRIC_SCORING_ENABLED")
+    accuracy_ceiling_enabled: bool = Field(
+        default=True, validation_alias="ACCURACY_CEILING_ENABLED"
+    )
+    weights: Dict[str, float] = Field(
+        default_factory=lambda: {
+            "accuracy": 0.35,
+            "relevance": 0.10,
+            "completeness": 0.20,
+            "conciseness": 0.15,
+            "clarity": 0.20,
+        }
+    )
+
+    @field_validator("weights")
+    @classmethod
+    def validate_weights(cls, v: Dict[str, float]) -> Dict[str, float]:
+        """Validate rubric weights: non-negative, sum to 1.0, all dimensions present."""
+        if not v:
+            return v
+
+        # Check for negative weights
+        if any(x < 0 for x in v.values()):
+            raise ValueError("Weights cannot be negative")
+
+        # Check sum equals 1.0 (within tolerance)
+        weight_sum = sum(v.values())
+        if abs(weight_sum - 1.0) > 0.01:
+            raise ValueError(f"Weights must sum to 1.0, got {weight_sum}")
+
+        # Check all required dimensions present
+        required = {"accuracy", "relevance", "completeness", "conciseness", "clarity"}
+        if not required.issubset(v.keys()):
+            missing = required - set(v.keys())
+            raise ValueError(f"Weights must include all dimensions: {required}. Missing: {missing}")
+
+        return v
+
+
+class SafetyConfig(BaseModel):
+    """Safety gate for harmful content detection (ADR-016/ADR-031).
+
+    When enabled, caps scores for responses that fail safety checks.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False, validation_alias="SAFETY_GATE_ENABLED")
+    score_cap: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class BiasConfig(BaseModel):
+    """Per-session and cross-session bias auditing (ADR-015/018/ADR-031).
+
+    Controls bias detection and persistence for evaluator calibration.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    audit_enabled: bool = Field(default=False, validation_alias="BIAS_AUDIT_ENABLED")
+    persistence_enabled: bool = Field(
+        default=False, validation_alias="BIAS_PERSISTENCE_ENABLED"
+    )
+    store_path: str = Field(default="data/bias_metrics.jsonl")
+    consent_level: Literal["OFF", "LOCAL_ONLY", "ANONYMOUS", "ENHANCED", "RESEARCH"] = (
+        "LOCAL_ONLY"
+    )
+    length_correlation_threshold: float = Field(default=0.3, ge=0.0, le=1.0)  # |r| above this = bias
+    position_variance_threshold: float = Field(default=0.5, ge=0.0)  # Match original config.py default
+
+
+class EvaluationConfig(BaseModel):
+    """Evaluation-time configuration for scoring, safety, and bias (ADR-031).
+
+    Container for all evaluation-related settings migrated from config.py.
+    """
+
+    rubric: RubricConfig = Field(default_factory=RubricConfig)
+    safety: SafetyConfig = Field(default_factory=SafetyConfig)
+    bias: BiasConfig = Field(default_factory=BiasConfig)
+
+
+# =============================================================================
 # Main Unified Configuration
 # =============================================================================
 
@@ -638,6 +734,7 @@ class UnifiedConfig(BaseModel):
         default_factory=ModelIntelligenceConfig
     )
     frontier: FrontierConfig = Field(default_factory=FrontierConfig)  # ADR-027
+    evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)  # ADR-031
 
     def get_tier_contract(self, tier: str) -> TierContract:
         """Get TierContract for a specific tier.
@@ -954,6 +1051,27 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     audition_eval_sessions = os.getenv("LLM_COUNCIL_AUDITION_EVAL_SESSIONS")
     if audition_eval_sessions:
         config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault("evaluation", {})["min_sessions"] = int(audition_eval_sessions)
+
+    # Evaluation overrides (ADR-031)
+    rubric_enabled = os.getenv("RUBRIC_SCORING_ENABLED")
+    if rubric_enabled:
+        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})["enabled"] = rubric_enabled.lower() in ("true", "1", "yes")
+
+    accuracy_ceiling_enabled = os.getenv("ACCURACY_CEILING_ENABLED")
+    if accuracy_ceiling_enabled:
+        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})["accuracy_ceiling_enabled"] = accuracy_ceiling_enabled.lower() in ("true", "1", "yes")
+
+    safety_enabled = os.getenv("SAFETY_GATE_ENABLED")
+    if safety_enabled:
+        config_dict.setdefault("evaluation", {}).setdefault("safety", {})["enabled"] = safety_enabled.lower() in ("true", "1", "yes")
+
+    bias_audit_enabled = os.getenv("BIAS_AUDIT_ENABLED")
+    if bias_audit_enabled:
+        config_dict.setdefault("evaluation", {}).setdefault("bias", {})["audit_enabled"] = bias_audit_enabled.lower() in ("true", "1", "yes")
+
+    bias_persistence_enabled = os.getenv("BIAS_PERSISTENCE_ENABLED")
+    if bias_persistence_enabled:
+        config_dict.setdefault("evaluation", {}).setdefault("bias", {})["persistence_enabled"] = bias_persistence_enabled.lower() in ("true", "1", "yes")
 
     return UnifiedConfig(**config_dict)
 

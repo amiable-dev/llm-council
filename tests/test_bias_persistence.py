@@ -845,14 +845,14 @@ class TestPersistSessionBiasData:
     """Integration tests for high-level persist function."""
 
     def test_respects_persistence_disabled(self):
-        """No-op when BIAS_PERSISTENCE_ENABLED=false."""
+        """No-op when persistence is disabled in config."""
         from llm_council.bias_persistence import persist_session_bias_data
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
-            with patch("llm_council.bias_persistence.BIAS_PERSISTENCE_ENABLED", False):
-                with patch("llm_council.bias_persistence.BIAS_STORE_PATH", store_path):
+            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=False):
+                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=store_path):
                     count = persist_session_bias_data(
                         session_id="test",
                         stage1_results=[{"model": "m", "response": "r"}],
@@ -873,8 +873,8 @@ class TestPersistSessionBiasData:
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
-            with patch("llm_council.bias_persistence.BIAS_PERSISTENCE_ENABLED", True):
-                with patch("llm_council.bias_persistence.BIAS_STORE_PATH", store_path):
+            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
+                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=store_path):
                     count = persist_session_bias_data(
                         session_id="integration-test",
                         stage1_results=[
@@ -911,9 +911,9 @@ class TestPersistSessionBiasData:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
             # Test with LOCAL_ONLY - no hash
-            with patch("llm_council.bias_persistence.BIAS_PERSISTENCE_ENABLED", True):
-                with patch("llm_council.bias_persistence.BIAS_STORE_PATH", store_path):
-                    with patch("llm_council.bias_persistence.BIAS_CONSENT_LEVEL", ConsentLevel.LOCAL_ONLY.value):
+            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
+                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=store_path):
+                    with patch("llm_council.bias_persistence._get_bias_consent_level", return_value=ConsentLevel.LOCAL_ONLY.value):
                         persist_session_bias_data(
                             session_id="test-local",
                             stage1_results=[{"model": "m", "response": "r"}],
@@ -929,14 +929,14 @@ class TestPersistSessionBiasData:
             assert records[0].query_hash is None  # No hash at LOCAL_ONLY
 
     def test_uses_configured_store_path(self):
-        """Writes to BIAS_STORE_PATH."""
+        """Writes to configured store path from config."""
         from llm_council.bias_persistence import persist_session_bias_data
 
         with tempfile.TemporaryDirectory() as tmpdir:
             custom_path = Path(tmpdir) / "custom" / "location" / "bias.jsonl"
 
-            with patch("llm_council.bias_persistence.BIAS_PERSISTENCE_ENABLED", True):
-                with patch("llm_council.bias_persistence.BIAS_STORE_PATH", custom_path):
+            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
+                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=custom_path):
                     persist_session_bias_data(
                         session_id="test",
                         stage1_results=[{"model": "m", "response": "r"}],

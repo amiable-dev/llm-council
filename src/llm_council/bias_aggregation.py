@@ -23,8 +23,17 @@ from typing import Any, Dict, List, Optional
 from llm_council.bias_persistence import (
     BiasMetricRecord,
     read_bias_records,
-    BIAS_STORE_PATH,
 )
+from llm_council.unified_config import get_config
+
+
+def _get_bias_store_path() -> Path:
+    """Get bias store path from unified config."""
+    try:
+        path_str = get_config().evaluation.bias.store_path
+        return Path(path_str).expanduser()
+    except Exception:
+        return Path.home() / ".llm-council" / "bias_metrics.jsonl"
 
 logger = logging.getLogger(__name__)
 
@@ -434,7 +443,7 @@ def run_aggregated_bias_audit(
     Main entry point for Phase 2 aggregation.
 
     Args:
-        store_path: Path to JSONL store (default: BIAS_STORE_PATH)
+        store_path: Path to JSONL store (default from config)
         max_sessions: Limit to last N sessions
         max_days: Limit to last N days
 
@@ -442,7 +451,7 @@ def run_aggregated_bias_audit(
         AggregatedBiasAuditResult with all metrics
     """
     if store_path is None:
-        store_path = BIAS_STORE_PATH
+        store_path = _get_bias_store_path()
 
     # Read records with filters
     records = read_bias_records(

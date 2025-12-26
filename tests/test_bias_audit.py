@@ -14,9 +14,13 @@ from llm_council.bias_audit import (
     run_bias_audit,
     extract_scores_from_stage2,
     derive_position_mapping,
-    LENGTH_CORRELATION_THRESHOLD,
-    POSITION_VARIANCE_THRESHOLD,
 )
+from llm_council.unified_config import get_config
+
+# Get thresholds from config
+_config = get_config()
+LENGTH_CORRELATION_THRESHOLD = _config.evaluation.bias.length_correlation_threshold
+POSITION_VARIANCE_THRESHOLD = _config.evaluation.bias.position_variance_threshold
 
 
 class TestBiasAuditResult:
