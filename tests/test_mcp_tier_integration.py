@@ -33,7 +33,7 @@ class TestConsultCouncilWithTierContract:
     async def test_quick_tier_uses_quick_models(self):
         """Quick confidence should use quick tier models."""
         from llm_council.mcp_server import consult_council
-        from llm_council.config import TIER_MODEL_POOLS
+        from llm_council.tier_contract import _get_tier_model_pools
 
         with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
             mock_council.return_value = {
@@ -46,13 +46,14 @@ class TestConsultCouncilWithTierContract:
 
             call_kwargs = mock_council.call_args.kwargs
             tier_contract = call_kwargs["tier_contract"]
-            assert tier_contract.allowed_models == TIER_MODEL_POOLS["quick"]
+            pools = _get_tier_model_pools()
+            assert tier_contract.allowed_models == pools["quick"]
 
     @pytest.mark.asyncio
     async def test_high_tier_uses_high_models(self):
         """High confidence should use high tier models."""
         from llm_council.mcp_server import consult_council
-        from llm_council.config import TIER_MODEL_POOLS
+        from llm_council.tier_contract import _get_tier_model_pools
 
         with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
             mock_council.return_value = {
@@ -65,13 +66,14 @@ class TestConsultCouncilWithTierContract:
 
             call_kwargs = mock_council.call_args.kwargs
             tier_contract = call_kwargs["tier_contract"]
-            assert tier_contract.allowed_models == TIER_MODEL_POOLS["high"]
+            pools = _get_tier_model_pools()
+            assert tier_contract.allowed_models == pools["high"]
 
     @pytest.mark.asyncio
     async def test_reasoning_tier_uses_reasoning_models(self):
         """Reasoning confidence should use reasoning tier models."""
         from llm_council.mcp_server import consult_council
-        from llm_council.config import TIER_MODEL_POOLS
+        from llm_council.tier_contract import _get_tier_model_pools
 
         with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
             mock_council.return_value = {
@@ -84,7 +86,8 @@ class TestConsultCouncilWithTierContract:
 
             call_kwargs = mock_council.call_args.kwargs
             tier_contract = call_kwargs["tier_contract"]
-            assert tier_contract.allowed_models == TIER_MODEL_POOLS["reasoning"]
+            pools = _get_tier_model_pools()
+            assert tier_contract.allowed_models == pools["reasoning"]
 
 
 class TestHealthCheckWithTierPools:

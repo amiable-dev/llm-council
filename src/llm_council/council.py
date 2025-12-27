@@ -176,7 +176,7 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models in parallel
-    responses = await query_models_parallel(_get_council_models(), messages)
+    responses = await query_models_parallel(COUNCIL_MODELS, messages)
 
     # Format results and aggregate usage
     stage1_results = []
@@ -227,7 +227,7 @@ async def stage1_collect_responses_with_status(
         - usage dict: Aggregated token counts
         - model_statuses dict: Per-model status information
     """
-    council_models = models if models is not None else _get_council_models()
+    council_models = models if models is not None else COUNCIL_MODELS
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models with progress tracking
@@ -467,7 +467,7 @@ async def run_council_with_fallback(
     elif tier_contract is not None:
         council_models = tier_contract.allowed_models
     else:
-        council_models = _get_council_models()
+        council_models = COUNCIL_MODELS
 
     requested_models = len(council_models)
 
@@ -1130,10 +1130,10 @@ Now provide your evaluation and ranking:"""
     messages = [{"role": "user", "content": ranking_prompt}]
 
     # Determine which models will review (stratified sampling for large councils)
-    reviewers = _get_council_models().copy()
-    if _get_max_reviewers() is not None and len(_get_council_models()) > _get_max_reviewers():
+    reviewers = list(COUNCIL_MODELS)  # Copy the list
+    if _get_max_reviewers() is not None and len(COUNCIL_MODELS) > _get_max_reviewers():
         # For large councils, randomly sample k reviewers
-        reviewers = random.sample(_get_council_models(), _get_max_reviewers())
+        reviewers = random.sample(list(COUNCIL_MODELS), _get_max_reviewers())
 
     # Get rankings from reviewer models in parallel
     # Disable tools to prevent prompt injection via tool invocation
@@ -1834,7 +1834,7 @@ async def run_full_council(
         from llm_council.layer_contracts import LayerEventType, LayerEvent
         await event_bridge.emit(LayerEvent(
             event_type=LayerEventType.L3_COUNCIL_START,
-            data={"query": user_query[:100], "models": models or _get_council_models()}
+            data={"query": user_query[:100], "models": models or COUNCIL_MODELS}
         ))
 
     # Check cache first (unless bypassed)
@@ -2014,7 +2014,7 @@ async def run_full_council(
             "exclude_self_votes": _get_exclude_self_votes(),
             "style_normalization": _get_style_normalization(),
             "max_reviewers": _get_max_reviewers(),
-            "council_size": len(_get_council_models()),
+            "council_size": len(COUNCIL_MODELS),
             "responses_received": num_responses,
             "chairman": _get_chairman_model(),
             "verdict_type": verdict_type.value,  # ADR-025b: Requested verdict type
@@ -2071,7 +2071,7 @@ async def run_full_council(
         telemetry_event = {
             "type": "council_completed",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "council_size": len(_get_council_models()),
+            "council_size": len(COUNCIL_MODELS),
             "responses_received": num_responses,
             "synthesis_mode": _get_synthesis_mode(),
             "rankings": [

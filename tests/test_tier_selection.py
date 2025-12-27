@@ -434,10 +434,11 @@ class TestFrontierTier:
 
     def test_frontier_tier_exists_in_static_pools(self):
         """Frontier tier should be defined in static pools."""
-        from llm_council.config import TIER_MODEL_POOLS
+        from llm_council.tier_contract import _get_tier_model_pools
 
-        assert "frontier" in TIER_MODEL_POOLS
-        assert len(TIER_MODEL_POOLS["frontier"]) > 0
+        pools = _get_tier_model_pools()
+        assert "frontier" in pools
+        assert len(pools["frontier"]) > 0
 
     def test_frontier_tier_select_returns_models(self):
         """select_tier_models should return models for frontier tier."""
@@ -540,15 +541,15 @@ class TestTierContractIntegration:
 
     def test_tier_contract_uses_static_when_intelligence_disabled(self):
         """Should use static config when intelligence disabled."""
-        from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import TIER_MODEL_POOLS
+        from llm_council.tier_contract import create_tier_contract, _get_tier_model_pools
 
         # Ensure intelligence is disabled
         with patch.dict(os.environ, {"LLM_COUNCIL_MODEL_INTELLIGENCE": "false"}):
             contract = create_tier_contract(tier="high")
+            pools = _get_tier_model_pools()
             # Should use static pools
             for model in contract.allowed_models:
-                assert model in TIER_MODEL_POOLS["high"]
+                assert model in pools["high"]
 
     def test_create_frontier_tier_contract(self):
         """Should create tier contract for frontier tier (ADR-027)."""

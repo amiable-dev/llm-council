@@ -111,15 +111,17 @@ class TestCreateTierContract:
         assert contract.max_attempts == 2
 
     def test_create_tier_contract_uses_tier_model_pools(self):
-        """Factory function should use TIER_MODEL_POOLS for allowed_models."""
-        from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import TIER_MODEL_POOLS
+        """Factory function should use tier model pools for allowed_models."""
+        from llm_council.tier_contract import create_tier_contract, _get_tier_model_pools
+
+        # Get the actual pools from unified config
+        pools = _get_tier_model_pools()
 
         contract = create_tier_contract("quick")
-        assert contract.allowed_models == TIER_MODEL_POOLS["quick"]
+        assert contract.allowed_models == pools["quick"]
 
         contract = create_tier_contract("high")
-        assert contract.allowed_models == TIER_MODEL_POOLS["high"]
+        assert contract.allowed_models == pools["high"]
 
     def test_create_tier_contract_invalid_tier_raises(self):
         """Invalid tier should raise ValueError."""
