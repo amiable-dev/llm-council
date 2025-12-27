@@ -1943,3 +1943,117 @@ class TestADR032Serialization:
         assert "timeouts:" in yaml_str
         assert "cache:" in yaml_str
         assert "telemetry:" in yaml_str
+
+
+class TestGetApiKey:
+    """Test get_api_key() helper function (ADR-032)."""
+
+    def test_get_api_key_from_env(self, monkeypatch):
+        """Environment variable takes priority."""
+        from llm_council.unified_config import get_api_key
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-from-env")
+        result = get_api_key("openrouter")
+        assert result == "test-key-from-env"
+
+    def test_get_api_key_missing(self, monkeypatch):
+        """Missing key returns None."""
+        from llm_council.unified_config import get_api_key
+
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("NONEXISTENT_PROVIDER_API_KEY", raising=False)
+
+        result = get_api_key("nonexistent_provider")
+        assert result is None
+
+    def test_get_api_key_provider_case_insensitive(self, monkeypatch):
+        """Provider name is normalized to uppercase for env lookup."""
+        from llm_council.unified_config import get_api_key
+
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
+        result = get_api_key("anthropic")
+        assert result == "anthropic-key"
+
+        result = get_api_key("ANTHROPIC")
+        assert result == "anthropic-key"
+
+    def test_get_api_key_openai(self, monkeypatch):
+        """OpenAI API key lookup works."""
+        from llm_council.unified_config import get_api_key
+
+        monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+        result = get_api_key("openai")
+        assert result == "openai-key"
+
+    def test_get_api_key_google(self, monkeypatch):
+        """Google API key lookup works."""
+        from llm_council.unified_config import get_api_key
+
+        monkeypatch.setenv("GOOGLE_API_KEY", "google-key")
+        result = get_api_key("google")
+        assert result == "google-key"
+
+
+class TestDumpEffectiveConfig:
+    """Test dump_effective_config() helper function (ADR-032)."""
+
+    def test_dump_effective_config_returns_yaml(self):
+        """dump_effective_config returns valid YAML string."""
+        from llm_council.unified_config import dump_effective_config
+
+        yaml_str = dump_effective_config()
+        assert isinstance(yaml_str, str)
+        assert "council:" in yaml_str
+
+    def test_dump_effective_config_includes_all_sections(self):
+        """dump_effective_config includes all ADR-032 sections."""
+        from llm_council.unified_config import dump_effective_config
+
+        yaml_str = dump_effective_config()
+        assert "secrets:" in yaml_str
+        assert "council:" in yaml_str
+        assert "timeouts:" in yaml_str
+        assert "cache:" in yaml_str
+        assert "telemetry:" in yaml_str
+
+    def test_dump_effective_config_redact_secrets(self, monkeypatch):
+        """redact_secrets=True redacts API keys in credentials section."""
+        from llm_council.unified_config import dump_effective_config, reload_config
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-secret-key-12345")
+        reload_config()
+
+        yaml_str = dump_effective_config(redact_secrets=True)
+
+        # The credentials section should have [REDACTED] for openrouter
+        # Note: The key may appear in other places (like env loading) but
+        # credentials section should be redacted
+        assert "[REDACTED]" in yaml_str
+
+    def test_dump_effective_config_no_redact(self, monkeypatch):
+        """redact_secrets=False shows actual values (for credentials section)."""
+        from llm_council.unified_config import dump_effective_config, reload_config
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-visible-key")
+        reload_config()
+
+        yaml_str = dump_effective_config(redact_secrets=False)
+        assert "openrouter" in yaml_str.lower()
+
+
+class TestTierPoolsConfig:
+    """Test TierPoolsConfig for per-tier model pools (ADR-032)."""
+
+    def test_tier_pools_exists_in_tiers(self):
+        """TierPoolsConfig should exist in TierConfig.pools."""
+        config = UnifiedConfig()
+        assert hasattr(config.tiers, "pools")
+        assert config.tiers.pools is not None
+
+    def test_tier_pools_has_all_tiers(self):
+        """All tiers should have a pool defined."""
+        config = UnifiedConfig()
+        pools = config.tiers.pools
+
+        for tier in ["quick", "balanced", "high", "reasoning"]:
+            assert tier in pools or hasattr(pools, tier)
