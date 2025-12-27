@@ -101,12 +101,12 @@ def get_cache_key(query: str) -> str:
     """
     cache_input = {
         "query": query,
-        "council_models": sorted(_council_models()),
-        "chairman": _chairman_model(),
-        "synthesis_mode": _synthesis_mode(),
-        "exclude_self_votes": _exclude_self_votes(),
-        "style_normalization": _style_normalization(),
-        "max_reviewers": _max_reviewers(),
+        "council_models": sorted(COUNCIL_MODELS),
+        "chairman": CHAIRMAN_MODEL,
+        "synthesis_mode": SYNTHESIS_MODE,
+        "exclude_self_votes": EXCLUDE_SELF_VOTES,
+        "style_normalization": STYLE_NORMALIZATION,
+        "max_reviewers": MAX_REVIEWERS,
     }
     serialized = json.dumps(cache_input, sort_keys=True)
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
@@ -121,10 +121,10 @@ def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
     Returns:
         Cached response dict if valid cache hit, None otherwise
     """
-    if not _cache_enabled():
+    if not CACHE_ENABLED:
         return None
 
-    cache_file = _cache_dir() / f"{cache_key}.json"
+    cache_file = CACHE_DIR / f"{cache_key}.json"
 
     if not cache_file.exists():
         return None
@@ -134,10 +134,9 @@ def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
             cached = json.load(f)
 
         # Check TTL if configured
-        ttl = _cache_ttl()
-        if ttl > 0:
+        if CACHE_TTL > 0:
             cached_at = cached.get("_cached_at", 0)
-            if time.time() - cached_at > ttl:
+            if time.time() - cached_at > CACHE_TTL:
                 # Cache expired, delete file
                 cache_file.unlink(missing_ok=True)
                 return None
@@ -165,14 +164,13 @@ def save_to_cache(
         stage3_result: Result from Stage 3
         metadata: Response metadata
     """
-    if not _cache_enabled():
+    if not CACHE_ENABLED:
         return
 
-    cache_directory = _cache_dir()
     # Create cache directory if needed
-    cache_directory.mkdir(parents=True, exist_ok=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    cache_file = cache_directory / f"{cache_key}.json"
+    cache_file = CACHE_DIR / f"{cache_key}.json"
 
     cache_data = {
         "_cached_at": time.time(),
@@ -197,12 +195,11 @@ def clear_cache() -> int:
     Returns:
         Number of cache entries deleted
     """
-    cache_directory = _cache_dir()
-    if not cache_directory.exists():
+    if not CACHE_DIR.exists():
         return 0
 
     count = 0
-    for cache_file in cache_directory.glob("*.json"):
+    for cache_file in CACHE_DIR.glob("*.json"):
         try:
             cache_file.unlink()
             count += 1
@@ -218,27 +215,23 @@ def get_cache_stats() -> Dict[str, Any]:
     Returns:
         Dict with cache stats (entry count, total size, oldest/newest)
     """
-    cache_directory = _cache_dir()
-    cache_enabled = _cache_enabled()
-    ttl = _cache_ttl()
-
-    if not cache_directory.exists():
+    if not CACHE_DIR.exists():
         return {
-            "enabled": cache_enabled,
+            "enabled": CACHE_ENABLED,
             "entries": 0,
             "total_size_bytes": 0,
-            "cache_dir": str(cache_directory),
+            "cache_dir": str(CACHE_DIR),
         }
 
-    entries = list(cache_directory.glob("*.json"))
+    entries = list(CACHE_DIR.glob("*.json"))
     total_size = sum(f.stat().st_size for f in entries)
 
     stats = {
-        "enabled": cache_enabled,
+        "enabled": CACHE_ENABLED,
         "entries": len(entries),
         "total_size_bytes": total_size,
-        "cache_dir": str(cache_directory),
-        "ttl_seconds": ttl if ttl > 0 else "infinite",
+        "cache_dir": str(CACHE_DIR),
+        "ttl_seconds": CACHE_TTL if CACHE_TTL > 0 else "infinite",
     }
 
     if entries:
