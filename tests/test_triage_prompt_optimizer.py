@@ -220,8 +220,9 @@ class TestIntegrationWithTriage:
     def test_run_triage_default_no_optimization(self):
         """run_triage should not optimize by default (passthrough)."""
         from llm_council.triage import run_triage
-        from llm_council.config import COUNCIL_MODELS
+        from llm_council.unified_config import get_config
 
+        COUNCIL_MODELS = get_config().council.models
         original = "Test query"
         result = run_triage(original)
 

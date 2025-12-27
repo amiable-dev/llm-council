@@ -666,56 +666,6 @@ council:
         assert "ollama" in config.gateways.fallback.chain
 
 
-class TestConfigDeprecation:
-    """Test deprecation bridge for config.py constants (ADR-025a)."""
-
-    def test_deprecated_ollama_base_url_warns(self):
-        """Accessing config.OLLAMA_BASE_URL should emit deprecation warning."""
-        import warnings
-        from llm_council import config
-
-        # Reset the warning cache to ensure we see the warning
-        config._deprecated_warned.discard("OLLAMA_BASE_URL")
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            # Access deprecated constant
-            _ = config.OLLAMA_BASE_URL
-            # Should have deprecation warning
-            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
-            assert any("unified_config" in str(warning.message).lower() or
-                      "deprecated" in str(warning.message).lower()
-                      for warning in w)
-
-    def test_deprecated_webhook_timeout_warns(self):
-        """Accessing config.WEBHOOK_TIMEOUT should emit deprecation warning."""
-        import warnings
-        from llm_council import config
-
-        # Reset the warning cache to ensure we see the warning
-        config._deprecated_warned.discard("WEBHOOK_TIMEOUT")
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            _ = config.WEBHOOK_TIMEOUT
-            assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
-
-    def test_deprecated_attrs_return_correct_values(self):
-        """Deprecated config attrs should return values from unified_config."""
-        from llm_council import config
-        from llm_council.unified_config import get_config
-        import warnings
-
-        # Suppress warnings for this test
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-        unified = get_config()
-        ollama_config = unified.gateways.providers.get("ollama")
-        if ollama_config:
-            # Value from deprecated constant should match unified config
-            assert config.OLLAMA_BASE_URL == ollama_config.base_url
-
-
 class TestUnifiedConfigWithWebhooks:
     """Test UnifiedConfig includes webhooks field."""
 

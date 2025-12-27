@@ -1,6 +1,8 @@
 """Tests for telemetry configuration.
 
 Tests the LLM_COUNCIL_TELEMETRY environment variable and auto-initialization.
+
+ADR-032: Updated to use unified_config instead of config.py.
 """
 
 import os
@@ -13,78 +15,103 @@ class TestTelemetryConfig:
 
     def test_telemetry_default_is_off(self):
         """Telemetry should be disabled by default."""
-        # Clear any existing telemetry env var
-        with patch.dict(os.environ, {}, clear=True):
-            # Need to reload config to pick up env changes
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+        from llm_council import unified_config
 
-            assert config.TELEMETRY_ENABLED is False
-            assert config.TELEMETRY_LEVEL == "off"
+        # Clear any existing telemetry env var and reload
+        with patch.dict(os.environ, {}, clear=True):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.telemetry.enabled is False
+            assert config.telemetry.level == "off"
 
     def test_telemetry_off_explicitly(self):
         """LLM_COUNCIL_TELEMETRY=off should disable telemetry."""
-        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "off"}):
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+        from llm_council import unified_config
 
-            assert config.TELEMETRY_ENABLED is False
-            assert config.TELEMETRY_LEVEL == "off"
+        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "off"}):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.telemetry.enabled is False
+            assert config.telemetry.level == "off"
+
+        # Cleanup
+        unified_config.reload_config()
 
     def test_telemetry_anonymous_level(self):
         """LLM_COUNCIL_TELEMETRY=anonymous should enable basic telemetry."""
-        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+        from llm_council import unified_config
 
-            assert config.TELEMETRY_ENABLED is True
-            assert config.TELEMETRY_LEVEL == "anonymous"
+        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.telemetry.enabled is True
+            assert config.telemetry.level == "anonymous"
+
+        # Cleanup
+        unified_config.reload_config()
 
     def test_telemetry_debug_level(self):
         """LLM_COUNCIL_TELEMETRY=debug should enable debug telemetry."""
-        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "debug"}):
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+        from llm_council import unified_config
 
-            assert config.TELEMETRY_ENABLED is True
-            assert config.TELEMETRY_LEVEL == "debug"
+        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "debug"}):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.telemetry.enabled is True
+            assert config.telemetry.level == "debug"
+
+        # Cleanup
+        unified_config.reload_config()
 
     def test_telemetry_case_insensitive(self):
         """Telemetry level should be case-insensitive."""
-        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "ANONYMOUS"}):
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+        from llm_council import unified_config
 
-            assert config.TELEMETRY_ENABLED is True
-            assert config.TELEMETRY_LEVEL == "anonymous"
+        # Note: Pydantic validation lowercases the value via _apply_env_overrides
+        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "ANONYMOUS"}):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.telemetry.enabled is True
+            assert config.telemetry.level == "anonymous"
+
+        # Cleanup
+        unified_config.reload_config()
 
     def test_telemetry_endpoint_default(self):
         """Default telemetry endpoint should be set."""
-        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+        from llm_council import unified_config
 
-            assert config.TELEMETRY_ENDPOINT is not None
-            assert "telemetry" in config.TELEMETRY_ENDPOINT.lower() or "ingest" in config.TELEMETRY_ENDPOINT.lower()
+        with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.telemetry.endpoint is not None
+            assert "telemetry" in config.telemetry.endpoint.lower() or "ingest" in config.telemetry.endpoint.lower()
+
+        # Cleanup
+        unified_config.reload_config()
 
     def test_telemetry_endpoint_override(self):
         """LLM_COUNCIL_TELEMETRY_ENDPOINT should override default."""
+        from llm_council import unified_config
+
         custom_endpoint = "https://custom.example.com/events"
         with patch.dict(os.environ, {
             "LLM_COUNCIL_TELEMETRY": "anonymous",
             "LLM_COUNCIL_TELEMETRY_ENDPOINT": custom_endpoint
         }):
-            import importlib
-            from llm_council import config
-            importlib.reload(config)
+            unified_config.reload_config()
+            config = unified_config.get_config()
 
-            assert config.TELEMETRY_ENDPOINT == custom_endpoint
+            assert config.telemetry.endpoint == custom_endpoint
+
+        # Cleanup
+        unified_config.reload_config()
 
 
 class TestHttpTelemetryClient:

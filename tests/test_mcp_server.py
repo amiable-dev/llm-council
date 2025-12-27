@@ -342,7 +342,7 @@ async def test_timeout_preserves_diagnostic_info():
         }
 
     with patch('llm_council.openrouter.query_model_with_status', side_effect=mock_query_with_status), \
-         patch('llm_council.config.COUNCIL_MODELS', ['openai/gpt-4', 'anthropic/claude', 'google/gemini']):
+         patch('llm_council.council.COUNCIL_MODELS', ['openai/gpt-4', 'anthropic/claude', 'google/gemini']):
 
         # Run with a very short timeout to trigger global timeout
         result = await run_council_with_fallback(

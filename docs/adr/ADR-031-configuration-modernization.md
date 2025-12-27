@@ -201,13 +201,37 @@ council:
 
 ## Implementation Checklist
 
-- [ ] Add `EvaluationConfig` to `unified_config.py`
-- [ ] Add `validation_alias` for legacy env vars
-- [ ] Add semantic validators (weights, bounds)
-- [ ] Migrate 36 import sites
-- [ ] Delete or gut `config.py`
+- [x] Add `EvaluationConfig` to `unified_config.py`
+- [x] Add `validation_alias` for legacy env vars
+- [x] Add semantic validators (weights, bounds)
+- [x] Migrate evaluation-related import sites (bias_audit.py, bias_persistence.py, bias_aggregation.py, council.py)
+- [ ] ~~Delete or gut `config.py`~~ **Deferred** - Non-evaluation imports remain (COUNCIL_MODELS, gateway config, telemetry, etc.)
 - [ ] Update `llm_council.yaml` schema
-- [ ] Update `CLAUDE.md` documentation
-- [ ] Run full test suite
-- [ ] Create single atomic PR
-- [ ] Notify team post-merge
+- [x] Update `CLAUDE.md` documentation
+- [x] Run full test suite (1898 tests pass)
+- [x] Create atomic commits (`ddca934`)
+
+### Implementation Notes
+
+**Scope Clarification:** ADR-031 focused specifically on **evaluation config** (rubric, safety, bias). The full config.py deletion requires migrating ~15 additional files with non-evaluation config (council membership, gateway config, telemetry, etc.) which is deferred to a future effort.
+
+**Files Migrated:**
+- `src/llm_council/bias_audit.py` - Uses `get_config().evaluation.bias.*`
+- `src/llm_council/bias_persistence.py` - Uses helper functions `_get_bias_*`
+- `src/llm_council/bias_aggregation.py` - Uses `_get_bias_store_path()`
+- `src/llm_council/council.py` - Uses `eval_config = get_config().evaluation`
+
+**Pattern Used:**
+```python
+# Helper function pattern (bias_persistence.py)
+def _get_bias_persistence_enabled() -> bool:
+    try:
+        return get_config().evaluation.bias.persistence_enabled
+    except Exception:
+        return False
+
+# Direct access pattern (council.py)
+eval_config = get_config().evaluation
+if eval_config.rubric.enabled:
+    weights = eval_config.rubric.weights
+```

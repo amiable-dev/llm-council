@@ -542,7 +542,7 @@ class TestGatewayWiring:
         # When USE_GATEWAY_LAYER is False (default), the adapter should use
         # the direct openrouter functions
         # We can verify this by checking the module-level USE_GATEWAY_LAYER flag
-        from llm_council.config import USE_GATEWAY_LAYER
+        from llm_council.gateway_adapter import USE_GATEWAY_LAYER
 
         if not USE_GATEWAY_LAYER:
             # The adapter falls back to direct functions

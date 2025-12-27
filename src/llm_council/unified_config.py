@@ -1397,6 +1397,132 @@ def reload_config() -> UnifiedConfig:
 # ADR-032: Helper Functions
 # =============================================================================
 
+# ADR-013: Key source tracking for diagnostics
+_key_source: str = "unknown"
+
+# Lazy-loaded keyring module (None means not checked, False means not installed)
+keyring: Any = None
+
+
+def _is_fail_backend() -> bool:
+    """Check if keyring is using the fail backend (headless environment).
+
+    Returns:
+        True if keyring is unavailable or using fail backend
+    """
+    global keyring
+    if keyring is None:
+        try:
+            import keyring as kr
+            keyring = kr
+        except ImportError:
+            keyring = False
+            return True
+
+    if keyring is False:
+        return True
+
+    try:
+        from keyring.backends import fail
+        return isinstance(keyring.get_keyring(), fail.Keyring)
+    except ImportError:
+        return False
+
+
+def _get_api_key_from_keychain(provider: str = "openrouter_api_key") -> Optional[str]:
+    """Get API key from system keychain (ADR-013).
+
+    Args:
+        provider: The key name to look up (default: openrouter_api_key)
+
+    Returns:
+        API key string or None if not found/unavailable
+    """
+    global keyring
+    if keyring is None:
+        try:
+            import keyring as kr
+            keyring = kr
+        except ImportError:
+            keyring = False
+            return None
+
+    if keyring is False:
+        return None
+
+    if _is_fail_backend():
+        return None
+
+    try:
+        config = get_config()
+        return keyring.get_password(config.secrets.keychain_service, provider)
+    except Exception:
+        return None
+
+
+def get_key_source() -> str:
+    """Get the source of the last API key resolution (ADR-013).
+
+    Returns:
+        One of: "environment", "keychain", "config_file", "unknown"
+    """
+    return _key_source
+
+
+def _get_api_key(provider: str = "openrouter") -> Optional[str]:
+    """Internal API key resolution with source tracking (ADR-013).
+
+    This is the internal implementation that tracks key source.
+    Use get_api_key() for the public API.
+
+    Priority:
+    1. Environment variable (e.g., OPENROUTER_API_KEY)
+    2. macOS Keychain (via keyring library, if available)
+    3. User config file (deprecated, emits warning)
+
+    Args:
+        provider: Provider name (e.g., "openrouter", "anthropic", "openai")
+
+    Returns:
+        API key string or None if not found
+    """
+    global _key_source
+
+    # Normalize provider name to uppercase for env var lookup
+    env_var = f"{provider.upper()}_API_KEY"
+
+    # 1. Check environment variable (includes .env via dotenv)
+    key = os.environ.get(env_var)
+    if key:
+        _key_source = "environment"
+        return key
+
+    # 2. Try keychain (if keyring is available)
+    keychain_key = _get_api_key_from_keychain(f"{provider}_api_key")
+    if keychain_key:
+        _key_source = "keychain"
+        return keychain_key
+
+    # 3. Try user config (deprecated)
+    if _user_config.get(f"{provider}_api_key"):
+        _key_source = "config_file"
+        # Emit warning unless suppressed
+        if not os.environ.get("LLM_COUNCIL_SUPPRESS_WARNINGS"):
+            import sys
+            print(
+                f"Warning: Loading API key from config file is insecure. "
+                f"Use environment variables or keychain instead.",
+                file=sys.stderr
+            )
+        return _user_config[f"{provider}_api_key"]
+
+    _key_source = "unknown"
+    return None
+
+
+# User config for backwards compatibility with config file keys
+_user_config: Dict[str, Any] = {}
+
 
 def get_api_key(provider: str) -> Optional[str]:
     """Resolve API key for provider (ADR-013 resolution chain).
@@ -1415,37 +1541,7 @@ def get_api_key(provider: str) -> Optional[str]:
     Returns:
         API key string or None if not found
     """
-    # Normalize provider name to uppercase for env var lookup
-    env_var = f"{provider.upper()}_API_KEY"
-
-    # 1. Check environment variable (includes .env via dotenv)
-    key = os.environ.get(env_var)
-    if key:
-        return key
-
-    # 2. Try keychain (if keyring is available)
-    try:
-        import keyring
-
-        # Check if we have a real backend (not the fail backend)
-        try:
-            from keyring.backends import fail
-
-            if isinstance(keyring.get_keyring(), fail.Keyring):
-                return None
-        except ImportError:
-            pass
-
-        config = get_config()
-        keychain_key = keyring.get_password(config.secrets.keychain_service, provider)
-        if keychain_key:
-            return keychain_key
-    except ImportError:
-        pass  # keyring not installed
-    except Exception:
-        pass  # keychain access failed
-
-    return None
+    return _get_api_key(provider)
 
 
 def dump_effective_config(redact_secrets: bool = True) -> str:

@@ -1,83 +1,167 @@
-"""Tests for llm_council configuration."""
+"""Tests for llm_council configuration.
+
+ADR-032: Migrated from config.py to unified_config.py.
+"""
 import os
-import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
+import yaml
 import pytest
 
 
-def test_config_loads_from_env():
+def test_config_loads_api_key_from_env():
     """Test that API key is loaded from environment variable."""
+    from llm_council import unified_config
+
     with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
-        # Re-import to pick up env var
-        import importlib
-        import llm_council.config as config
-        importlib.reload(config)
-        
-        assert config.OPENROUTER_API_KEY == "test-key"
+        # Reload config to pick up env var
+        unified_config.reload_config()
+
+        key = unified_config.get_api_key("openrouter")
+        assert key == "test-key"
+
+    # Cleanup
+    unified_config.reload_config()
 
 
 def test_council_models_from_env():
     """Test that council models can be set via environment variable."""
+    from llm_council import unified_config
+
     test_models = "model1,model2,model3"
     with patch.dict(os.environ, {"LLM_COUNCIL_MODELS": test_models}):
-        import importlib
-        import llm_council.config as config
-        importlib.reload(config)
-        
-        assert config.COUNCIL_MODELS == ["model1", "model2", "model3"]
+        unified_config.reload_config()
+        config = unified_config.get_config()
+
+        assert config.council.models == ["model1", "model2", "model3"]
+
+    # Cleanup
+    unified_config.reload_config()
+
+
+def test_council_models_from_env_json_format():
+    """Test that council models can be set via JSON array env var."""
+    from llm_council import unified_config
+
+    test_models = '["model/a", "model/b", "model/c"]'
+    with patch.dict(os.environ, {"LLM_COUNCIL_MODELS": test_models}):
+        unified_config.reload_config()
+        config = unified_config.get_config()
+
+        assert config.council.models == ["model/a", "model/b", "model/c"]
+
+    # Cleanup
+    unified_config.reload_config()
 
 
 def test_chairman_model_from_env():
     """Test that chairman model can be set via environment variable."""
+    from llm_council import unified_config
+
     with patch.dict(os.environ, {"LLM_COUNCIL_CHAIRMAN": "test-chairman"}):
-        import importlib
-        import llm_council.config as config
-        importlib.reload(config)
-        
-        assert config.CHAIRMAN_MODEL == "test-chairman"
+        unified_config.reload_config()
+        config = unified_config.get_config()
+
+        assert config.council.chairman == "test-chairman"
+
+    # Cleanup
+    unified_config.reload_config()
 
 
-def test_config_file_loading():
-    """Test that configuration can be loaded from JSON file."""
+def test_yaml_config_file_loading():
+    """Test that configuration can be loaded from YAML file."""
+    from llm_council import unified_config
+
     with tempfile.TemporaryDirectory() as tmpdir:
-        config_dir = Path(tmpdir) / ".config" / "llm-council"
-        config_dir.mkdir(parents=True)
-        config_file = config_dir / "config.json"
-        
+        config_file = Path(tmpdir) / "llm_council.yaml"
+
         test_config = {
-            "council_models": ["custom1", "custom2"],
-            "chairman_model": "custom-chairman"
+            "council": {
+                "council": {
+                    "models": ["custom1", "custom2"],
+                    "chairman": "custom-chairman"
+                }
+            }
         }
-        
+
         with open(config_file, 'w') as f:
-            json.dump(test_config, f)
-        
-        # Mock Path.home() to return our temp directory
-        with patch.object(Path, 'home', return_value=Path(tmpdir)):
-            import importlib
-            import llm_council.config as config
-            importlib.reload(config)
-            
-            assert config.COUNCIL_MODELS == ["custom1", "custom2"]
-            assert config.CHAIRMAN_MODEL == "custom-chairman"
+            yaml.dump(test_config, f)
+
+        # Point env var to temp config file
+        with patch.dict(os.environ, {"LLM_COUNCIL_CONFIG": str(config_file)}):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            assert config.council.models == ["custom1", "custom2"]
+            assert config.council.chairman == "custom-chairman"
+
+    # Cleanup
+    unified_config.reload_config()
 
 
 def test_default_models_used():
     """Test that defaults are used when no config is provided."""
+    from llm_council import unified_config
+
     with patch.dict(os.environ, {}, clear=True):
-        with patch.object(Path, 'home', return_value=Path("/nonexistent")):
-            import importlib
-            import llm_council.config as config
-            importlib.reload(config)
-            
-            assert config.COUNCIL_MODELS == config.DEFAULT_COUNCIL_MODELS
-            assert config.CHAIRMAN_MODEL == config.DEFAULT_CHAIRMAN_MODEL
+        # Point to non-existent config
+        with patch('llm_council.unified_config._find_config_file', return_value=None):
+            unified_config.reload_config()
+            config = unified_config.get_config()
+
+            # Should have default models
+            assert len(config.council.models) >= 2
+            assert len(config.council.chairman) > 0
+
+    # Cleanup
+    unified_config.reload_config()
 
 
-def test_api_url_constant():
-    """Test that OpenRouter API URL is properly defined."""
-    import llm_council.config as config
-    
-    assert config.OPENROUTER_API_URL == "https://openrouter.ai/api/v1/chat/completions"
+def test_gateway_default_is_openrouter():
+    """Test that default gateway is OpenRouter."""
+    from llm_council import unified_config
+
+    config = unified_config.get_config()
+
+    assert config.gateways.default == "openrouter"
+
+
+def test_openrouter_provider_configured():
+    """Test that OpenRouter provider is configured."""
+    from llm_council import unified_config
+
+    config = unified_config.get_config()
+
+    openrouter = config.gateways.providers.get("openrouter")
+    assert openrouter is not None
+    assert openrouter.enabled is True
+
+
+def test_tier_pools_have_all_tiers():
+    """Test that all expected tiers are configured."""
+    from llm_council import unified_config
+
+    config = unified_config.get_config()
+
+    expected_tiers = {"quick", "balanced", "high", "reasoning", "frontier"}
+    assert set(config.tiers.pools.keys()) == expected_tiers
+
+
+def test_telemetry_default_off():
+    """Test that telemetry is off by default."""
+    from llm_council import unified_config
+
+    config = unified_config.get_config()
+
+    assert config.telemetry.level == "off"
+    assert config.telemetry.enabled is False
+
+
+def test_cache_default_disabled():
+    """Test that cache is disabled by default."""
+    from llm_council import unified_config
+
+    config = unified_config.get_config()
+
+    assert config.cache.enabled is False

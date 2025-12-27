@@ -1,6 +1,8 @@
 """Tests for MCP server tier contract integration (ADR-022).
 
 TDD: Write these tests first, then implement the integration.
+
+ADR-032: Updated to use tier_contract instead of config.py.
 """
 
 import pytest
@@ -110,7 +112,9 @@ class TestHealthCheckWithTierPools:
     async def test_health_check_shows_tier_model_counts(self):
         """Health check should show model count per tier."""
         from llm_council.mcp_server import council_health_check
-        from llm_council.config import TIER_MODEL_POOLS
+        from llm_council.tier_contract import _get_tier_model_pools
+
+        TIER_MODEL_POOLS = _get_tier_model_pools()
 
         with patch("llm_council.mcp_server.query_model_with_status") as mock_query:
             mock_query.return_value = {"status": "ok", "content": "test"}
@@ -132,7 +136,7 @@ class TestTierContractTimeoutsUsed:
     async def test_quick_tier_uses_quick_timeout(self):
         """Quick tier should use quick timeout values."""
         from llm_council.mcp_server import consult_council
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         quick_timeout = get_tier_timeout("quick")
 
@@ -153,7 +157,7 @@ class TestTierContractTimeoutsUsed:
     async def test_reasoning_tier_uses_reasoning_timeout(self):
         """Reasoning tier should use reasoning timeout values."""
         from llm_council.mcp_server import consult_council
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         reasoning_timeout = get_tier_timeout("reasoning")
 

@@ -1,6 +1,6 @@
 """Tests for ADR-013: Secure API Key Handling.
 
-These tests follow TDD - written BEFORE implementation.
+ADR-032: Updated to use unified_config instead of config.py.
 """
 import os
 import sys
@@ -23,21 +23,21 @@ class TestKeyResolutionPriority:
 
     def test_env_var_takes_priority_over_keychain(self):
         """Environment variable should override keychain."""
-        from llm_council.config import _get_api_key, _key_source
+        from llm_council.unified_config import _get_api_key
 
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "env-key"}), \
-             patch('llm_council.config._get_api_key_from_keychain', return_value="keychain-key"):
+             patch('llm_council.unified_config._get_api_key_from_keychain', return_value="keychain-key"):
             key = _get_api_key()
             assert key == "env-key"
 
     def test_keychain_used_when_no_env_var(self):
         """Keychain should be used when env var is not set."""
-        from llm_council.config import _get_api_key
+        from llm_council.unified_config import _get_api_key
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value="keychain-key"), \
-                 patch('llm_council.config._user_config', {}):
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value="keychain-key"), \
+                 patch('llm_council.unified_config._user_config', {}):
                 key = _get_api_key()
                 assert key == "keychain-key"
         finally:
@@ -46,14 +46,14 @@ class TestKeyResolutionPriority:
 
     def test_config_file_used_as_last_resort(self):
         """Config file should only be used when env var and keychain both fail."""
-        from llm_council.config import _get_api_key
+        from llm_council import unified_config
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value=None), \
-                 patch('llm_council.config._user_config', {"openrouter_api_key": "config-key"}), \
-                 patch('llm_council.config.os.getenv', return_value=None):
-                key = _get_api_key()
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value=None), \
+                 patch.object(unified_config, '_user_config', {"openrouter_api_key": "config-key"}), \
+                 patch.dict(os.environ, {"LLM_COUNCIL_SUPPRESS_WARNINGS": "1"}):
+                key = unified_config._get_api_key()
                 assert key == "config-key"
         finally:
             if env_backup:
@@ -61,12 +61,12 @@ class TestKeyResolutionPriority:
 
     def test_returns_none_when_no_key_found(self):
         """Should return None when no key is available anywhere."""
-        from llm_council.config import _get_api_key
+        from llm_council.unified_config import _get_api_key
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value=None), \
-                 patch('llm_council.config._user_config', {}):
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value=None), \
+                 patch('llm_council.unified_config._user_config', {}):
                 key = _get_api_key()
                 assert key is None
         finally:
@@ -83,7 +83,7 @@ class TestKeySourceTracking:
 
     def test_key_source_tracked_for_env(self):
         """Key source should be 'environment' when from env var."""
-        from llm_council.config import _get_api_key, get_key_source
+        from llm_council.unified_config import _get_api_key, get_key_source
 
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "env-key"}):
             _get_api_key()
@@ -91,12 +91,12 @@ class TestKeySourceTracking:
 
     def test_key_source_tracked_for_keychain(self):
         """Key source should be 'keychain' when from keychain."""
-        from llm_council.config import _get_api_key, get_key_source
+        from llm_council.unified_config import _get_api_key, get_key_source
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value="keychain-key"), \
-                 patch('llm_council.config._user_config', {}):
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value="keychain-key"), \
+                 patch('llm_council.unified_config._user_config', {}):
                 _get_api_key()
                 assert get_key_source() == "keychain"
         finally:
@@ -105,15 +105,15 @@ class TestKeySourceTracking:
 
     def test_key_source_tracked_for_config(self):
         """Key source should be 'config_file' when from config."""
-        from llm_council.config import _get_api_key, get_key_source
+        from llm_council import unified_config
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value=None), \
-                 patch('llm_council.config._user_config', {"openrouter_api_key": "config-key"}), \
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value=None), \
+                 patch.object(unified_config, '_user_config', {"openrouter_api_key": "config-key"}), \
                  patch.dict(os.environ, {"LLM_COUNCIL_SUPPRESS_WARNINGS": "1"}):
-                _get_api_key()
-                assert get_key_source() == "config_file"
+                unified_config._get_api_key()
+                assert unified_config.get_key_source() == "config_file"
         finally:
             if env_backup:
                 os.environ["OPENROUTER_API_KEY"] = env_backup
@@ -128,51 +128,69 @@ class TestKeyringOptional:
 
     def test_keyring_import_error_handled(self):
         """Should handle ImportError when keyring not installed."""
-        from llm_council.config import _get_api_key_from_keychain
+        from llm_council import unified_config
 
-        # Patch keyring to None to simulate it not being installed
-        with patch('llm_council.config.keyring', None):
-            result = _get_api_key_from_keychain()
-            assert result is None
+        # Reset keyring state to force re-check
+        original_keyring = unified_config.keyring
+        unified_config.keyring = None
+
+        try:
+            # Patch import to fail
+            with patch.dict(sys.modules, {'keyring': None}):
+                # Force re-import check by resetting state
+                unified_config.keyring = None
+                result = unified_config._get_api_key_from_keychain()
+                assert result is None
+        finally:
+            unified_config.keyring = original_keyring
 
     def test_keyring_fail_backend_returns_none(self):
         """Should return None when keyring has fail backend (headless)."""
-        from llm_council.config import _get_api_key_from_keychain
+        from llm_council import unified_config
 
         mock_keyring = MagicMock()
-        mock_fail_keyring = MagicMock()
-        mock_keyring.get_keyring.return_value = mock_fail_keyring
+        original_keyring = unified_config.keyring
+        unified_config.keyring = mock_keyring
 
-        # Mock the fail.Keyring class check
-        with patch('llm_council.config.keyring', mock_keyring), \
-             patch('llm_council.config._is_fail_backend', return_value=True):
-            result = _get_api_key_from_keychain()
-            assert result is None
+        try:
+            with patch('llm_council.unified_config._is_fail_backend', return_value=True):
+                result = unified_config._get_api_key_from_keychain()
+                assert result is None
+        finally:
+            unified_config.keyring = original_keyring
 
     def test_keyring_success_returns_key(self):
         """Should return key when keyring works."""
-        from llm_council.config import _get_api_key_from_keychain
+        from llm_council import unified_config
 
         mock_keyring = MagicMock()
         mock_keyring.get_password.return_value = "keychain-secret-key"
+        original_keyring = unified_config.keyring
+        unified_config.keyring = mock_keyring
 
-        with patch('llm_council.config.keyring', mock_keyring), \
-             patch('llm_council.config._is_fail_backend', return_value=False):
-            result = _get_api_key_from_keychain()
-            assert result == "keychain-secret-key"
-            mock_keyring.get_password.assert_called_once_with("llm-council", "openrouter_api_key")
+        try:
+            with patch('llm_council.unified_config._is_fail_backend', return_value=False):
+                result = unified_config._get_api_key_from_keychain()
+                assert result == "keychain-secret-key"
+                mock_keyring.get_password.assert_called_once_with("llm-council", "openrouter_api_key")
+        finally:
+            unified_config.keyring = original_keyring
 
     def test_keyring_exception_handled(self):
         """Should handle exceptions from keyring gracefully."""
-        from llm_council.config import _get_api_key_from_keychain
+        from llm_council import unified_config
 
         mock_keyring = MagicMock()
         mock_keyring.get_password.side_effect = Exception("Keychain locked")
+        original_keyring = unified_config.keyring
+        unified_config.keyring = mock_keyring
 
-        with patch('llm_council.config.keyring', mock_keyring), \
-             patch('llm_council.config._is_fail_backend', return_value=False):
-            result = _get_api_key_from_keychain()
-            assert result is None
+        try:
+            with patch('llm_council.unified_config._is_fail_backend', return_value=False):
+                result = unified_config._get_api_key_from_keychain()
+                assert result is None
+        finally:
+            unified_config.keyring = original_keyring
 
 
 # =============================================================================
@@ -184,14 +202,14 @@ class TestConfigFileWarning:
 
     def test_warning_emitted_for_config_file_key(self, capsys):
         """Should emit warning to stderr when key from config file."""
-        from llm_council.config import _get_api_key
+        from llm_council import unified_config
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         warn_backup = os.environ.pop("LLM_COUNCIL_SUPPRESS_WARNINGS", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value=None), \
-                 patch('llm_council.config._user_config', {"openrouter_api_key": "config-key"}):
-                _get_api_key()
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value=None), \
+                 patch.object(unified_config, '_user_config', {"openrouter_api_key": "config-key"}):
+                unified_config._get_api_key()
                 captured = capsys.readouterr()
                 assert "Warning" in captured.err or "insecure" in captured.err.lower()
         finally:
@@ -202,14 +220,14 @@ class TestConfigFileWarning:
 
     def test_warning_suppressed_with_env_var(self, capsys):
         """Should suppress warning when LLM_COUNCIL_SUPPRESS_WARNINGS is set."""
-        from llm_council.config import _get_api_key
+        from llm_council import unified_config
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value=None), \
-                 patch('llm_council.config._user_config', {"openrouter_api_key": "config-key"}), \
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value=None), \
+                 patch.object(unified_config, '_user_config', {"openrouter_api_key": "config-key"}), \
                  patch.dict(os.environ, {"LLM_COUNCIL_SUPPRESS_WARNINGS": "1"}):
-                _get_api_key()
+                unified_config._get_api_key()
                 captured = capsys.readouterr()
                 assert "Warning" not in captured.err
         finally:
@@ -218,7 +236,7 @@ class TestConfigFileWarning:
 
     def test_no_warning_for_env_var_key(self, capsys):
         """Should not emit warning when key from env var."""
-        from llm_council.config import _get_api_key
+        from llm_council.unified_config import _get_api_key
 
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "env-key"}):
             _get_api_key()
@@ -227,12 +245,12 @@ class TestConfigFileWarning:
 
     def test_no_warning_for_keychain_key(self, capsys):
         """Should not emit warning when key from keychain."""
-        from llm_council.config import _get_api_key
+        from llm_council.unified_config import _get_api_key
 
         env_backup = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
-            with patch('llm_council.config._get_api_key_from_keychain', return_value="keychain-key"), \
-                 patch('llm_council.config._user_config', {}):
+            with patch('llm_council.unified_config._get_api_key_from_keychain', return_value="keychain-key"), \
+                 patch('llm_council.unified_config._user_config', {}):
                 _get_api_key()
                 captured = capsys.readouterr()
                 assert "Warning" not in captured.err

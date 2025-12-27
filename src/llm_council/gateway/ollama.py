@@ -16,8 +16,30 @@ from typing import Any, AsyncIterator, Dict, List, Optional, TYPE_CHECKING
 # Import configuration from unified_config (ADR-025a alignment)
 from llm_council.unified_config import OllamaProviderConfig, get_config
 
-# Hardware profiles are still in config.py (not deprecated)
-from llm_council.config import OLLAMA_HARDWARE_PROFILES
+# Hardware profiles for deployment guidance (per ADR-025)
+# These are recommendations, not enforced requirements
+OLLAMA_HARDWARE_PROFILES = {
+    "minimum": {
+        "description": "8+ core CPU, 16GB RAM, SSD",
+        "models": ["7b-q4"],
+        "use_case": "Development/testing only",
+    },
+    "recommended": {
+        "description": "Apple M-series Pro/Max, 32GB unified memory",
+        "models": ["7b", "13b-q4"],
+        "use_case": "Small council (2-3 local models)",
+    },
+    "professional": {
+        "description": "2x RTX 4090/5090, 64GB+ system RAM",
+        "models": ["70b-q4", "70b"],
+        "use_case": "Production single-tenant",
+    },
+    "enterprise": {
+        "description": "Mac Studio 64GB+ / multi-GPU workstation",
+        "models": ["70b concurrent", "multiple 13b"],
+        "use_case": "Air-gapped production, multi-model council",
+    },
+}
 
 if TYPE_CHECKING:
     from llm_council.unified_config import OllamaProviderConfig

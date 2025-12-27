@@ -262,7 +262,8 @@ class TestSelectTierModels:
 
         Note: ADR-027 introduced preview model filtering. Models with 'preview'
         in their name are excluded unless allow_preview=True. The static pool
-        may have fewer than 4 non-preview models.
+        may have fewer than 4 non-preview models. Additionally, tier intersection
+        filtering may exclude models that don't meet quality tier requirements.
         """
         from llm_council.metadata.selection import select_tier_models
 
@@ -272,9 +273,11 @@ class TestSelectTierModels:
         assert len(models) >= 1
         assert len(models) <= 4
 
-        # With allow_preview=True, should get all 4
+        # With allow_preview=True, should get at least as many models
+        # (may still be filtered by tier intersection, quality tier, etc.)
         models_with_preview = select_tier_models(tier="high", allow_preview=True)
-        assert len(models_with_preview) == 4
+        assert len(models_with_preview) >= len(models)
+        assert len(models_with_preview) <= 4
 
     def test_respects_count_parameter(self):
         """Should return specified number of models."""

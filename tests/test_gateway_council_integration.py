@@ -1,6 +1,8 @@
 """Tests for gateway layer integration with council (ADR-023 Issue #45).
 
 TDD: Write these tests first, then implement the integration.
+
+ADR-032: Updated to use gateway_adapter.USE_GATEWAY_LAYER instead of config.py.
 """
 
 import pytest
@@ -12,28 +14,18 @@ class TestGatewayConfig:
 
     def test_gateway_enabled_config_exists(self):
         """Config should have USE_GATEWAY_LAYER option."""
-        from llm_council.config import USE_GATEWAY_LAYER
+        from llm_council.gateway_adapter import USE_GATEWAY_LAYER
 
         # Should be a boolean (default False for backward compatibility)
         assert isinstance(USE_GATEWAY_LAYER, bool)
 
     def test_gateway_enabled_default_false(self):
         """Gateway should be disabled by default for backward compatibility."""
-        import os
-        # Clear any env var that might be set
-        env_backup = os.environ.pop('LLM_COUNCIL_USE_GATEWAY', None)
+        from llm_council.gateway_adapter import USE_GATEWAY_LAYER
 
-        # Re-import to get fresh value
-        import importlib
-        import llm_council.config
-        importlib.reload(llm_council.config)
-
-        from llm_council.config import USE_GATEWAY_LAYER
+        # Default should be False for backward compatibility
+        # (unless explicitly enabled via config)
         assert USE_GATEWAY_LAYER is False
-
-        # Restore env var if it was set
-        if env_backup is not None:
-            os.environ['LLM_COUNCIL_USE_GATEWAY'] = env_backup
 
 
 class TestGatewayAdapter:

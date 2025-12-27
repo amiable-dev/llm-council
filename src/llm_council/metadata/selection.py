@@ -23,7 +23,7 @@ Example usage:
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
 
-from ..config import TIER_MODEL_POOLS
+from ..tier_contract import _get_tier_model_pools
 from .types import QualityTier
 
 if TYPE_CHECKING:
@@ -395,7 +395,7 @@ def select_tier_models(
     This is the main entry point for tier-specific model selection.
     When model intelligence is enabled with discovery, uses dynamic
     candidate selection from the cached registry. Otherwise, falls
-    back to static TIER_MODEL_POOLS.
+    back to static tier model pools from tier_contract.
 
     Args:
         tier: Tier name (quick, balanced, high, reasoning, frontier)
@@ -416,7 +416,8 @@ def select_tier_models(
             return dynamic_result
 
     # Get static pool as baseline/fallback
-    static_pool = TIER_MODEL_POOLS.get(tier, TIER_MODEL_POOLS.get("high", []))
+    tier_pools = _get_tier_model_pools()
+    static_pool = tier_pools.get(tier, tier_pools.get("high", []))
 
     # Create candidates from static pool with estimated scores
     candidates = _create_candidates_from_pool(static_pool, tier)

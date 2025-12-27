@@ -204,7 +204,7 @@ class TestTierContractTimeoutAlignment:
     def test_quick_timeout_matches_adr012(self):
         """Quick tier deadline should match ADR-012 (30s)."""
         from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         contract = create_tier_contract("quick")
         tier_timeout = get_tier_timeout("quick")
@@ -214,7 +214,7 @@ class TestTierContractTimeoutAlignment:
     def test_balanced_timeout_matches_adr012(self):
         """Balanced tier deadline should match ADR-012 (90s)."""
         from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         contract = create_tier_contract("balanced")
         tier_timeout = get_tier_timeout("balanced")
@@ -224,7 +224,7 @@ class TestTierContractTimeoutAlignment:
     def test_high_timeout_matches_adr012(self):
         """High tier deadline should match ADR-012 (180s)."""
         from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         contract = create_tier_contract("high")
         tier_timeout = get_tier_timeout("high")
@@ -234,7 +234,7 @@ class TestTierContractTimeoutAlignment:
     def test_reasoning_timeout_matches_adr012(self):
         """Reasoning tier deadline should match ADR-012 (600s)."""
         from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         contract = create_tier_contract("reasoning")
         tier_timeout = get_tier_timeout("reasoning")
@@ -256,7 +256,7 @@ class TestTierContractPerModelTimeout:
     def test_per_model_timeout_matches_adr012(self):
         """per_model_timeout_ms should align with ADR-012 tier timeouts."""
         from llm_council.tier_contract import create_tier_contract
-        from llm_council.config import get_tier_timeout
+        from llm_council.tier_contract import get_tier_timeout
 
         for tier in ["quick", "balanced", "high", "reasoning"]:
             contract = create_tier_contract(tier)

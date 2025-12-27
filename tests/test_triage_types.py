@@ -261,12 +261,13 @@ class TestRunTriageStub:
     def test_run_triage_passthrough_mode(self):
         """Stub run_triage should pass through query unchanged."""
         from llm_council.triage import run_triage
-        from llm_council.config import COUNCIL_MODELS
+        from llm_council.unified_config import get_config
 
+        COUNCIL_MODELS = get_config().council.models
         result = run_triage("What is 2 + 2?")
 
         # Passthrough should use default council models
-        assert result.resolved_models == COUNCIL_MODELS
+        assert result.resolved_models == list(COUNCIL_MODELS)
         # Should have passthrough prompt for each model
         assert len(result.optimized_prompts) == len(COUNCIL_MODELS)
 

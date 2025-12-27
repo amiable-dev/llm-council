@@ -57,6 +57,20 @@ def _get_tier_timeout(tier: str) -> Dict[str, int]:
     }
 
 
+def get_tier_timeout(tier: str) -> Dict[str, int]:
+    """Get timeout configuration for a tier.
+
+    Public API for getting tier timeouts.
+
+    Args:
+        tier: One of "quick", "balanced", "high", "reasoning", "frontier"
+
+    Returns:
+        dict with "total" and "per_model" timeout values in seconds
+    """
+    return _get_tier_timeout(tier)
+
+
 # Default pools used when config isn't loaded yet
 _DEFAULT_TIER_MODEL_POOLS = {
     "quick": ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001"],

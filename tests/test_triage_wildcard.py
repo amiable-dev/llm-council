@@ -253,8 +253,9 @@ class TestIntegrationWithTriage:
     def test_run_triage_includes_wildcard(self):
         """run_triage with wildcard=True should add specialist model."""
         from llm_council.triage import run_triage
-        from llm_council.config import COUNCIL_MODELS
+        from llm_council.unified_config import get_config
 
+        COUNCIL_MODELS = get_config().council.models
         result = run_triage("Write a Python sorting algorithm", include_wildcard=True)
 
         # Should have council models + 1 wildcard
@@ -272,8 +273,9 @@ class TestIntegrationWithTriage:
     def test_run_triage_no_wildcard_by_default(self):
         """run_triage should not include wildcard by default (passthrough mode)."""
         from llm_council.triage import run_triage
-        from llm_council.config import COUNCIL_MODELS
+        from llm_council.unified_config import get_config
 
+        COUNCIL_MODELS = get_config().council.models
         result = run_triage("Write a Python sorting algorithm")
 
         # Passthrough mode should not add wildcard
