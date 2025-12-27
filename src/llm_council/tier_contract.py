@@ -14,7 +14,62 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-from .config import TIER_MODEL_POOLS, get_tier_timeout
+# ADR-032: Migrated to unified_config (lazy import to avoid circular dependency)
+
+
+def _get_tier_model_pools() -> Dict[str, List[str]]:
+    """Get tier model pools from unified config."""
+    # Lazy import to avoid circular dependency
+    from .unified_config import get_config
+    config = get_config()
+
+    def get_models(tier: str) -> List[str]:
+        """Extract models list from TierPoolConfig or return empty list."""
+        pool = config.tiers.pools.get(tier)
+        if pool is None:
+            return []
+        # TierPoolConfig has a 'models' attribute
+        if hasattr(pool, 'models'):
+            return pool.models
+        # Fallback if it's already a list
+        if isinstance(pool, list):
+            return pool
+        return []
+
+    return {
+        "quick": get_models("quick"),
+        "balanced": get_models("balanced"),
+        "high": get_models("high"),
+        "reasoning": get_models("reasoning"),
+        "frontier": get_models("frontier"),
+    }
+
+
+def _get_tier_timeout(tier: str) -> Dict[str, int]:
+    """Get tier timeout config from unified config."""
+    # Lazy import to avoid circular dependency
+    from .unified_config import get_config
+    config = get_config()
+    timeouts = config.timeouts
+    return {
+        "total": timeouts.get_timeout(tier, "total") // 1000,  # Convert ms to seconds
+        "per_model": timeouts.get_timeout(tier, "per_model") // 1000,
+    }
+
+
+# Default pools used when config isn't loaded yet
+_DEFAULT_TIER_MODEL_POOLS = {
+    "quick": ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001"],
+    "balanced": ["openai/gpt-4o", "anthropic/claude-sonnet-4", "google/gemini-2.0-pro-exp"],
+    "high": ["openai/gpt-4o", "anthropic/claude-sonnet-4", "google/gemini-2.5-pro-preview", "x-ai/grok-3"],
+    "reasoning": ["openai/o1", "openai/o3-mini", "deepseek/deepseek-r1"],
+    "frontier": ["openai/o3", "anthropic/claude-opus-4-5-20250514"],
+}
+
+
+# Module-level alias for backwards compatibility
+# Uses default pools at import time to avoid import errors
+TIER_MODEL_POOLS = _DEFAULT_TIER_MODEL_POOLS
 
 if TYPE_CHECKING:
     from .reasoning import ReasoningConfig
@@ -84,7 +139,8 @@ def _get_allowed_models(tier: str, task_domain: Optional[str] = None) -> List[st
         return select_tier_models(tier=tier, task_domain=task_domain)
 
     # Fall back to static pools
-    return TIER_MODEL_POOLS[tier]
+    pools = _get_tier_model_pools()
+    return pools[tier]
 
 
 def create_tier_contract(
@@ -107,13 +163,14 @@ def create_tier_contract(
     """
     tier_lower = tier.lower()
 
-    if tier_lower not in TIER_MODEL_POOLS:
+    pools = _get_tier_model_pools()
+    if tier_lower not in pools:
         raise ValueError(
             f"Unknown tier: {tier}. Valid tiers: quick, balanced, high, reasoning, frontier"
         )
 
     # Get timeout config from ADR-012
-    timeout_config = get_tier_timeout(tier_lower)
+    timeout_config = _get_tier_timeout(tier_lower)
     deadline_ms = timeout_config["total"] * 1000
     per_model_timeout_ms = timeout_config["per_model"] * 1000
 
@@ -188,7 +245,62 @@ def create_tier_contract(
     )
 
 
-# Pre-built default contracts for each tier
-DEFAULT_TIER_CONTRACTS: Dict[str, TierContract] = {
-    tier: create_tier_contract(tier) for tier in ["quick", "balanced", "high", "reasoning", "frontier"]
-}
+# Lazy-loaded default contracts for each tier
+_default_tier_contracts: Optional[Dict[str, TierContract]] = None
+
+
+def get_default_tier_contracts() -> Dict[str, TierContract]:
+    """Get pre-built default contracts for each tier (lazy-loaded)."""
+    global _default_tier_contracts
+    if _default_tier_contracts is None:
+        _default_tier_contracts = {
+            tier: create_tier_contract(tier) for tier in ["quick", "balanced", "high", "reasoning", "frontier"]
+        }
+    return _default_tier_contracts
+
+
+# For backwards compatibility, access via property-like behavior
+# Note: This may cause issues if used at import time - use get_default_tier_contracts() instead
+class _DefaultTierContractsProxy(dict):
+    """Proxy object that lazily loads tier contracts on first access.
+
+    Inherits from dict to pass isinstance checks while still being lazy.
+    """
+
+    def __init__(self):
+        # Don't call dict.__init__ with data - we populate lazily
+        super().__init__()
+        self._initialized = False
+
+    def _ensure_initialized(self):
+        if not self._initialized:
+            self._initialized = True
+            data = get_default_tier_contracts()
+            super().update(data)
+
+    def __getitem__(self, key: str) -> TierContract:
+        self._ensure_initialized()
+        return super().__getitem__(key)
+
+    def __iter__(self):
+        self._ensure_initialized()
+        return super().__iter__()
+
+    def items(self):
+        self._ensure_initialized()
+        return super().items()
+
+    def keys(self):
+        self._ensure_initialized()
+        return super().keys()
+
+    def values(self):
+        self._ensure_initialized()
+        return super().values()
+
+    def __len__(self):
+        self._ensure_initialized()
+        return super().__len__()
+
+
+DEFAULT_TIER_CONTRACTS = _DefaultTierContractsProxy()

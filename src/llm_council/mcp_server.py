@@ -20,17 +20,63 @@ from llm_council.council import (
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
 from llm_council.verdict import VerdictType
-from llm_council.config import (
-    COUNCIL_MODELS,
-    CHAIRMAN_MODEL,
-    OPENROUTER_API_KEY,
-    get_key_source,
-    get_tier_timeout,
-    infer_tier_from_models,
-    TIER_MODEL_POOLS,
-)
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_config, get_api_key
 from llm_council.tier_contract import create_tier_contract
 from llm_council.openrouter import query_model_with_status, STATUS_OK
+
+
+def _get_council_models() -> list:
+    """Get council models from unified config."""
+    return get_config().council.models
+
+
+def _get_chairman_model() -> str:
+    """Get chairman model from unified config."""
+    return get_config().council.chairman
+
+
+def _get_openrouter_api_key() -> str:
+    """Get OpenRouter API key via ADR-013 resolution chain."""
+    return get_api_key("openrouter") or ""
+
+
+def _get_tier_model_pools() -> dict:
+    """Get tier model pools from unified config."""
+    config = get_config()
+    return config.tiers.pools
+
+
+def _get_tier_timeout(tier: str) -> dict:
+    """Get tier timeout config from unified config."""
+    config = get_config()
+    timeouts = config.timeouts
+    return {
+        "total": timeouts.get_timeout(tier, "total") // 1000,  # Convert ms to seconds
+        "per_model": timeouts.get_timeout(tier, "per_model") // 1000,
+    }
+
+
+def _get_key_source() -> str:
+    """Determine the source of the API key."""
+    import os
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return "environment"
+    # Could add keychain detection here
+    return "unknown"
+
+
+# Module-level function for backwards compatibility with tests
+def get_key_source() -> str:
+    """Public function wrapper for backwards compatibility."""
+    return _get_key_source()
+
+
+# Module-level aliases for backwards compatibility
+COUNCIL_MODELS = _get_council_models()
+CHAIRMAN_MODEL = _get_chairman_model()
+OPENROUTER_API_KEY = _get_openrouter_api_key()
+TIER_MODEL_POOLS = _get_tier_model_pools()
 
 
 mcp = FastMCP("LLM Council")
@@ -45,22 +91,22 @@ def _build_confidence_configs() -> dict:
     return {
         "quick": {
             "models": 2,
-            **get_tier_timeout("quick"),
+            **_get_tier_timeout("quick"),
             "description": "Fast response (~20-30s)",
         },
         "balanced": {
             "models": 3,
-            **get_tier_timeout("balanced"),
+            **_get_tier_timeout("balanced"),
             "description": "Balanced response (~45-60s)",
         },
         "high": {
             "models": None,
-            **get_tier_timeout("high"),
+            **_get_tier_timeout("high"),
             "description": "Full council deliberation (~90s)",
         },
         "reasoning": {
             "models": None,
-            **get_tier_timeout("reasoning"),
+            **_get_tier_timeout("reasoning"),
             "description": "Deep reasoning models (~3-5min)",
         },
     }

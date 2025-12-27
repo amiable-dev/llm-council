@@ -182,10 +182,11 @@ async def run_benchmark(
     """
     from llm_council.council import run_full_council
     from llm_council.openrouter import query_model
-    from llm_council.config import COUNCIL_MODELS
+    # ADR-032: Migrated to unified_config
+    from llm_council.unified_config import get_config
 
     if models is None:
-        models = COUNCIL_MODELS
+        models = get_config().council.models
 
     questions = load_test_dataset(dataset_path)
     results = []

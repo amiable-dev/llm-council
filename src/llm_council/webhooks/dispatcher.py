@@ -11,21 +11,36 @@ from urllib.parse import urlparse
 
 import httpx
 
-from llm_council.config import (
-    WEBHOOK_TIMEOUT,
-    WEBHOOK_MAX_RETRIES,
-    WEBHOOK_HTTPS_ONLY,
-)
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_config
 
 from .types import WebhookConfig, WebhookPayload, WebhookDeliveryResult
 from .hmac_auth import generate_webhook_headers
 
 
+def _get_webhook_config():
+    """Get webhook configuration from unified config."""
+    try:
+        config = get_config()
+        if hasattr(config, 'webhooks'):
+            return config.webhooks
+    except Exception:
+        pass
+    return None
+
+
 # Default configuration (can be overridden via environment)
 try:
-    DEFAULT_TIMEOUT = WEBHOOK_TIMEOUT
-    DEFAULT_MAX_RETRIES = WEBHOOK_MAX_RETRIES
-    DEFAULT_HTTPS_ONLY = WEBHOOK_HTTPS_ONLY
+    webhook_config = _get_webhook_config()
+    if webhook_config:
+        DEFAULT_TIMEOUT = getattr(webhook_config, 'timeout', 5.0)
+        DEFAULT_MAX_RETRIES = getattr(webhook_config, 'max_retries', 3)
+        DEFAULT_HTTPS_ONLY = getattr(webhook_config, 'https_only', True)
+    else:
+        # Fallback if config not available
+        DEFAULT_TIMEOUT = 5.0
+        DEFAULT_MAX_RETRIES = 3
+        DEFAULT_HTTPS_ONLY = True
 except (ImportError, AttributeError):
     # Fallback if config not available
     DEFAULT_TIMEOUT = 5.0

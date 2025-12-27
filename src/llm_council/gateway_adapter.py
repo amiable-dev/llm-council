@@ -14,7 +14,17 @@ Usage:
 import asyncio
 from typing import List, Dict, Any, Optional, Callable, Awaitable
 
-from llm_council.config import USE_GATEWAY_LAYER
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_config
+
+
+def _use_gateway_layer() -> bool:
+    """Check if gateway layer is enabled from unified config."""
+    config = get_config()
+    return getattr(config.gateways, 'enabled', False) if hasattr(config, 'gateways') else False
+
+
+USE_GATEWAY_LAYER = _use_gateway_layer()
 
 # Import direct openrouter functions (always available as fallback)
 from llm_council.openrouter import (

@@ -7,7 +7,18 @@ import httpx
 import asyncio
 import time
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
-from llm_council.config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_api_key, get_config
+
+# Default OpenRouter API URL (can be overridden via gateways config)
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+def _get_openrouter_api_key() -> str:
+    """Get OpenRouter API key from unified config resolution."""
+    return get_api_key("openrouter") or ""
+
+# Module-level alias for backwards compatibility with tests
+OPENROUTER_API_KEY = _get_openrouter_api_key()
 
 if TYPE_CHECKING:
     from llm_council.gateway.types import ReasoningParams
@@ -74,7 +85,7 @@ async def query_model_with_status(
         Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
     """
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {_get_openrouter_api_key()}",
         "Content-Type": "application/json",
     }
 

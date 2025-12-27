@@ -12,8 +12,14 @@ Features:
 
 from typing import Optional
 
-from llm_council.config import COUNCIL_MODELS
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_config
 from llm_council.tier_contract import TierContract
+
+
+def _get_council_models() -> list:
+    """Get council models from unified config."""
+    return get_config().council.models
 
 from .types import (
     DEFAULT_SPECIALIST_POOLS,
@@ -135,7 +141,7 @@ def run_triage(
     if tier_contract is not None:
         models = list(tier_contract.allowed_models)
     else:
-        models = list(COUNCIL_MODELS)
+        models = list(_get_council_models())
 
     metadata = {"mode": "passthrough"}
 

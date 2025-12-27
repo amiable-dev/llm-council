@@ -11,8 +11,15 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from .config import get_tier_models
+# ADR-032: Migrated to unified_config
+from .unified_config import get_config
 from .openrouter import query_model
+
+
+def get_tier_models(tier: str) -> list:
+    """Get models for a tier from unified config."""
+    config = get_config()
+    return config.tiers.pools.get(tier, [])
 
 if TYPE_CHECKING:
     from .tier_contract import TierContract

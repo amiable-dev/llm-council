@@ -13,7 +13,17 @@ from typing import AsyncIterator, Dict, Any, List, Optional
 
 import httpx
 
-from llm_council.config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_api_key
+
+# Default constants
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+def _get_openrouter_api_key() -> str:
+    """Get OpenRouter API key via ADR-013 resolution chain."""
+    return get_api_key("openrouter") or ""
+
+OPENROUTER_API_KEY = _get_openrouter_api_key()
 
 from .base import (
     BaseRouter,

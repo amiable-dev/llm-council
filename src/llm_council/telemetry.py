@@ -159,13 +159,16 @@ def _auto_init_telemetry() -> None:
     This is a no-op if telemetry is disabled (the default).
     """
     try:
-        from llm_council.config import TELEMETRY_ENABLED, TELEMETRY_LEVEL, TELEMETRY_ENDPOINT
+        # ADR-032: Migrated to unified_config
+        from llm_council.unified_config import get_config
+        config = get_config()
+        telemetry_config = config.telemetry
 
-        if TELEMETRY_ENABLED:
+        if telemetry_config.enabled:
             from llm_council.telemetry_client import HttpTelemetry
             client = HttpTelemetry(
-                endpoint=TELEMETRY_ENDPOINT,
-                level=TELEMETRY_LEVEL,
+                endpoint=telemetry_config.endpoint,
+                level=telemetry_config.level,
             )
             set_telemetry(client)
     except ImportError:

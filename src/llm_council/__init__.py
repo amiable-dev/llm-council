@@ -23,13 +23,22 @@ from llm_council.council import (
     calculate_aggregate_rankings,
     parse_ranking_from_text,
 )
-from llm_council.config import (
-    COUNCIL_MODELS,
-    CHAIRMAN_MODEL,
-    SYNTHESIS_MODE,
-    EXCLUDE_SELF_VOTES,
-    STYLE_NORMALIZATION,
-)
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_config
+
+
+def _get_council_config():
+    """Get council configuration from unified config."""
+    return get_config().council
+
+
+# Module-level aliases for backwards compatibility (re-exports)
+COUNCIL_MODELS = _get_council_config().models
+CHAIRMAN_MODEL = _get_council_config().chairman
+SYNTHESIS_MODE = _get_council_config().synthesis_mode
+EXCLUDE_SELF_VOTES = _get_council_config().exclude_self_votes
+STYLE_NORMALIZATION = _get_council_config().style_normalization
+
 from llm_council.telemetry import (
     TelemetryProtocol,
     get_telemetry,

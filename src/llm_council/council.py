@@ -20,17 +20,49 @@ from llm_council.gateway_adapter import (
     STATUS_AUTH_ERROR,
     STATUS_ERROR,
 )
-from llm_council.config import (
-    COUNCIL_MODELS,
-    CHAIRMAN_MODEL,
-    SYNTHESIS_MODE,
-    EXCLUDE_SELF_VOTES,
-    STYLE_NORMALIZATION,
-    NORMALIZER_MODEL,
-    MAX_REVIEWERS,
-    CACHE_ENABLED,
-)
+# ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config
+
+# Lazy-loaded config helpers (call these, not the module-level constants)
+def _get_council_config():
+    """Get council config section."""
+    return get_config().council
+
+def _get_council_models() -> list:
+    """Get council models from unified config."""
+    return _get_council_config().models
+
+def _get_chairman_model() -> str:
+    return _get_council_config().chairman
+
+def _get_synthesis_mode() -> str:
+    return _get_council_config().synthesis_mode
+
+def _get_exclude_self_votes() -> bool:
+    return _get_council_config().exclude_self_votes
+
+def _get_style_normalization():
+    return _get_council_config().style_normalization
+
+def _get_normalizer_model() -> str:
+    return _get_council_config().normalizer_model
+
+def _get_max_reviewers():
+    return _get_council_config().max_reviewers
+
+def _get_cache_enabled() -> bool:
+    return get_config().cache.enabled
+
+# Module-level aliases for backwards compatibility with test mocking
+# These are the initial values; tests can mock them for isolation
+COUNCIL_MODELS = _get_council_models()
+CHAIRMAN_MODEL = _get_chairman_model()
+SYNTHESIS_MODE = _get_synthesis_mode()
+EXCLUDE_SELF_VOTES = _get_exclude_self_votes()
+STYLE_NORMALIZATION = _get_style_normalization()
+NORMALIZER_MODEL = _get_normalizer_model()
+MAX_REVIEWERS = _get_max_reviewers()
+CACHE_ENABLED = _get_cache_enabled()
 from llm_council.tier_contract import TierContract
 from llm_council.rubric import (
     parse_rubric_evaluation,
@@ -144,7 +176,7 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(_get_council_models(), messages)
 
     # Format results and aggregate usage
     stage1_results = []
@@ -187,7 +219,7 @@ async def stage1_collect_responses_with_status(
         shared_raw_responses: Optional dict that gets populated incrementally as models
             respond. Used for preserving diagnostic state when outer timeout cancels
             this function before it returns.
-        models: Optional list of models to query (defaults to COUNCIL_MODELS)
+        models: Optional list of models to query (defaults to _get_council_models())
 
     Returns:
         Tuple of:
@@ -195,7 +227,7 @@ async def stage1_collect_responses_with_status(
         - usage dict: Aggregated token counts
         - model_statuses dict: Per-model status information
     """
-    council_models = models if models is not None else COUNCIL_MODELS
+    council_models = models if models is not None else _get_council_models()
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models with progress tracking
@@ -325,7 +357,7 @@ and highlight any important insights. Be clear that this is based on partial dat
     messages = [{"role": "user", "content": synthesis_prompt}]
 
     # Use chairman model for synthesis
-    response = await query_model(CHAIRMAN_MODEL, messages, timeout=15.0, disable_tools=True)
+    response = await query_model(_get_chairman_model(), messages, timeout=15.0, disable_tools=True)
 
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
@@ -373,7 +405,7 @@ async def run_council_with_fallback(
         on_progress: Optional async callback for progress updates
         synthesis_deadline: Time limit before triggering fallback synthesis
         per_model_timeout: Time limit per individual model query (default: 25s, reasoning: 150s)
-        models: Optional list of model identifiers to use (overrides tier_contract and COUNCIL_MODELS)
+        models: Optional list of model identifiers to use (overrides tier_contract and _get_council_models())
         tier_contract: Optional TierContract for tier-appropriate execution (ADR-022)
         use_wildcard: If True, add domain specialist via triage (ADR-020)
         optimize_prompts: If True, apply per-model prompt optimization (ADR-020)
@@ -435,7 +467,7 @@ async def run_council_with_fallback(
     elif tier_contract is not None:
         council_models = tier_contract.allowed_models
     else:
-        council_models = COUNCIL_MODELS
+        council_models = _get_council_models()
 
     requested_models = len(council_models)
 
@@ -654,7 +686,7 @@ async def run_council_with_fallback(
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "council_size": len(council_models),
                 "responses_received": len(stage1_results),
-                "synthesis_mode": SYNTHESIS_MODE,
+                "synthesis_mode": _get_synthesis_mode(),
                 "rankings": [
                     {
                         "model": r["model"],
@@ -664,9 +696,9 @@ async def run_council_with_fallback(
                     for r in aggregate_rankings
                 ],
                 "config": {
-                    "exclude_self_votes": EXCLUDE_SELF_VOTES,
-                    "style_normalization": STYLE_NORMALIZATION,
-                    "max_reviewers": MAX_REVIEWERS
+                    "exclude_self_votes": _get_exclude_self_votes(),
+                    "style_normalization": _get_style_normalization(),
+                    "max_reviewers": _get_max_reviewers()
                 }
             }
             # Fire-and-forget
@@ -884,14 +916,14 @@ async def stage1_5_normalize_styles(
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     # Handle different normalization modes
-    if STYLE_NORMALIZATION == "auto":
+    if _get_style_normalization() == "auto":
         responses = [r['response'] for r in stage1_results]
         if not should_normalize_styles(responses):
             return stage1_results, total_usage
         # Proceed with normalization (auto-triggered)
-    elif not STYLE_NORMALIZATION:
+    elif not _get_style_normalization():
         return stage1_results, total_usage
-    # else: STYLE_NORMALIZATION is True, always normalize
+    # else: _get_style_normalization() is True, always normalize
 
     normalized_results = []
 
@@ -912,7 +944,7 @@ Original text:
 Rewritten text:"""
 
         messages = [{"role": "user", "content": normalize_prompt}]
-        response = await query_model(NORMALIZER_MODEL, messages, timeout=60.0)
+        response = await query_model(_get_normalizer_model(), messages, timeout=60.0)
 
         if response is not None:
             normalized_results.append({
@@ -1098,10 +1130,10 @@ Now provide your evaluation and ranking:"""
     messages = [{"role": "user", "content": ranking_prompt}]
 
     # Determine which models will review (stratified sampling for large councils)
-    reviewers = COUNCIL_MODELS.copy()
-    if MAX_REVIEWERS is not None and len(COUNCIL_MODELS) > MAX_REVIEWERS:
+    reviewers = _get_council_models().copy()
+    if _get_max_reviewers() is not None and len(_get_council_models()) > _get_max_reviewers():
         # For large councils, randomly sample k reviewers
-        reviewers = random.sample(COUNCIL_MODELS, MAX_REVIEWERS)
+        reviewers = random.sample(_get_council_models(), _get_max_reviewers())
 
     # Get rankings from reviewer models in parallel
     # Disable tools to prevent prompt injection via tool invocation
@@ -1236,7 +1268,7 @@ async def stage3_synthesize_final(
         )
     else:
         # Mode-specific instructions for SYNTHESIS mode
-        if SYNTHESIS_MODE == "debate":
+        if _get_synthesis_mode() == "debate":
             mode_instructions = """Your task as Chairman is to present a STRUCTURED ANALYSIS with clear sections.
 
 You MUST include ALL of these sections in your response, using EXACTLY these headers:
@@ -1288,14 +1320,14 @@ STAGE 2 - Peer Rankings:
 
     # Query the chairman model
     # Disable tools to prevent prompt injection via tool invocation
-    response = await query_model(CHAIRMAN_MODEL, messages, disable_tools=True)
+    response = await query_model(_get_chairman_model(), messages, disable_tools=True)
 
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     if response is None:
         # Fallback if chairman fails
         return {
-            "model": CHAIRMAN_MODEL,
+            "model": _get_chairman_model(),
             "response": "Error: Unable to generate final synthesis."
         }, total_usage, None
 
@@ -1339,7 +1371,7 @@ STAGE 2 - Peer Rankings:
             logging.getLogger(__name__).warning(f"Failed to parse tie-breaker verdict: {e}")
 
     return {
-        "model": CHAIRMAN_MODEL,
+        "model": _get_chairman_model(),
         "response": response_content
     }, total_usage, verdict_result
 
@@ -1504,7 +1536,7 @@ def calculate_aggregate_rankings(
     Normalization is critical: without it, a 3-model council (max 2 points)
     and 10-model council (max 9 points) produce incomparable scores.
 
-    When EXCLUDE_SELF_VOTES is True, excludes votes where the reviewer
+    When _get_exclude_self_votes() is True, excludes votes where the reviewer
     is evaluating their own response (prevents self-preference bias).
 
     ADR-027 Shadow Mode: When voting_authorities is provided, votes from models
@@ -1536,7 +1568,7 @@ def calculate_aggregate_rankings(
                 "average_position": 1.0,
                 "average_score": None,
                 "vote_count": 0,
-                "self_votes_excluded": EXCLUDE_SELF_VOTES,
+                "self_votes_excluded": _get_exclude_self_votes(),
                 "rank": 1
             }]
         return []
@@ -1597,7 +1629,7 @@ def calculate_aggregate_rankings(
                 author_model = _get_model_from_label_value(label_to_model[label])
 
                 # Exclude self-votes if configured
-                if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
+                if _get_exclude_self_votes() and reviewer_model == author_model:
                     self_votes_excluded += 1
                     continue
 
@@ -1617,7 +1649,7 @@ def calculate_aggregate_rankings(
                 if label in label_to_model:
                     author_model = _get_model_from_label_value(label_to_model[label])
 
-                    if EXCLUDE_SELF_VOTES and reviewer_model == author_model:
+                    if _get_exclude_self_votes() and reviewer_model == author_model:
                         continue
 
                     # Normalize raw score to [0,1] (assuming 1-10 scale)
@@ -1649,7 +1681,7 @@ def calculate_aggregate_rankings(
             # Average of normalized raw scores [0,1]
             "average_score": round(sum(raw_scores) / len(raw_scores), 3) if raw_scores else None,
             "vote_count": len(borda_scores),
-            "self_votes_excluded": EXCLUDE_SELF_VOTES
+            "self_votes_excluded": _get_exclude_self_votes()
         }
 
         # ADR-027: Optionally include shadow votes for observability
@@ -1770,14 +1802,14 @@ async def run_full_council(
 
     Pipeline:
     1. Stage 1: Collect individual responses from all council models
-    2. Stage 1.5 (optional): Normalize response styles if STYLE_NORMALIZATION is enabled
+    2. Stage 1.5 (optional): Normalize response styles if _get_style_normalization() is enabled
     3. Stage 2: Anonymous peer review with JSON-based rankings
     4. Stage 3: Chairman synthesis (consensus, debate, or verdict mode)
 
     Args:
         user_query: The user's question
         bypass_cache: If True, skip cache lookup and force fresh query
-        models: Optional list of model identifiers to use (overrides COUNCIL_MODELS)
+        models: Optional list of model identifiers to use (overrides _get_council_models())
         webhook_config: Optional WebhookConfig for real-time event notifications (ADR-025a)
         verdict_type: Type of verdict to render (ADR-025b Jury Mode):
             - SYNTHESIS: Default behavior, unstructured natural language synthesis
@@ -1802,12 +1834,12 @@ async def run_full_council(
         from llm_council.layer_contracts import LayerEventType, LayerEvent
         await event_bridge.emit(LayerEvent(
             event_type=LayerEventType.L3_COUNCIL_START,
-            data={"query": user_query[:100], "models": models or COUNCIL_MODELS}
+            data={"query": user_query[:100], "models": models or _get_council_models()}
         ))
 
     # Check cache first (unless bypassed)
     cache_key = get_cache_key(user_query)
-    if CACHE_ENABLED and not bypass_cache:
+    if _get_cache_enabled() and not bypass_cache:
         cached = get_cached_response(cache_key)
         if cached:
             # Add cache hit indicator to metadata
@@ -1978,13 +2010,13 @@ async def run_full_council(
         "label_to_model": label_to_model,
         "aggregate_rankings": aggregate_rankings,
         "config": {
-            "synthesis_mode": SYNTHESIS_MODE,
-            "exclude_self_votes": EXCLUDE_SELF_VOTES,
-            "style_normalization": STYLE_NORMALIZATION,
-            "max_reviewers": MAX_REVIEWERS,
-            "council_size": len(COUNCIL_MODELS),
+            "synthesis_mode": _get_synthesis_mode(),
+            "exclude_self_votes": _get_exclude_self_votes(),
+            "style_normalization": _get_style_normalization(),
+            "max_reviewers": _get_max_reviewers(),
+            "council_size": len(_get_council_models()),
             "responses_received": num_responses,
-            "chairman": CHAIRMAN_MODEL,
+            "chairman": _get_chairman_model(),
             "verdict_type": verdict_type.value,  # ADR-025b: Requested verdict type
             "effective_verdict_type": effective_verdict_type.value,  # ADR-025b: Actual type used
             "deadlock_detected": deadlock_detected,  # ADR-025b: True if escalated to TIE_BREAKER
@@ -2039,9 +2071,9 @@ async def run_full_council(
         telemetry_event = {
             "type": "council_completed",
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "council_size": len(COUNCIL_MODELS),
+            "council_size": len(_get_council_models()),
             "responses_received": num_responses,
-            "synthesis_mode": SYNTHESIS_MODE,
+            "synthesis_mode": _get_synthesis_mode(),
             "rankings": [
                 {
                     "model": r["model"],
@@ -2051,9 +2083,9 @@ async def run_full_council(
                 for r in aggregate_rankings
             ],
             "config": {
-                "exclude_self_votes": EXCLUDE_SELF_VOTES,
-                "style_normalization": STYLE_NORMALIZATION,
-                "max_reviewers": MAX_REVIEWERS
+                "exclude_self_votes": _get_exclude_self_votes(),
+                "style_normalization": _get_style_normalization(),
+                "max_reviewers": _get_max_reviewers()
             }
         }
         # Fire-and-forget - don't await to avoid blocking response
@@ -2061,7 +2093,7 @@ async def run_full_council(
         asyncio.create_task(telemetry.send_event(telemetry_event))
 
     # Save to cache if caching is enabled
-    if CACHE_ENABLED:
+    if _get_cache_enabled():
         metadata["cache_hit"] = False
         metadata["cache_key"] = cache_key
         save_to_cache(cache_key, stage1_results, stage2_results, stage3_result, metadata)

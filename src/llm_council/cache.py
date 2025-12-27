@@ -17,17 +17,68 @@ import time
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, List
 
-from llm_council.config import (
-    CACHE_ENABLED,
-    CACHE_TTL,
-    CACHE_DIR,
-    COUNCIL_MODELS,
-    CHAIRMAN_MODEL,
-    SYNTHESIS_MODE,
-    EXCLUDE_SELF_VOTES,
-    STYLE_NORMALIZATION,
-    MAX_REVIEWERS,
-)
+# ADR-032: Migrated to unified_config
+from llm_council.unified_config import get_config
+
+
+def _get_cache_config():
+    """Get cache configuration from unified config."""
+    return get_config().cache
+
+
+def _get_council_config():
+    """Get council configuration from unified config."""
+    return get_config().council
+
+
+# Lazy-loaded accessors for cache config
+def _cache_enabled() -> bool:
+    return _get_cache_config().enabled
+
+
+def _cache_ttl() -> int:
+    return _get_cache_config().ttl_seconds
+
+
+def _cache_dir():
+    return _get_cache_config().directory
+
+
+# Lazy-loaded accessors for council config (used in cache key generation)
+def _council_models() -> list:
+    return _get_council_config().models
+
+
+def _chairman_model() -> str:
+    return _get_council_config().chairman
+
+
+def _synthesis_mode() -> str:
+    return _get_council_config().synthesis_mode
+
+
+def _exclude_self_votes() -> bool:
+    return _get_council_config().exclude_self_votes
+
+
+def _style_normalization():
+    return _get_council_config().style_normalization
+
+
+def _max_reviewers():
+    return _get_council_config().max_reviewers
+
+
+# Module-level aliases for backwards compatibility with tests
+CACHE_ENABLED = _cache_enabled()
+CACHE_TTL = _cache_ttl()
+CACHE_DIR = _cache_dir()
+COUNCIL_MODELS = _council_models()
+CHAIRMAN_MODEL = _chairman_model()
+SYNTHESIS_MODE = _synthesis_mode()
+EXCLUDE_SELF_VOTES = _exclude_self_votes()
+STYLE_NORMALIZATION = _style_normalization()
+MAX_REVIEWERS = _max_reviewers()
 
 
 def get_cache_key(query: str) -> str:
@@ -50,12 +101,12 @@ def get_cache_key(query: str) -> str:
     """
     cache_input = {
         "query": query,
-        "council_models": sorted(COUNCIL_MODELS),
-        "chairman": CHAIRMAN_MODEL,
-        "synthesis_mode": SYNTHESIS_MODE,
-        "exclude_self_votes": EXCLUDE_SELF_VOTES,
-        "style_normalization": STYLE_NORMALIZATION,
-        "max_reviewers": MAX_REVIEWERS,
+        "council_models": sorted(_council_models()),
+        "chairman": _chairman_model(),
+        "synthesis_mode": _synthesis_mode(),
+        "exclude_self_votes": _exclude_self_votes(),
+        "style_normalization": _style_normalization(),
+        "max_reviewers": _max_reviewers(),
     }
     serialized = json.dumps(cache_input, sort_keys=True)
     return hashlib.sha256(serialized.encode()).hexdigest()[:16]
@@ -70,10 +121,10 @@ def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
     Returns:
         Cached response dict if valid cache hit, None otherwise
     """
-    if not CACHE_ENABLED:
+    if not _cache_enabled():
         return None
 
-    cache_file = CACHE_DIR / f"{cache_key}.json"
+    cache_file = _cache_dir() / f"{cache_key}.json"
 
     if not cache_file.exists():
         return None
@@ -83,9 +134,10 @@ def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
             cached = json.load(f)
 
         # Check TTL if configured
-        if CACHE_TTL > 0:
+        ttl = _cache_ttl()
+        if ttl > 0:
             cached_at = cached.get("_cached_at", 0)
-            if time.time() - cached_at > CACHE_TTL:
+            if time.time() - cached_at > ttl:
                 # Cache expired, delete file
                 cache_file.unlink(missing_ok=True)
                 return None
@@ -113,13 +165,14 @@ def save_to_cache(
         stage3_result: Result from Stage 3
         metadata: Response metadata
     """
-    if not CACHE_ENABLED:
+    if not _cache_enabled():
         return
 
+    cache_directory = _cache_dir()
     # Create cache directory if needed
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_directory.mkdir(parents=True, exist_ok=True)
 
-    cache_file = CACHE_DIR / f"{cache_key}.json"
+    cache_file = cache_directory / f"{cache_key}.json"
 
     cache_data = {
         "_cached_at": time.time(),
@@ -144,11 +197,12 @@ def clear_cache() -> int:
     Returns:
         Number of cache entries deleted
     """
-    if not CACHE_DIR.exists():
+    cache_directory = _cache_dir()
+    if not cache_directory.exists():
         return 0
 
     count = 0
-    for cache_file in CACHE_DIR.glob("*.json"):
+    for cache_file in cache_directory.glob("*.json"):
         try:
             cache_file.unlink()
             count += 1
@@ -164,23 +218,27 @@ def get_cache_stats() -> Dict[str, Any]:
     Returns:
         Dict with cache stats (entry count, total size, oldest/newest)
     """
-    if not CACHE_DIR.exists():
+    cache_directory = _cache_dir()
+    cache_enabled = _cache_enabled()
+    ttl = _cache_ttl()
+
+    if not cache_directory.exists():
         return {
-            "enabled": CACHE_ENABLED,
+            "enabled": cache_enabled,
             "entries": 0,
             "total_size_bytes": 0,
-            "cache_dir": str(CACHE_DIR),
+            "cache_dir": str(cache_directory),
         }
 
-    entries = list(CACHE_DIR.glob("*.json"))
+    entries = list(cache_directory.glob("*.json"))
     total_size = sum(f.stat().st_size for f in entries)
 
     stats = {
-        "enabled": CACHE_ENABLED,
+        "enabled": cache_enabled,
         "entries": len(entries),
         "total_size_bytes": total_size,
-        "cache_dir": str(CACHE_DIR),
-        "ttl_seconds": CACHE_TTL if CACHE_TTL > 0 else "infinite",
+        "cache_dir": str(cache_directory),
+        "ttl_seconds": ttl if ttl > 0 else "infinite",
     }
 
     if entries:
