@@ -1391,3 +1391,82 @@ def reload_config() -> UnifiedConfig:
     global _global_config
     _global_config = get_effective_config()
     return _global_config
+
+
+# =============================================================================
+# ADR-032: Helper Functions
+# =============================================================================
+
+
+def get_api_key(provider: str) -> Optional[str]:
+    """Resolve API key for provider (ADR-013 resolution chain).
+
+    Priority:
+    1. Environment variable (e.g., OPENROUTER_API_KEY)
+    2. macOS Keychain (via keyring library, if available)
+    3. None (caller handles missing key)
+
+    Note: dotenv is loaded at module import, so .env vars
+    are already in os.environ.
+
+    Args:
+        provider: Provider name (e.g., "openrouter", "anthropic", "openai")
+
+    Returns:
+        API key string or None if not found
+    """
+    # Normalize provider name to uppercase for env var lookup
+    env_var = f"{provider.upper()}_API_KEY"
+
+    # 1. Check environment variable (includes .env via dotenv)
+    key = os.environ.get(env_var)
+    if key:
+        return key
+
+    # 2. Try keychain (if keyring is available)
+    try:
+        import keyring
+
+        # Check if we have a real backend (not the fail backend)
+        try:
+            from keyring.backends import fail
+
+            if isinstance(keyring.get_keyring(), fail.Keyring):
+                return None
+        except ImportError:
+            pass
+
+        config = get_config()
+        keychain_key = keyring.get_password(config.secrets.keychain_service, provider)
+        if keychain_key:
+            return keychain_key
+    except ImportError:
+        pass  # keyring not installed
+    except Exception:
+        pass  # keychain access failed
+
+    return None
+
+
+def dump_effective_config(redact_secrets: bool = True) -> str:
+    """Dump the effective configuration as a YAML string.
+
+    Useful for debugging and logging the current configuration state.
+
+    Args:
+        redact_secrets: If True, redacts API keys and sensitive values
+
+    Returns:
+        YAML string representation of the effective configuration
+    """
+    config = get_config()
+    config_dict = {"council": config.to_dict()}
+
+    if redact_secrets:
+        # Redact credentials section
+        if "credentials" in config_dict["council"]:
+            for key in config_dict["council"]["credentials"]:
+                if config_dict["council"]["credentials"][key]:
+                    config_dict["council"]["credentials"][key] = "[REDACTED]"
+
+    return yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
