@@ -5,6 +5,101 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] - 2025-12-27
+
+### Added
+
+- **ADR-031 EvaluationConfig**: Unified evaluation configuration schema
+  - `EvaluationConfig` class with benchmark, comparison, and reporting settings
+  - Environment variable overrides for all evaluation settings
+  - Integration with unified configuration system
+
+- **ADR-032 Complete Configuration Migration**: Single source of truth
+  - All configuration now flows through `unified_config.py`
+  - Added `get_api_key()` with ADR-013 resolution chain (env → keychain → dotenv)
+  - Added `get_key_source()` for API key diagnostics
+  - Added `dump_effective_config()` for debugging
+  - Public `get_tier_timeout()` function in `tier_contract.py`
+
+### Removed
+
+- **Deleted `config.py`**: 823 lines of legacy configuration code removed
+  - All 16 import sites migrated to `unified_config.py` and `tier_contract.py`
+  - Tier model pools now accessed via `tier_contract._get_tier_model_pools()`
+  - `OLLAMA_HARDWARE_PROFILES` moved to `gateway/ollama.py`
+
+### Changed
+
+- Updated 15 test files to use new configuration imports
+- `metadata/selection.py` now imports from `tier_contract` instead of `config`
+- Documentation updated to reflect configuration changes
+
+## [0.16.0] - 2025-12-24
+
+### Added
+
+- **ADR-027 Frontier Tier**: Cutting-edge model support with Shadow Mode
+  - `VotingAuthority` enum (FULL, ADVISORY, EXCLUDED) for tier-based voting
+  - Shadow Mode: Frontier models vote but don't affect consensus
+  - `GraduationCriteria` for promoting models from frontier to high tier
+  - Cost ceiling protection (5x high-tier average)
+  - Hard fallback from frontier to high tier on failure
+
+- **ADR-028 Dynamic Candidate Discovery**: Real-time model discovery
+  - Background worker for periodic model refresh
+  - Circuit breaker integration for model health tracking
+  - Automatic candidate pool updates from OpenRouter API
+
+- **ADR-029 Model Audition Mechanism**: Controlled model evaluation
+  - Structured audition process for new models
+  - Performance tracking during audition period
+  - Graduation criteria based on quality metrics
+
+- **ADR-030 Scoring Refinements**: Improved model scoring
+  - `CostScaleAlgorithm` options: linear, log_ratio, exponential
+  - Benchmark-justified `QUALITY_TIER_SCORES` with citations
+  - `MetricsAdapter` for circuit breaker telemetry
+  - Cost scoring with configurable algorithms
+
+### Changed
+
+- Tier model pools now include `frontier` tier
+- Quality tier scores updated based on MMLU benchmarks
+- Circuit breaker integration with model selection
+
+## [0.15.0] - 2025-12-24
+
+### Added
+
+- **ADR-026 Model Intelligence Layer**: Dynamic model metadata and selection
+  - **Phase 1**: Dynamic metadata with TTL caching
+    - `DynamicMetadataProvider` with OpenRouter API integration
+    - `StaticRegistryProvider` with 31 bundled models
+    - `select_tier_models()` for weighted model selection
+    - Anti-herding penalties for traffic concentration
+    - Provider diversity enforcement (min 2 providers)
+  - **Phase 2**: Reasoning parameter optimization
+    - `ReasoningConfig` with effort levels (MINIMAL to XHIGH)
+    - Automatic reasoning injection for o1/R1 models
+    - Usage tracking for reasoning tokens
+  - **Phase 3**: Internal performance tracking
+    - `InternalPerformanceTracker` with exponential decay
+    - JSONL persistence for performance metrics
+    - Quality scores based on Borda rankings
+
+- **Offline Mode**: `LLM_COUNCIL_OFFLINE=true` for air-gapped deployments
+  - Forces `StaticRegistryProvider` exclusively
+  - All core operations work without external calls
+
+- **Bundled Model Registry**: `models/registry.yaml` with 31 models
+  - OpenAI, Anthropic, Google, xAI, DeepSeek, Meta, Mistral, Ollama
+  - Includes context windows, pricing, and quality tiers
+
+### Changed
+
+- `create_tier_contract()` now accepts optional `task_domain` parameter
+- Model selection uses real metadata instead of regex heuristics
+
 ## [0.14.0] - 2025-12-23
 
 ### Added
