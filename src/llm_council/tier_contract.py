@@ -302,5 +302,9 @@ class _DefaultTierContractsProxy(dict):
         self._ensure_initialized()
         return super().__len__()
 
+    def __contains__(self, key):
+        self._ensure_initialized()
+        return super().__contains__(key)
+
 
 DEFAULT_TIER_CONTRACTS = _DefaultTierContractsProxy()

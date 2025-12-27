@@ -199,8 +199,9 @@ class TestTelemetryAutoInit:
         """Telemetry should be auto-initialized when config enables it."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
             import importlib
-            from llm_council import config
-            importlib.reload(config)
+            from llm_council import unified_config
+            # Must reload unified_config to pick up new env var
+            unified_config.reload_config()
 
             # Reload telemetry to trigger auto-init with new config
             from llm_council import telemetry
@@ -212,8 +213,9 @@ class TestTelemetryAutoInit:
         """Telemetry should be NoOp when config disables it."""
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "off"}):
             import importlib
-            from llm_council import config
-            importlib.reload(config)
+            from llm_council import unified_config
+            # Must reload unified_config to pick up new env var
+            unified_config.reload_config()
 
             # Reload telemetry to trigger auto-init with new config
             from llm_council import telemetry
