@@ -10,26 +10,6 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 
 ### Backend Structure (`backend/`)
 
-**`config.py`** - DEPRECATED, Backwards Compatibility Layer
-- **ADR-032**: This module is deprecated. Source files now use `unified_config.py`
-- Kept for backwards compatibility with tests that import from it
-- Core configuration is now in `unified_config.py` and loaded via `get_config()`
-- Tier model pools are in `tier_contract._get_tier_model_pools()`
-- API key resolution is in `unified_config.get_api_key()`
-- Some deprecated attributes emit `DeprecationWarning` via `__getattr__`
-
-**Migration from config.py to unified_config.py (ADR-032)**:
-```python
-# OLD (deprecated)
-from llm_council.config import COUNCIL_MODELS, CHAIRMAN_MODEL
-
-# NEW (preferred)
-from llm_council.unified_config import get_config
-config = get_config()
-council_models = config.council.models
-chairman = config.council.chairman
-```
-
 **`tier_contract.py`** - ADR-022 Tier Contract
 - `TierContract`: Frozen dataclass defining tier execution parameters
   - `tier`: Confidence level (quick|balanced|high|reasoning)
@@ -460,7 +440,7 @@ chairman = config.council.chairman
 - `apply_safety_gate_to_score()`: Caps score if safety check fails
 - **Patterns detected**: dangerous_instructions, weapon_making, malware_hacking, self_harm, pii_exposure
 - **Context-aware**: Exclusion contexts allow educational/defensive content
-- Configuration in `config.py`: `SAFETY_GATE_ENABLED`, `SAFETY_SCORE_CAP`
+- Configuration in `unified_config.py`: `scoring.safety_gate_enabled`
 
 **`bias_audit.py`** - ADR-015 Per-Session Bias Indicators
 - `BiasAuditResult`: Dataclass containing all bias metrics
@@ -671,7 +651,7 @@ This strict format allows reliable parsing while still getting thoughtful evalua
 ## Important Implementation Details
 
 ### Relative Imports
-All backend modules use relative imports (e.g., `from .config import ...`) not absolute imports. This is critical for Python's module system to work correctly when running as `python -m backend.main`.
+All backend modules use relative imports (e.g., `from .unified_config import ...`) not absolute imports. This is critical for Python's module system to work correctly when running as `python -m backend.main`.
 
 ### Port Configuration
 - Backend: 8001 (changed from 8000 to avoid conflict)
@@ -682,7 +662,7 @@ All backend modules use relative imports (e.g., `from .config import ...`) not a
 All ReactMarkdown components must be wrapped in `<div className="markdown-content">` for proper spacing. This class is defined globally in `index.css`.
 
 ### Model Configuration
-Models are hardcoded in `backend/config.py`. Chairman can be same or different from council members. The current default is Gemini as chairman per user preference.
+Models are configured in `llm_council.yaml` and loaded via `unified_config.py`. Chairman can be same or different from council members. Configuration can be overridden via environment variables (e.g., `LLM_COUNCIL_MODELS`).
 
 ## Common Gotchas
 
