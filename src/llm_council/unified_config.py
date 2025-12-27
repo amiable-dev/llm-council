@@ -28,16 +28,54 @@ Example YAML configuration (llm_council.yaml):
 """
 
 import fnmatch
+import json
 import os
 import re
 from dataclasses import field
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 
 from .tier_contract import TierContract, create_tier_contract
+
+
+# =============================================================================
+# ADR-032: Model List Auto-Detection Helper
+# =============================================================================
+
+
+def parse_model_list(value: Union[str, List[str]]) -> List[str]:
+    """Parse model list from string or list (ADR-032 auto-detection).
+
+    Supports:
+    - List passthrough: ["model1", "model2"]
+    - JSON array: '["model1", "model2"]'
+    - Comma-separated: "model1, model2"
+
+    Args:
+        value: Either a list of strings or a string representation
+
+    Returns:
+        List of model identifiers
+    """
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    value = value.strip()
+    if value.startswith("["):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            # Fall through to comma parsing
+            pass
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+# Type alias for model lists with auto-detection
+ModelList = Annotated[List[str], BeforeValidator(parse_model_list)]
 
 
 # =============================================================================
@@ -617,6 +655,161 @@ class ObservabilityConfig(BaseModel):
 
 
 # =============================================================================
+# ADR-032: Complete Configuration Migration
+# =============================================================================
+
+
+class SecretsConfig(BaseModel):
+    """Metadata about required secrets (ADR-032).
+
+    Note: Does NOT contain actual secrets or resolution logic.
+    Use get_api_key() helper for resolution.
+    """
+
+    required_providers: List[str] = Field(
+        default_factory=lambda: ["openrouter"],
+        description="Providers that require API keys",
+    )
+    keychain_service: str = Field(
+        default="llm-council",
+        description="macOS Keychain service name",
+    )
+
+
+class CouncilConfig(BaseModel):
+    """Core council behavior configuration (ADR-032)."""
+
+    model_config = {"populate_by_name": True}
+
+    models: ModelList = Field(
+        default_factory=lambda: [
+            "openai/gpt-5.2-pro",
+            "google/gemini-3-pro-preview",
+            "anthropic/claude-opus-4.5",
+            "x-ai/grok-4",
+        ],
+        alias="LLM_COUNCIL_MODELS",
+    )
+    chairman: str = Field(
+        default="google/gemini-3-pro-preview",
+        alias="LLM_COUNCIL_CHAIRMAN",
+    )
+    synthesis_mode: Literal["consensus", "debate"] = Field(
+        default="consensus",
+        alias="LLM_COUNCIL_MODE",
+    )
+    exclude_self_votes: bool = Field(
+        default=True,
+        alias="LLM_COUNCIL_EXCLUDE_SELF_VOTES",
+    )
+    style_normalization: Union[bool, Literal["auto"]] = Field(
+        default=False,
+        alias="LLM_COUNCIL_STYLE_NORMALIZATION",
+    )
+    normalizer_model: str = Field(
+        default="google/gemini-2.0-flash-001",
+        alias="LLM_COUNCIL_NORMALIZER_MODEL",
+    )
+    max_reviewers: Optional[int] = Field(
+        default=None,
+        alias="LLM_COUNCIL_MAX_REVIEWERS",
+    )
+
+
+class TierTimeoutConfig(BaseModel):
+    """Timeout configuration for a single tier (ADR-032)."""
+
+    total: int = Field(ge=1000, description="Total timeout in ms")
+    per_model: int = Field(ge=500, description="Per-model timeout in ms")
+
+
+class TimeoutsConfig(BaseModel):
+    """Tier-sovereign timeout configuration (ADR-022/ADR-032).
+
+    All timeout values are in milliseconds.
+    """
+
+    model_config = {"populate_by_name": True}
+
+    quick: TierTimeoutConfig = Field(
+        default_factory=lambda: TierTimeoutConfig(total=30000, per_model=20000)
+    )
+    balanced: TierTimeoutConfig = Field(
+        default_factory=lambda: TierTimeoutConfig(total=90000, per_model=45000)
+    )
+    high: TierTimeoutConfig = Field(
+        default_factory=lambda: TierTimeoutConfig(total=180000, per_model=90000)
+    )
+    reasoning: TierTimeoutConfig = Field(
+        default_factory=lambda: TierTimeoutConfig(total=600000, per_model=300000)
+    )
+    frontier: TierTimeoutConfig = Field(
+        default_factory=lambda: TierTimeoutConfig(total=600000, per_model=300000)
+    )
+    multiplier: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        alias="LLM_COUNCIL_TIMEOUT_MULTIPLIER",
+    )
+
+    def get_timeout(self, tier: str, timeout_type: str = "total") -> int:
+        """Get timeout with multiplier applied.
+
+        Args:
+            tier: One of quick, balanced, high, reasoning, frontier
+            timeout_type: Either "total" or "per_model"
+
+        Returns:
+            Timeout in milliseconds with multiplier applied
+        """
+        tier_config = getattr(self, tier, None)
+        if tier_config is None:
+            # Fall back to high tier for unknown tiers
+            tier_config = self.high
+        base = getattr(tier_config, timeout_type, tier_config.total)
+        return int(base * self.multiplier)
+
+
+class CacheConfig(BaseModel):
+    """Response caching configuration (ADR-032)."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(
+        default=False,
+        alias="LLM_COUNCIL_CACHE",
+    )
+    ttl_seconds: int = Field(
+        default=0,  # 0 = infinite (no expiry)
+        ge=0,
+        alias="LLM_COUNCIL_CACHE_TTL",
+    )
+    directory: Path = Field(
+        default_factory=lambda: Path.home() / ".cache" / "llm-council"
+    )
+
+
+class TelemetryConfig(BaseModel):
+    """Opt-in telemetry configuration (ADR-032)."""
+
+    model_config = {"populate_by_name": True}
+
+    level: Literal["off", "anonymous", "debug"] = Field(
+        default="off",
+        alias="LLM_COUNCIL_TELEMETRY",
+    )
+    endpoint: str = Field(
+        default="https://ingest.llmcouncil.ai/v1/events"
+    )
+
+    @property
+    def enabled(self) -> bool:
+        """Convenience property for checking if telemetry is on."""
+        return self.level != "off"
+
+
+# =============================================================================
 # ADR-031: EvaluationConfig (Rubric, Safety, Bias)
 # =============================================================================
 
@@ -735,6 +928,12 @@ class UnifiedConfig(BaseModel):
     )
     frontier: FrontierConfig = Field(default_factory=FrontierConfig)  # ADR-027
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)  # ADR-031
+    # ADR-032: Complete Configuration Migration
+    secrets: SecretsConfig = Field(default_factory=SecretsConfig)
+    council: CouncilConfig = Field(default_factory=CouncilConfig)
+    timeouts: TimeoutsConfig = Field(default_factory=TimeoutsConfig)
+    cache: CacheConfig = Field(default_factory=CacheConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
 
     def get_tier_contract(self, tier: str) -> TierContract:
         """Get TierContract for a specific tier.
@@ -1072,6 +1271,65 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     bias_persistence_enabled = os.getenv("BIAS_PERSISTENCE_ENABLED")
     if bias_persistence_enabled:
         config_dict.setdefault("evaluation", {}).setdefault("bias", {})["persistence_enabled"] = bias_persistence_enabled.lower() in ("true", "1", "yes")
+
+    # ADR-032: Council configuration overrides
+    council_models = os.getenv("LLM_COUNCIL_MODELS")
+    if council_models:
+        config_dict.setdefault("council", {})["models"] = parse_model_list(council_models)
+
+    council_chairman = os.getenv("LLM_COUNCIL_CHAIRMAN")
+    if council_chairman:
+        config_dict.setdefault("council", {})["chairman"] = council_chairman
+
+    council_mode = os.getenv("LLM_COUNCIL_MODE")
+    if council_mode:
+        config_dict.setdefault("council", {})["synthesis_mode"] = council_mode
+
+    council_exclude_self = os.getenv("LLM_COUNCIL_EXCLUDE_SELF_VOTES")
+    if council_exclude_self:
+        config_dict.setdefault("council", {})["exclude_self_votes"] = council_exclude_self.lower() in ("true", "1", "yes")
+
+    council_style_norm = os.getenv("LLM_COUNCIL_STYLE_NORMALIZATION")
+    if council_style_norm:
+        if council_style_norm.lower() == "auto":
+            config_dict.setdefault("council", {})["style_normalization"] = "auto"
+        else:
+            config_dict.setdefault("council", {})["style_normalization"] = council_style_norm.lower() in ("true", "1", "yes")
+
+    council_normalizer = os.getenv("LLM_COUNCIL_NORMALIZER_MODEL")
+    if council_normalizer:
+        config_dict.setdefault("council", {})["normalizer_model"] = council_normalizer
+
+    council_max_reviewers = os.getenv("LLM_COUNCIL_MAX_REVIEWERS")
+    if council_max_reviewers:
+        config_dict.setdefault("council", {})["max_reviewers"] = int(council_max_reviewers)
+
+    # ADR-032: Timeout configuration overrides
+    timeout_multiplier = os.getenv("LLM_COUNCIL_TIMEOUT_MULTIPLIER")
+    if timeout_multiplier:
+        config_dict.setdefault("timeouts", {})["multiplier"] = float(timeout_multiplier)
+
+    # ADR-032: Cache configuration overrides
+    cache_enabled = os.getenv("LLM_COUNCIL_CACHE")
+    if cache_enabled:
+        config_dict.setdefault("cache", {})["enabled"] = cache_enabled.lower() in ("true", "1", "yes")
+
+    cache_ttl = os.getenv("LLM_COUNCIL_CACHE_TTL")
+    if cache_ttl:
+        config_dict.setdefault("cache", {})["ttl_seconds"] = int(cache_ttl)
+
+    cache_dir = os.getenv("LLM_COUNCIL_CACHE_DIR")
+    if cache_dir:
+        config_dict.setdefault("cache", {})["directory"] = cache_dir
+
+    # ADR-032: Telemetry configuration overrides
+    telemetry_level = os.getenv("LLM_COUNCIL_TELEMETRY")
+    if telemetry_level and telemetry_level.lower() in ("off", "anonymous", "debug"):
+        config_dict.setdefault("telemetry", {})["level"] = telemetry_level.lower()
+
+    telemetry_endpoint = os.getenv("LLM_COUNCIL_TELEMETRY_ENDPOINT")
+    if telemetry_endpoint:
+        config_dict.setdefault("telemetry", {})["endpoint"] = telemetry_endpoint
 
     return UnifiedConfig(**config_dict)
 

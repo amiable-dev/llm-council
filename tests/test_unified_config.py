@@ -1362,3 +1362,584 @@ council:
         config = get_effective_config(config_file)
 
         assert config.evaluation.bias.persistence_enabled is True
+
+
+# =============================================================================
+# ADR-032 Configuration Migration Tests (TDD - RED Phase)
+# =============================================================================
+
+
+class TestParseModelList:
+    """Test parse_model_list helper for auto-detecting list formats (ADR-032)."""
+
+    def test_parse_model_list_passthrough(self):
+        """List input passes through unchanged."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list(["model-a", "model-b"])
+        assert result == ["model-a", "model-b"]
+
+    def test_parse_model_list_json_array(self):
+        """JSON array string is parsed correctly."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list('["model-a", "model-b"]')
+        assert result == ["model-a", "model-b"]
+
+    def test_parse_model_list_comma_separated(self):
+        """Comma-separated string is parsed correctly."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list("model-a, model-b, model-c")
+        assert result == ["model-a", "model-b", "model-c"]
+
+    def test_parse_model_list_comma_no_spaces(self):
+        """Comma-separated without spaces works."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list("model-a,model-b")
+        assert result == ["model-a", "model-b"]
+
+    def test_parse_model_list_empty_string(self):
+        """Empty string returns empty list."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list("")
+        assert result == []
+
+    def test_parse_model_list_empty_list(self):
+        """Empty list passes through."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list([])
+        assert result == []
+
+    def test_parse_model_list_single_model(self):
+        """Single model string is parsed correctly."""
+        from llm_council.unified_config import parse_model_list
+
+        result = parse_model_list("openai/gpt-4o")
+        assert result == ["openai/gpt-4o"]
+
+
+class TestSecretsConfig:
+    """Test SecretsConfig metadata-only schema (ADR-032)."""
+
+    def test_secrets_config_defaults(self):
+        """SecretsConfig should have correct defaults."""
+        from llm_council.unified_config import SecretsConfig
+
+        config = SecretsConfig()
+
+        assert config.required_providers == ["openrouter"]
+        assert config.keychain_service == "llm-council"
+
+    def test_secrets_config_custom_providers(self):
+        """SecretsConfig should accept custom providers."""
+        from llm_council.unified_config import SecretsConfig
+
+        config = SecretsConfig(required_providers=["openrouter", "anthropic", "openai"])
+        assert config.required_providers == ["openrouter", "anthropic", "openai"]
+
+    def test_secrets_config_custom_keychain(self):
+        """SecretsConfig should accept custom keychain service."""
+        from llm_council.unified_config import SecretsConfig
+
+        config = SecretsConfig(keychain_service="my-app")
+        assert config.keychain_service == "my-app"
+
+    def test_secrets_config_in_unified_config(self):
+        """UnifiedConfig should include secrets field."""
+        config = UnifiedConfig()
+
+        assert hasattr(config, "secrets")
+        assert config.secrets is not None
+        assert config.secrets.required_providers == ["openrouter"]
+
+
+class TestCouncilConfig:
+    """Test CouncilConfig for core council behavior (ADR-032)."""
+
+    def test_council_config_defaults(self):
+        """CouncilConfig should match config.py defaults."""
+        from llm_council.unified_config import CouncilConfig
+
+        config = CouncilConfig()
+
+        # Defaults from config.py
+        assert "openai/gpt-5.2-pro" in config.models
+        assert config.chairman == "google/gemini-3-pro-preview"
+        assert config.synthesis_mode == "consensus"
+        assert config.exclude_self_votes is True
+        assert config.style_normalization is False
+        assert config.normalizer_model == "google/gemini-2.0-flash-001"
+        assert config.max_reviewers is None
+
+    def test_council_config_model_list_from_comma(self):
+        """ModelList should parse comma-separated string."""
+        from llm_council.unified_config import CouncilConfig
+
+        config = CouncilConfig(models="model1, model2, model3")
+        assert config.models == ["model1", "model2", "model3"]
+
+    def test_council_config_model_list_from_json(self):
+        """ModelList should parse JSON array string."""
+        from llm_council.unified_config import CouncilConfig
+
+        config = CouncilConfig(models='["model1", "model2"]')
+        assert config.models == ["model1", "model2"]
+
+    def test_council_config_model_list_passthrough(self):
+        """ModelList should pass through list."""
+        from llm_council.unified_config import CouncilConfig
+
+        config = CouncilConfig(models=["model1", "model2"])
+        assert config.models == ["model1", "model2"]
+
+    def test_council_config_synthesis_mode_validation(self):
+        """synthesis_mode must be 'consensus' or 'debate'."""
+        from llm_council.unified_config import CouncilConfig
+
+        # Valid modes
+        config = CouncilConfig(synthesis_mode="consensus")
+        assert config.synthesis_mode == "consensus"
+
+        config = CouncilConfig(synthesis_mode="debate")
+        assert config.synthesis_mode == "debate"
+
+        # Invalid mode
+        with pytest.raises(ValueError):
+            CouncilConfig(synthesis_mode="invalid")
+
+    def test_council_config_style_normalization_auto(self):
+        """style_normalization can be 'auto' string."""
+        from llm_council.unified_config import CouncilConfig
+
+        config = CouncilConfig(style_normalization="auto")
+        assert config.style_normalization == "auto"
+
+    def test_council_config_in_unified_config(self):
+        """UnifiedConfig should include council field."""
+        config = UnifiedConfig()
+
+        assert hasattr(config, "council")
+        assert config.council is not None
+        assert config.council.synthesis_mode == "consensus"
+
+
+class TestTimeoutsConfig:
+    """Test TimeoutsConfig for tier-sovereign timeouts (ADR-032)."""
+
+    def test_timeouts_config_defaults(self):
+        """TimeoutsConfig should match config.py DEFAULT_TIER_TIMEOUTS."""
+        from llm_council.unified_config import TimeoutsConfig
+
+        config = TimeoutsConfig()
+
+        # Quick tier
+        assert config.quick.total == 30000
+        assert config.quick.per_model == 20000
+
+        # Balanced tier
+        assert config.balanced.total == 90000
+        assert config.balanced.per_model == 45000
+
+        # High tier
+        assert config.high.total == 180000
+        assert config.high.per_model == 90000
+
+        # Reasoning tier
+        assert config.reasoning.total == 600000
+        assert config.reasoning.per_model == 300000
+
+        # Frontier tier
+        assert config.frontier.total == 600000
+        assert config.frontier.per_model == 300000
+
+        # Multiplier
+        assert config.multiplier == 1.0
+
+    def test_timeouts_config_get_timeout(self):
+        """get_timeout should return correct value."""
+        from llm_council.unified_config import TimeoutsConfig
+
+        config = TimeoutsConfig()
+
+        assert config.get_timeout("quick") == 30000
+        assert config.get_timeout("quick", "per_model") == 20000
+        assert config.get_timeout("reasoning") == 600000
+
+    def test_timeouts_config_multiplier_applied(self):
+        """Multiplier should be applied to get_timeout."""
+        from llm_council.unified_config import TimeoutsConfig
+
+        config = TimeoutsConfig(multiplier=2.0)
+
+        assert config.get_timeout("quick") == 60000
+        assert config.get_timeout("quick", "per_model") == 40000
+
+    def test_timeouts_config_invalid_tier(self):
+        """get_timeout should return default for invalid tier."""
+        from llm_council.unified_config import TimeoutsConfig
+
+        config = TimeoutsConfig()
+
+        # Should return default (high tier) for unknown tier
+        result = config.get_timeout("unknown")
+        assert result == 180000  # high tier default
+
+    def test_timeouts_config_multiplier_validation(self):
+        """Multiplier must be between 0.1 and 10.0."""
+        from llm_council.unified_config import TimeoutsConfig
+
+        # Valid
+        config = TimeoutsConfig(multiplier=5.0)
+        assert config.multiplier == 5.0
+
+        # Too low
+        with pytest.raises(ValueError):
+            TimeoutsConfig(multiplier=0.05)
+
+        # Too high
+        with pytest.raises(ValueError):
+            TimeoutsConfig(multiplier=15.0)
+
+    def test_timeouts_config_in_unified_config(self):
+        """UnifiedConfig should include timeouts field."""
+        config = UnifiedConfig()
+
+        assert hasattr(config, "timeouts")
+        assert config.timeouts is not None
+        assert config.timeouts.multiplier == 1.0
+
+
+class TestCacheConfig:
+    """Test CacheConfig for response caching (ADR-032)."""
+
+    def test_cache_config_defaults(self):
+        """CacheConfig should match config.py defaults."""
+        from llm_council.unified_config import CacheConfig
+        from pathlib import Path
+
+        config = CacheConfig()
+
+        assert config.enabled is False
+        assert config.ttl_seconds == 0  # 0 = infinite (no expiry)
+        assert config.directory == Path.home() / ".cache" / "llm-council"
+
+    def test_cache_config_custom_values(self):
+        """CacheConfig should accept custom values."""
+        from llm_council.unified_config import CacheConfig
+        from pathlib import Path
+
+        config = CacheConfig(
+            enabled=True,
+            ttl_seconds=3600,
+            directory=Path("/tmp/cache"),
+        )
+
+        assert config.enabled is True
+        assert config.ttl_seconds == 3600
+        assert config.directory == Path("/tmp/cache")
+
+    def test_cache_config_ttl_validation(self):
+        """TTL cannot be negative."""
+        from llm_council.unified_config import CacheConfig
+
+        # Valid: 0 (infinite)
+        config = CacheConfig(ttl_seconds=0)
+        assert config.ttl_seconds == 0
+
+        # Invalid: negative
+        with pytest.raises(ValueError):
+            CacheConfig(ttl_seconds=-1)
+
+    def test_cache_config_in_unified_config(self):
+        """UnifiedConfig should include cache field."""
+        config = UnifiedConfig()
+
+        assert hasattr(config, "cache")
+        assert config.cache is not None
+        assert config.cache.enabled is False
+
+
+class TestTelemetryConfig:
+    """Test TelemetryConfig for opt-in telemetry (ADR-032)."""
+
+    def test_telemetry_config_defaults(self):
+        """TelemetryConfig should have opt-out defaults."""
+        from llm_council.unified_config import TelemetryConfig
+
+        config = TelemetryConfig()
+
+        assert config.level == "off"
+        assert config.endpoint == "https://ingest.llmcouncil.ai/v1/events"
+        assert config.enabled is False
+
+    def test_telemetry_config_enabled_property(self):
+        """enabled property should reflect level."""
+        from llm_council.unified_config import TelemetryConfig
+
+        assert TelemetryConfig(level="off").enabled is False
+        assert TelemetryConfig(level="anonymous").enabled is True
+        assert TelemetryConfig(level="debug").enabled is True
+
+    def test_telemetry_config_level_validation(self):
+        """Level must be 'off', 'anonymous', or 'debug'."""
+        from llm_council.unified_config import TelemetryConfig
+
+        # Valid levels
+        for level in ["off", "anonymous", "debug"]:
+            config = TelemetryConfig(level=level)
+            assert config.level == level
+
+        # Invalid level
+        with pytest.raises(ValueError):
+            TelemetryConfig(level="invalid")
+
+    def test_telemetry_config_custom_endpoint(self):
+        """TelemetryConfig should accept custom endpoint."""
+        from llm_council.unified_config import TelemetryConfig
+
+        config = TelemetryConfig(endpoint="https://my-telemetry.example.com/v1")
+        assert config.endpoint == "https://my-telemetry.example.com/v1"
+
+    def test_telemetry_config_in_unified_config(self):
+        """UnifiedConfig should include telemetry field."""
+        config = UnifiedConfig()
+
+        assert hasattr(config, "telemetry")
+        assert config.telemetry is not None
+        assert config.telemetry.level == "off"
+
+
+class TestADR032EnvVarOverrides:
+    """Test environment variable overrides for ADR-032 config sections."""
+
+    def test_council_models_env_override(self, monkeypatch):
+        """LLM_COUNCIL_MODELS env var should override models."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_MODELS", "test/model1,test/model2")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.council.models == ["test/model1", "test/model2"]
+
+    def test_council_chairman_env_override(self, monkeypatch):
+        """LLM_COUNCIL_CHAIRMAN env var should override chairman."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_CHAIRMAN", "test/chairman-model")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.council.chairman == "test/chairman-model"
+
+    def test_council_mode_env_override(self, monkeypatch):
+        """LLM_COUNCIL_MODE env var should override synthesis_mode."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_MODE", "debate")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.council.synthesis_mode == "debate"
+
+    def test_timeout_multiplier_env_override(self, monkeypatch):
+        """LLM_COUNCIL_TIMEOUT_MULTIPLIER env var should override multiplier."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_TIMEOUT_MULTIPLIER", "2.5")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.timeouts.multiplier == 2.5
+
+    def test_cache_enabled_env_override(self, monkeypatch):
+        """LLM_COUNCIL_CACHE env var should override cache.enabled."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_CACHE", "true")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.cache.enabled is True
+
+    def test_cache_ttl_env_override(self, monkeypatch):
+        """LLM_COUNCIL_CACHE_TTL env var should override cache.ttl_seconds."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_CACHE_TTL", "7200")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.cache.ttl_seconds == 7200
+
+    def test_telemetry_level_env_override(self, monkeypatch):
+        """LLM_COUNCIL_TELEMETRY env var should override telemetry.level."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_TELEMETRY", "anonymous")
+        reload_config()
+        config = get_effective_config()
+
+        assert config.telemetry.level == "anonymous"
+        assert config.telemetry.enabled is True
+
+
+class TestADR032YAMLLoading:
+    """Test YAML loading for ADR-032 config sections."""
+
+    def test_secrets_config_from_yaml(self, tmp_path):
+        """SecretsConfig should load from YAML."""
+        yaml_content = """
+council:
+  secrets:
+    required_providers: ["openrouter", "anthropic"]
+    keychain_service: "my-custom-app"
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        config = load_config(config_file)
+
+        assert config.secrets.required_providers == ["openrouter", "anthropic"]
+        assert config.secrets.keychain_service == "my-custom-app"
+
+    def test_council_config_from_yaml(self, tmp_path):
+        """CouncilConfig should load from YAML."""
+        yaml_content = """
+council:
+  council:
+    models:
+      - openai/gpt-4o
+      - anthropic/claude-3
+    chairman: "google/gemini-2.5-pro"
+    synthesis_mode: "debate"
+    exclude_self_votes: false
+    style_normalization: "auto"
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        config = load_config(config_file)
+
+        assert config.council.models == ["openai/gpt-4o", "anthropic/claude-3"]
+        assert config.council.chairman == "google/gemini-2.5-pro"
+        assert config.council.synthesis_mode == "debate"
+        assert config.council.exclude_self_votes is False
+        assert config.council.style_normalization == "auto"
+
+    def test_timeouts_config_from_yaml(self, tmp_path):
+        """TimeoutsConfig should load from YAML."""
+        yaml_content = """
+council:
+  timeouts:
+    multiplier: 1.5
+    quick:
+      total: 15000
+      per_model: 10000
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        config = load_config(config_file)
+
+        assert config.timeouts.multiplier == 1.5
+        assert config.timeouts.quick.total == 15000
+        assert config.timeouts.quick.per_model == 10000
+
+    def test_cache_config_from_yaml(self, tmp_path):
+        """CacheConfig should load from YAML."""
+        yaml_content = """
+council:
+  cache:
+    enabled: true
+    ttl_seconds: 1800
+    directory: "/tmp/llm-cache"
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        config = load_config(config_file)
+
+        assert config.cache.enabled is True
+        assert config.cache.ttl_seconds == 1800
+        assert str(config.cache.directory) == "/tmp/llm-cache"
+
+    def test_telemetry_config_from_yaml(self, tmp_path):
+        """TelemetryConfig should load from YAML."""
+        yaml_content = """
+council:
+  telemetry:
+    level: "debug"
+    endpoint: "https://custom.telemetry.example.com"
+"""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text(yaml_content)
+
+        config = load_config(config_file)
+
+        assert config.telemetry.level == "debug"
+        assert config.telemetry.enabled is True
+        assert config.telemetry.endpoint == "https://custom.telemetry.example.com"
+
+
+class TestADR032Serialization:
+    """Test serialization of ADR-032 config sections."""
+
+    def test_secrets_serializes_to_dict(self):
+        """Secrets config should serialize to dict."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "secrets" in config_dict
+        assert config_dict["secrets"]["required_providers"] == ["openrouter"]
+
+    def test_council_serializes_to_dict(self):
+        """Council config should serialize to dict."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "council" in config_dict
+        assert "models" in config_dict["council"]
+        assert "chairman" in config_dict["council"]
+
+    def test_timeouts_serializes_to_dict(self):
+        """Timeouts config should serialize to dict."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "timeouts" in config_dict
+        assert "multiplier" in config_dict["timeouts"]
+        assert "quick" in config_dict["timeouts"]
+
+    def test_cache_serializes_to_dict(self):
+        """Cache config should serialize to dict."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "cache" in config_dict
+        assert "enabled" in config_dict["cache"]
+        assert "ttl_seconds" in config_dict["cache"]
+
+    def test_telemetry_serializes_to_dict(self):
+        """Telemetry config should serialize to dict."""
+        config = UnifiedConfig()
+        config_dict = config.to_dict()
+
+        assert "telemetry" in config_dict
+        assert "level" in config_dict["telemetry"]
+        assert "endpoint" in config_dict["telemetry"]
+
+    def test_all_adr032_sections_in_yaml(self):
+        """All ADR-032 sections should appear in YAML output."""
+        config = UnifiedConfig()
+        yaml_str = config.to_yaml()
+
+        assert "secrets:" in yaml_str
+        assert "council:" in yaml_str
+        assert "timeouts:" in yaml_str
+        assert "cache:" in yaml_str
+        assert "telemetry:" in yaml_str
