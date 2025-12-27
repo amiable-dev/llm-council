@@ -17,6 +17,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `get_tier_models(tier)`: Returns models for a tier, with env var override support
 - Uses environment variable `OPENROUTER_API_KEY` from `.env`
 - Backend runs on **port 8001** (NOT 8000 - user had another app on 8000)
+- **Note (ADR-031)**: Evaluation config (rubric, safety, bias) has moved to `unified_config.py`
 
 **`tier_contract.py`** - ADR-022 Tier Contract
 - `TierContract`: Frozen dataclass defining tier execution parameters
@@ -156,7 +157,7 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - Single source of truth consolidating ADR-020, ADR-022, ADR-023, ADR-026 settings
 - Pydantic-based schema with validation
 - **Main Classes**:
-  - `UnifiedConfig`: Root configuration with tiers, triage, gateways, model_intelligence
+  - `UnifiedConfig`: Root configuration with tiers, triage, gateways, model_intelligence, evaluation
   - `TierConfig`: Tier pools, defaults, escalation settings
   - `TriageConfig`: Wildcard, prompt optimization, fast path settings
   - `GatewayConfig`: Default gateway, providers, model routing, fallback chain
@@ -165,6 +166,10 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
     - `refresh`: Cache TTL settings (registry_ttl, availability_ttl)
     - `selection`: Selection algorithm settings (min_providers, default_count)
     - `anti_herding`: Traffic concentration prevention (enabled, threshold, penalty)
+  - `EvaluationConfig` (ADR-031): Evaluation-time settings for scoring, safety, and bias
+    - `rubric`: RubricConfig (enabled, weights with validation)
+    - `safety`: SafetyConfig (enabled, score_cap)
+    - `bias`: BiasConfig (audit_enabled, persistence_enabled, thresholds, store_path, consent_level)
     - `scoring` (ADR-030): Cost scoring algorithm configuration
       - `cost_scale`: "linear" | "log_ratio" | "exponential" (default: "log_ratio")
       - `cost_reference_high`: Reference expensive price (default: 0.015)
@@ -190,6 +195,11 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   2. `./llm_council.yaml` (current directory)
   3. `~/.config/llm-council/llm_council.yaml`
 - **Environment Variable Substitution**: Supports `${VAR_NAME}` syntax in YAML
+- **EvaluationConfig Environment Variables** (ADR-031):
+  - `RUBRIC_SCORING_ENABLED`: Enable rubric-based scoring
+  - `SAFETY_GATE_ENABLED`: Enable safety gate
+  - `BIAS_AUDIT_ENABLED`: Enable per-session bias auditing
+  - `BIAS_PERSISTENCE_ENABLED`: Enable cross-session bias persistence
 
 **`layer_contracts.py`** - ADR-024 Layer Interface Contracts
 - Formalizes L1→L2→L3→L4 layer boundaries with validation and observability
@@ -451,7 +461,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
   - Supports legacy format: Derives from label letter (A → 0, B → 1)
 - `run_bias_audit()`: Main entry point, runs all bias checks and returns overall risk assessment
 - `extract_scores_from_stage2()`: Converts Stage 2 results to format needed for bias audit
-- Configuration in `config.py`: `BIAS_AUDIT_ENABLED`, `LENGTH_CORRELATION_THRESHOLD`, `POSITION_VARIANCE_THRESHOLD`
+- **Configuration** (ADR-031): Uses `get_config().evaluation.bias.*` from unified_config
+  - `audit_enabled`, `length_correlation_threshold`, `position_variance_threshold`
 
 **Statistical Limitations**: Per-session bias auditing has inherent limitations with small sample sizes:
 - With N=4-5 models, length correlation has only 4-5 data points (minimum 30+ needed for significance)
@@ -467,7 +478,8 @@ LLM Council is a 3-stage deliberation system where multiple LLMs collaboratively
 - `read_bias_records()`: Read with filtering (max_sessions, max_days, since)
 - `create_bias_records_from_session()`: Convert Stage 2 results to records
 - `persist_session_bias_data()`: High-level integration point for council.py
-- Configuration in `config.py`: `BIAS_PERSISTENCE_ENABLED`, `BIAS_STORE_PATH`, etc.
+- **Configuration** (ADR-031): Uses helper functions accessing `get_config().evaluation.bias.*`
+  - `_get_bias_persistence_enabled()`, `_get_bias_store_path()`, `_get_bias_consent_level()`
 
 **`bias_aggregation.py`** - ADR-018 Phase 2-3: Cross-Session Analysis
 - `StatisticalConfidence`: Enum for confidence tiers (INSUFFICIENT, PRELIMINARY, MODERATE, HIGH)
