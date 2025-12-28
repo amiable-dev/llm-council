@@ -1,0 +1,24 @@
+version: 1
+interactions:
+- request:
+    body: null
+    headers:
+      accept:
+      - application/json
+      authorization:
+      - Bearer test-key
+      host:
+      - openrouter.ai
+      user-agent:
+      - python-httpx/0.27.0
+    method: GET
+    uri: https://openrouter.ai/api/v1/models
+  response:
+    body:
+      string: '{"data": [{"id": "test/model", "context_length": 4096, "architecture": {"input_modalities": ["text", "image"]}}]}'
+    headers:
+      content-type:
+      - application/json
+    status:
+      code: 200
+      message: OK
