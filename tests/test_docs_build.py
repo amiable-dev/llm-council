@@ -40,7 +40,7 @@ def test_mkdocs_config_valid_yaml():
 
 def test_mkdocs_has_site_name(mkdocs_config: dict):
     """Verify mkdocs.yml has site_name."""
-    assert mkdocs_config.get("site_name") == "LLM Council"
+    assert mkdocs_config.get("site_name") == "llm-council"
 
 
 def test_mkdocs_uses_material_theme(mkdocs_config: dict):
@@ -104,11 +104,18 @@ def test_mkdocs_build_succeeds():
     internal links to files outside the docs/ folder (e.g., council
     reviews, source code) which generate warnings but are valid in
     the original ADR context.
+
+    Requires: pip install "llm-council-core[docs]"
     """
     import subprocess
+    import shutil
+
+    # Skip if mkdocs is not installed (docs optional dependency)
+    if shutil.which("mkdocs") is None:
+        pytest.skip("mkdocs not installed (requires [docs] extra)")
 
     result = subprocess.run(
-        ["uv", "run", "mkdocs", "build"],
+        ["mkdocs", "build"],
         capture_output=True,
         text=True,
         cwd=Path(__file__).parent.parent,
