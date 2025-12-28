@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.2] - 2025-12-28
+
+### Changed
+
+- **Release Workflow Documentation**: Updated CLAUDE.md with correct PR-based release process
+  - Emphasizes never pushing directly to master
+  - Documents required CI checks (Test, Lint, Type Check, DCO)
+  - Adds verification steps and enforcement notes
+
+### Fixed
+
+- **CI Pipeline**: Disabled failing `Notify Council Cloud` job temporarily (#202)
+  - Job requires `CROSS_REPO_TOKEN` secret which is not configured
+  - Will be reinstated when secret is set up
+
 ## [0.19.1] - 2025-12-28
 
 ### Added
