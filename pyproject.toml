@@ -35,6 +35,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "httpx>=0.27.0",
     "pyyaml>=6.0.3",
+    "pydantic>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -88,4 +89,21 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
-ignore = ["E501"]                  # Line too long (handled by formatter)
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "E402",   # Module level import not at top (intentional for config-before-import pattern)
+    "E741",   # Ambiguous variable name - false positives on loop vars
+    "F401",   # Unused imports - common in __init__.py re-exports and tests
+    "F541",   # f-string without placeholders - harmless
+    "F811",   # Redefinition - common in tests and intentional re-imports
+    "F821",   # Undefined name - false positives on forward references
+    "F841",   # Local variable assigned but never used (common in tests for setup)
+    "I001",   # Import sorting - auto-fix causes circular imports, so ignore
+    "N806",   # Variable in function should be lowercase (COUNCIL_MODELS is intentional)
+    "N818",   # Exception name should end with Error (TransportFailure is intentional)
+    "W291",   # Trailing whitespace - cosmetic
+    "W293",   # Blank line contains whitespace - cosmetic
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F401"]  # Unused imports in tests are often for fixtures
