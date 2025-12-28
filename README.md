@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://amiable-dev.github.io/llm-council">
-    <img src="docs/assets/logo.svg" alt="LLM Council Logo" width="200">
+    <img src="https://raw.githubusercontent.com/amiable-dev/llm-council/master/docs/assets/logo.svg" alt="LLM Council Logo" width="200">
   </a>
 </p>
 
