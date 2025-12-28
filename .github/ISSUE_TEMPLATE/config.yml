@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/amiable-dev/llm-council/discussions
+    about: Ask questions and discuss LLM Council in GitHub Discussions
+  - name: Security Vulnerabilities
+    url: https://github.com/amiable-dev/llm-council/security/advisories/new
+    about: Report security vulnerabilities privately (do not open public issues)
