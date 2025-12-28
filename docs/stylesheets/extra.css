@@ -26,14 +26,8 @@
 .hero h1 {
   margin: 0.5rem 0;
   font-size: 2.5rem;
-  font-weight: 400;
-  color: white;
-  text-transform: lowercase;
-  font-family: "JetBrains Mono", "Roboto Mono", monospace;
-}
-
-.hero h1 .council {
   font-weight: 700;
+  color: white;
 }
 
 .hero p {
