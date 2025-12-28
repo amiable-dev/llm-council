@@ -1,5 +1,83 @@
 /* LLM Council Documentation Styles */
 
+/* Header logo size */
+.md-header__button.md-logo img,
+.md-nav__button.md-logo img {
+  height: 32px;
+  width: auto;
+}
+
+/* Hero section for home page */
+.hero {
+  text-align: center;
+  padding: 3rem 1rem 2rem;
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, var(--md-primary-fg-color--light) 0%, var(--md-primary-fg-color) 100%);
+  border-radius: 0.5rem;
+  color: white;
+}
+
+.hero img {
+  max-width: 180px;
+  height: auto;
+  margin-bottom: 1rem;
+  filter: brightness(0) invert(1);
+}
+
+.hero h1 {
+  margin: 0.5rem 0;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: white;
+}
+
+.hero p {
+  margin: 0.5rem 0 1.5rem;
+  font-size: 1.2rem;
+  opacity: 0.9;
+}
+
+.hero .hero-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hero .hero-buttons a {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.3rem;
+  text-decoration: none;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hero .hero-buttons a:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.hero .hero-buttons .primary {
+  background: white;
+  color: var(--md-primary-fg-color);
+}
+
+.hero .hero-buttons .secondary {
+  background: transparent;
+  color: white;
+  border: 2px solid white;
+}
+
+/* Dark mode hero adjustments */
+[data-md-color-scheme="slate"] .hero {
+  background: linear-gradient(135deg, #3949ab 0%, #1a237e 100%);
+}
+
+[data-md-color-scheme="slate"] .hero img {
+  filter: brightness(0) invert(1);
+}
+
 /* Custom colors */
 :root {
   --md-primary-fg-color: #4051b5;

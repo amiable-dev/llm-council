@@ -1,6 +1,12 @@
-# LLM Council
-
-A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis.
+<div class="hero" markdown>
+  <img src="assets/logo.svg" alt="LLM Council">
+  <h1>LLM Council</h1>
+  <p>Multi-LLM deliberation through peer review and synthesis</p>
+  <div class="hero-buttons">
+    <a href="getting-started/quickstart/" class="primary">Get Started</a>
+    <a href="https://github.com/amiable-dev/llm-council" class="secondary">GitHub</a>
+  </div>
+</div>
 
 ## What is LLM Council?
 
