@@ -330,6 +330,5 @@ frontier.graduation.promoted{model_id}
 
 ## References
 
-- [ADR-022: Tier System](./ADR-022-tier-system.md)
+- [ADR-022: Tiered Model Selection](./ADR-022-tiered-model-selection.md)
 - [ADR-026: Dynamic Model Intelligence](./ADR-026-dynamic-model-intelligence.md)
-- [Council Review: 2025-12-24](../council-reviews/ADR-027-review.md)

@@ -309,5 +309,4 @@ curl -X POST http://localhost:8000/v1/council/run \
 ## References
 
 - [ADR-008: Package Structure](./ADR-008-package-structure.md)
-- [Business Plan - Council Feedback](../../../council-cloud/docs/plans/BUSINESS_PLAN_COUNCIL_FEEDBACK.md)
 - Similar patterns: Supabase (OSS + Cloud), Grafana, Redis

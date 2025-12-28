@@ -523,4 +523,3 @@ class TestScoringRefinements:
 - [ADR-026: Dynamic Model Intelligence](./ADR-026-dynamic-model-intelligence.md)
 - [Circuit Breaker Pattern (Martin Fowler)](https://martinfowler.com/bliki/CircuitBreaker.html)
 - [Microsoft Circuit Breaker Best Practices](https://docs.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker)
-- [Council Review: 2025-12-24](../council-reviews/ADR-030-review.md)

@@ -426,7 +426,7 @@ The `derive_position_mapping()` function supports both formats:
 - **Enhanced format**: Uses `display_index` directly (preferred)
 - **Legacy format**: Falls back to parsing position from label letter (A=0, B=1)
 
-This enables position bias detection without requiring a separate ADR-017. See [ADR-017](ADR-017-position-tracking.md) for scenarios where explicit position tracking would be needed.
+This enables position bias detection without requiring a separate position tracking system. See [ADR-017: Response Order Randomization](./ADR-017-response-order-randomization.md) for the randomization approach that complements this detection.
 
 ---
 
