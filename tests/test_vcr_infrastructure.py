@@ -3,7 +3,6 @@
 These tests ensure the VCR recording infrastructure is properly configured.
 """
 
-import os
 from pathlib import Path
 
 import pytest
