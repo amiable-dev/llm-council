@@ -24,7 +24,7 @@ For questions, ideas, and community conversation:
 
 Join our Discord server for real-time chat:
 
-- Coming soon! (Link will be added when available)
+- **[LLM Council Discord](https://discord.gg/y467DGHF)** - Real-time community chat
 
 ## Bug Reports and Feature Requests
 
