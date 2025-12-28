@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: LLM Council
+message: >-
+  If you use this software, please cite it using the metadata from this file.
+type: software
+authors:
+  - name: Amiable Dev
+    email: dev@amiable.dev
+  - name: Andrej Karpathy
+    affiliation: Original concept and implementation
+repository-code: https://github.com/amiable-dev/llm-council
+url: https://github.com/amiable-dev/llm-council
+abstract: >-
+  A multi-LLM deliberation system where multiple LLMs collaboratively answer
+  questions through peer review and synthesis. Available as a Python library,
+  MCP server, or HTTP API.
+keywords:
+  - llm
+  - ai
+  - multi-model
+  - consensus
+  - peer-review
+  - mcp
+  - model-context-protocol
+license: MIT
+version: 0.17.0
+date-released: 2025-12-28
