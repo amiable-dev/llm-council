@@ -686,33 +686,59 @@ Use `test_openrouter.py` to verify API connectivity and test different model ide
 
 ## Release Workflow
 
-**Branch Protection**: The repository has branch protection rules requiring PRs and CI checks. Follow this workflow for releases:
+**Branch Protection**: The repository has branch protection rules requiring PRs and CI checks. **Never push directly to master** - all changes must go through PRs, even for releases.
 
-### 1. Create Release Branch
+### 1. Ensure Starting from Latest Master
+```bash
+git checkout master
+git pull origin master
+```
+
+### 2. Create Release Branch
 ```bash
 git checkout -b release/v0.X.0
 ```
 
-### 2. Update CHANGELOG.md
+### 3. Update CHANGELOG.md
 Add release notes following [Keep a Changelog](https://keepachangelog.com/) format:
 - **Added**: New features
 - **Changed**: Changes to existing functionality
 - **Fixed**: Bug fixes
 - **Removed**: Removed features
 
-### 3. Open Pull Request
+### 4. Commit and Push Branch
 ```bash
 git add CHANGELOG.md
-git commit -m "chore(release): Prepare v0.X.0 release"
+git commit --signoff -m "chore(release): Prepare v0.X.0 release"
 git push -u origin release/v0.X.0
-gh pr create --title "Release v0.X.0" --body "## Release Notes\n\n[changelog excerpt]"
 ```
 
-### 4. Wait for CI
-Let GitHub Actions run tests and checks. Fix any failures before merging.
+### 5. Open Pull Request
+```bash
+gh pr create --title "Release v0.X.0" --body "## Release Notes
 
-### 5. Merge and Tag
-After PR is merged:
+[changelog excerpt]
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+```
+
+### 6. Wait for CI
+Let GitHub Actions run tests and checks. **Do not merge until all required checks pass.**
+
+Required checks:
+- `Test` - Unit and integration tests
+- `Lint` - Code style checks
+- `Type Check` - Static type analysis
+- `DCO` - Developer Certificate of Origin (requires `--signoff`)
+
+### 7. Merge PR
+After CI passes, merge via GitHub UI or CLI:
+```bash
+gh pr merge --squash --delete-branch
+```
+
+### 8. Tag the Release (After Merge)
+**Only after PR is merged**, create and push the version tag:
 ```bash
 git checkout master
 git pull origin master
@@ -720,11 +746,18 @@ git tag -a v0.X.0 -m "v0.X.0 - Brief description"
 git push origin v0.X.0
 ```
 
-### 6. Build and Publish
+This triggers the `publish.yml` workflow which automatically:
+- Builds the package
+- Tests installation from wheel
+- Publishes to PyPI
+
+### 9. Verify Publication
 ```bash
-uv build
-# Verify version in dist/llm_council_core-0.X.0-py3-none-any.whl
-uv publish  # or: twine upload dist/*
+# Check workflow status
+gh run list --workflow=publish.yml --limit=1
+
+# Verify on PyPI (after ~2 minutes)
+pip index versions llm-council-core
 ```
 
 ### Versioning
@@ -741,6 +774,10 @@ uv publish  # or: twine upload dist/*
 - Provides audit trail for contributors
 - Models the workflow expected from contributors
 - Allows async review if needed
+
+### Enforcing Branch Protection
+To prevent accidental direct pushes (even by admins), enable in GitHub:
+**Settings → Branches → Branch protection rules → master → "Do not allow bypassing the above settings"**
 
 ## Data Flow Summary
 
