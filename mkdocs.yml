@@ -1,4 +1,4 @@
-site_name: LLM Council
+site_name: llm-council
 site_url: https://amiable-dev.github.io/llm-council
 site_description: A multi-LLM deliberation system for collaborative AI reasoning
 site_author: Amiable Dev
@@ -13,6 +13,9 @@ theme:
   name: material
   logo: assets/logo.svg
   favicon: assets/logo.png
+  font:
+    text: Montserrat
+    code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

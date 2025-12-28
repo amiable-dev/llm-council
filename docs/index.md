@@ -1,6 +1,6 @@
 <div class="hero" markdown>
   <img src="assets/logo.svg" alt="LLM Council">
-  <h1>LLM Council</h1>
+  <h1>llm-council</h1>
   <p>Multi-LLM deliberation through peer review and synthesis</p>
   <div class="hero-buttons">
     <a href="getting-started/quickstart/" class="primary">Get Started</a>
