@@ -1,0 +1,52 @@
+{
+  "name": "LLM Council Dev",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+
+  "features": {
+    "ghcr.io/astral-sh/uv:latest": {}
+  },
+
+  "postCreateCommand": "uv sync --all-extras && cp -n .env.example .env 2>/dev/null || true",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+          }
+        },
+        "ruff.lint.run": "onSave"
+      },
+      "extensions": [
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "github.copilot",
+        "github.copilot-chat",
+        "eamodio.gitlens"
+      ]
+    }
+  },
+
+  "forwardPorts": [8001],
+  "portsAttributes": {
+    "8001": {
+      "label": "LLM Council API",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "containerEnv": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONUNBUFFERED": "1"
+  },
+
+  "remoteUser": "vscode"
+}
