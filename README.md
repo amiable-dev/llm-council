@@ -11,6 +11,7 @@
   <a href="https://pypi.org/project/llm-council-core/"><img src="https://img.shields.io/pypi/v/llm-council-core.svg" alt="PyPI version"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://llm-council.dev"><img src="https://img.shields.io/badge/docs-llm--council.dev-blue" alt="Documentation"></a>
   <a href="https://discord.gg/y467DGHF"><img src="https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white" alt="Discord"></a>
 </p>
 
