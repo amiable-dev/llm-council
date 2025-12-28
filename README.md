@@ -1,12 +1,22 @@
-# LLM Council Core
+<p align="center">
+  <a href="https://amiable-dev.github.io/llm-council">
+    <img src="docs/assets/logo.svg" alt="LLM Council Logo" width="200">
+  </a>
+</p>
 
-[![CI](https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml/badge.svg)](https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml)
-[![PyPI version](https://img.shields.io/pypi/v/llm-council-core.svg)](https://pypi.org/project/llm-council-core/)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white)](https://discord.gg/y467DGHF)
+<h1 align="center">LLM Council Core</h1>
 
-A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.
+<p align="center">
+  <a href="https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml"><img src="https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pypi.org/project/llm-council-core/"><img src="https://img.shields.io/pypi/v/llm-council-core.svg" alt="PyPI version"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+  <a href="https://discord.gg/y467DGHF"><img src="https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white" alt="Discord"></a>
+</p>
+
+<p align="center">
+  <em>A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.</em>
+</p>
 
 ## What is This?
 

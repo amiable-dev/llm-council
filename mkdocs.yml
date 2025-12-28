@@ -11,6 +11,8 @@ copyright: Copyright &copy; 2024-2025 Amiable Dev
 
 theme:
   name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.png
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
