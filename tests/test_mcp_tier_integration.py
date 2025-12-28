@@ -8,6 +8,9 @@ ADR-032: Updated to use tier_contract instead of config.py.
 import pytest
 from unittest.mock import patch, AsyncMock
 
+# Skip all tests in this module if mcp is not installed
+pytest.importorskip("mcp", reason="MCP package not installed (optional dependency)")
+
 
 class TestConsultCouncilWithTierContract:
     """Test that consult_council uses TierContract."""

@@ -339,6 +339,15 @@ class TestSetupKeyCommand:
 # Test 6: Health Check Includes Key Source
 # =============================================================================
 
+# Check if MCP is available for tests that need mcp_server
+try:
+    import mcp
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+
+
+@pytest.mark.skipif(not HAS_MCP, reason="MCP package not installed (optional dependency)")
 class TestHealthCheckKeySource:
     """Test that health check includes key source information."""
 
