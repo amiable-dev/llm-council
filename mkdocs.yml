@@ -13,9 +13,6 @@ theme:
   name: material
   logo: assets/logo.svg
   favicon: assets/logo.png
-  font:
-    text: Montserrat
-    code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
