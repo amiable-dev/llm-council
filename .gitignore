@@ -51,3 +51,9 @@ htmlcov/
 
 # Version file (auto-generated)
 src/llm_council/_version.py
+
+# MkDocs build output
+site/
+
+# Claude Code agent workspace
+.agent/
