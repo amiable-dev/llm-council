@@ -4,7 +4,8 @@ These tests require the optional [mcp] dependencies.
 Install with: pip install "llm-council[mcp]"
 """
 import json
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 # Skip all tests in this module if MCP is not installed
@@ -177,20 +178,13 @@ async def test_council_health_check_no_api_key():
 
 
 @pytest.mark.asyncio
+@pytest.mark.vcr()
 async def test_council_health_check_success():
     """Test health check with successful API connectivity."""
     from llm_council.mcp_server import council_health_check
     from llm_council.openrouter import STATUS_OK
 
-    mock_response = {
-        "status": STATUS_OK,
-        "content": "pong",
-        "latency_ms": 150,
-    }
-
-    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', 'test-key'), \
-         patch('llm_council.mcp_server.query_model_with_status', return_value=mock_response):
-
+    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', 'test-key'):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -269,7 +263,7 @@ async def test_consult_council_with_context_progress():
         return mock_result
 
     with patch('llm_council.mcp_server.run_council_with_fallback', side_effect=mock_council_fn):
-        result = await consult_council("test query", ctx=mock_ctx)
+        await consult_council("test query", ctx=mock_ctx)
 
         # Verify progress was reported (at least start and end)
         assert mock_ctx.report_progress.called
@@ -316,6 +310,7 @@ async def test_timeout_preserves_diagnostic_info():
     cancel the pipeline before model_responses was populated, losing diagnostic info.
     """
     import asyncio
+
     from llm_council.council import run_council_with_fallback
     from llm_council.openrouter import STATUS_OK, STATUS_TIMEOUT
 
@@ -374,9 +369,7 @@ async def test_timeout_preserves_diagnostic_info():
 @pytest.mark.asyncio
 async def test_shared_results_populated_incrementally():
     """Test that query_models_with_progress populates shared_results as models complete."""
-    from llm_council.openrouter import query_models_with_progress, STATUS_OK
-
-    responses_collected = []
+    from llm_council.openrouter import STATUS_OK, query_models_with_progress
 
     async def mock_query(model, messages, timeout=None, disable_tools=False):
         return {
