@@ -107,6 +107,7 @@ nav:
       - ADR-031 Configuration Modernization: adr/ADR-031-configuration-modernization.md
       - ADR-032 Config Migration: adr/ADR-032-complete-config-migration.md
       - ADR-033 OSS Community: adr/ADR-033-oss-community-infrastructure.md
+      - ADR-034 Agent Skills: adr/ADR-034-agent-skills-verification.md
   - Blog:
     - Multi-Model Architecture: blog/01-multi-model-architecture.md
     - Fault-Tolerant Gateway: blog/02-fault-tolerant-gateway.md
