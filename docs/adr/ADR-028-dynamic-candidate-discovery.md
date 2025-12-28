@@ -453,4 +453,3 @@ class TestDynamicDiscovery:
 - [ADR-026: Dynamic Model Intelligence](./ADR-026-dynamic-model-intelligence.md)
 - [GitHub Issue #109](https://github.com/amiable-dev/llm-council/issues/109)
 - [OpenRouter Models API](https://openrouter.ai/docs/api/reference/models)
-- [Council Review: 2025-12-24](../council-reviews/ADR-028-review.md)

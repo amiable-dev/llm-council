@@ -429,4 +429,3 @@ class TestAuditionMechanism:
 - [ADR-027: Frontier Tier](./ADR-027-frontier-tier.md) (Shadow Mode)
 - [ADR-028: Dynamic Candidate Discovery](./ADR-028-dynamic-candidate-discovery.md)
 - [ADR-026: Dynamic Model Intelligence](./ADR-026-dynamic-model-intelligence.md)
-- [Council Review: 2025-12-24](../council-reviews/ADR-029-review.md)

@@ -276,6 +276,4 @@ ORDER BY aggregate_borda DESC;
 
 ## Links
 
-- [Current Implementation](../../src/llm_council/council.py) - `calculate_aggregate_rankings()`
 - [Issue #13: Score/rank mismatch](https://github.com/amiable-dev/llm-council/issues/13)
-- [Implementation Roadmap](../plans/IMPLEMENTATION_ROADMAP.md)
