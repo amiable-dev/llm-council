@@ -287,8 +287,9 @@ def _get_static_fallback(tier: str) -> List["ModelCandidate"]:
     from .selection import ModelCandidate
 
     try:
-        from ..config import TIER_MODEL_POOLS
+        from ..tier_contract import _get_tier_model_pools
 
+        TIER_MODEL_POOLS = _get_tier_model_pools()
         pool = TIER_MODEL_POOLS.get(tier, [])
         candidates = []
 
