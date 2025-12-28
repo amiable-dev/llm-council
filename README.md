@@ -26,6 +26,15 @@ Instead of asking a single LLM for answers, this MCP server:
 2. **Stage 2**: Each LLM reviews and ranks the other responses (anonymized to prevent bias)
 3. **Stage 3**: A Chairman LLM synthesizes all responses into a final, high-quality answer
 
+## Credits & Attribution
+
+This project is a derivative work based on the original [llm-council](https://github.com/karpathy/llm-council) by Andrej Karpathy.
+
+Karpathy's original README stated:
+> "I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like."
+
+...the irony of producing a derivative work that packages the core concept for broader use via the Model Context Protocol!
+
 ## Installation
 
 ```bash
@@ -1146,11 +1155,6 @@ This project is a derivative work based on the original [llm-council](https://gi
 - User-configurable model selection
 - Enhanced features (style normalization, self-vote exclusion, synthesis modes)
 - Test suite and modern packaging standards
-
-Karpathy's original README stated:
-> "I'm not going to support it in any way, it's provided here as is for other people's inspiration and I don't intend to improve it. Code is ephemeral now and libraries are over, ask your LLM to change it in whatever way you like."
-
-This derivative work respects that spirit while packaging the core concept for broader use via the Model Context Protocol.
 
 ## License
 
