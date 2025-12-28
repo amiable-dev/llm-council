@@ -75,18 +75,19 @@ jobs:
       - name: Run type checker
         run: mypy src/llm_council --ignore-missing-imports || echo "Type checking warnings (non-blocking)"
 
+  # TODO: Reinstate when CROSS_REPO_TOKEN is configured (see #202)
   # Trigger smoke tests in the proprietary council-cloud repo
   # This ensures OSS changes don't break the cloud integration
-  notify-cloud:
-    name: Notify Council Cloud
-    needs: [test, lint]
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Trigger council-cloud smoke tests
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.CROSS_REPO_TOKEN }}
-          repository: amiable-dev/council-cloud
-          event-type: oss-pr-opened
-          client-payload: '{"pr": ${{ github.event.pull_request.number }}, "sha": "${{ github.event.pull_request.head.sha }}", "ref": "${{ github.event.pull_request.head.ref }}"}'
+  # notify-cloud:
+  #   name: Notify Council Cloud
+  #   needs: [test, lint]
+  #   if: github.event_name == 'pull_request'
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Trigger council-cloud smoke tests
+  #       uses: peter-evans/repository-dispatch@v3
+  #       with:
+  #         token: ${{ secrets.CROSS_REPO_TOKEN }}
+  #         repository: amiable-dev/council-cloud
+  #         event-type: oss-pr-opened
+  #         client-payload: '{"pr": ${{ github.event.pull_request.number }}, "sha": "${{ github.event.pull_request.head.sha }}", "ref": "${{ github.event.pull_request.head.ref }}"}'
