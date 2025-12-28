@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2025-12-28
+
+### Added
+
+- **ADR-035 DevSecOps Implementation**: Comprehensive security pipeline for OSS
+  - 5-layer security pipeline (Pre-commit → PR → Main → Release → Runtime)
+  - Fork-compatible CI design (PR checks work without repo secrets)
+  - GitHub Actions workflows: CodeQL, Trivy, Semgrep, Gitleaks, Dependency Review
+  - SBOM generation with CycloneDX for supply chain transparency
+  - Council-reviewed with reasoning tier feedback incorporated
+
+### Fixed
+
+- **Discovery Import Bug**: Fixed `discovery.py` importing from deleted `config.py`
+  - Now correctly imports from `tier_contract._get_tier_model_pools()`
+
+### Changed
+
+- **Model Pool Configuration**: Updated tier model pools to next-gen identifiers
+  - quick: gpt-5-mini, claude-haiku-4.5, gemini-3-flash-preview
+  - balanced: gpt-5-mini, claude-sonnet-4.5, gemini-3-flash-preview, grok-code-fast-1
+  - high: gpt-5.2, claude-opus-4.5, gemini-3-pro-preview, grok-4.1-fast
+  - reasoning/frontier: gpt-5.2-pro, claude-opus-4.5, gemini-3-pro-preview, grok-4.1-fast
+- Synced `llm_council.yaml` with `unified_config.py` TierConfig defaults
+
 ## [0.18.1] - 2025-12-28
 
 ### Fixed
