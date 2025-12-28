@@ -44,6 +44,12 @@ Consult the LLM council about best practices for error handling
 - **Content validation** - Check factual accuracy across models
 - **Complex problem solving** - Leverage diverse AI reasoning
 
+## Community
+
+- **[Discord](https://discord.gg/y467DGHF)** - Real-time chat and support
+- **[GitHub Discussions](https://github.com/amiable-dev/llm-council/discussions)** - Q&A and ideas
+- **[Contributing Guide](contributing.md)** - Help improve LLM Council
+
 ## Next Steps
 
 - [Installation](getting-started/installation.md) - Detailed setup instructions
