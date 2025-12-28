@@ -21,7 +21,6 @@
   max-width: 180px;
   height: auto;
   margin-bottom: 1rem;
-  filter: brightness(0) invert(1);
 }
 
 .hero h1 {
@@ -74,9 +73,6 @@
   background: linear-gradient(135deg, #3949ab 0%, #1a237e 100%);
 }
 
-[data-md-color-scheme="slate"] .hero img {
-  filter: brightness(0) invert(1);
-}
 
 /* Custom colors */
 :root {
