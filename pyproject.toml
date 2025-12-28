@@ -57,7 +57,7 @@ docs = ["mkdocs-material>=9.5.0", "mkdocs>=1.5.0"]
 Homepage = "https://github.com/amiable-dev/llm-council"
 Repository = "https://github.com/amiable-dev/llm-council"
 Issues = "https://github.com/amiable-dev/llm-council/issues"
-Documentation = "https://github.com/amiable-dev/llm-council#readme"
+Documentation = "https://llm-council.dev"
 
 [project.scripts]
 llm-council = "llm_council.cli:main"

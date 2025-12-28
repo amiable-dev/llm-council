@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2025-12-28
+
+### Added
+
+- **ADR-034 Agent Skills Integration**: Standard skill interface for work verification
+  - Comparison of Banteg's multi-CLI approach vs LLM Council deliberation
+  - Proposed skill wrappers: `council-verify`, `council-review`, `council-gate`
+  - Verification API design (`POST /v1/council/verify`) with machine-actionable JSON
+  - Pluggable backend architecture supporting multiple verification engines
+  - Defense-in-depth security model with context isolation
+  - Council-reviewed with feedback incorporated
+
+- **ADR-033 OSS Community Infrastructure**: Documentation and branding
+  - MkDocs Material theme with brand typography (Montserrat + JetBrains Mono)
+  - Custom domain `llm-council.dev` configured
+  - 28 ADRs and 7 blog posts added to navigation
+  - Hero section with styled CTAs
+  - GitHub issue templates for bugs, features, and ADRs
+
+### Fixed
+
+- MkDocs navigation: All 28 ADRs now properly listed
+- MkDocs navigation: All 7 blog posts now in Blog section
+- 9 broken links in ADR documentation files
+
+### Changed
+
+- Documentation URL updated to `https://llm-council.dev`
+- README.md: Added documentation badge linking to llm-council.dev
+
 ## [0.17.0] - 2025-12-27
 
 ### Added
