@@ -20,8 +20,8 @@
     },
     "llm-council": {
       "type": "stdio",
-      "command": "/Users/christopherjoseph/projects/amiable/llm-council/.venv/bin/llm-council",
-      "args": [],
+      "command": "/Users/christopherjoseph/.local/share/mise/installs/python/3.11.14/bin/python3",
+      "args": ["-m", "llm_council.mcp_server"],
       "env": {}
     }
   }

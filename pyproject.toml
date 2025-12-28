@@ -62,6 +62,7 @@ Documentation = "https://llm-council.dev"
 
 [project.scripts]
 llm-council = "llm_council.cli:main"
+llm-council-mcp = "llm_council.mcp_server:main"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
