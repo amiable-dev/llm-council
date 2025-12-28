@@ -684,6 +684,64 @@ Models are configured in `llm_council.yaml` and loaded via `unified_config.py`. 
 
 Use `test_openrouter.py` to verify API connectivity and test different model identifiers before adding to council. The script tests both streaming and non-streaming modes.
 
+## Release Workflow
+
+**Branch Protection**: The repository has branch protection rules requiring PRs and CI checks. Follow this workflow for releases:
+
+### 1. Create Release Branch
+```bash
+git checkout -b release/v0.X.0
+```
+
+### 2. Update CHANGELOG.md
+Add release notes following [Keep a Changelog](https://keepachangelog.com/) format:
+- **Added**: New features
+- **Changed**: Changes to existing functionality
+- **Fixed**: Bug fixes
+- **Removed**: Removed features
+
+### 3. Open Pull Request
+```bash
+git add CHANGELOG.md
+git commit -m "chore(release): Prepare v0.X.0 release"
+git push -u origin release/v0.X.0
+gh pr create --title "Release v0.X.0" --body "## Release Notes\n\n[changelog excerpt]"
+```
+
+### 4. Wait for CI
+Let GitHub Actions run tests and checks. Fix any failures before merging.
+
+### 5. Merge and Tag
+After PR is merged:
+```bash
+git checkout master
+git pull origin master
+git tag -a v0.X.0 -m "v0.X.0 - Brief description"
+git push origin v0.X.0
+```
+
+### 6. Build and Publish
+```bash
+uv build
+# Verify version in dist/llm_council_core-0.X.0-py3-none-any.whl
+uv publish  # or: twine upload dist/*
+```
+
+### Versioning
+
+- **Version source**: Git tags via `setuptools-scm` (configured in `pyproject.toml`)
+- **Version file**: `src/llm_council/_version.py` is auto-generated and gitignored
+- **Semantic versioning**: MAJOR.MINOR.PATCH
+  - MAJOR: Breaking API changes
+  - MINOR: New features, backward compatible
+  - PATCH: Bug fixes only
+
+### Why PRs Matter for OSS
+- Runs CI checks before merge (tests, linting)
+- Provides audit trail for contributors
+- Models the workflow expected from contributors
+- Allows async review if needed
+
 ## Data Flow Summary
 
 ```
