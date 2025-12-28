@@ -6,22 +6,20 @@ This project uses Architecture Decision Records (ADRs) to document significant t
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [ADR-015](../../docs/adr/ADR-015-per-session-bias-audit.md) | Per-Session Bias Audit | Implemented |
-| [ADR-016](../../docs/adr/ADR-016-structured-rubric-scoring.md) | Structured Rubric Scoring | Implemented |
-| [ADR-018](../../docs/adr/ADR-018-cross-session-bias-aggregation.md) | Cross-Session Bias Aggregation | Implemented |
-| [ADR-020](../../docs/adr/ADR-020-not-diamond-integration.md) | Query Triage Layer | Implemented |
-| [ADR-022](../../docs/adr/ADR-022-tiered-model-selection.md) | Tiered Model Selection | Implemented |
-| [ADR-023](../../docs/adr/ADR-023-gateway-layer.md) | Gateway Layer | Implemented |
-| [ADR-024](../../docs/adr/ADR-024-unified-routing-architecture.md) | Unified Routing Architecture | Implemented |
-| [ADR-025](../../docs/adr/ADR-025-future-integration.md) | Future Integration | Implemented |
-| [ADR-025b](../../docs/adr/ADR-025b-jury-mode.md) | Jury Mode | Implemented |
-| [ADR-026](../../docs/adr/ADR-026-model-intelligence-layer.md) | Model Intelligence Layer | Implemented |
-| [ADR-027](../../docs/adr/ADR-027-frontier-tier.md) | Frontier Tier | Implemented |
-| [ADR-028](../../docs/adr/ADR-028-dynamic-discovery.md) | Dynamic Candidate Discovery | Implemented |
-| [ADR-029](../../docs/adr/ADR-029-model-audition.md) | Model Audition Mechanism | Implemented |
-| [ADR-030](../../docs/adr/ADR-030-circuit-breaker.md) | Enhanced Circuit Breaker | Implemented |
-| [ADR-031](../../docs/adr/ADR-031-evaluation-config.md) | Evaluation Configuration | Implemented |
-| [ADR-033](../../docs/adr/ADR-033-oss-community-infrastructure.md) | OSS Community Infrastructure | In Progress |
+| [ADR-015](../adr/ADR-015-bias-auditing.md) | Per-Session Bias Audit | Implemented |
+| [ADR-016](../adr/ADR-016-structured-rubric-scoring.md) | Structured Rubric Scoring | Implemented |
+| [ADR-018](../adr/ADR-018-cross-session-bias-aggregation.md) | Cross-Session Bias Aggregation | Implemented |
+| [ADR-020](../adr/ADR-020-not-diamond-integration-strategy.md) | Query Triage Layer | Implemented |
+| [ADR-022](../adr/ADR-022-tiered-model-selection.md) | Tiered Model Selection | Implemented |
+| [ADR-023](../adr/ADR-023-multi-router-gateway-support.md) | Gateway Layer | Implemented |
+| [ADR-024](../adr/ADR-024-unified-routing-architecture.md) | Unified Routing Architecture | Implemented |
+| [ADR-025](../adr/ADR-025-future-integration-capabilities.md) | Future Integration | Implemented |
+| [ADR-026](../adr/ADR-026-dynamic-model-intelligence.md) | Model Intelligence Layer | Implemented |
+| [ADR-027](../adr/ADR-027-frontier-tier.md) | Frontier Tier | Implemented |
+| [ADR-028](../adr/ADR-028-dynamic-candidate-discovery.md) | Dynamic Candidate Discovery | Implemented |
+| [ADR-029](../adr/ADR-029-model-audition-mechanism.md) | Model Audition Mechanism | Implemented |
+| [ADR-030](../adr/ADR-030-scoring-refinements.md) | Enhanced Circuit Breaker | Implemented |
+| [ADR-031](../adr/ADR-031-configuration-modernization.md) | Evaluation Configuration | Implemented |
 
 ## ADR Format
 
@@ -40,4 +38,4 @@ Each ADR follows this structure:
 3. Open PR for discussion
 4. Update status as implementation progresses
 
-See [GOVERNANCE.md](../../GOVERNANCE.md) for the decision process.
+See the project GOVERNANCE.md for the decision process.
