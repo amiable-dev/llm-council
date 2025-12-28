@@ -6,36 +6,35 @@ from frontier tier to high tier when frontier models fail.
 This implements Issue #114.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from typing import Optional
 
 
 class TestExecuteWithFallback:
     """Test execute_with_fallback() function."""
 
     @pytest.mark.asyncio
+    @pytest.mark.vcr()
     async def test_returns_response_on_success(self):
         """Should return response when frontier model succeeds."""
         from llm_council.frontier_fallback import execute_with_fallback
 
-        with patch("llm_council.frontier_fallback.query_model") as mock_query:
-            mock_query.return_value = {"content": "Frontier response"}
-
+        with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"):
             response = await execute_with_fallback(
                 query="What is 2+2?",
-                frontier_model="openai/gpt-5.2-pro",
+                frontier_model="openai/gpt-4o",
             )
 
             assert response is not None
-            assert response.get("content") == "Frontier response"
-            mock_query.assert_called_once()
+            assert "content" in response
 
     @pytest.mark.asyncio
     async def test_falls_back_on_timeout(self):
         """Should fall back to high tier on timeout."""
-        from llm_council.frontier_fallback import execute_with_fallback
         import asyncio
+
+        from llm_council.frontier_fallback import execute_with_fallback
 
         with patch("llm_council.frontier_fallback.query_model") as mock_query:
             # First call raises timeout, second succeeds
@@ -58,7 +57,7 @@ class TestExecuteWithFallback:
     @pytest.mark.asyncio
     async def test_falls_back_on_rate_limit(self):
         """Should fall back to high tier on rate limit error."""
-        from llm_council.frontier_fallback import execute_with_fallback, RateLimitError
+        from llm_council.frontier_fallback import RateLimitError, execute_with_fallback
 
         with patch("llm_council.frontier_fallback.query_model") as mock_query:
             # First call raises rate limit, second succeeds
@@ -81,9 +80,9 @@ class TestExecuteWithFallback:
     @pytest.mark.asyncio
     async def test_logs_warning_on_fallback(self):
         """Should log warning when falling back."""
-        from llm_council.frontier_fallback import execute_with_fallback
         import asyncio
-        import logging
+
+        from llm_council.frontier_fallback import execute_with_fallback
 
         with patch("llm_council.frontier_fallback.query_model") as mock_query:
             mock_query.side_effect = [
@@ -106,8 +105,9 @@ class TestExecuteWithFallback:
     @pytest.mark.asyncio
     async def test_configurable_fallback_tier(self):
         """Should use configurable fallback tier."""
-        from llm_council.frontier_fallback import execute_with_fallback
         import asyncio
+
+        from llm_council.frontier_fallback import execute_with_fallback
 
         with patch("llm_council.frontier_fallback.query_model") as mock_query:
             mock_query.side_effect = [
