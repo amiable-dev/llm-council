@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2025-12-28
+
+### Added
+
+- **Model Registry**: Added 6 missing models to `registry.yaml` for offline mode support
+  - `openai/gpt-5-mini`: 400K context, economy tier
+  - `openai/gpt-5.2`: 400K context, frontier tier
+  - `anthropic/claude-sonnet-4.5`: 200K context, frontier tier
+  - `anthropic/claude-haiku-4.5`: 200K context, economy tier
+  - `google/gemini-3-flash-preview`: 1M context, economy tier
+  - `x-ai/grok-code-fast-1`: 256K context, economy tier
+
+### Fixed
+
+- **Branch Protection**: Fixed CI status check name mismatch (`test` → `Test`)
+
 ## [0.19.0] - 2025-12-28
 
 ### Added
