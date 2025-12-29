@@ -1,0 +1,21 @@
+# Pre-commit Configuration
+# ADR-035: DevSecOps Implementation - Phase 2
+# Issue: #210
+
+repos:
+  # Linting and formatting with Ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Secret detection with Gitleaks
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # Note: Semgrep runs in CI only (too slow for pre-commit)
+  # CodeQL provides deep analysis in CI

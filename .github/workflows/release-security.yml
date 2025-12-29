@@ -1,0 +1,55 @@
+# Release Security Workflow
+# ADR-035: DevSecOps Implementation - Layer 4
+# Issues: #213, #221
+
+name: Release Security
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  id-token: write
+  packages: write
+
+jobs:
+  sbom-attach:
+    name: Attach SBOM to Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -e ".[dev]"
+
+      - name: Generate SBOM
+        run: |
+          pip install cyclonedx-bom==4.6.0
+          cyclonedx-py environment -o llm-council-${{ github.ref_name }}-sbom.json --format json
+
+      - name: Attach SBOM to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: llm-council-${{ github.ref_name }}-sbom.json
+
+  # Future: Container scanning when Docker image is published
+  # container-scan:
+  #   name: Scan Container Image
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Run Trivy container scan
+  #       uses: aquasecurity/trivy-action@0.28.0
+  #       with:
+  #         image-ref: 'ghcr.io/amiable-dev/llm-council:${{ github.ref_name }}'
+  #         format: 'sarif'
+  #         output: 'trivy-container.sarif'

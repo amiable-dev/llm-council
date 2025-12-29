@@ -1,0 +1,36 @@
+# Gitleaks Configuration
+# ADR-035: DevSecOps Implementation - Phase 2
+# Issue: #209
+
+title = "LLM Council Gitleaks Config"
+
+[extend]
+useDefault = true
+
+# Custom rules for LLM API providers
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API Key"
+regex = '''(?i)(openrouter[_-]?api[_-]?key|sk-or-v1-)[\s'"=:]+[a-zA-Z0-9_-]{32,}'''
+tags = ["api", "openrouter"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''(?i)(anthropic[_-]?api[_-]?key|sk-ant-)[\s'"=:]+[a-zA-Z0-9_-]{32,}'''
+tags = ["api", "anthropic"]
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API Key"
+regex = '''(?i)(openai[_-]?api[_-]?key|sk-proj-)[\s'"=:]+[a-zA-Z0-9_-]{32,}'''
+tags = ["api", "openai"]
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+    '''\.env\.example$''',
+    '''tests/cassettes/.*\.yaml$''',
+    '''tests/.*\.py$''',  # Test files may contain mock keys
+    '''docs/.*\.md$''',
+]

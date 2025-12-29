@@ -89,6 +89,35 @@ The council uses XML sandboxing in Stage 2 to prevent prompt injection attacks d
 - Cross-session bias metrics require explicit consent
 - Query hashing (for RESEARCH consent) uses HMAC with configurable secret
 
+## Automated Security Scanning
+
+LLM Council implements a multi-layered security scanning pipeline (see [ADR-035](docs/adr/ADR-035-devsecops-security-pipeline.md)):
+
+### Pre-commit Hooks (Layer 1)
+- **Gitleaks**: Secret detection before commit
+- **Ruff**: Python linting and formatting
+
+### CI/CD Security Checks (Layer 2)
+- **CodeQL**: Semantic code analysis for Python vulnerabilities
+- **Semgrep**: SAST with custom LLM-specific rules
+- **Dependency Review**: License and vulnerability checking on PRs
+
+### Post-Merge Security (Layer 3)
+- **Snyk**: Continuous dependency monitoring
+- **Trivy**: Container and filesystem vulnerability scanning
+- **SonarCloud**: Code quality and security analysis
+
+### Release Security (Layer 4)
+- **SBOM**: CycloneDX Software Bill of Materials attached to releases
+- Enables downstream vulnerability tracking
+
+### Installing Pre-commit Hooks
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
 ## Security Updates
 
 Security updates are released as patch versions. Subscribe to:
