@@ -19,7 +19,7 @@ rules:
     metadata:
       category: security
       cwe: "CWE-502: Deserialization of Untrusted Data"
-      owasp: "A8:2017 Insecure Deserialization"
+      owasp: "A08:2021 Software and Data Integrity Failures"
       references:
         - https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data
 
@@ -38,7 +38,7 @@ rules:
     metadata:
       category: security
       cwe: "CWE-94: Improper Control of Generation of Code"
-      owasp: "A3:2017 Injection"
+      owasp: "A03:2021 Injection"
       references:
         - https://owasp.org/www-project-top-ten/
 
@@ -77,7 +77,7 @@ rules:
     metadata:
       category: security
       cwe: "CWE-798: Use of Hard-coded Credentials"
-      owasp: "A2:2017 Broken Authentication"
+      owasp: "A07:2021 Identification and Authentication Failures"
 
   # Rule 5: Detect prompt injection via f-strings with user input
   - id: prompt-injection-risk
