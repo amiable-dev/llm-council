@@ -76,15 +76,18 @@ rules:
         - https://cwe.mitre.org/data/definitions/835.html
 
   # Rule 4: Detect hardcoded API keys
+  # Uses metavariable-regex to avoid false positives on short test strings
   - id: hardcoded-api-key
     patterns:
-      - pattern-either:
-          - pattern: $KEY = "sk-..."
-          - pattern: $KEY = "sk-or-..."
-          - pattern: $KEY = "sk-ant-..."
-          - pattern: $KEY = "sk-proj-..."
+      - pattern: $KEY = "$VAL"
+      - metavariable-regex:
+          metavariable: $VAL
+          # Match API keys: sk- optionally followed by or-/ant-/proj-
+          # then 20+ alphanumeric/underscore/hyphen characters
+          regex: ^sk-(?:or-|ant-|proj-)?[A-Za-z0-9_-]{20,}$
     message: |
       Hardcoded API key detected. Use environment variables instead.
+      Example: api_key = os.environ.get("OPENROUTER_API_KEY")
     languages: [python]
     severity: ERROR
     metadata:
