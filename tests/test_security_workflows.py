@@ -319,6 +319,19 @@ class TestDependencyReviewConfig:
     """Tests for Dependency Review license blocking configuration."""
 
     @pytest.fixture
+    def config_path(self, project_root: Path) -> Path:
+        """Path to dependency review config file."""
+        return project_root / ".github" / "dependency-review-config.yml"
+
+    @pytest.fixture
+    def config(self, config_path: Path) -> dict:
+        """Load dependency review configuration."""
+        if not config_path.exists():
+            pytest.skip("dependency-review-config.yml not yet created")
+        with open(config_path) as f:
+            return yaml.safe_load(f)
+
+    @pytest.fixture
     def workflow_path(self, workflows_dir: Path) -> Path:
         """Path to security workflow."""
         return workflows_dir / "security.yml"
@@ -332,8 +345,12 @@ class TestDependencyReviewConfig:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
-    def test_dependency_review_blocks_gpl(self, workflow_config: dict):
-        """Verify Dependency Review blocks GPL licenses."""
+    def test_dependency_review_config_exists(self, config_path: Path):
+        """Verify dependency-review-config.yml exists."""
+        assert config_path.exists(), "dependency-review-config.yml must exist"
+
+    def test_workflow_uses_config_file(self, workflow_config: dict):
+        """Verify workflow references the config file."""
         jobs = workflow_config.get("jobs", {})
         dep_review = jobs.get("dependency-review", {})
         steps = dep_review.get("steps", [])
@@ -349,34 +366,33 @@ class TestDependencyReviewConfig:
         assert dep_review_step is not None, "Should have Dependency Review action"
 
         with_config = dep_review_step.get("with", {})
-        deny_licenses = with_config.get("deny-licenses", "")
+        config_file = with_config.get("config-file", "")
+        assert "dependency-review-config.yml" in config_file, (
+            "Workflow should reference dependency-review-config.yml"
+        )
+
+    def test_dependency_review_blocks_gpl(self, config: dict):
+        """Verify Dependency Review blocks GPL licenses."""
+        deny_licenses = config.get("deny-licenses", [])
 
         # Check for GPL licenses in deny list
         gpl_licenses = ["GPL-2.0", "GPL-3.0", "AGPL-3.0"]
-        for license in gpl_licenses:
-            assert license in deny_licenses, (
-                f"Dependency Review should block {license}"
+        for license_id in gpl_licenses:
+            assert license_id in deny_licenses, (
+                f"Dependency Review should block {license_id}"
             )
 
-    def test_dependency_review_fails_on_high_severity(self, workflow_config: dict):
+    def test_dependency_review_fails_on_high_severity(self, config: dict):
         """Verify Dependency Review fails on high severity vulnerabilities."""
-        jobs = workflow_config.get("jobs", {})
-        dep_review = jobs.get("dependency-review", {})
-        steps = dep_review.get("steps", [])
-
-        # Find the Dependency Review action step
-        dep_review_step = None
-        for step in steps:
-            uses = step.get("uses", "")
-            if "dependency-review-action" in uses:
-                dep_review_step = step
-                break
-
-        assert dep_review_step is not None
-
-        with_config = dep_review_step.get("with", {})
-        fail_on = with_config.get("fail-on-severity", "")
-
-        assert "high" in fail_on.lower() or fail_on == "high", (
+        fail_on = config.get("fail-on-severity", "")
+        assert fail_on == "high", (
             "Dependency Review should fail on high severity"
+        )
+
+    def test_dependency_review_allows_sonarqube_action(self, config: dict):
+        """Verify SonarQube action is allowed despite LGPL-3.0 license."""
+        allow_list = config.get("allow-dependencies-licenses", [])
+        sonar_allowed = any("sonarqube-scan-action" in pkg for pkg in allow_list)
+        assert sonar_allowed, (
+            "SonarQube action should be allowed (build-time tool, not distributed)"
         )

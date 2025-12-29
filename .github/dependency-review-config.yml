@@ -1,0 +1,21 @@
+# Dependency Review Configuration
+# ADR-035: DevSecOps Implementation
+#
+# Block viral licenses that conflict with MIT for code dependencies,
+# but allow them for GitHub Actions (build-time tools only).
+
+# Licenses to deny for code dependencies
+deny-licenses:
+  - GPL-2.0
+  - GPL-3.0
+  - AGPL-3.0
+  - LGPL-2.1
+  - LGPL-3.0
+
+# Allow specific packages with otherwise-denied licenses
+# GitHub Actions are build-time tools, not distributed with the project
+allow-dependencies-licenses:
+  - pkg:githubactions/SonarSource/sonarqube-scan-action
+
+# Fail on high severity vulnerabilities
+fail-on-severity: high

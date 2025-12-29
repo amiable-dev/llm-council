@@ -87,9 +87,8 @@ jobs:
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
         with:
-          # Block viral licenses that conflict with MIT
-          deny-licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0
-          fail-on-severity: high
+          # Use config file for license rules (allows build-time action exceptions)
+          config-file: ./.github/dependency-review-config.yml
 
   # ============================================================
   # Layer 3: Main Branch (post-merge, requires secrets)
