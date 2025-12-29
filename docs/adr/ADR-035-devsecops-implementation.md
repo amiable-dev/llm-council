@@ -658,7 +658,7 @@ Add security badges:
 
 ```markdown
 [![Security: Snyk](https://snyk.io/test/github/amiable-dev/llm-council/badge.svg)](https://snyk.io/test/github/amiable-dev/llm-council)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/amiable-dev/llm-council/badge)](https://securityscorecards.dev/viewer/?uri=github.com/amiable-dev/llm-council)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/amiable-dev/llm-council/badge)](https://scorecard.dev/viewer/?uri=github.com/amiable-dev/llm-council)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Famiable-dev%2Fllm-council.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Famiable-dev%2Fllm-council)
 ```
 
@@ -691,7 +691,7 @@ Add security badges:
 
 ### Phase 4: Visibility & Trust - ✅ Complete
 - [x] Add security badges to README
-- [ ] Register with OpenSSF Scorecard (manual: submit repo)
+- [x] Add OpenSSF Scorecard workflow (`.github/workflows/scorecard.yml`)
 - [x] Update SECURITY.md with automation details
 - [ ] Document security posture in docs site (future)
 - [ ] Add SLSA Level 2 provenance attestations (future)
@@ -713,6 +713,7 @@ Phases 1-4 implemented via GitHub issues #205-#222. Key files created:
 - `.github/dependency-review-config.yml` - License rules with build-time action exceptions
 - `.github/workflows/security.yml` - Main security workflow (Layers 2-3)
 - `.github/workflows/release-security.yml` - Release security (Layer 4)
+- `.github/workflows/scorecard.yml` - OpenSSF Scorecard analysis (Phase 4)
 - `.gitleaks.toml` - Custom secret patterns
 - `.pre-commit-config.yaml` - Pre-commit hooks
 - `.semgrep/llm-security.yaml` - LLM-specific SAST rules
@@ -725,9 +726,6 @@ Phases 1-4 implemented via GitHub issues #205-#222. Key files created:
 2. ✅ Configure branch protection to require security checks
 3. ✅ Add `SONAR_TOKEN` and `SNYK_TOKEN` to repository secrets
 4. ✅ Disable SonarCloud "Automatic Analysis" (conflicts with CI-based analysis)
-
-**Manual Steps Remaining:**
-1. Register with OpenSSF Scorecard
 
 ## Consequences
 

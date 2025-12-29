@@ -110,6 +110,7 @@ LLM Council implements a multi-layered security scanning pipeline (see [ADR-035]
 
 ### Release Security (Layer 4)
 - **SBOM**: CycloneDX Software Bill of Materials attached to releases
+- **OpenSSF Scorecard**: Automated security health metrics ([view score](https://scorecard.dev/viewer/?uri=github.com/amiable-dev/llm-council))
 - Enables downstream vulnerability tracking
 
 ### Installing Pre-commit Hooks
