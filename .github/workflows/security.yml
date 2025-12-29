@@ -150,13 +150,17 @@ jobs:
         run: |
           uv pip install --system -e ".[dev]"
 
+      - name: Generate requirements.txt for Snyk
+        run: |
+          pip freeze > requirements.txt
+
       - name: Run Snyk to monitor
         uses: snyk/actions/python@0.4.0  # Pinned version
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: monitor
-          args: --org=amiable-dev --project-name=llm-council
+          args: --org=amiable-dev --project-name=llm-council --file=requirements.txt
 
   sbom-generate:
     name: Generate SBOM
@@ -180,7 +184,7 @@ jobs:
       - name: Generate SBOM
         run: |
           pip install cyclonedx-bom==4.6.0
-          cyclonedx-py environment -o sbom.json --format json
+          cyclonedx-py environment -o sbom.json --output-format JSON
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
