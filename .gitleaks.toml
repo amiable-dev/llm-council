@@ -31,5 +31,6 @@ description = "Global allowlist"
 paths = [
     '''\.env\.example$''',
     '''tests/cassettes/.*\.yaml$''',
+    '''tests/.*\.py$''',  # Test files may contain mock keys
     '''docs/.*\.md$''',
 ]
