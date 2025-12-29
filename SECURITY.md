@@ -91,7 +91,7 @@ The council uses XML sandboxing in Stage 2 to prevent prompt injection attacks d
 
 ## Automated Security Scanning
 
-LLM Council implements a multi-layered security scanning pipeline (see [ADR-035](docs/adr/ADR-035-devsecops-security-pipeline.md)):
+LLM Council implements a multi-layered security scanning pipeline (see [ADR-035](docs/adr/ADR-035-devsecops-implementation.md)):
 
 ### Pre-commit Hooks (Layer 1)
 - **Gitleaks**: Secret detection before commit
