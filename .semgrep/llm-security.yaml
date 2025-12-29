@@ -112,12 +112,28 @@ rules:
   # Rule 6: Detect missing rate limiting on API endpoints
   - id: missing-rate-limit
     patterns:
-      - pattern: |
-          @$APP.route(...)
-          def $FUNC(...):
-            ...
-            $CLIENT.chat.completions.create(...)
-            ...
+      - pattern-either:
+          # OpenAI-style chat completions
+          - pattern: |
+              @$APP.route(...)
+              def $FUNC(...):
+                ...
+                $CLIENT.chat.completions.create(...)
+                ...
+          # OpenAI-compatible clients with retries helper
+          - pattern: |
+              @$APP.route(...)
+              def $FUNC(...):
+                ...
+                $CLIENT.chat.completions_with_retries(...)
+                ...
+          # Anthropic-style messages API (and similar providers)
+          - pattern: |
+              @$APP.route(...)
+              def $FUNC(...):
+                ...
+                $CLIENT.messages.create(...)
+                ...
       - pattern-not: |
           @limiter.limit(...)
           @$APP.route(...)
