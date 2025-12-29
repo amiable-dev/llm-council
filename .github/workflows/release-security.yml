@@ -11,12 +11,14 @@ on:
 permissions:
   contents: write
   id-token: write
-  packages: write
+  attestations: write
 
 jobs:
   sbom-attach:
     name: Attach SBOM to Release
     runs-on: ubuntu-latest
+    outputs:
+      sbom-file: ${{ steps.sbom.outputs.filename }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,14 +35,40 @@ jobs:
           uv pip install --system -e ".[dev]"
 
       - name: Generate SBOM
+        id: sbom
         run: |
           pip install cyclonedx-bom==4.6.0
-          cyclonedx-py environment -o llm-council-${{ github.ref_name }}-sbom.json --format json
+          SBOM_FILE="llm-council-${{ github.ref_name }}-sbom.json"
+          cyclonedx-py environment -o "$SBOM_FILE" --output-format JSON
+          echo "filename=$SBOM_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: ${{ steps.sbom.outputs.filename }}
 
       - name: Attach SBOM to release
         uses: softprops/action-gh-release@v2
         with:
-          files: llm-council-${{ github.ref_name }}-sbom.json
+          files: ${{ steps.sbom.outputs.filename }}
+
+  # SLSA Level 3 Provenance for release artifacts
+  # Uses GitHub's native attestation support (Sigstore-based)
+  provenance:
+    name: Generate SLSA Provenance
+    needs: sbom-attach
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+
+      - name: Generate SLSA provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ needs.sbom-attach.outputs.sbom-file }}
 
   # Future: Container scanning when Docker image is published
   # container-scan:

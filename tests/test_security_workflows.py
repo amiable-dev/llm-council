@@ -272,6 +272,57 @@ class TestReleaseSecurityWorkflow:
             permissions.get("contents") == "write"
         ), "Workflow needs contents: write to attach files to releases"
 
+    def test_release_security_has_provenance_job(self, workflow_config: dict):
+        """Verify workflow has SLSA provenance generation job."""
+        jobs = workflow_config.get("jobs", {})
+        assert "provenance" in jobs, "Workflow should have provenance job for SLSA"
+
+    def test_release_security_provenance_uses_attest_action(self, workflow_config: dict):
+        """Verify provenance job uses GitHub's attest-build-provenance action."""
+        jobs = workflow_config.get("jobs", {})
+        provenance = jobs.get("provenance", {})
+        steps = provenance.get("steps", [])
+
+        attest_step = None
+        for step in steps:
+            uses = step.get("uses", "")
+            if "attest-build-provenance" in uses:
+                attest_step = step
+                break
+
+        assert attest_step is not None, "Should use actions/attest-build-provenance"
+
+    def test_release_security_has_attestations_permission(self, workflow_config: dict):
+        """Verify workflow has attestations: write for SLSA provenance."""
+        permissions = workflow_config.get("permissions", {})
+        assert (
+            permissions.get("attestations") == "write"
+        ), "Workflow needs attestations: write for SLSA provenance"
+
+    def test_release_security_has_id_token_permission(self, workflow_config: dict):
+        """Verify workflow has id-token: write for Sigstore signing."""
+        permissions = workflow_config.get("permissions", {})
+        assert (
+            permissions.get("id-token") == "write"
+        ), "Workflow needs id-token: write for Sigstore OIDC signing"
+
+    def test_release_security_sbom_uses_correct_format_flag(self, workflow_config: dict):
+        """Verify SBOM generation uses --output-format (not --format)."""
+        jobs = workflow_config.get("jobs", {})
+        sbom_job = jobs.get("sbom-attach", {})
+        steps = sbom_job.get("steps", [])
+
+        sbom_step = None
+        for step in steps:
+            if step.get("name", "").lower().startswith("generate sbom"):
+                sbom_step = step
+                break
+
+        assert sbom_step is not None, "Should have SBOM generation step"
+        run_cmd = sbom_step.get("run", "")
+        assert "--output-format" in run_cmd, "Should use --output-format (not --format)"
+        assert "--format json" not in run_cmd, "Should NOT use deprecated --format flag"
+
 
 # =============================================================================
 # CI Workflow Version Pinning Tests

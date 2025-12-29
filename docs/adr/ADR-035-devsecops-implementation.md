@@ -693,14 +693,13 @@ Add security badges:
 - [x] Add security badges to README
 - [x] Add OpenSSF Scorecard workflow (`.github/workflows/scorecard.yml`)
 - [x] Update SECURITY.md with automation details
+- [x] Add SLSA Level 3 provenance attestations (`actions/attest-build-provenance`)
 - [ ] Document security posture in docs site (future)
-- [ ] Add SLSA Level 2 provenance attestations (future)
 
 ### Phase 5: Advanced Supply Chain (Future)
 - [x] Add pre-commit hooks documentation (SECURITY.md)
 - [ ] Create security testing guide for contributors
 - [ ] Add security checklist to PR template
-- [ ] Upgrade to SLSA Level 3
 - [ ] Add Garak/Promptfoo LLM red-teaming (when Council Cloud launches)
 - [ ] Evaluate Socket.dev for typosquatting detection
 

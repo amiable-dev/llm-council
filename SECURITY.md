@@ -110,8 +110,10 @@ LLM Council implements a multi-layered security scanning pipeline (see [ADR-035]
 
 ### Release Security (Layer 4)
 - **SBOM**: CycloneDX Software Bill of Materials attached to releases
+- **SLSA Provenance**: Level 3 build provenance attestations (Sigstore-signed)
 - **OpenSSF Scorecard**: Automated security health metrics ([view score](https://scorecard.dev/viewer/?uri=github.com/amiable-dev/llm-council))
-- Enables downstream vulnerability tracking
+- **PyPI Attestations**: Automatic attestations via Trusted Publisher
+- Enables downstream vulnerability tracking and artifact verification
 
 ### Installing Pre-commit Hooks
 
