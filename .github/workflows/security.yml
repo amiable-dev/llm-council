@@ -91,8 +91,8 @@ jobs:
           config-file: ./.github/dependency-review-config.yml
 
   # ============================================================
-  # Layer 3: Main Branch (post-merge, requires secrets)
-  # These jobs only run after merge, not on fork PRs
+  # Layer 3: Main Branch (post-merge, rate-limit or secret protected)
+  # These jobs only run after merge, not on fork PRs (fork-safe: no secrets or rate-limit sensitive)
   # ============================================================
 
   trivy-sca:
