@@ -33,18 +33,48 @@ class ComplexityResult:
 
 # Technical keywords that indicate higher complexity
 TECHNICAL_KEYWORDS = {
-    "algorithm", "complexity", "analyze", "analysis", "optimize",
-    "performance", "distributed", "security", "vulnerability",
-    "architecture", "implement", "design", "debug", "refactor",
-    "integration", "scalability", "concurrency", "parallel",
-    "theorem", "proof", "derive", "mathematical",
+    "algorithm",
+    "complexity",
+    "analyze",
+    "analysis",
+    "optimize",
+    "performance",
+    "distributed",
+    "security",
+    "vulnerability",
+    "architecture",
+    "implement",
+    "design",
+    "debug",
+    "refactor",
+    "integration",
+    "scalability",
+    "concurrency",
+    "parallel",
+    "theorem",
+    "proof",
+    "derive",
+    "mathematical",
 }
 
 # Multi-part question indicators
 MULTIPART_INDICATORS = {
-    "first,", "second,", "third,", "then,", "next,", "finally,",
-    "additionally,", "also,", "furthermore,", "1.", "2.", "3.",
-    "step 1", "step 2", "part 1", "part 2",
+    "first,",
+    "second,",
+    "third,",
+    "then,",
+    "next,",
+    "finally,",
+    "additionally,",
+    "also,",
+    "furthermore,",
+    "1.",
+    "2.",
+    "3.",
+    "step 1",
+    "step 2",
+    "part 1",
+    "part 2",
 }
 
 

@@ -67,7 +67,10 @@ class TestLiteLLMAdapter:
 
         # LiteLLM uses different formats for model IDs
         assert adapter._normalize_model_id("openai/gpt-4o") == "gpt-4o"
-        assert adapter._normalize_model_id("anthropic/claude-3-5-sonnet-20241022") == "claude-3-5-sonnet-20241022"
+        assert (
+            adapter._normalize_model_id("anthropic/claude-3-5-sonnet-20241022")
+            == "claude-3-5-sonnet-20241022"
+        )
         # Ollama models keep their prefix for LiteLLM
         assert adapter._normalize_model_id("ollama/llama3.2") == "ollama/llama3.2"
 

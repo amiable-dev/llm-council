@@ -21,9 +21,7 @@ class TestQualityPercentileUnknownModel:
         from llm_council.performance.tracker import InternalPerformanceTracker
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
             result = tracker.get_quality_percentile("nonexistent/model")
             assert result is None
 
@@ -33,9 +31,7 @@ class TestQualityPercentileUnknownModel:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Record only 5 sessions (need 10 for PRELIMINARY confidence)
             for i in range(5):
@@ -65,9 +61,7 @@ class TestQualityPercentileSingleModel:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Record 10 sessions (PRELIMINARY confidence)
             for i in range(10):
@@ -98,9 +92,7 @@ class TestQualityPercentileMultipleModels:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Model A: High score (0.9)
             for i in range(10):
@@ -165,9 +157,7 @@ class TestQualityPercentileMultipleModels:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Create 4 models with different scores
             for model_idx, score in enumerate([0.3, 0.5, 0.7, 0.95]):
@@ -196,9 +186,7 @@ class TestQualityPercentileMultipleModels:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Create 4 models with different scores
             for model_idx, score in enumerate([0.1, 0.5, 0.7, 0.9]):
@@ -231,9 +219,7 @@ class TestQualityPercentile75thThreshold:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Create 8 models with evenly distributed scores
             # Scores: 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8
@@ -271,9 +257,7 @@ class TestGetAllModelScores:
         from llm_council.performance.types import ModelSessionMetric
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            tracker = InternalPerformanceTracker(
-                store_path=Path(tmpdir) / "metrics.jsonl"
-            )
+            tracker = InternalPerformanceTracker(store_path=Path(tmpdir) / "metrics.jsonl")
 
             # Record sessions for 3 models
             for model_id, score in [("a", 0.8), ("b", 0.5), ("c", 0.3)]:

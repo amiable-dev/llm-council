@@ -145,8 +145,8 @@ class HttpTelemetry:
 
             # Check if we should flush
             should_flush = (
-                len(self._buffer) >= self.batch_size or
-                (datetime.utcnow() - self._last_flush).total_seconds() >= self.flush_interval
+                len(self._buffer) >= self.batch_size
+                or (datetime.utcnow() - self._last_flush).total_seconds() >= self.flush_interval
             )
 
             if should_flush:
@@ -195,17 +195,16 @@ class HttpTelemetry:
                     await asyncio.sleep(1)  # Brief backoff
 
         # Log at debug level to avoid cluttering user output
-        logger.debug(f"Failed to send {len(events)} telemetry events after {self.max_retries} attempts")
+        logger.debug(
+            f"Failed to send {len(events)} telemetry events after {self.max_retries} attempts"
+        )
 
     async def close(self) -> None:
         """Flush remaining events and close the client."""
         await self._flush()
 
 
-def create_telemetry_client(
-    level: str = "off",
-    endpoint: Optional[str] = None
-) -> HttpTelemetry:
+def create_telemetry_client(level: str = "off", endpoint: Optional[str] = None) -> HttpTelemetry:
     """
     Factory function to create a telemetry client based on config.
 
@@ -218,6 +217,7 @@ def create_telemetry_client(
     """
     # ADR-032: Migrated to unified_config
     from llm_council.unified_config import get_config
+
     config = get_config()
 
     return HttpTelemetry(

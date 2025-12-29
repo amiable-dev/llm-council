@@ -87,10 +87,7 @@ class GatewayRouter:
                     return self.gateways[gateway_id]
 
         # Fall back to default gateway
-        return self.gateways.get(
-            self._default_gateway,
-            next(iter(self.gateways.values()))
-        )
+        return self.gateways.get(self._default_gateway, next(iter(self.gateways.values())))
 
     def _get_circuit_breaker(self, gateway_id: str) -> CircuitBreaker:
         """Get or create circuit breaker for a gateway.
@@ -130,47 +127,44 @@ class GatewayRouter:
         """
         # ADR-024: Validate boundary crossing and emit L4_GATEWAY_REQUEST
         # Local import to avoid circular dependency
-        from ..layer_contracts import (
-            LayerEventType, 
-            emit_layer_event, 
-            cross_l3_to_l4
-        )
+        from ..layer_contracts import LayerEventType, emit_layer_event, cross_l3_to_l4
+
         cross_l3_to_l4(request)
 
         initial_gateway = self.get_gateway_for_model(request.model)
         initial_gateway_id = self._get_gateway_id(initial_gateway)
-        
+
         # Build chain: [initial, ...fallbacks]
         chain_ids = [initial_gateway_id]
         if initial_gateway_id in self._fallback_chains:
             chain_ids.extend(self._fallback_chains[initial_gateway_id])
-            
+
         last_exception = None
-        
+
         for i, gateway_id in enumerate(chain_ids):
             if gateway_id not in self.gateways:
                 continue
-                
+
             gateway = self.gateways[gateway_id]
             cb = self._get_circuit_breaker(gateway_id)
-            
+
             # Emit fallback event if this is not the first attempt
             if i > 0:
                 emit_layer_event(
                     LayerEventType.L4_GATEWAY_FALLBACK,
                     {
                         "model": request.model,
-                        "from_gateway": chain_ids[i-1],
+                        "from_gateway": chain_ids[i - 1],
                         "to_gateway": gateway_id,
-                        "reason": str(last_exception) if last_exception else "unknown"
+                        "reason": str(last_exception) if last_exception else "unknown",
                     },
                     layer_from="L4",
-                    layer_to="L4"
+                    layer_to="L4",
                 )
 
             # Check circuit breaker
             if not cb.allow_request():
-                # If circuit is open, we consider this a "failure" contextually 
+                # If circuit is open, we consider this a "failure" contextually
                 # (unavailable) and move to next fallback
                 last_exception = CircuitOpenError(
                     f"Circuit is open for gateway {gateway_id}",
@@ -184,7 +178,7 @@ class GatewayRouter:
                 # Record success/failure based on response status
                 if response.status == "ok":
                     cb.record_success()
-                    
+
                     # ADR-024: Emit response event
                     emit_layer_event(
                         LayerEventType.L4_GATEWAY_RESPONSE,
@@ -192,10 +186,10 @@ class GatewayRouter:
                             "gateway": gateway_id,
                             "latency_ms": response.latency_ms,
                             "status": response.status,
-                            "model": response.model
+                            "model": response.model,
                         },
                         layer_from="L4",
-                        layer_to="L3"
+                        layer_to="L3",
                     )
                     return response
                 elif response.status in ("error", "timeout"):
@@ -209,23 +203,25 @@ class GatewayRouter:
                             "latency_ms": response.latency_ms,
                             "status": response.status,
                             "model": response.model,
-                            "error": response.error
+                            "error": response.error,
                         },
                         layer_from="L4",
-                        layer_to="L3"
+                        layer_to="L3",
                     )
 
                     # Keep track of error but continue to next fallback
                     if response.error:
                         last_exception = Exception(f"Gateway {gateway_id} error: {response.error}")
                     else:
-                        last_exception = Exception(f"Gateway {gateway_id} returned status {response.status}")
+                        last_exception = Exception(
+                            f"Gateway {gateway_id} returned status {response.status}"
+                        )
 
             except Exception as e:
                 cb.record_failure()
                 last_exception = e
                 continue
-                
+
         # If we get here, all gateways failed
         if last_exception:
             raise last_exception
@@ -252,12 +248,14 @@ class GatewayRouter:
         responses = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                responses.append(GatewayResponse(
-                    content="",
-                    model=requests[i].model,
-                    status="error",
-                    error=str(result),
-                ))
+                responses.append(
+                    GatewayResponse(
+                        content="",
+                        model=requests[i].model,
+                        status="error",
+                        error=str(result),
+                    )
+                )
             else:
                 responses.append(result)
 

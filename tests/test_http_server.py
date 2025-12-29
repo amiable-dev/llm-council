@@ -3,6 +3,7 @@
 These tests require the optional [http] dependencies.
 Install with: pip install "llm-council[http]"
 """
+
 import os
 from unittest.mock import AsyncMock, patch
 
@@ -10,7 +11,8 @@ import pytest
 
 # Skip all tests in this module if HTTP deps not installed
 fastapi = pytest.importorskip(
-    "fastapi", reason="HTTP dependencies not installed. Install with: pip install 'llm-council[http]'"
+    "fastapi",
+    reason="HTTP dependencies not installed. Install with: pip install 'llm-council[http]'",
 )
 from fastapi.testclient import TestClient
 

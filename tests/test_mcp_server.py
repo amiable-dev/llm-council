@@ -3,27 +3,32 @@
 These tests require the optional [mcp] dependencies.
 Install with: pip install "llm-council[mcp]"
 """
+
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 # Skip all tests in this module if MCP is not installed
-pytest.importorskip("mcp", reason="MCP dependencies not installed. Install with: pip install 'llm-council[mcp]'")
+pytest.importorskip(
+    "mcp", reason="MCP dependencies not installed. Install with: pip install 'llm-council[mcp]'"
+)
 
 
 def test_mcp_server_imports():
     """Test that MCP server can be imported."""
     from llm_council import mcp_server
-    assert hasattr(mcp_server, 'mcp')
-    assert hasattr(mcp_server, 'consult_council')
-    assert hasattr(mcp_server, 'council_health_check')
-    assert hasattr(mcp_server, 'main')
+
+    assert hasattr(mcp_server, "mcp")
+    assert hasattr(mcp_server, "consult_council")
+    assert hasattr(mcp_server, "council_health_check")
+    assert hasattr(mcp_server, "main")
 
 
 def test_main_entry_point_exists():
     """Test that main() entry point is defined."""
     from llm_council.mcp_server import main
+
     assert callable(main)
 
 
@@ -59,11 +64,11 @@ async def test_consult_council_tool():
             "synthesis_type": "full",
             "warning": None,
             "label_to_model": {},
-            "aggregate_rankings": []
-        }
+            "aggregate_rankings": [],
+        },
     }
 
-    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+    with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
         mock_council.return_value = mock_result
 
         result = await consult_council("test query", include_details=False)
@@ -89,11 +94,11 @@ async def test_consult_council_with_details():
             "synthesis_type": "full",
             "warning": None,
             "label_to_model": {"Response A": "test-model"},
-            "aggregate_rankings": []
-        }
+            "aggregate_rankings": [],
+        },
     }
 
-    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+    with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
         mock_council.return_value = mock_result
 
         result = await consult_council("test query", include_details=True)
@@ -119,11 +124,11 @@ async def test_consult_council_with_confidence_level():
             "requested_models": 1,
             "synthesis_type": "full",
             "warning": None,
-            "aggregate_rankings": []
-        }
+            "aggregate_rankings": [],
+        },
     }
 
-    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+    with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
         mock_council.return_value = mock_result
 
         # Test with "quick" confidence
@@ -149,11 +154,11 @@ async def test_consult_council_with_rankings_metadata():
             "aggregate_rankings": [
                 {"model": "openai/gpt-4", "borda_score": 0.85, "rank": 1},
                 {"model": "anthropic/claude", "borda_score": 0.75, "rank": 2},
-            ]
-        }
+            ],
+        },
     }
 
-    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+    with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
         mock_council.return_value = mock_result
 
         result = await consult_council("test query")
@@ -168,7 +173,7 @@ async def test_council_health_check_no_api_key():
     """Test health check when API key is not configured."""
     from llm_council.mcp_server import council_health_check
 
-    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', None):
+    with patch("llm_council.mcp_server.OPENROUTER_API_KEY", None):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -184,7 +189,7 @@ async def test_council_health_check_success():
     from llm_council.mcp_server import council_health_check
     from llm_council.openrouter import STATUS_OK
 
-    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', 'test-key'):
+    with patch("llm_council.mcp_server.OPENROUTER_API_KEY", "test-key"):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -206,9 +211,10 @@ async def test_council_health_check_api_error():
         "latency_ms": 50,
     }
 
-    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', 'invalid-key'), \
-         patch('llm_council.mcp_server.query_model_with_status', return_value=mock_response):
-
+    with (
+        patch("llm_council.mcp_server.OPENROUTER_API_KEY", "invalid-key"),
+        patch("llm_council.mcp_server.query_model_with_status", return_value=mock_response),
+    ):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -222,7 +228,7 @@ async def test_council_health_check_includes_estimates():
     """Test health check includes duration estimates (ADR-012)."""
     from llm_council.mcp_server import council_health_check
 
-    with patch('llm_council.mcp_server.OPENROUTER_API_KEY', None):
+    with patch("llm_council.mcp_server.OPENROUTER_API_KEY", None):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -247,8 +253,8 @@ async def test_consult_council_with_context_progress():
             "synthesis_type": "full",
             "warning": None,
             "label_to_model": {},
-            "aggregate_rankings": []
-        }
+            "aggregate_rankings": [],
+        },
     }
 
     # Create a mock context with report_progress method
@@ -262,7 +268,7 @@ async def test_consult_council_with_context_progress():
             await on_progress(5, 5, "Complete")
         return mock_result
 
-    with patch('llm_council.mcp_server.run_council_with_fallback', side_effect=mock_council_fn):
+    with patch("llm_council.mcp_server.run_council_with_fallback", side_effect=mock_council_fn):
         await consult_council("test query", ctx=mock_ctx)
 
         # Verify progress was reported (at least start and end)
@@ -287,11 +293,11 @@ async def test_consult_council_shows_warning_on_partial():
             "requested_models": 2,
             "synthesis_type": "partial",
             "warning": "This answer is based on 1 of 2 intended models. Did not respond: model-b (timeout).",
-            "aggregate_rankings": []
-        }
+            "aggregate_rankings": [],
+        },
     }
 
-    with patch('llm_council.mcp_server.run_council_with_fallback') as mock_council:
+    with patch("llm_council.mcp_server.run_council_with_fallback") as mock_council:
         mock_council.return_value = mock_result
 
         result = await consult_council("test query")
@@ -317,7 +323,9 @@ async def test_timeout_preserves_diagnostic_info():
     # Create a mock that simulates some models responding before timeout
     call_count = 0
 
-    async def mock_query_with_status(model, messages, timeout=None, disable_tools=False, reasoning_params=None):
+    async def mock_query_with_status(
+        model, messages, timeout=None, disable_tools=False, reasoning_params=None
+    ):
         nonlocal call_count
         call_count += 1
         # First model responds quickly
@@ -336,13 +344,17 @@ async def test_timeout_preserves_diagnostic_info():
             "latency_ms": 10000,
         }
 
-    with patch('llm_council.openrouter.query_model_with_status', side_effect=mock_query_with_status), \
-         patch('llm_council.council.COUNCIL_MODELS', ['openai/gpt-4', 'anthropic/claude', 'google/gemini']):
-
+    with (
+        patch("llm_council.openrouter.query_model_with_status", side_effect=mock_query_with_status),
+        patch(
+            "llm_council.council.COUNCIL_MODELS",
+            ["openai/gpt-4", "anthropic/claude", "google/gemini"],
+        ),
+    ):
         # Run with a very short timeout to trigger global timeout
         result = await run_council_with_fallback(
             "test query",
-            synthesis_deadline=0.5  # Very short - will timeout
+            synthesis_deadline=0.5,  # Very short - will timeout
         )
 
         # Key assertion: model_responses should have diagnostic info for ALL models
@@ -351,7 +363,9 @@ async def test_timeout_preserves_diagnostic_info():
         model_responses = result["model_responses"]
 
         # Should have entries for all 3 models
-        assert len(model_responses) >= 1, f"Expected at least 1 model status, got: {model_responses}"
+        assert (
+            len(model_responses) >= 1
+        ), f"Expected at least 1 model status, got: {model_responses}"
 
         # The fast model should show as ok or have response
         # Other models should show as timeout (not missing!)
@@ -359,8 +373,9 @@ async def test_timeout_preserves_diagnostic_info():
 
         # At least the quick model should have responded
         # (implementation detail: depends on timing)
-        assert any(s == STATUS_OK for s in statuses) or any(s == STATUS_TIMEOUT for s in statuses), \
-            f"Expected some model statuses, got: {statuses}"
+        assert any(s == STATUS_OK for s in statuses) or any(
+            s == STATUS_TIMEOUT for s in statuses
+        ), f"Expected some model statuses, got: {statuses}"
 
         # Check metadata reflects partial status
         assert result["metadata"]["status"] in ("partial", "failed")
@@ -378,7 +393,7 @@ async def test_shared_results_populated_incrementally():
             "latency_ms": 100,
         }
 
-    with patch('llm_council.openrouter.query_model_with_status', side_effect=mock_query):
+    with patch("llm_council.openrouter.query_model_with_status", side_effect=mock_query):
         # Create a shared dict to observe incremental population
         shared = {}
 

@@ -21,6 +21,7 @@ def get_tier_models(tier: str) -> list:
     config = get_config()
     return config.tiers.pools.get(tier, [])
 
+
 if TYPE_CHECKING:
     from .tier_contract import TierContract
 

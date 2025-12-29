@@ -73,6 +73,7 @@ def get_high_tier_avg_cost() -> float:
     # For now, use the reference cost from selection.py
     try:
         from .metadata.selection import COST_REFERENCE_HIGH
+
         return COST_REFERENCE_HIGH
     except ImportError:
         # Fallback to reasonable default

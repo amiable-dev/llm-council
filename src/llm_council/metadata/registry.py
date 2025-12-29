@@ -42,6 +42,7 @@ def _emit_discovery_event(event_type, data: dict) -> None:
     except Exception as e:
         logger.debug(f"Failed to emit discovery event {event_type}: {e}")
 
+
 # Configuration defaults
 DEFAULT_STALE_THRESHOLD_MINUTES = 30
 DEFAULT_MAX_RETRIES = 3
@@ -247,9 +248,7 @@ class ModelRegistry:
         """
         return {
             "registry_size": len(self._cache),
-            "last_refresh": (
-                self._last_refresh.isoformat() if self._last_refresh else None
-            ),
+            "last_refresh": (self._last_refresh.isoformat() if self._last_refresh else None),
             "is_stale": self.is_stale,
             "refresh_failures": self._refresh_failures,
             "stale_threshold_minutes": self._stale_threshold_minutes,

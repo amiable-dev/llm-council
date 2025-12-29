@@ -53,7 +53,7 @@ class TestVerdictResult:
             verdict_type=VerdictType.BINARY,
             verdict="approved",
             confidence=0.85,
-            rationale="All models agreed on quality."
+            rationale="All models agreed on quality.",
         )
 
         assert result.verdict_type == VerdictType.BINARY
@@ -69,7 +69,7 @@ class TestVerdictResult:
             verdict_type=VerdictType.SYNTHESIS,
             verdict="The synthesized answer...",
             confidence=0.9,
-            rationale="Based on consensus."
+            rationale="Based on consensus.",
         )
 
         assert result.dissent is None
@@ -85,7 +85,7 @@ class TestVerdictResult:
             verdict="approved",
             confidence=0.7,
             rationale="Majority approved.",
-            dissent="Minority perspective: One model raised security concerns."
+            dissent="Minority perspective: One model raised security concerns.",
         )
 
         assert result.dissent is not None
@@ -101,7 +101,7 @@ class TestVerdictResult:
             confidence=0.6,
             rationale="Chairman broke the tie.",
             deadlocked=True,
-            borda_spread=0.05
+            borda_spread=0.05,
         )
 
         assert result.deadlocked is True
@@ -117,7 +117,7 @@ class TestVerdictResult:
                 verdict_type=VerdictType.BINARY,
                 verdict="approved",
                 confidence=conf,
-                rationale="Test"
+                rationale="Test",
             )
             assert 0.0 <= result.confidence <= 1.0
 
@@ -248,14 +248,14 @@ class TestTieBreaker:
         """Tie-breaker verdict should set deadlocked=True."""
         from llm_council.verdict import VerdictResult, VerdictType, parse_tie_breaker_verdict
 
-        json_str = '''
+        json_str = """
         {
             "verdict": "approved",
             "confidence": 0.6,
             "rationale": "Chose A over B",
             "deadlock_resolution": "A had better code quality"
         }
-        '''
+        """
 
         result = parse_tie_breaker_verdict(json_str)
         assert result.deadlocked is True
@@ -268,7 +268,7 @@ class TestTieBreaker:
 
         json_str = '{"verdict": "rejected", "confidence": 0.55, "rationale": "Edge case", "deadlock_resolution": "Tie broken by quality"}'
 
-        with patch('llm_council.verdict.logger') as mock_logger:
+        with patch("llm_council.verdict.logger") as mock_logger:
             result = parse_tie_breaker_verdict(json_str)
             # Should log at INFO level
             mock_logger.info.assert_called()
@@ -333,7 +333,7 @@ class TestVerdictResultSerialization:
             verdict_type=VerdictType.BINARY,
             verdict="approved",
             confidence=0.9,
-            rationale="All good"
+            rationale="All good",
         )
 
         d = result.to_dict()
@@ -351,7 +351,7 @@ class TestVerdictResultSerialization:
             verdict_type=VerdictType.BINARY,
             verdict="rejected",
             confidence=0.8,
-            rationale="Failed checks"
+            rationale="Failed checks",
         )
 
         json_str = result.to_json()
@@ -367,7 +367,7 @@ class TestVerdictResultSerialization:
             "verdict_type": "binary",
             "verdict": "approved",
             "confidence": 0.95,
-            "rationale": "Excellent"
+            "rationale": "Excellent",
         }
 
         result = VerdictResult.from_dict(d)

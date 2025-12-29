@@ -45,6 +45,7 @@ def _emit_audition_event(event_type_name: str, data: dict) -> None:
     except ImportError:
         pass  # layer_contracts not available
 
+
 logger = logging.getLogger(__name__)
 
 # Default store path
@@ -208,9 +209,7 @@ class AuditionTracker:
                         },
                     )
 
-                logger.info(
-                    f"Model {model_id} transitioned: {old_state.value} → {new_state.value}"
-                )
+                logger.info(f"Model {model_id} transitioned: {old_state.value} → {new_state.value}")
 
         # Update cache and persist
         self._cache[model_id] = updated
@@ -292,9 +291,7 @@ class AuditionTracker:
                 self._cache[model_id] = updated
                 self._persist(updated)
 
-                logger.info(
-                    f"Model {model_id} transitioned: {old_state.value} → {new_state.value}"
-                )
+                logger.info(f"Model {model_id} transitioned: {old_state.value} → {new_state.value}")
 
         return transitions
 

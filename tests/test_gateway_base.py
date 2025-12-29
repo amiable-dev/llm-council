@@ -14,10 +14,7 @@ class TestCanonicalMessage:
         """CanonicalMessage must have role and content."""
         from llm_council.gateway.types import CanonicalMessage, ContentBlock
 
-        msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello")]
-        )
+        msg = CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
 
         assert msg.role == "user"
         assert len(msg.content) == 1
@@ -29,8 +26,7 @@ class TestCanonicalMessage:
         from llm_council.gateway.types import CanonicalMessage, ContentBlock
 
         msg = CanonicalMessage(
-            role="system",
-            content=[ContentBlock(type="text", text="You are helpful")]
+            role="system", content=[ContentBlock(type="text", text="You are helpful")]
         )
 
         assert msg.role == "system"
@@ -40,8 +36,7 @@ class TestCanonicalMessage:
         from llm_council.gateway.types import CanonicalMessage, ContentBlock
 
         msg = CanonicalMessage(
-            role="assistant",
-            content=[ContentBlock(type="text", text="I can help")]
+            role="assistant", content=[ContentBlock(type="text", text="I can help")]
         )
 
         assert msg.role == "assistant"
@@ -50,10 +45,7 @@ class TestCanonicalMessage:
         """CanonicalMessage should have optional tool fields."""
         from llm_council.gateway.types import CanonicalMessage, ContentBlock
 
-        msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello")]
-        )
+        msg = CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
 
         # Tool fields should have defaults
         assert msg.tool_calls == []
@@ -102,11 +94,8 @@ class TestGatewayRequest:
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         assert request.model == "openai/gpt-4o"
@@ -119,10 +108,7 @@ class TestGatewayRequest:
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
             max_tokens=1000,
             temperature=0.7,
@@ -176,11 +162,7 @@ class TestUsageInfo:
         """UsageInfo should have token counts."""
         from llm_council.gateway.types import UsageInfo
 
-        usage = UsageInfo(
-            prompt_tokens=100,
-            completion_tokens=50,
-            total_tokens=150
-        )
+        usage = UsageInfo(prompt_tokens=100, completion_tokens=50, total_tokens=150)
 
         assert usage.prompt_tokens == 100
         assert usage.completion_tokens == 50
@@ -267,8 +249,9 @@ class TestBaseRouterProtocol:
 
         # Check abstract methods exist
         abstract_methods = {
-            name for name, method in inspect.getmembers(BaseRouter)
-            if getattr(method, '__isabstractmethod__', False)
+            name
+            for name, method in inspect.getmembers(BaseRouter)
+            if getattr(method, "__isabstractmethod__", False)
         }
 
         assert "complete" in abstract_methods

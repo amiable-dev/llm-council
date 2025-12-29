@@ -83,7 +83,9 @@ class TestAuditionEventEmission:
 
         # Check event was emitted
         events = get_layer_events()
-        transition_events = [e for e in events if e.event_type == LayerEventType.AUDITION_STATE_TRANSITION]
+        transition_events = [
+            e for e in events if e.event_type == LayerEventType.AUDITION_STATE_TRANSITION
+        ]
         assert len(transition_events) >= 1
         event = transition_events[-1]
         assert event.data["model_id"] == "test/model"
@@ -102,7 +104,9 @@ class TestAuditionEventEmission:
         tracker.record_session("test/model", success=False)
 
         events = get_layer_events()
-        failure_events = [e for e in events if e.event_type == LayerEventType.AUDITION_FAILURE_RECORDED]
+        failure_events = [
+            e for e in events if e.event_type == LayerEventType.AUDITION_FAILURE_RECORDED
+        ]
         assert len(failure_events) >= 1
         event = failure_events[-1]
         assert event.data["model_id"] == "test/model"
@@ -141,7 +145,9 @@ class TestAuditionEventEmission:
         tracker.record_session("test/model", success=False, criteria=criteria)
 
         events = get_layer_events()
-        quarantine_events = [e for e in events if e.event_type == LayerEventType.AUDITION_QUARANTINE_TRIGGERED]
+        quarantine_events = [
+            e for e in events if e.event_type == LayerEventType.AUDITION_QUARANTINE_TRIGGERED
+        ]
         assert len(quarantine_events) >= 1
         event = quarantine_events[-1]
         assert event.data["model_id"] == "test/model"
@@ -179,7 +185,9 @@ class TestAuditionEventEmission:
         tracker.record_session("test/model", success=True, criteria=criteria)
 
         events = get_layer_events()
-        graduation_events = [e for e in events if e.event_type == LayerEventType.AUDITION_GRADUATION_COMPLETE]
+        graduation_events = [
+            e for e in events if e.event_type == LayerEventType.AUDITION_GRADUATION_COMPLETE
+        ]
         assert len(graduation_events) >= 1
         event = graduation_events[-1]
         assert event.data["model_id"] == "test/model"
@@ -220,7 +228,9 @@ class TestAuditionSelectionEventEmission:
 
         # Check event was emitted for auditioning model (shadow/model)
         events = get_layer_events()
-        selection_events = [e for e in events if e.event_type == LayerEventType.AUDITION_MODEL_SELECTED]
+        selection_events = [
+            e for e in events if e.event_type == LayerEventType.AUDITION_MODEL_SELECTED
+        ]
         assert len(selection_events) >= 1
         event = selection_events[-1]
         assert event.data["model_id"] == "shadow/model"

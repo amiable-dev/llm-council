@@ -31,11 +31,14 @@ class TestShadowSamplingConfig:
 
     def test_config_from_env(self):
         """Config should be loadable from environment variables."""
-        with patch.dict("os.environ", {
-            "LLM_COUNCIL_SHADOW_SAMPLING_RATE": "0.10",
-            "LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD": "0.15",
-            "LLM_COUNCIL_SHADOW_WINDOW_SIZE": "200",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_COUNCIL_SHADOW_SAMPLING_RATE": "0.10",
+                "LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD": "0.15",
+                "LLM_COUNCIL_SHADOW_WINDOW_SIZE": "200",
+            },
+        ):
             config = ShadowSamplingConfig.from_env()
             assert config.sampling_rate == 0.10
             assert config.disagreement_threshold == 0.15
@@ -203,14 +206,16 @@ class TestShadowMetricStore:
     def test_calculate_disagreement_rate_all_agree(self, store):
         """Rate should be 0 when all samples agree."""
         for i in range(10):
-            store.record(ShadowSampleResult(
-                query_hash=f"hash{i}",
-                fast_path_model="openai/gpt-4o-mini",
-                fast_path_response="Same answer",
-                council_consensus="Same answer",
-                agreement_score=0.95,
-                timestamp=float(i),
-            ))
+            store.record(
+                ShadowSampleResult(
+                    query_hash=f"hash{i}",
+                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_response="Same answer",
+                    council_consensus="Same answer",
+                    agreement_score=0.95,
+                    timestamp=float(i),
+                )
+            )
 
         rate = store.get_disagreement_rate()
         assert rate == 0.0
@@ -219,25 +224,29 @@ class TestShadowMetricStore:
         """Rate should reflect actual disagreement proportion."""
         # 5 agreements
         for i in range(5):
-            store.record(ShadowSampleResult(
-                query_hash=f"agree{i}",
-                fast_path_model="openai/gpt-4o-mini",
-                fast_path_response="Answer A",
-                council_consensus="Answer A",
-                agreement_score=0.95,
-                timestamp=float(i),
-            ))
+            store.record(
+                ShadowSampleResult(
+                    query_hash=f"agree{i}",
+                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_response="Answer A",
+                    council_consensus="Answer A",
+                    agreement_score=0.95,
+                    timestamp=float(i),
+                )
+            )
 
         # 5 disagreements
         for i in range(5):
-            store.record(ShadowSampleResult(
-                query_hash=f"disagree{i}",
-                fast_path_model="openai/gpt-4o-mini",
-                fast_path_response="Answer A",
-                council_consensus="Answer B",
-                agreement_score=0.40,
-                timestamp=float(i + 5),
-            ))
+            store.record(
+                ShadowSampleResult(
+                    query_hash=f"disagree{i}",
+                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_response="Answer A",
+                    council_consensus="Answer B",
+                    agreement_score=0.40,
+                    timestamp=float(i + 5),
+                )
+            )
 
         rate = store.get_disagreement_rate()
         assert rate == 0.5
@@ -246,14 +255,16 @@ class TestShadowMetricStore:
         """Store should only keep last N results (window_size)."""
         # Add more than window_size results
         for i in range(20):
-            store.record(ShadowSampleResult(
-                query_hash=f"hash{i}",
-                fast_path_model="openai/gpt-4o-mini",
-                fast_path_response="Answer",
-                council_consensus="Answer",
-                agreement_score=0.95,
-                timestamp=float(i),
-            ))
+            store.record(
+                ShadowSampleResult(
+                    query_hash=f"hash{i}",
+                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_response="Answer",
+                    council_consensus="Answer",
+                    agreement_score=0.95,
+                    timestamp=float(i),
+                )
+            )
 
         # Should only have window_size (10) results
         recent = store.get_recent_results()
@@ -263,38 +274,44 @@ class TestShadowMetricStore:
         """Should detect when disagreement rate exceeds threshold."""
         # Add 9 disagreements (90% disagreement rate)
         for i in range(9):
-            store.record(ShadowSampleResult(
-                query_hash=f"hash{i}",
-                fast_path_model="openai/gpt-4o-mini",
-                fast_path_response="Fast answer",
-                council_consensus="Council answer",
-                agreement_score=0.30,
-                timestamp=float(i),
-            ))
+            store.record(
+                ShadowSampleResult(
+                    query_hash=f"hash{i}",
+                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_response="Fast answer",
+                    council_consensus="Council answer",
+                    agreement_score=0.30,
+                    timestamp=float(i),
+                )
+            )
 
         # Add 1 agreement
-        store.record(ShadowSampleResult(
-            query_hash="agree",
-            fast_path_model="openai/gpt-4o-mini",
-            fast_path_response="Same",
-            council_consensus="Same",
-            agreement_score=0.95,
-            timestamp=10.0,
-        ))
+        store.record(
+            ShadowSampleResult(
+                query_hash="agree",
+                fast_path_model="openai/gpt-4o-mini",
+                fast_path_response="Same",
+                council_consensus="Same",
+                agreement_score=0.95,
+                timestamp=10.0,
+            )
+        )
 
         # 90% disagreement should exceed 8% threshold
         assert store.is_threshold_breached() is True
 
     def test_persistence(self, store, tmp_path):
         """Results should persist across store instances."""
-        store.record(ShadowSampleResult(
-            query_hash="persist_test",
-            fast_path_model="openai/gpt-4o-mini",
-            fast_path_response="Answer",
-            council_consensus="Answer",
-            agreement_score=0.95,
-            timestamp=1234567890.0,
-        ))
+        store.record(
+            ShadowSampleResult(
+                query_hash="persist_test",
+                fast_path_model="openai/gpt-4o-mini",
+                fast_path_response="Answer",
+                council_consensus="Answer",
+                agreement_score=0.95,
+                timestamp=1234567890.0,
+            )
+        )
 
         # Create new store instance with same path
         config = ShadowSamplingConfig(window_size=10)

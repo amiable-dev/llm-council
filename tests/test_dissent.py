@@ -26,7 +26,7 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B", "Response C"],
                     "scores": {"Response A": 9, "Response B": 7, "Response C": 5},
-                }
+                },
             },
             {
                 "model": "model-b",
@@ -34,7 +34,7 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B", "Response C"],
                     "scores": {"Response A": 8, "Response B": 6, "Response C": 4},
-                }
+                },
             },
             {
                 "model": "model-c",
@@ -42,8 +42,8 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response B", "Response C", "Response A"],
                     "scores": {"Response A": 3, "Response B": 8, "Response C": 7},
-                    "evaluation": "Response A has serious accuracy issues."
-                }
+                    "evaluation": "Response A has serious accuracy issues.",
+                },
             },
         ]
 
@@ -62,14 +62,14 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 8, "Response B": 6},
-                }
+                },
             },
             {
                 "model": "model-b",
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 9, "Response B": 5},
-                }
+                },
             },
         ]
 
@@ -87,14 +87,14 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 8, "Response B": 6},
-                }
+                },
             },
             {
                 "model": "model-b",
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 7, "Response B": 5},
-                }
+                },
             },
         ]
 
@@ -116,21 +116,21 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 7, "Response B": 6},
-                }
+                },
             },
             {
                 "model": "model-b",
                 "parsed_ranking": {
                     "ranking": ["Response B", "Response A"],
                     "scores": {"Response A": 6, "Response B": 7},
-                }
+                },
             },
         ]
 
         # With minimum spread requirement
         dissent = extract_dissent_from_stage2(
             stage2_results,
-            min_borda_spread=2.0  # Require significant spread
+            min_borda_spread=2.0,  # Require significant spread
         )
 
         assert dissent is None  # Scores too close
@@ -145,15 +145,15 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 9, "Response B": 5},
-                }
+                },
             },
             {
                 "model": "model-b",
                 "parsed_ranking": {
                     "ranking": ["Response B", "Response A"],
                     "scores": {"Response A": 4, "Response B": 8},
-                    "evaluation": "Response A contains factual errors about the API."
-                }
+                    "evaluation": "Response A contains factual errors about the API.",
+                },
             },
         ]
 
@@ -179,7 +179,7 @@ class TestDissentExtraction:
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
                     # No scores
-                }
+                },
             },
         ]
 

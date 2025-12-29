@@ -48,16 +48,8 @@ def _dict_to_status(data: Dict) -> AuditionStatus:
         model_id=data["model_id"],
         state=AuditionState(data["state"]),
         session_count=data.get("session_count", 0),
-        first_seen=(
-            datetime.fromisoformat(data["first_seen"])
-            if data.get("first_seen")
-            else None
-        ),
-        last_seen=(
-            datetime.fromisoformat(data["last_seen"])
-            if data.get("last_seen")
-            else None
-        ),
+        first_seen=(datetime.fromisoformat(data["first_seen"]) if data.get("first_seen") else None),
+        last_seen=(datetime.fromisoformat(data["last_seen"]) if data.get("last_seen") else None),
         consecutive_failures=data.get("consecutive_failures", 0),
         quality_percentile=data.get("quality_percentile"),
         quarantine_until=(

@@ -169,9 +169,7 @@ class TestModelRegistry:
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(
-            info=info1, fetched_at=datetime.utcnow()
-        )
+        registry._cache["openai/gpt-4o"] = RegistryEntry(info=info1, fetched_at=datetime.utcnow())
         registry._cache["anthropic/claude-3-opus"] = RegistryEntry(
             info=info2, fetched_at=datetime.utcnow()
         )
@@ -237,9 +235,7 @@ class TestRegistryRefresh:
         mock_provider.get_model_info = MagicMock(side_effect=get_model_info)
         mock_provider.get_model_status = MagicMock(
             side_effect=lambda m: (
-                ModelStatus.DEPRECATED
-                if "deprecated" in m
-                else ModelStatus.AVAILABLE
+                ModelStatus.DEPRECATED if "deprecated" in m else ModelStatus.AVAILABLE
             )
         )
 

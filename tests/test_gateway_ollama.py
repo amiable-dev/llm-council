@@ -95,8 +95,7 @@ class TestOllamaMessageConversion:
 
         gateway = OllamaGateway()
         msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello, world!")]
+            role="user", content=[ContentBlock(type="text", text="Hello, world!")]
         )
 
         converted = gateway._convert_message(msg)
@@ -115,7 +114,7 @@ class TestOllamaMessageConversion:
             content=[
                 ContentBlock(type="text", text="Hello"),
                 ContentBlock(type="text", text="World"),
-            ]
+            ],
         )
 
         converted = gateway._convert_message(msg)
@@ -131,8 +130,7 @@ class TestOllamaMessageConversion:
 
         gateway = OllamaGateway()
         msg = CanonicalMessage(
-            role="system",
-            content=[ContentBlock(type="text", text="You are a helpful assistant.")]
+            role="system", content=[ContentBlock(type="text", text="You are a helpful assistant.")]
         )
 
         converted = gateway._convert_message(msg)
@@ -151,7 +149,7 @@ class TestOllamaMessageConversion:
             content=[
                 ContentBlock(type="text", text="What's in this image?"),
                 ContentBlock(type="image", image_url="https://example.com/image.png"),
-            ]
+            ],
         )
 
         converted = gateway._convert_message(msg)
@@ -172,18 +170,18 @@ class TestOllamaComplete:
         """complete() should return GatewayResponse."""
         from llm_council.gateway.ollama import OllamaGateway
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         gateway = OllamaGateway()
         request = GatewayRequest(
             model="ollama/llama3.2",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         # Mock LiteLLM
@@ -212,18 +210,18 @@ class TestOllamaComplete:
         """complete() should include usage info when available."""
         from llm_council.gateway.ollama import OllamaGateway
         from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock, UsageInfo
+            GatewayRequest,
+            CanonicalMessage,
+            ContentBlock,
+            UsageInfo,
         )
 
         gateway = OllamaGateway()
         request = GatewayRequest(
             model="ollama/llama3.2",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = MagicMock()
@@ -251,28 +249,21 @@ class TestOllamaComplete:
     async def test_complete_handles_timeout(self):
         """complete() should handle timeout properly."""
         from llm_council.gateway.ollama import OllamaGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
         import asyncio
 
         gateway = OllamaGateway()
         request = GatewayRequest(
             model="ollama/llama3.2",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
-            timeout=1.0
+            timeout=1.0,
         )
 
         with patch.object(gateway, "_get_litellm") as mock_get_litellm:
             mock_litellm = MagicMock()
-            mock_litellm.acompletion = AsyncMock(
-                side_effect=asyncio.TimeoutError("Timeout")
-            )
+            mock_litellm.acompletion = AsyncMock(side_effect=asyncio.TimeoutError("Timeout"))
             mock_get_litellm.return_value = mock_litellm
 
             response = await gateway.complete(request)
@@ -285,19 +276,14 @@ class TestOllamaComplete:
     async def test_complete_handles_connection_error(self):
         """complete() should handle connection refused (Ollama not running)."""
         from llm_council.gateway.ollama import OllamaGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = OllamaGateway()
         request = GatewayRequest(
             model="ollama/llama3.2",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         with patch.object(gateway, "_get_litellm") as mock_get_litellm:
@@ -317,21 +303,16 @@ class TestOllamaComplete:
     async def test_complete_calls_litellm_acompletion(self):
         """Should call litellm.acompletion with correct parameters."""
         from llm_council.gateway.ollama import OllamaGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = OllamaGateway()
         request = GatewayRequest(
             model="ollama/llama3.2",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
             max_tokens=100,
-            temperature=0.7
+            temperature=0.7,
         )
 
         mock_response = MagicMock()
@@ -357,19 +338,14 @@ class TestOllamaComplete:
     async def test_complete_passes_ollama_model_format(self):
         """Should pass 'ollama/model-name' format to LiteLLM."""
         from llm_council.gateway.ollama import OllamaGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = OllamaGateway()
         request = GatewayRequest(
             model="ollama/mistral:7b",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = MagicMock()
@@ -400,7 +376,9 @@ class TestOllamaQualityDegradation:
 
         assert notice is not None
         assert notice.is_local_model is True
-        assert "ollama" in notice.warning_message.lower() or "local" in notice.warning_message.lower()
+        assert (
+            "ollama" in notice.warning_message.lower() or "local" in notice.warning_message.lower()
+        )
 
     def test_quality_notice_format(self):
         """Quality notice should follow ADR-025 format."""
@@ -410,8 +388,13 @@ class TestOllamaQualityDegradation:
         notice = gateway._create_quality_degradation_notice("ollama/llama3.2")
 
         # Check for required elements per ADR-025
-        assert "LOCAL" in notice.warning_message.upper() or "local" in notice.warning_message.lower()
-        assert "quality" in notice.warning_message.lower() or "degraded" in notice.warning_message.lower()
+        assert (
+            "LOCAL" in notice.warning_message.upper() or "local" in notice.warning_message.lower()
+        )
+        assert (
+            "quality" in notice.warning_message.lower()
+            or "degraded" in notice.warning_message.lower()
+        )
 
     def test_response_includes_quality_metadata(self):
         """Response should include quality degradation notice for local models."""
@@ -422,7 +405,12 @@ class TestOllamaQualityDegradation:
 
         # Should suggest hardware profile
         assert notice.suggested_hardware_profile is not None
-        assert notice.suggested_hardware_profile in ["minimum", "recommended", "professional", "enterprise"]
+        assert notice.suggested_hardware_profile in [
+            "minimum",
+            "recommended",
+            "professional",
+            "enterprise",
+        ]
 
     def test_hardware_profile_suggestion(self):
         """Should suggest appropriate hardware profile based on model."""
@@ -493,7 +481,7 @@ class TestOllamaGatewayConfig:
         """Gateway should use http://localhost:11434 by default."""
         from llm_council.gateway.ollama import OllamaGateway
 
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             gateway = OllamaGateway()
             assert gateway._base_url == "http://localhost:11434"
 
@@ -501,7 +489,7 @@ class TestOllamaGatewayConfig:
         """Gateway should use LLM_COUNCIL_OLLAMA_BASE_URL if set."""
         from llm_council.gateway.ollama import OllamaGateway
 
-        with patch.dict('os.environ', {'LLM_COUNCIL_OLLAMA_BASE_URL': 'http://custom:11434'}):
+        with patch.dict("os.environ", {"LLM_COUNCIL_OLLAMA_BASE_URL": "http://custom:11434"}):
             # Need to reimport to pick up env var, or pass explicitly
             gateway = OllamaGateway(base_url="http://custom:11434")
             assert gateway._base_url == "http://custom:11434"
@@ -525,10 +513,7 @@ class TestOllamaRouterIntegration:
         ollama_gateway = OllamaGateway()
 
         # Should not raise
-        router = GatewayRouter(
-            gateways={"ollama": ollama_gateway},
-            default_gateway="ollama"
-        )
+        router = GatewayRouter(gateways={"ollama": ollama_gateway}, default_gateway="ollama")
 
         assert "ollama" in router.gateways
         assert router.gateways["ollama"] is ollama_gateway
@@ -550,7 +535,7 @@ class TestOllamaRouterIntegration:
             model_routing={
                 "ollama/*": "ollama",
             },
-            default_gateway="openrouter"
+            default_gateway="openrouter",
         )
 
         # ollama/* should route to ollama gateway
@@ -578,7 +563,7 @@ class TestOllamaRouterIntegration:
             fallback_chains={
                 "ollama": ["openrouter"],
             },
-            default_gateway="ollama"
+            default_gateway="ollama",
         )
 
         # Verify fallback chain is configured (access internal attribute)
@@ -602,10 +587,13 @@ class TestOllamaLiteLLMImport:
 
         gateway = OllamaGateway()
 
-        with patch.dict('sys.modules', {'litellm': None}):
-            with patch('builtins.__import__', side_effect=ImportError("No module named 'litellm'")):
+        with patch.dict("sys.modules", {"litellm": None}):
+            with patch("builtins.__import__", side_effect=ImportError("No module named 'litellm'")):
                 with pytest.raises(ImportError) as exc_info:
                     gateway._get_litellm()
 
                 assert "litellm" in str(exc_info.value).lower()
-                assert "pip install" in str(exc_info.value).lower() or "ollama" in str(exc_info.value).lower()
+                assert (
+                    "pip install" in str(exc_info.value).lower()
+                    or "ollama" in str(exc_info.value).lower()
+                )

@@ -140,9 +140,7 @@ class TestEnvironmentVariableOverrides:
         from llm_council import unified_config
         from llm_council.tier_contract import _get_tier_model_pools
 
-        with patch.dict(
-            os.environ, {"LLM_COUNCIL_MODELS_QUICK": "test/model-a,test/model-b"}
-        ):
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODELS_QUICK": "test/model-a,test/model-b"}):
             unified_config.reload_config()
             pools = _get_tier_model_pools()
             assert pools["quick"] == ["test/model-a", "test/model-b"]
@@ -170,9 +168,7 @@ class TestEnvironmentVariableOverrides:
         from llm_council import unified_config
         from llm_council.tier_contract import _get_tier_model_pools
 
-        with patch.dict(
-            os.environ, {"LLM_COUNCIL_MODELS_HIGH": "a/1,b/2,c/3,d/4"}
-        ):
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODELS_HIGH": "a/1,b/2,c/3,d/4"}):
             unified_config.reload_config()
             pools = _get_tier_model_pools()
             assert pools["high"] == ["a/1", "b/2", "c/3", "d/4"]
@@ -200,9 +196,7 @@ class TestEnvironmentVariableOverrides:
         from llm_council import unified_config
         from llm_council.tier_contract import _get_tier_model_pools
 
-        with patch.dict(
-            os.environ, {"LLM_COUNCIL_MODELS_QUICK": " model/a , model/b "}
-        ):
+        with patch.dict(os.environ, {"LLM_COUNCIL_MODELS_QUICK": " model/a , model/b "}):
             unified_config.reload_config()
             pools = _get_tier_model_pools()
             assert pools["quick"] == ["model/a", "model/b"]

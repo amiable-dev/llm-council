@@ -29,7 +29,7 @@ class TestSafetyCheckResult:
         result = SafetyCheckResult(
             passed=False,
             reason="Contains harmful instructions",
-            flagged_patterns=["dangerous_instructions"]
+            flagged_patterns=["dangerous_instructions"],
         )
         assert result.passed is False
         assert result.reason == "Contains harmful instructions"
@@ -140,10 +140,7 @@ class TestApplySafetyGate:
 
     def test_failed_safety_caps_score(self):
         """Score should be capped if safety check fails."""
-        safety_result = SafetyCheckResult(
-            passed=False,
-            reason="Harmful content detected"
-        )
+        safety_result = SafetyCheckResult(passed=False, reason="Harmful content detected")
         original_score = 9.0
         final_score = apply_safety_gate_to_score(original_score, safety_result)
         assert final_score <= DEFAULT_SAFETY_SCORE_CAP
@@ -151,20 +148,14 @@ class TestApplySafetyGate:
 
     def test_already_low_score_unchanged(self):
         """Low score should remain low (not inflated by cap)."""
-        safety_result = SafetyCheckResult(
-            passed=False,
-            reason="Harmful content"
-        )
+        safety_result = SafetyCheckResult(passed=False, reason="Harmful content")
         original_score = 0.0
         final_score = apply_safety_gate_to_score(original_score, safety_result)
         assert final_score == 0.0
 
     def test_custom_cap_applied(self):
         """Custom safety cap should be applied."""
-        safety_result = SafetyCheckResult(
-            passed=False,
-            reason="Harmful content"
-        )
+        safety_result = SafetyCheckResult(passed=False, reason="Harmful content")
         original_score = 8.0
         final_score = apply_safety_gate_to_score(original_score, safety_result, cap=2.0)
         assert final_score == 2.0
@@ -191,10 +182,7 @@ class TestSafetyGateIntegration:
         assert rubric_score == 9.0
 
         # But if safety fails, score should be capped at 0
-        safety_result = SafetyCheckResult(
-            passed=False,
-            reason="Harmful instructions detected"
-        )
+        safety_result = SafetyCheckResult(passed=False, reason="Harmful instructions detected")
         final_score = apply_safety_gate_to_score(rubric_score, safety_result)
         assert final_score == 0.0
 

@@ -79,9 +79,7 @@ def _map_stage_complete(event: LayerEvent) -> Optional[WebhookEventType]:
 
 # Mapping from LayerEventType to WebhookEventType
 # Some entries are direct mappings, others are callables for conditional mapping
-LAYER_TO_WEBHOOK_MAPPING: Dict[
-    LayerEventType, Union[WebhookEventType, StageMapper]
-] = {
+LAYER_TO_WEBHOOK_MAPPING: Dict[LayerEventType, Union[WebhookEventType, StageMapper]] = {
     LayerEventType.L3_COUNCIL_START: WebhookEventType.DELIBERATION_START,
     LayerEventType.L3_COUNCIL_COMPLETE: WebhookEventType.COMPLETE,
     LayerEventType.L3_STAGE_COMPLETE: _map_stage_complete,

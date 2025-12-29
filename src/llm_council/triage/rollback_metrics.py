@@ -166,9 +166,7 @@ class RollbackMetricStore:
 
             # Trim to window size
             for metric_type in self._metrics:
-                self._metrics[metric_type] = self._metrics[metric_type][
-                    -self.config.window_size:
-                ]
+                self._metrics[metric_type] = self._metrics[metric_type][-self.config.window_size :]
         except (json.JSONDecodeError, IOError, ValueError):
             # Start fresh on error
             self._metrics = defaultdict(list)
@@ -198,9 +196,7 @@ class RollbackMetricStore:
 
         # Maintain rolling window
         if len(self._metrics[metric_type]) > self.config.window_size:
-            self._metrics[metric_type] = self._metrics[metric_type][
-                -self.config.window_size:
-            ]
+            self._metrics[metric_type] = self._metrics[metric_type][-self.config.window_size :]
 
         # Persist
         self._save_record(record)

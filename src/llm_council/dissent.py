@@ -162,13 +162,15 @@ def extract_outlier_info(
                 continue
             median, std = response_stats[response]
             if std > 0 and score < median - threshold * std:
-                outliers.append(OutlierInfo(
-                    reviewer=reviewer,
-                    disagreement=response,
-                    evaluation=reviewer_evaluations.get(reviewer, ""),
-                    score_given=score,
-                    median_score=median,
-                ))
+                outliers.append(
+                    OutlierInfo(
+                        reviewer=reviewer,
+                        disagreement=response,
+                        evaluation=reviewer_evaluations.get(reviewer, ""),
+                        score_given=score,
+                        median_score=median,
+                    )
+                )
 
     return outliers
 
@@ -202,7 +204,9 @@ def format_dissent_message(outliers: List[OutlierInfo]) -> str:
         if evaluation:
             points.append(f"{evaluation}")
         else:
-            points.append(f"{reviewer} scored significantly lower (gave {score}, median was {median})")
+            points.append(
+                f"{reviewer} scored significantly lower (gave {score}, median was {median})"
+            )
 
     if len(points) == 1:
         return f"Minority perspective: {points[0]}"
@@ -234,10 +238,7 @@ def extract_dissent_from_stage2(
         return None
 
     # Check if any results have scores
-    has_scores = any(
-        result.get("parsed_ranking", {}).get("scores")
-        for result in stage2_results
-    )
+    has_scores = any(result.get("parsed_ranking", {}).get("scores") for result in stage2_results)
     if not has_scores:
         return None
 

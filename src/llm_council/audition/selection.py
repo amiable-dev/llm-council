@@ -47,6 +47,7 @@ def _emit_selection_event(model_id: str, state: str, selected: bool) -> None:
     except ImportError:
         pass  # layer_contracts not available
 
+
 if TYPE_CHECKING:
     from .tracker import AuditionTracker
 

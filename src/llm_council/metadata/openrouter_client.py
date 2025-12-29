@@ -25,7 +25,7 @@ DEFAULT_TIMEOUT = 30.0
 
 # Pricing thresholds for quality tier assignment (per 1K tokens)
 FRONTIER_THRESHOLD = 0.005  # > $0.005/1K = frontier
-ECONOMY_THRESHOLD = 0.001   # < $0.001/1K = economy
+ECONOMY_THRESHOLD = 0.001  # < $0.001/1K = economy
 # Between these = standard
 
 

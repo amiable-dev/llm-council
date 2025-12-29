@@ -97,6 +97,7 @@ class TestTelemetryGlobals:
         class PartialTelemetry:
             def is_enabled(self) -> bool:
                 return True
+
             # Missing send_event
 
         with pytest.raises(TypeError):
@@ -141,11 +142,7 @@ async def test_custom_telemetry_receives_events():
 
     # Simulate sending an event
     telemetry = get_telemetry()
-    await telemetry.send_event({
-        "type": "council_completed",
-        "council_size": 5,
-        "rankings": []
-    })
+    await telemetry.send_event({"type": "council_completed", "council_size": 5, "rankings": []})
 
     assert len(received_events) == 1
     assert received_events[0]["type"] == "council_completed"

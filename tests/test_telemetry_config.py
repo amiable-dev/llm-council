@@ -91,7 +91,10 @@ class TestTelemetryConfig:
             config = unified_config.get_config()
 
             assert config.telemetry.endpoint is not None
-            assert "telemetry" in config.telemetry.endpoint.lower() or "ingest" in config.telemetry.endpoint.lower()
+            assert (
+                "telemetry" in config.telemetry.endpoint.lower()
+                or "ingest" in config.telemetry.endpoint.lower()
+            )
 
         # Cleanup
         unified_config.reload_config()
@@ -101,10 +104,13 @@ class TestTelemetryConfig:
         from llm_council import unified_config
 
         custom_endpoint = "https://custom.example.com/events"
-        with patch.dict(os.environ, {
-            "LLM_COUNCIL_TELEMETRY": "anonymous",
-            "LLM_COUNCIL_TELEMETRY_ENDPOINT": custom_endpoint
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_COUNCIL_TELEMETRY": "anonymous",
+                "LLM_COUNCIL_TELEMETRY_ENDPOINT": custom_endpoint,
+            },
+        ):
             unified_config.reload_config()
             config = unified_config.get_config()
 
@@ -175,6 +181,7 @@ class TestHttpTelemetryClient:
 
             # Give async task time to complete
             import asyncio
+
             await asyncio.sleep(0.1)
 
             # Verify POST was called
@@ -190,7 +197,7 @@ class TestHttpTelemetryClient:
             "type": "council_completed",
             "query_text": "What is the meaning of life?",
             "query_hash": "abc123",
-            "rankings": []
+            "rankings": [],
         }
 
         filtered = client._filter_event(event)
@@ -209,7 +216,7 @@ class TestHttpTelemetryClient:
             "type": "council_completed",
             "query_text": "What is the meaning of life?",
             "query_hash": "abc123",
-            "rankings": []
+            "rankings": [],
         }
 
         filtered = client._filter_event(event)
@@ -227,11 +234,13 @@ class TestTelemetryAutoInit:
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "anonymous"}):
             import importlib
             from llm_council import unified_config
+
             # Must reload unified_config to pick up new env var
             unified_config.reload_config()
 
             # Reload telemetry to trigger auto-init with new config
             from llm_council import telemetry
+
             importlib.reload(telemetry)
 
             assert telemetry.get_telemetry().is_enabled() is True
@@ -241,11 +250,13 @@ class TestTelemetryAutoInit:
         with patch.dict(os.environ, {"LLM_COUNCIL_TELEMETRY": "off"}):
             import importlib
             from llm_council import unified_config
+
             # Must reload unified_config to pick up new env var
             unified_config.reload_config()
 
             # Reload telemetry to trigger auto-init with new config
             from llm_council import telemetry
+
             importlib.reload(telemetry)
 
             assert telemetry.get_telemetry().is_enabled() is False

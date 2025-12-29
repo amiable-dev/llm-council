@@ -20,38 +20,49 @@ from llm_council.gateway_adapter import (
     STATUS_AUTH_ERROR,
     STATUS_ERROR,
 )
+
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config
+
 
 # Lazy-loaded config helpers (call these, not the module-level constants)
 def _get_council_config():
     """Get council config section."""
     return get_config().council
 
+
 def _get_council_models() -> list:
     """Get council models from unified config."""
     return _get_council_config().models
 
+
 def _get_chairman_model() -> str:
     return _get_council_config().chairman
+
 
 def _get_synthesis_mode() -> str:
     return _get_council_config().synthesis_mode
 
+
 def _get_exclude_self_votes() -> bool:
     return _get_council_config().exclude_self_votes
+
 
 def _get_style_normalization():
     return _get_council_config().style_normalization
 
+
 def _get_normalizer_model() -> str:
     return _get_council_config().normalizer_model
+
 
 def _get_max_reviewers():
     return _get_council_config().max_reviewers
 
+
 def _get_cache_enabled() -> bool:
     return get_config().cache.enabled
+
 
 # Module-level aliases for backwards compatibility with test mocking
 # These are the initial values; tests can mock them for isolation
@@ -141,6 +152,7 @@ MODEL_STATUS_RATE_LIMITED = STATUS_RATE_LIMITED
 # But also supports legacy format for backward compatibility:
 # {"Response A": "gpt-4"}
 
+
 def _get_model_from_label_value(value):
     """Extract model name from label_to_model value (enhanced or legacy format).
 
@@ -160,7 +172,6 @@ MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
 
 # Progress callback type
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
-
 
 
 async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
@@ -184,15 +195,12 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
 
     for model, response in responses.items():
         if response is not None:  # Only include successful responses
-            stage1_results.append({
-                "model": model,
-                "response": response.get('content', '')
-            })
+            stage1_results.append({"model": model, "response": response.get("content", "")})
             # Aggregate usage
-            usage = response.get('usage', {})
-            total_usage["prompt_tokens"] += usage.get('prompt_tokens', 0)
-            total_usage["completion_tokens"] += usage.get('completion_tokens', 0)
-            total_usage["total_tokens"] += usage.get('total_tokens', 0)
+            usage = response.get("usage", {})
+            total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
 
     return stage1_results, total_usage
 
@@ -260,10 +268,7 @@ async def stage1_collect_responses_with_status(
 
         # Only include successful responses in results
         if response.get("status") == STATUS_OK:
-            stage1_results.append({
-                "model": model,
-                "response": response.get("content", "")
-            })
+            stage1_results.append({"model": model, "response": response.get("content", "")})
             model_statuses[model]["response"] = response.get("content", "")
 
             # Aggregate usage
@@ -276,8 +281,7 @@ async def stage1_collect_responses_with_status(
 
 
 def generate_partial_warning(
-    model_statuses: Dict[str, Dict[str, Any]],
-    requested: int
+    model_statuses: Dict[str, Dict[str, Any]], requested: int
 ) -> Optional[str]:
     """
     Generate a warning message for partial results (ADR-012).
@@ -295,8 +299,7 @@ def generate_partial_warning(
         return None
 
     failed_models = [
-        model for model, status in model_statuses.items()
-        if status.get("status") != STATUS_OK
+        model for model, status in model_statuses.items() if status.get("status") != STATUS_OK
     ]
 
     failed_reasons = []
@@ -330,7 +333,8 @@ async def quick_synthesis(
     """
     # Filter to only successful responses
     successful = {
-        model: info for model, info in model_responses.items()
+        model: info
+        for model, info in model_responses.items()
         if info.get("status") == STATUS_OK and info.get("response")
     }
 
@@ -338,10 +342,9 @@ async def quick_synthesis(
         return "Error: No model responses available for synthesis.", {}
 
     # Build context from available responses
-    responses_text = "\n\n".join([
-        f"**{model}**:\n{info['response']}"
-        for model, info in successful.items()
-    ])
+    responses_text = "\n\n".join(
+        [f"**{model}**:\n{info['response']}" for model, info in successful.items()]
+    )
 
     synthesis_prompt = f"""You are synthesizing multiple AI responses into a single coherent answer.
 Note: This is a PARTIAL synthesis - some models did not respond in time.
@@ -455,10 +458,10 @@ async def run_council_with_fallback(
             include_wildcard=use_wildcard,
             optimize_prompts=optimize_prompts,
         )
-        
+
         # ADR-024 (Observability): Record L2 -> L3 boundary
         cross_l2_to_l3(triage_result, tier_contract)
-        
+
         council_models = triage_result.resolved_models
         triage_metadata = triage_result.metadata
     # Determine models to use: explicit > tier_contract > default
@@ -485,7 +488,7 @@ async def run_council_with_fallback(
             "triage": triage_metadata,
             "webhooks_enabled": webhook_config is not None,
             "include_dissent": include_dissent,  # ADR-025b: Dissent extraction enabled
-        }
+        },
     }
 
     # ADR-025a: Start EventBridge for webhook notifications
@@ -556,11 +559,15 @@ async def run_council_with_fallback(
             result["metadata"]["status"] = "failed"
             result["metadata"]["synthesis_type"] = "none"
             result["synthesis"] = "Error: All models failed to respond. Please try again."
-            result["metadata"]["warning"] = generate_partial_warning(model_statuses, requested_models)
+            result["metadata"]["warning"] = generate_partial_warning(
+                model_statuses, requested_models
+            )
             await report_progress(total_steps, total_steps, "Failed - no responses")
             return result
 
-        await report_progress(requested_models, total_steps, "Stage 1 complete, starting peer review...")
+        await report_progress(
+            requested_models, total_steps, "Stage 1 complete, starting peer review..."
+        )
 
         # ADR-025a: Emit Stage 1 complete webhook event
         try:
@@ -604,7 +611,9 @@ async def run_council_with_fallback(
             query=user_query,
         )
 
-        await report_progress(requested_models * 2, total_steps, "Stage 2 complete, synthesizing...")
+        await report_progress(
+            requested_models * 2, total_steps, "Stage 2 complete, synthesizing..."
+        )
 
         # ADR-025a: Emit Stage 2 complete webhook event
         try:
@@ -621,14 +630,13 @@ async def run_council_with_fallback(
         deadlock_detected = False
         if verdict_type == VerdictType.BINARY and aggregate_rankings:
             borda_scores = [
-                r.get('borda_score', 0.0)
-                for r in aggregate_rankings
-                if 'borda_score' in r
+                r.get("borda_score", 0.0) for r in aggregate_rankings if "borda_score" in r
             ]
             if detect_deadlock(borda_scores, threshold=0.1):
                 deadlock_detected = True
                 effective_verdict_type = VerdictType.TIE_BREAKER
                 import logging
+
                 logging.getLogger(__name__).info(
                     "Deadlock detected. Escalating from BINARY to TIE_BREAKER."
                 )
@@ -691,15 +699,15 @@ async def run_council_with_fallback(
                     {
                         "model": r["model"],
                         "borda_score": r.get("borda_score"),
-                        "vote_count": r.get("vote_count", 0)
+                        "vote_count": r.get("vote_count", 0),
                     }
                     for r in aggregate_rankings
                 ],
                 "config": {
                     "exclude_self_votes": _get_exclude_self_votes(),
                     "style_normalization": _get_style_normalization(),
-                    "max_reviewers": _get_max_reviewers()
-                }
+                    "max_reviewers": _get_max_reviewers(),
+                },
             }
             # Fire-and-forget
             asyncio.create_task(telemetry.send_event(telemetry_event))
@@ -762,7 +770,7 @@ async def run_council_with_fallback(
                 model_statuses[model] = {
                     "status": MODEL_STATUS_TIMEOUT,
                     "latency_ms": int(synthesis_deadline * 1000),
-                    "error": f"Global timeout after {synthesis_deadline}s"
+                    "error": f"Global timeout after {synthesis_deadline}s",
                 }
 
         result["model_responses"] = model_statuses
@@ -774,7 +782,9 @@ async def run_council_with_fallback(
 
             synthesis, usage = await quick_synthesis(user_query, result["model_responses"])
             result["synthesis"] = synthesis
-            result["metadata"]["synthesis_type"] = "partial" if len(successful_responses) > 1 else "stage1_only"
+            result["metadata"]["synthesis_type"] = (
+                "partial" if len(successful_responses) > 1 else "stage1_only"
+            )
             result["metadata"]["warning"] = generate_partial_warning(
                 result["model_responses"], requested_models
             )
@@ -856,7 +866,7 @@ def should_normalize_styles(responses: List[str]) -> bool:
         return False
 
     # Heuristic 1: Format variance (markdown headers)
-    has_markdown = [bool(re.search(r'^#+\s', r, re.MULTILINE)) for r in responses]
+    has_markdown = [bool(re.search(r"^#+\s", r, re.MULTILINE)) for r in responses]
     if len(set(has_markdown)) > 1:  # Mix of markdown and plain
         return True
 
@@ -873,9 +883,15 @@ def should_normalize_styles(responses: List[str]) -> bool:
 
     # Heuristic 3: AI preamble detection
     preambles = [
-        "as an ai", "as a language model", "i'd be happy to",
-        "certainly!", "great question", "sure!", "absolutely!",
-        "i don't have personal", "i'm an ai"
+        "as an ai",
+        "as a language model",
+        "i'd be happy to",
+        "certainly!",
+        "great question",
+        "sure!",
+        "absolutely!",
+        "i don't have personal",
+        "i'm an ai",
     ]
     preamble_counts = [
         sum(1 for p in preambles if p in r.lower()[:200])  # Check first 200 chars
@@ -885,7 +901,7 @@ def should_normalize_styles(responses: List[str]) -> bool:
         return True  # Some have preambles, some don't
 
     # Heuristic 4: Code block variance
-    has_code = [bool(re.search(r'```', r)) for r in responses]
+    has_code = [bool(re.search(r"```", r)) for r in responses]
     if len(set(has_code)) > 1:  # Mix of code blocks and no code blocks
         return True
 
@@ -893,7 +909,7 @@ def should_normalize_styles(responses: List[str]) -> bool:
 
 
 async def stage1_5_normalize_styles(
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Stage 1.5: Normalize response styles to reduce stylistic fingerprinting.
@@ -917,7 +933,7 @@ async def stage1_5_normalize_styles(
 
     # Handle different normalization modes
     if _get_style_normalization() == "auto":
-        responses = [r['response'] for r in stage1_results]
+        responses = [r["response"] for r in stage1_results]
         if not should_normalize_styles(responses):
             return stage1_results, total_usage
         # Proceed with normalization (auto-triggered)
@@ -947,30 +963,33 @@ Rewritten text:"""
         response = await query_model(_get_normalizer_model(), messages, timeout=60.0)
 
         if response is not None:
-            normalized_results.append({
-                "model": result['model'],
-                "response": response.get('content', result['response']),
-                "original_response": result['response']
-            })
+            normalized_results.append(
+                {
+                    "model": result["model"],
+                    "response": response.get("content", result["response"]),
+                    "original_response": result["response"],
+                }
+            )
             # Aggregate usage
-            usage = response.get('usage', {})
-            total_usage["prompt_tokens"] += usage.get('prompt_tokens', 0)
-            total_usage["completion_tokens"] += usage.get('completion_tokens', 0)
-            total_usage["total_tokens"] += usage.get('total_tokens', 0)
+            usage = response.get("usage", {})
+            total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
         else:
             # If normalization fails, use original
-            normalized_results.append({
-                "model": result['model'],
-                "response": result['response'],
-                "original_response": result['response']
-            })
+            normalized_results.append(
+                {
+                    "model": result["model"],
+                    "response": result["response"],
+                    "original_response": result["response"],
+                }
+            )
 
     return normalized_results, total_usage
 
 
 async def stage2_collect_rankings(
-    user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    user_query: str, stage1_results: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str], Dict[str, int]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -996,15 +1015,17 @@ async def stage2_collect_rankings(
     # Enhanced format (v0.3.0+) per council recommendation to eliminate string parsing fragility
     # INVARIANT: Labels are assigned in lexicographic order corresponding to presentation order
     label_to_model = {
-        f"Response {label}": {"model": result['model'], "display_index": i}
+        f"Response {label}": {"model": result["model"], "display_index": i}
         for i, (label, result) in enumerate(zip(labels, shuffled_results))
     }
 
     # Build the ranking prompt with XML delimiters for prompt injection defense
-    responses_text = "\n\n".join([
-        f"<candidate_response id=\"{label}\">\n{html.escape(result['response'])}\n</candidate_response>"
-        for label, result in zip(labels, shuffled_results)
-    ])
+    responses_text = "\n\n".join(
+        [
+            f"<candidate_response id=\"{label}\">\n{html.escape(result['response'])}\n</candidate_response>"
+            for label, result in zip(labels, shuffled_results)
+        ]
+    )
 
     # ADR-016: Use rubric scoring if enabled
     # ADR-031: Get evaluation config from unified_config
@@ -1145,7 +1166,7 @@ Now provide your evaluation and ranking:"""
 
     for model, response in responses.items():
         if response is not None:
-            full_text = response.get('content', '')
+            full_text = response.get("content", "")
 
             # ADR-016: Parse rubric evaluation if enabled, fall back to holistic
             if eval_config.rubric.enabled:
@@ -1167,9 +1188,7 @@ Now provide your evaluation and ranking:"""
                                 dimension_scores, rubric_weights
                             )
                         else:
-                            overall = calculate_weighted_score(
-                                dimension_scores, rubric_weights
-                            )
+                            overall = calculate_weighted_score(dimension_scores, rubric_weights)
                         scores_with_ceiling[resp_label] = overall
 
                     parsed = {
@@ -1186,16 +1205,18 @@ Now provide your evaluation and ranking:"""
                 # Holistic scoring (original behavior)
                 parsed = parse_ranking_from_text(full_text)
 
-            stage2_results.append({
-                "model": model,  # The reviewer model
-                "ranking": full_text,
-                "parsed_ranking": parsed
-            })
+            stage2_results.append(
+                {
+                    "model": model,  # The reviewer model
+                    "ranking": full_text,
+                    "parsed_ranking": parsed,
+                }
+            )
             # Aggregate usage
-            usage = response.get('usage', {})
-            total_usage["prompt_tokens"] += usage.get('prompt_tokens', 0)
-            total_usage["completion_tokens"] += usage.get('completion_tokens', 0)
-            total_usage["total_tokens"] += usage.get('total_tokens', 0)
+            usage = response.get("usage", {})
+            total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
+            total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
+            total_usage["total_tokens"] += usage.get("total_tokens", 0)
 
     return stage2_results, label_to_model, total_usage
 
@@ -1227,23 +1248,23 @@ async def stage3_synthesize_final(
         Tuple of (result dict with 'model' and 'response', usage dict, optional VerdictResult)
     """
     # Build comprehensive context for chairman
-    stage1_text = "\n\n".join([
-        f"Model: {result['model']}\nResponse: {result['response']}"
-        for result in stage1_results
-    ])
+    stage1_text = "\n\n".join(
+        [f"Model: {result['model']}\nResponse: {result['response']}" for result in stage1_results]
+    )
 
-    stage2_text = "\n\n".join([
-        f"Model: {result['model']}\nRanking: {result['ranking']}"
-        for result in stage2_results
-    ])
+    stage2_text = "\n\n".join(
+        [f"Model: {result['model']}\nRanking: {result['ranking']}" for result in stage2_results]
+    )
 
     # Add aggregate rankings context if available
     rankings_context = ""
     if aggregate_rankings:
-        rankings_list = "\n".join([
-            f"  #{r['rank']}. {r['model']} (avg score: {r.get('average_score', 'N/A')}, votes: {r.get('vote_count', 0)})"
-            for r in aggregate_rankings
-        ])
+        rankings_list = "\n".join(
+            [
+                f"  #{r['rank']}. {r['model']} (avg score: {r.get('average_score', 'N/A')}, votes: {r.get('vote_count', 0)})"
+                for r in aggregate_rankings
+            ]
+        )
         rankings_context = f"\n\nAGGREGATE RANKINGS (after excluding self-votes):\n{rankings_list}"
 
     # ADR-025b: Jury Mode verdict type handling
@@ -1252,10 +1273,12 @@ async def stage3_synthesize_final(
         # Build top candidates string for tie-breaker mode
         top_candidates = ""
         if verdict_type == VerdictType.TIE_BREAKER and aggregate_rankings:
-            top_candidates = "\n".join([
-                f"  - {r['model']}: Borda score {r.get('borda_score', 'N/A')}"
-                for r in aggregate_rankings[:3]  # Top 3 for context
-            ])
+            top_candidates = "\n".join(
+                [
+                    f"  - {r['model']}: Borda score {r.get('borda_score', 'N/A')}"
+                    for r in aggregate_rankings[:3]  # Top 3 for context
+                ]
+            )
 
         # Combine rankings info for verdict prompt
         rankings_summary = f"{stage2_text}{rankings_context}"
@@ -1326,18 +1349,22 @@ STAGE 2 - Peer Rankings:
 
     if response is None:
         # Fallback if chairman fails
-        return {
-            "model": _get_chairman_model(),
-            "response": "Error: Unable to generate final synthesis."
-        }, total_usage, None
+        return (
+            {
+                "model": _get_chairman_model(),
+                "response": "Error: Unable to generate final synthesis.",
+            },
+            total_usage,
+            None,
+        )
 
     # Capture usage
-    usage = response.get('usage', {})
-    total_usage["prompt_tokens"] = usage.get('prompt_tokens', 0)
-    total_usage["completion_tokens"] = usage.get('completion_tokens', 0)
-    total_usage["total_tokens"] = usage.get('total_tokens', 0)
+    usage = response.get("usage", {})
+    total_usage["prompt_tokens"] = usage.get("prompt_tokens", 0)
+    total_usage["completion_tokens"] = usage.get("completion_tokens", 0)
+    total_usage["total_tokens"] = usage.get("total_tokens", 0)
 
-    response_content = response.get('content', '')
+    response_content = response.get("content", "")
 
     # ADR-025b: Parse verdict for BINARY/TIE_BREAKER modes
     verdict_result: Optional[VerdictResult] = None
@@ -1347,33 +1374,36 @@ STAGE 2 - Peer Rankings:
             # Calculate Borda spread if we have aggregate rankings
             if aggregate_rankings:
                 borda_scores = {
-                    r['model']: r.get('borda_score', 0.0)
+                    r["model"]: r.get("borda_score", 0.0)
                     for r in aggregate_rankings
-                    if 'borda_score' in r
+                    if "borda_score" in r
                 }
                 verdict_result.borda_spread = calculate_borda_spread(borda_scores)
         except ValueError as e:
             # Log parsing error but don't fail - return raw response
             import logging
+
             logging.getLogger(__name__).warning(f"Failed to parse binary verdict: {e}")
     elif verdict_type == VerdictType.TIE_BREAKER:
         try:
             verdict_result = parse_tie_breaker_verdict(response_content)
             if aggregate_rankings:
                 borda_scores = {
-                    r['model']: r.get('borda_score', 0.0)
+                    r["model"]: r.get("borda_score", 0.0)
                     for r in aggregate_rankings
-                    if 'borda_score' in r
+                    if "borda_score" in r
                 }
                 verdict_result.borda_spread = calculate_borda_spread(borda_scores)
         except ValueError as e:
             import logging
+
             logging.getLogger(__name__).warning(f"Failed to parse tie-breaker verdict: {e}")
 
-    return {
-        "model": _get_chairman_model(),
-        "response": response_content
-    }, total_usage, verdict_result
+    return (
+        {"model": _get_chairman_model(), "response": response_content},
+        total_usage,
+        verdict_result,
+    )
 
 
 def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bool:
@@ -1400,10 +1430,7 @@ def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bo
         return False
 
     # Get score-based ordering (highest score first)
-    score_order = sorted(
-        ranked_with_scores,
-        key=lambda x: -scores.get(x, 0)
-    )
+    score_order = sorted(ranked_with_scores, key=lambda x: -scores.get(x, 0))
 
     # Compare to ranking order
     return ranked_with_scores != score_order
@@ -1455,17 +1482,17 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
             return result
 
     # Try to extract JSON block from markdown code fence
-    json_match = re.search(r'```json\s*([\s\S]*?)\s*```', ranking_text)
+    json_match = re.search(r"```json\s*([\s\S]*?)\s*```", ranking_text)
     if json_match:
         try:
             parsed = json.loads(json_match.group(1))
-            if isinstance(parsed.get('ranking'), list):
-                result['ranking'] = parsed['ranking']
-            if isinstance(parsed.get('scores'), dict):
-                result['scores'] = parsed['scores']
+            if isinstance(parsed.get("ranking"), list):
+                result["ranking"] = parsed["ranking"]
+            if isinstance(parsed.get("scores"), dict):
+                result["scores"] = parsed["scores"]
             # Check for score/rank mismatch
-            if detect_score_rank_mismatch(result['ranking'], result['scores']):
-                result['score_rank_mismatch'] = True
+            if detect_score_rank_mismatch(result["ranking"], result["scores"]):
+                result["score_rank_mismatch"] = True
             return result
         except json.JSONDecodeError:
             pass
@@ -1478,22 +1505,22 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
         brace_count = 0
         end = start
         for i, char in enumerate(ranking_text[start:], start):
-            if char == '{':
+            if char == "{":
                 brace_count += 1
-            elif char == '}':
+            elif char == "}":
                 brace_count -= 1
                 if brace_count == 0:
                     end = i + 1
                     break
         try:
             parsed = json.loads(ranking_text[start:end])
-            if isinstance(parsed.get('ranking'), list):
-                result['ranking'] = parsed['ranking']
-            if isinstance(parsed.get('scores'), dict):
-                result['scores'] = parsed['scores']
+            if isinstance(parsed.get("ranking"), list):
+                result["ranking"] = parsed["ranking"]
+            if isinstance(parsed.get("scores"), dict):
+                result["scores"] = parsed["scores"]
             # Check for score/rank mismatch
-            if detect_score_rank_mismatch(result['ranking'], result['scores']):
-                result['score_rank_mismatch'] = True
+            if detect_score_rank_mismatch(result["ranking"], result["scores"]):
+                result["score_rank_mismatch"] = True
             return result
         except json.JSONDecodeError:
             pass
@@ -1503,18 +1530,20 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
         parts = ranking_text.split("FINAL RANKING:")
         if len(parts) >= 2:
             ranking_section = parts[1]
-            numbered_matches = re.findall(r'\d+\.\s*Response [A-Z]', ranking_section)
+            numbered_matches = re.findall(r"\d+\.\s*Response [A-Z]", ranking_section)
             if numbered_matches:
-                result['ranking'] = [re.search(r'Response [A-Z]', m).group() for m in numbered_matches]
+                result["ranking"] = [
+                    re.search(r"Response [A-Z]", m).group() for m in numbered_matches
+                ]
                 return result
-            matches = re.findall(r'Response [A-Z]', ranking_section)
+            matches = re.findall(r"Response [A-Z]", ranking_section)
             if matches:
-                result['ranking'] = matches
+                result["ranking"] = matches
                 return result
 
     # Final fallback: try to find any "Response X" patterns in order
-    matches = re.findall(r'Response [A-Z]', ranking_text)
-    result['ranking'] = matches
+    matches = re.findall(r"Response [A-Z]", ranking_text)
+    result["ranking"] = matches
     return result
 
 
@@ -1562,15 +1591,17 @@ def calculate_aggregate_rankings(
     if num_candidates <= 1:
         if num_candidates == 1:
             model = _get_model_from_label_value(list(label_to_model.values())[0])
-            return [{
-                "model": model,
-                "borda_score": 1.0,  # Only candidate gets perfect score
-                "average_position": 1.0,
-                "average_score": None,
-                "vote_count": 0,
-                "self_votes_excluded": _get_exclude_self_votes(),
-                "rank": 1
-            }]
+            return [
+                {
+                    "model": model,
+                    "borda_score": 1.0,  # Only candidate gets perfect score
+                    "average_position": 1.0,
+                    "average_score": None,
+                    "vote_count": 0,
+                    "self_votes_excluded": _get_exclude_self_votes(),
+                    "rank": 1,
+                }
+            ]
         return []
 
     # Track normalized Borda scores and raw scores for each model
@@ -1586,13 +1617,13 @@ def calculate_aggregate_rankings(
     max_borda = num_candidates - 1
 
     for ranking in stage2_results:
-        reviewer_model = ranking.get('model', '')
-        parsed = ranking.get('parsed_ranking', {})
-        ranking_list = parsed.get('ranking', [])
-        scores = parsed.get('scores', {})
+        reviewer_model = ranking.get("model", "")
+        parsed = ranking.get("parsed_ranking", {})
+        ranking_list = parsed.get("ranking", [])
+        scores = parsed.get("scores", {})
 
         # Skip if this ranking was marked as abstained
-        if parsed.get('abstained'):
+        if parsed.get("abstained"):
             continue
 
         # ADR-027: Determine voting authority for this reviewer
@@ -1614,14 +1645,17 @@ def calculate_aggregate_rankings(
             top_label = ranking_list[0]
             if top_label in label_to_model:
                 top_model = _get_model_from_label_value(label_to_model[top_label])
-                shadow_votes.append({
-                    "reviewer": reviewer_model,
-                    "top_pick": top_model,
-                    "ranking": [
-                        _get_model_from_label_value(label_to_model[lbl])
-                        for lbl in ranking_list if lbl in label_to_model
-                    ],
-                })
+                shadow_votes.append(
+                    {
+                        "reviewer": reviewer_model,
+                        "top_pick": top_model,
+                        "ranking": [
+                            _get_model_from_label_value(label_to_model[lbl])
+                            for lbl in ranking_list
+                            if lbl in label_to_model
+                        ],
+                    }
+                )
 
         # Calculate normalized Borda scores from ranking positions
         for position, label in enumerate(ranking_list):
@@ -1663,10 +1697,11 @@ def calculate_aggregate_rankings(
     # ADR-027: Include all candidate models, even those with 0 effective votes
     # This ensures ADVISORY-only councils still return all candidates
     all_candidate_models = {
-        _get_model_from_label_value(label_to_model[label])
-        for label in label_to_model
+        _get_model_from_label_value(label_to_model[label]) for label in label_to_model
     }
-    all_models = all_candidate_models | set(model_borda_scores.keys()) | set(model_raw_scores.keys())
+    all_models = (
+        all_candidate_models | set(model_borda_scores.keys()) | set(model_raw_scores.keys())
+    )
 
     for model in all_models:
         borda_scores = model_borda_scores.get(model, [])
@@ -1676,12 +1711,14 @@ def calculate_aggregate_rankings(
         entry = {
             "model": model,
             # Average of normalized Borda scores [0,1]
-            "borda_score": round(sum(borda_scores) / len(borda_scores), 3) if borda_scores else None,
+            "borda_score": round(sum(borda_scores) / len(borda_scores), 3)
+            if borda_scores
+            else None,
             "average_position": round(sum(positions) / len(positions), 2) if positions else None,
             # Average of normalized raw scores [0,1]
             "average_score": round(sum(raw_scores) / len(raw_scores), 3) if raw_scores else None,
             "vote_count": len(borda_scores),
-            "self_votes_excluded": _get_exclude_self_votes()
+            "self_votes_excluded": _get_exclude_self_votes(),
         }
 
         # ADR-027: Optionally include shadow votes for observability
@@ -1691,11 +1728,11 @@ def calculate_aggregate_rankings(
         aggregate.append(entry)
 
     # Sort by Borda score (higher is better), then by raw score as tiebreaker
-    aggregate.sort(key=lambda x: (-(x['borda_score'] or -999), -(x['average_score'] or 0)))
+    aggregate.sort(key=lambda x: (-(x["borda_score"] or -999), -(x["average_score"] or 0)))
 
     # Add rank numbers
     for i, entry in enumerate(aggregate, start=1):
-        entry['rank'] = i
+        entry["rank"] = i
 
     return aggregate
 
@@ -1776,10 +1813,10 @@ Title:"""
         # Fallback to a generic title
         return "New Conversation"
 
-    title = response.get('content', 'New Conversation').strip()
+    title = response.get("content", "New Conversation").strip()
 
     # Clean up the title - remove quotes, limit length
-    title = title.strip('"\'')
+    title = title.strip("\"'")
 
     # Truncate if too long
     if len(title) > 50:
@@ -1832,10 +1869,13 @@ async def run_full_council(
 
         # Emit council start event
         from llm_council.layer_contracts import LayerEventType, LayerEvent
-        await event_bridge.emit(LayerEvent(
-            event_type=LayerEventType.L3_COUNCIL_START,
-            data={"query": user_query[:100], "models": models or COUNCIL_MODELS}
-        ))
+
+        await event_bridge.emit(
+            LayerEvent(
+                event_type=LayerEventType.L3_COUNCIL_START,
+                data={"query": user_query[:100], "models": models or COUNCIL_MODELS},
+            )
+        )
 
     # Check cache first (unless bypassed)
     cache_key = get_cache_key(user_query)
@@ -1850,7 +1890,7 @@ async def run_full_council(
                 cached.get("stage1_results", []),
                 cached.get("stage2_results", []),
                 cached.get("stage3_result", {}),
-                metadata
+                metadata,
             )
 
     # Initialize usage tracking
@@ -1885,10 +1925,12 @@ async def run_full_council(
 
     # If no models responded successfully, return error
     if num_responses == 0:
-        return [], [], {
-            "model": "error",
-            "response": "All models failed to respond. Please try again."
-        }, {"usage": total_usage}
+        return (
+            [],
+            [],
+            {"model": "error", "response": "All models failed to respond. Please try again."},
+            {"usage": total_usage},
+        )
 
     # Handle small councils (N ≤ 2) - peer review is unstable or meaningless
     degraded_mode = None
@@ -1900,29 +1942,35 @@ async def run_full_council(
         degraded_mode = "single_model"
         stage2_results = []
         # Enhanced format (v0.3.0+) with explicit display_index
-        label_to_model = {"Response A": {"model": stage1_results[0]['model'], "display_index": 0}}
-        aggregate_rankings = [{
-            "model": stage1_results[0]['model'],
-            "rank": 1,
-            "average_score": None,
-            "average_position": None,
-            "vote_count": 0,
-            "note": "Single model - no peer review"
-        }]
+        label_to_model = {"Response A": {"model": stage1_results[0]["model"], "display_index": 0}}
+        aggregate_rankings = [
+            {
+                "model": stage1_results[0]["model"],
+                "rank": 1,
+                "average_score": None,
+                "average_position": None,
+                "vote_count": 0,
+                "note": "Single model - no peer review",
+            }
+        ]
     elif num_responses == 2:
         # Two models: peer review gives only 1 vote each (unstable)
         # Proceed but mark as degraded
         degraded_mode = "two_models"
         responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
-        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(user_query, responses_for_review)
+        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
+            user_query, responses_for_review
+        )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
         # Add warning to each ranking
         for r in aggregate_rankings:
-            r['note'] = "Two-model council - rankings based on single vote"
+            r["note"] = "Two-model council - rankings based on single vote"
     else:
         # Normal flow (N ≥ 3)
         responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
-        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(user_query, responses_for_review)
+        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
+            user_query, responses_for_review
+        )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
     total_usage["stage1_5"] = stage1_5_usage
@@ -1933,15 +1981,12 @@ async def run_full_council(
     deadlock_detected = False
     if verdict_type == VerdictType.BINARY and aggregate_rankings:
         # Extract Borda scores for deadlock detection
-        borda_scores = [
-            r.get('borda_score', 0.0)
-            for r in aggregate_rankings
-            if 'borda_score' in r
-        ]
+        borda_scores = [r.get("borda_score", 0.0) for r in aggregate_rankings if "borda_score" in r]
         if detect_deadlock(borda_scores, threshold=0.1):
             deadlock_detected = True
             effective_verdict_type = VerdictType.TIE_BREAKER
             import logging
+
             logging.getLogger(__name__).info(
                 f"Deadlock detected (top 2 within threshold). "
                 f"Escalating from BINARY to TIE_BREAKER mode."
@@ -1956,9 +2001,7 @@ async def run_full_council(
         position_mapping = derive_position_mapping(label_to_model)
         # Run bias audit with position data for position bias detection
         bias_audit_result = run_bias_audit(
-            stage1_results,
-            stage2_scores,
-            position_mapping=position_mapping
+            stage1_results, stage2_scores, position_mapping=position_mapping
         )
 
     # Stage 3: Synthesize final answer (with mode and verdict type support)
@@ -1993,17 +2036,18 @@ async def run_full_council(
     abstentions = []
     score_rank_mismatches = []
     for r in stage2_results:
-        parsed = r.get('parsed_ranking', {})
-        if parsed.get('abstained'):
-            abstentions.append({
-                "model": r['model'],
-                "reason": parsed.get('abstention_reason', 'Unknown')
-            })
-        if parsed.get('score_rank_mismatch'):
-            score_rank_mismatches.append({
-                "model": r['model'],
-                "note": "Ranking order used (scores ignored per council recommendation)"
-            })
+        parsed = r.get("parsed_ranking", {})
+        if parsed.get("abstained"):
+            abstentions.append(
+                {"model": r["model"], "reason": parsed.get("abstention_reason", "Unknown")}
+            )
+        if parsed.get("score_rank_mismatch"):
+            score_rank_mismatches.append(
+                {
+                    "model": r["model"],
+                    "note": "Ranking order used (scores ignored per council recommendation)",
+                }
+            )
 
     # Prepare metadata with configuration info
     metadata = {
@@ -2022,10 +2066,7 @@ async def run_full_council(
             "deadlock_detected": deadlock_detected,  # ADR-025b: True if escalated to TIE_BREAKER
             "include_dissent": include_dissent,  # ADR-025b: Dissent extraction enabled
         },
-        "usage": {
-            "by_stage": total_usage,
-            "total": grand_total
-        }
+        "usage": {"by_stage": total_usage, "total": grand_total},
     }
 
     # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
@@ -2051,6 +2092,7 @@ async def run_full_council(
     # ADR-015: Add bias audit results if enabled and computed
     if bias_audit_result is not None:
         from dataclasses import asdict
+
         metadata["bias_audit"] = asdict(bias_audit_result)
 
     # ADR-016: Add safety gate results if enabled
@@ -2059,8 +2101,7 @@ async def run_full_council(
             "enabled": True,
             "results": safety_results,
             "failed_models": [
-                model for model, result in safety_results.items()
-                if not result["passed"]
+                model for model, result in safety_results.items() if not result["passed"]
             ],
             "score_cap": eval_config.safety.score_cap,
         }
@@ -2078,18 +2119,19 @@ async def run_full_council(
                 {
                     "model": r["model"],
                     "borda_score": r.get("borda_score"),
-                    "vote_count": r.get("vote_count", 0)
+                    "vote_count": r.get("vote_count", 0),
                 }
                 for r in aggregate_rankings
             ],
             "config": {
                 "exclude_self_votes": _get_exclude_self_votes(),
                 "style_normalization": _get_style_normalization(),
-                "max_reviewers": _get_max_reviewers()
-            }
+                "max_reviewers": _get_max_reviewers(),
+            },
         }
         # Fire-and-forget - don't await to avoid blocking response
         import asyncio
+
         asyncio.create_task(telemetry.send_event(telemetry_event))
 
     # Save to cache if caching is enabled

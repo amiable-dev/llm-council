@@ -91,6 +91,7 @@ def get_provider() -> MetadataProvider:
         elif _is_model_intelligence_enabled():
             # Lazy import to avoid circular dependencies
             from .dynamic_provider import DynamicMetadataProvider
+
             _provider = DynamicMetadataProvider()
         else:
             _provider = StaticRegistryProvider()

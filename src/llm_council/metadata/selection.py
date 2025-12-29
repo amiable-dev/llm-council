@@ -36,8 +36,8 @@ if TYPE_CHECKING:
 QUALITY_TIER_SCORES: Dict[QualityTier, float] = {
     QualityTier.FRONTIER: 0.95,  # MMLU 87-90%
     QualityTier.STANDARD: 0.85,  # MMLU 80-86% (+0.10 from 0.75)
-    QualityTier.ECONOMY: 0.70,   # MMLU 70-79% (+0.15 from 0.55)
-    QualityTier.LOCAL: 0.50,     # MMLU 55-80% (+0.10 from 0.40)
+    QualityTier.ECONOMY: 0.70,  # MMLU 70-79% (+0.15 from 0.55)
+    QualityTier.LOCAL: 0.50,  # MMLU 55-80% (+0.10 from 0.40)
 }
 
 # Cost normalization reference points (per 1K tokens)
@@ -48,40 +48,40 @@ COST_REFERENCE_HIGH = 0.015  # Most expensive models (Claude Opus, o1)
 # Each tier prioritizes different attributes based on use case
 TIER_WEIGHTS: Dict[str, Dict[str, float]] = {
     "quick": {
-        "latency": 0.45,      # Speed is primary concern
-        "cost": 0.25,         # Cost-efficiency important
-        "quality": 0.15,      # Acceptable quality
-        "availability": 0.10, # Must be available
-        "diversity": 0.05,    # Nice to have
+        "latency": 0.45,  # Speed is primary concern
+        "cost": 0.25,  # Cost-efficiency important
+        "quality": 0.15,  # Acceptable quality
+        "availability": 0.10,  # Must be available
+        "diversity": 0.05,  # Nice to have
     },
     "balanced": {
-        "quality": 0.30,      # Good quality
-        "latency": 0.25,      # Reasonable speed
-        "cost": 0.20,         # Cost-conscious
-        "availability": 0.15, # Reliable
-        "diversity": 0.10,    # Variety helps
+        "quality": 0.30,  # Good quality
+        "latency": 0.25,  # Reasonable speed
+        "cost": 0.20,  # Cost-conscious
+        "availability": 0.15,  # Reliable
+        "diversity": 0.10,  # Variety helps
     },
     "high": {
-        "quality": 0.50,      # Quality is paramount
-        "availability": 0.20, # Must be reliable
-        "latency": 0.15,      # Speed secondary
-        "diversity": 0.10,    # Want different perspectives
-        "cost": 0.05,         # Cost less important
+        "quality": 0.50,  # Quality is paramount
+        "availability": 0.20,  # Must be reliable
+        "latency": 0.15,  # Speed secondary
+        "diversity": 0.10,  # Want different perspectives
+        "cost": 0.05,  # Cost less important
     },
     "reasoning": {
-        "quality": 0.60,      # Best possible quality
-        "availability": 0.20, # Must be available
-        "diversity": 0.10,    # Different reasoning styles
-        "latency": 0.05,      # Speed not critical
-        "cost": 0.05,         # Cost not a concern
+        "quality": 0.60,  # Best possible quality
+        "availability": 0.20,  # Must be available
+        "diversity": 0.10,  # Different reasoning styles
+        "latency": 0.05,  # Speed not critical
+        "cost": 0.05,  # Cost not a concern
     },
     # Frontier tier: cutting-edge/preview models, quality above all else
     "frontier": {
-        "quality": 0.70,      # Absolute best quality
-        "diversity": 0.15,    # Want variety of latest models
-        "availability": 0.10, # Accept some instability
-        "latency": 0.03,      # Speed least important
-        "cost": 0.02,         # Cost irrelevant for frontier
+        "quality": 0.70,  # Absolute best quality
+        "diversity": 0.15,  # Want variety of latest models
+        "availability": 0.10,  # Accept some instability
+        "latency": 0.03,  # Speed least important
+        "cost": 0.02,  # Cost irrelevant for frontier
     },
 }
 
@@ -103,6 +103,7 @@ class ModelCandidate:
         diversity_score: 0-1 score for diversity contribution
         recent_traffic: Recent traffic share (0-1) for anti-herding
     """
+
     model_id: str
     latency_score: float
     cost_score: float
@@ -153,11 +154,11 @@ def calculate_model_score(candidate: ModelCandidate, tier: str) -> float:
     weights = TIER_WEIGHTS.get(tier, TIER_WEIGHTS["balanced"])
 
     score = (
-        weights["latency"] * candidate.latency_score +
-        weights["cost"] * candidate.cost_score +
-        weights["quality"] * candidate.quality_score +
-        weights["availability"] * candidate.availability_score +
-        weights["diversity"] * candidate.diversity_score
+        weights["latency"] * candidate.latency_score
+        + weights["cost"] * candidate.cost_score
+        + weights["quality"] * candidate.quality_score
+        + weights["availability"] * candidate.availability_score
+        + weights["diversity"] * candidate.diversity_score
     )
 
     # Apply anti-herding penalty
@@ -206,10 +207,7 @@ def select_with_diversity(
     # Check if we need to enforce diversity
     if len(providers_selected) < min_providers and len(selected) >= count:
         # Try to swap in models from underrepresented providers
-        remaining_models = [
-            (m, s) for m, s in sorted_models
-            if m not in selected
-        ]
+        remaining_models = [(m, s) for m, s in sorted_models if m not in selected]
 
         for model_id, score in remaining_models:
             provider = model_id.split("/")[0] if "/" in model_id else model_id
@@ -235,10 +233,7 @@ def _is_discovery_enabled() -> bool:
         from ..unified_config import get_config
 
         config = get_config()
-        return (
-            config.model_intelligence.enabled
-            and config.model_intelligence.discovery.enabled
-        )
+        return config.model_intelligence.enabled and config.model_intelligence.discovery.enabled
     except Exception:
         return False
 
@@ -482,8 +477,8 @@ def _create_candidates_from_pool(pool: List[str], tier: str) -> List[ModelCandid
             cost_score=_estimate_cost_score(model_id),
             quality_score=_estimate_quality_score(model_id, tier),
             availability_score=0.95,  # Assume high availability for static pool
-            diversity_score=0.5,      # Neutral diversity
-            recent_traffic=0.0,       # No traffic data for static
+            diversity_score=0.5,  # Neutral diversity
+            recent_traffic=0.0,  # No traffic data for static
         )
         candidates.append(candidate)
 

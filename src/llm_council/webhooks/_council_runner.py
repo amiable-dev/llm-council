@@ -72,7 +72,7 @@ async def run_council(
         "data": {
             "request_id": request_id,
             "prompt": prompt[:100] + "..." if len(prompt) > 100 else prompt,
-        }
+        },
     }
 
     # Set up API key if provided
@@ -104,7 +104,7 @@ async def run_council(
             "data": {
                 "request_id": request_id,
                 "models_responded": result["metadata"].get("completed_models", 0),
-            }
+            },
         }
 
         # Stage 2 complete
@@ -113,7 +113,7 @@ async def run_council(
             "data": {
                 "request_id": request_id,
                 "rankings_collected": True,
-            }
+            },
         }
 
         # Check for failure
@@ -126,7 +126,7 @@ async def run_council(
                     "request_id": request_id,
                     "error": result.get("synthesis", "Unknown error"),
                     "status": status,
-                }
+                },
             }
         else:
             # Complete event with full result
@@ -139,8 +139,8 @@ async def run_council(
                         "status": status,
                         "synthesis_type": result["metadata"].get("synthesis_type"),
                         "model_count": len(result.get("model_responses", {})),
-                    }
-                }
+                    },
+                },
             }
 
     except Exception as e:
@@ -150,7 +150,7 @@ async def run_council(
             "data": {
                 "request_id": request_id,
                 "error": str(e),
-            }
+            },
         }
 
     finally:

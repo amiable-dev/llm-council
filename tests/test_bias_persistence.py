@@ -251,6 +251,7 @@ class TestQueryHashing:
             # Need to reimport to pick up new secret
             import importlib
             import llm_council.bias_persistence as bp
+
             importlib.reload(bp)
             custom_hash = bp.hash_query_if_enabled("test", bp.ConsentLevel.RESEARCH)
 
@@ -301,7 +302,7 @@ class TestAppendBiasRecords:
 
             append_bias_records(records, store_path)
 
-            with open(store_path, 'r') as f:
+            with open(store_path, "r") as f:
                 lines = f.readlines()
 
             assert len(lines) == 3
@@ -323,7 +324,7 @@ class TestAppendBiasRecords:
             record2 = BiasMetricRecord(session_id="second-session")
             append_bias_records([record2], store_path)
 
-            with open(store_path, 'r') as f:
+            with open(store_path, "r") as f:
                 lines = f.readlines()
 
             assert len(lines) == 2
@@ -362,7 +363,9 @@ class TestReadBiasRecords:
     def test_read_all_records(self):
         """Reads all records from file."""
         from llm_council.bias_persistence import (
-            append_bias_records, read_bias_records, BiasMetricRecord
+            append_bias_records,
+            read_bias_records,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -377,7 +380,9 @@ class TestReadBiasRecords:
     def test_filter_by_max_sessions(self):
         """Limits to last N sessions."""
         from llm_council.bias_persistence import (
-            append_bias_records, read_bias_records, BiasMetricRecord
+            append_bias_records,
+            read_bias_records,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -395,7 +400,9 @@ class TestReadBiasRecords:
     def test_filter_by_max_days(self):
         """Limits to last N days."""
         from llm_council.bias_persistence import (
-            append_bias_records, read_bias_records, BiasMetricRecord
+            append_bias_records,
+            read_bias_records,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -420,7 +427,9 @@ class TestReadBiasRecords:
     def test_filter_by_since_datetime(self):
         """Records after timestamp only."""
         from llm_council.bias_persistence import (
-            append_bias_records, read_bias_records, BiasMetricRecord
+            append_bias_records,
+            read_bias_records,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -441,7 +450,9 @@ class TestReadBiasRecords:
     def test_returns_chronological_order(self):
         """Oldest first."""
         from llm_council.bias_persistence import (
-            append_bias_records, read_bias_records, BiasMetricRecord
+            append_bias_records,
+            read_bias_records,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -481,10 +492,14 @@ class TestReadBiasRecords:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
             # Write mix of valid and invalid lines
-            with open(store_path, 'w') as f:
-                f.write('{"schema_version": "1.1.0", "session_id": "valid1", "timestamp": "", "consent_level": 1, "reviewer_id": "", "model_id": "", "position": 0, "response_length_chars": 0, "score_value": 0.0, "score_scale": "1-10", "council_config_version": "", "query_hash": null, "query_metadata": null}\n')
-                f.write('not valid json\n')
-                f.write('{"schema_version": "1.1.0", "session_id": "valid2", "timestamp": "", "consent_level": 1, "reviewer_id": "", "model_id": "", "position": 0, "response_length_chars": 0, "score_value": 0.0, "score_scale": "1-10", "council_config_version": "", "query_hash": null, "query_metadata": null}\n')
+            with open(store_path, "w") as f:
+                f.write(
+                    '{"schema_version": "1.1.0", "session_id": "valid1", "timestamp": "", "consent_level": 1, "reviewer_id": "", "model_id": "", "position": 0, "response_length_chars": 0, "score_value": 0.0, "score_scale": "1-10", "council_config_version": "", "query_hash": null, "query_metadata": null}\n'
+                )
+                f.write("not valid json\n")
+                f.write(
+                    '{"schema_version": "1.1.0", "session_id": "valid2", "timestamp": "", "consent_level": 1, "reviewer_id": "", "model_id": "", "position": 0, "response_length_chars": 0, "score_value": 0.0, "score_scale": "1-10", "council_config_version": "", "query_hash": null, "query_metadata": null}\n'
+                )
 
             result = read_bias_records(store_path)
 
@@ -499,8 +514,10 @@ class TestReadBiasRecords:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
             # Write record with older schema version (fewer fields)
-            with open(store_path, 'w') as f:
-                f.write('{"schema_version": "1.0.0", "session_id": "old-format", "timestamp": "", "reviewer_id": "", "model_id": "", "score_value": 5.0}\n')
+            with open(store_path, "w") as f:
+                f.write(
+                    '{"schema_version": "1.0.0", "session_id": "old-format", "timestamp": "", "reviewer_id": "", "model_id": "", "score_value": 5.0}\n'
+                )
 
             result = read_bias_records(store_path)
 
@@ -522,15 +539,11 @@ class TestCreateBiasRecordsFromSession:
         stage2_results = [
             {
                 "model": "model-a",
-                "parsed_ranking": {
-                    "scores": {"Response A": 7.0, "Response B": 8.0}
-                }
+                "parsed_ranking": {"scores": {"Response A": 7.0, "Response B": 8.0}},
             },
             {
                 "model": "model-b",
-                "parsed_ranking": {
-                    "scores": {"Response A": 6.0, "Response B": 9.0}
-                }
+                "parsed_ranking": {"scores": {"Response A": 6.0, "Response B": 9.0}},
             },
         ]
         label_to_model = {
@@ -556,12 +569,7 @@ class TestCreateBiasRecordsFromSession:
             {"model": "model-a", "response": "A"},
         ]
         stage2_results = [
-            {
-                "model": "reviewer-1",
-                "parsed_ranking": {
-                    "scores": {"Response A": 8.5}
-                }
-            },
+            {"model": "reviewer-1", "parsed_ranking": {"scores": {"Response A": 8.5}}},
         ]
         label_to_model = {
             "Response A": {"model": "model-a", "display_index": 0},
@@ -588,9 +596,7 @@ class TestCreateBiasRecordsFromSession:
         stage2_results = [
             {
                 "model": "reviewer",
-                "parsed_ranking": {
-                    "scores": {"Response A": 7.0, "Response B": 8.0}
-                }
+                "parsed_ranking": {"scores": {"Response A": 7.0, "Response B": 8.0}},
             },
         ]
         label_to_model = {
@@ -623,9 +629,7 @@ class TestCreateBiasRecordsFromSession:
         stage2_results = [
             {
                 "model": "reviewer",
-                "parsed_ranking": {
-                    "scores": {"Response A": 7.0, "Response B": 8.0}
-                }
+                "parsed_ranking": {"scores": {"Response A": 7.0, "Response B": 8.0}},
             },
         ]
         # Legacy format: just model string, no display_index
@@ -660,9 +664,7 @@ class TestCreateBiasRecordsFromSession:
         stage2_results = [
             {
                 "model": "reviewer",
-                "parsed_ranking": {
-                    "scores": {"Response A": 7.0, "Response B": 8.0}
-                }
+                "parsed_ranking": {"scores": {"Response A": 7.0, "Response B": 8.0}},
             },
         ]
         label_to_model = {
@@ -691,16 +693,11 @@ class TestCreateBiasRecordsFromSession:
             {"model": "model-a", "response": "A"},
         ]
         stage2_results = [
-            {
-                "model": "reviewer-1",
-                "parsed_ranking": {
-                    "scores": {"Response A": 8.0}
-                }
-            },
+            {"model": "reviewer-1", "parsed_ranking": {"scores": {"Response A": 8.0}}},
             {
                 "model": "reviewer-2",
                 "abstained": True,  # This reviewer abstained
-                "parsed_ranking": None
+                "parsed_ranking": None,
             },
         ]
         label_to_model = {
@@ -723,12 +720,7 @@ class TestCreateBiasRecordsFromSession:
         from llm_council.bias_persistence import create_bias_records_from_session
 
         stage1_results = [{"model": "model-a", "response": "A"}]
-        stage2_results = [
-            {
-                "model": "reviewer",
-                "parsed_ranking": {"scores": {"Response A": 7.0}}
-            }
-        ]
+        stage2_results = [{"model": "reviewer", "parsed_ranking": {"scores": {"Response A": 7.0}}}]
         label_to_model = {"Response A": {"model": "model-a", "display_index": 0}}
 
         records = create_bias_records_from_session(
@@ -746,12 +738,7 @@ class TestCreateBiasRecordsFromSession:
         from llm_council.bias_persistence import create_bias_records_from_session
 
         stage1_results = [{"model": "model-a", "response": "A"}]
-        stage2_results = [
-            {
-                "model": "reviewer",
-                "parsed_ranking": {"scores": {"Response A": 7.0}}
-            }
-        ]
+        stage2_results = [{"model": "reviewer", "parsed_ranking": {"scores": {"Response A": 7.0}}}]
         label_to_model = {"Response A": {"model": "model-a", "display_index": 0}}
 
         records = create_bias_records_from_session(
@@ -783,7 +770,9 @@ class TestGetBiasStoreStats:
     def test_stats_for_populated_store(self):
         """Returns accurate counts and sizes."""
         from llm_council.bias_persistence import (
-            append_bias_records, get_bias_store_stats, BiasMetricRecord
+            append_bias_records,
+            get_bias_store_stats,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -803,7 +792,9 @@ class TestGetBiasStoreStats:
     def test_includes_unique_session_count(self):
         """Counts distinct session_ids."""
         from llm_council.bias_persistence import (
-            append_bias_records, get_bias_store_stats, BiasMetricRecord
+            append_bias_records,
+            get_bias_store_stats,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -823,7 +814,9 @@ class TestGetBiasStoreStats:
     def test_includes_date_range(self):
         """Oldest and newest timestamps."""
         from llm_council.bias_persistence import (
-            append_bias_records, get_bias_store_stats, BiasMetricRecord
+            append_bias_records,
+            get_bias_store_stats,
+            BiasMetricRecord,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -851,15 +844,18 @@ class TestPersistSessionBiasData:
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
-            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=False):
-                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=store_path):
+            with patch(
+                "llm_council.bias_persistence._get_bias_persistence_enabled", return_value=False
+            ):
+                with patch(
+                    "llm_council.bias_persistence._get_bias_store_path", return_value=store_path
+                ):
                     count = persist_session_bias_data(
                         session_id="test",
                         stage1_results=[{"model": "m", "response": "r"}],
-                        stage2_results=[{
-                            "model": "r",
-                            "parsed_ranking": {"scores": {"Response A": 7.0}}
-                        }],
+                        stage2_results=[
+                            {"model": "r", "parsed_ranking": {"scores": {"Response A": 7.0}}}
+                        ],
                         label_to_model={"Response A": {"model": "m", "display_index": 0}},
                     )
 
@@ -873,8 +869,12 @@ class TestPersistSessionBiasData:
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
-            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
-                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=store_path):
+            with patch(
+                "llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True
+            ):
+                with patch(
+                    "llm_council.bias_persistence._get_bias_store_path", return_value=store_path
+                ):
                     count = persist_session_bias_data(
                         session_id="integration-test",
                         stage1_results=[
@@ -886,7 +886,7 @@ class TestPersistSessionBiasData:
                                 "model": "model-a",
                                 "parsed_ranking": {
                                     "scores": {"Response A": 7.0, "Response B": 8.0}
-                                }
+                                },
                             },
                         ],
                         label_to_model={
@@ -904,23 +904,31 @@ class TestPersistSessionBiasData:
     def test_respects_consent_level(self):
         """Query hash only at RESEARCH level."""
         from llm_council.bias_persistence import (
-            persist_session_bias_data, read_bias_records, ConsentLevel
+            persist_session_bias_data,
+            read_bias_records,
+            ConsentLevel,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
             # Test with LOCAL_ONLY - no hash
-            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
-                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=store_path):
-                    with patch("llm_council.bias_persistence._get_bias_consent_level", return_value=ConsentLevel.LOCAL_ONLY.value):
+            with patch(
+                "llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True
+            ):
+                with patch(
+                    "llm_council.bias_persistence._get_bias_store_path", return_value=store_path
+                ):
+                    with patch(
+                        "llm_council.bias_persistence._get_bias_consent_level",
+                        return_value=ConsentLevel.LOCAL_ONLY.value,
+                    ):
                         persist_session_bias_data(
                             session_id="test-local",
                             stage1_results=[{"model": "m", "response": "r"}],
-                            stage2_results=[{
-                                "model": "r",
-                                "parsed_ranking": {"scores": {"Response A": 7.0}}
-                            }],
+                            stage2_results=[
+                                {"model": "r", "parsed_ranking": {"scores": {"Response A": 7.0}}}
+                            ],
                             label_to_model={"Response A": {"model": "m", "display_index": 0}},
                             query="What is the meaning of life?",
                         )
@@ -935,15 +943,18 @@ class TestPersistSessionBiasData:
         with tempfile.TemporaryDirectory() as tmpdir:
             custom_path = Path(tmpdir) / "custom" / "location" / "bias.jsonl"
 
-            with patch("llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True):
-                with patch("llm_council.bias_persistence._get_bias_store_path", return_value=custom_path):
+            with patch(
+                "llm_council.bias_persistence._get_bias_persistence_enabled", return_value=True
+            ):
+                with patch(
+                    "llm_council.bias_persistence._get_bias_store_path", return_value=custom_path
+                ):
                     persist_session_bias_data(
                         session_id="test",
                         stage1_results=[{"model": "m", "response": "r"}],
-                        stage2_results=[{
-                            "model": "r",
-                            "parsed_ranking": {"scores": {"Response A": 7.0}}
-                        }],
+                        stage2_results=[
+                            {"model": "r", "parsed_ranking": {"scores": {"Response A": 7.0}}}
+                        ],
                         label_to_model={"Response A": {"model": "m", "display_index": 0}},
                     )
 

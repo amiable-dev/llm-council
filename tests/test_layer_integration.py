@@ -94,8 +94,7 @@ class TestTierEscalationPaths:
         # Verify escalation event was emitted
         events = get_layer_events()
         escalation_events = [
-            e for e in events
-            if e.event_type == LayerEventType.L2_DELIBERATION_ESCALATION
+            e for e in events if e.event_type == LayerEventType.L2_DELIBERATION_ESCALATION
         ]
         assert len(escalation_events) == 1
         assert "Low confidence" in escalation_events[0].data.get("reason", "")
@@ -159,9 +158,7 @@ class TestGatewayFailureIsolation:
         assert len(tier_escalation_events) == 0
 
         # Verify fallback WAS logged
-        fallback_events = [
-            e for e in events if e.event_type == LayerEventType.L4_GATEWAY_FALLBACK
-        ]
+        fallback_events = [e for e in events if e.event_type == LayerEventType.L4_GATEWAY_FALLBACK]
         assert len(fallback_events) == 1
 
     def test_gateway_rate_limit_uses_fallback(self):
@@ -198,12 +195,8 @@ class TestGatewayFailureIsolation:
         events = get_layer_events()
 
         # Should have 3 fallback events, 0 tier escalations
-        fallback_events = [
-            e for e in events if e.event_type == LayerEventType.L4_GATEWAY_FALLBACK
-        ]
-        tier_events = [
-            e for e in events if e.event_type == LayerEventType.L1_TIER_ESCALATION
-        ]
+        fallback_events = [e for e in events if e.event_type == LayerEventType.L4_GATEWAY_FALLBACK]
+        tier_events = [e for e in events if e.event_type == LayerEventType.L1_TIER_ESCALATION]
 
         assert len(fallback_events) == 3
         assert len(tier_events) == 0
@@ -438,9 +431,7 @@ class TestRollbackTriggers:
             )
 
         events = get_layer_events()
-        escalation_events = [
-            e for e in events if e.event_type == LayerEventType.L1_TIER_ESCALATION
-        ]
+        escalation_events = [e for e in events if e.event_type == LayerEventType.L1_TIER_ESCALATION]
 
         # Should have 5 escalations
         assert len(escalation_events) == 5
@@ -457,9 +448,7 @@ class TestRollbackTriggers:
             )
 
         events = get_layer_events()
-        fallback_events = [
-            e for e in events if e.event_type == LayerEventType.L4_GATEWAY_FALLBACK
-        ]
+        fallback_events = [e for e in events if e.event_type == LayerEventType.L4_GATEWAY_FALLBACK]
 
         assert len(fallback_events) == 3
 
@@ -487,9 +476,7 @@ class TestLayerSovereigntyIntegration:
         cross_l2_to_l3(triage_result, quick_contract)
 
         events = get_layer_events()
-        warning_events = [
-            e for e in events if e.event_type == LayerEventType.VALIDATION_WARNING
-        ]
+        warning_events = [e for e in events if e.event_type == LayerEventType.VALIDATION_WARNING]
 
         # If models outside tier, should have warning
         # If models inside tier, should have no warning

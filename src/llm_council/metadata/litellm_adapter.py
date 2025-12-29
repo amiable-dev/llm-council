@@ -45,6 +45,7 @@ class LiteLLMAdapter:
         if self._litellm is None:
             try:
                 import litellm
+
                 self._litellm = litellm
             except ImportError as e:
                 raise ImportError(

@@ -28,9 +28,7 @@ class TestDiscoverTierCandidates:
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(
-            info=info, fetched_at=datetime.utcnow()
-        )
+        registry._cache["openai/gpt-4o"] = RegistryEntry(info=info, fetched_at=datetime.utcnow())
         registry._last_refresh = datetime.utcnow()
 
         # Mock to detect if any API calls are made
@@ -111,9 +109,7 @@ class TestDiscoverTierCandidates:
         registry._last_refresh = datetime.utcnow()
 
         # Require large context
-        candidates = discover_tier_candidates(
-            "frontier", registry, required_context=100000
-        )
+        candidates = discover_tier_candidates("frontier", registry, required_context=100000)
         model_ids = [c.model_id for c in candidates]
 
         assert "anthropic/claude-3-opus" in model_ids

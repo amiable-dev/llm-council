@@ -16,10 +16,7 @@ class TestSSEEventFormatter:
         """Should format event as SSE."""
         from llm_council.webhooks.sse import format_sse_event
 
-        event = format_sse_event(
-            event="council.complete",
-            data={"result": "success"}
-        )
+        event = format_sse_event(event="council.complete", data={"result": "success"})
 
         assert "event: council.complete" in event
         assert "data: " in event
@@ -45,9 +42,7 @@ class TestSSEEventFormatter:
         from llm_council.webhooks.sse import format_sse_event
 
         event = format_sse_event(
-            event="council.complete",
-            data={"result": "success"},
-            event_id="evt-123"
+            event="council.complete", data={"result": "success"}, event_id="evt-123"
         )
 
         assert "id: evt-123" in event
@@ -56,11 +51,7 @@ class TestSSEEventFormatter:
         """Should include retry when provided."""
         from llm_council.webhooks.sse import format_sse_event
 
-        event = format_sse_event(
-            event="council.complete",
-            data={},
-            retry=5000
-        )
+        event = format_sse_event(event="council.complete", data={}, retry=5000)
 
         assert "retry: 5000" in event
 
@@ -88,7 +79,7 @@ class TestSSEEventGenerator:
         mock_responses = {
             "stage1": {"model1": "response1"},
             "stage2": {"rankings": [1, 2]},
-            "stage3": {"synthesis": "final"}
+            "stage3": {"synthesis": "final"},
         }
 
         with patch("llm_council.webhooks._council_runner.run_council") as mock_council:
@@ -102,11 +93,7 @@ class TestSSEEventGenerator:
             mock_council.return_value = mock_run()
 
             events = []
-            async for event in council_event_generator(
-                prompt="test",
-                models=None,
-                api_key=None
-            ):
+            async for event in council_event_generator(prompt="test", models=None, api_key=None):
                 events.append(event)
 
         assert len(events) >= 1  # At least some events
@@ -117,6 +104,7 @@ class TestSSEEventGenerator:
         from llm_council.webhooks.sse import council_event_generator
 
         with patch("llm_council.webhooks._council_runner.run_council") as mock_council:
+
             async def mock_run(*args, **kwargs):
                 yield {"event": "council.deliberation_start", "data": {"request_id": "123"}}
                 yield {"event": "council.complete", "data": {}}
@@ -136,6 +124,7 @@ class TestSSEEventGenerator:
         from llm_council.webhooks.sse import council_event_generator
 
         with patch("llm_council.webhooks._council_runner.run_council") as mock_council:
+
             async def mock_run(*args, **kwargs):
                 yield {"event": "council.deliberation_start", "data": {}}
                 yield {"event": "council.complete", "data": {"result": "done"}}
@@ -155,6 +144,7 @@ class TestSSEEventGenerator:
         from llm_council.webhooks.sse import council_event_generator
 
         with patch("llm_council.webhooks._council_runner.run_council") as mock_council:
+
             async def mock_run(*args, **kwargs):
                 yield {"event": "council.deliberation_start", "data": {}}
                 yield {"event": "council.error", "data": {"error": "Something went wrong"}}
@@ -179,7 +169,7 @@ class TestSSECouncilEvents:
         event = format_council_event(
             event_type="council.deliberation_start",
             request_id="req-123",
-            data={"models": ["gpt-4", "claude-3"]}
+            data={"models": ["gpt-4", "claude-3"]},
         )
 
         assert "deliberation_start" in event
@@ -190,9 +180,7 @@ class TestSSECouncilEvents:
         from llm_council.webhooks.sse import format_council_event
 
         event = format_council_event(
-            event_type="council.stage1.complete",
-            request_id="req-123",
-            data={"response_count": 4}
+            event_type="council.stage1.complete", request_id="req-123", data={"response_count": 4}
         )
 
         assert "stage1.complete" in event
@@ -204,10 +192,7 @@ class TestSSECouncilEvents:
         event = format_council_event(
             event_type="model.vote_cast",
             request_id="req-123",
-            data={
-                "voter": "gpt-4",
-                "ranking": ["A", "B", "C"]
-            }
+            data={"voter": "gpt-4", "ranking": ["A", "B", "C"]},
         )
 
         assert "vote_cast" in event
@@ -219,10 +204,7 @@ class TestSSECouncilEvents:
         event = format_council_event(
             event_type="council.complete",
             request_id="req-123",
-            data={
-                "duration_ms": 5432,
-                "stage3_response": "Final answer"
-            }
+            data={"duration_ms": 5432, "stage3_response": "Final answer"},
         )
 
         assert "complete" in event
@@ -239,6 +221,7 @@ class TestSSEKeepAlive:
         import asyncio
 
         with patch("llm_council.webhooks._council_runner.run_council") as mock_council:
+
             async def mock_run(*args, **kwargs):
                 yield {"event": "council.deliberation_start", "data": {}}
                 await asyncio.sleep(0.1)  # Simulate slow processing
@@ -248,8 +231,10 @@ class TestSSEKeepAlive:
 
             events = []
             async for event in council_event_generator(
-                "test", None, None,
-                keepalive_interval=0.05  # Short interval for test
+                "test",
+                None,
+                None,
+                keepalive_interval=0.05,  # Short interval for test
             ):
                 events.append(event)
 

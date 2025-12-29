@@ -17,6 +17,7 @@ from typing import Dict, Optional, Any
 
 class InvalidWeightsError(ValueError):
     """Raised when rubric weights are invalid."""
+
     pass
 
 
@@ -55,6 +56,7 @@ class RubricScore:
         overall: Pre-calculated weighted score (optional)
         notes: Reviewer notes explaining the scores (optional)
     """
+
     accuracy: int
     relevance: int
     completeness: int
@@ -159,7 +161,7 @@ def parse_rubric_evaluation(response_text: str) -> Optional[Dict[str, Any]]:
         return None
 
     # Try to find JSON in code block first
-    code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?```'
+    code_block_pattern = r"```(?:json)?\s*\n?(.*?)\n?```"
     matches = re.findall(code_block_pattern, response_text, re.DOTALL)
 
     json_candidates = []
@@ -171,16 +173,16 @@ def parse_rubric_evaluation(response_text: str) -> Optional[Dict[str, Any]]:
     # Also try to find raw JSON object by finding balanced braces
     # Find all potential JSON start positions
     for i, char in enumerate(response_text):
-        if char == '{':
+        if char == "{":
             # Try to find matching closing brace
             depth = 0
             for j in range(i, len(response_text)):
-                if response_text[j] == '{':
+                if response_text[j] == "{":
                     depth += 1
-                elif response_text[j] == '}':
+                elif response_text[j] == "}":
                     depth -= 1
                     if depth == 0:
-                        candidate = response_text[i:j+1]
+                        candidate = response_text[i : j + 1]
                         json_candidates.append(candidate)
                         break
 

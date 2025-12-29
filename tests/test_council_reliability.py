@@ -2,6 +2,7 @@
 
 These tests follow TDD - written BEFORE implementation.
 """
+
 import pytest
 import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
@@ -11,6 +12,7 @@ from typing import Dict, Any
 # =============================================================================
 # Test 1: Tiered Timeout Constants
 # =============================================================================
+
 
 def test_timeout_constants_defined():
     """Test that tiered timeout constants are defined per ADR-012."""
@@ -32,6 +34,7 @@ def test_timeout_constants_defined():
 # Test 2: Structured Model Result Schema
 # =============================================================================
 
+
 def test_model_result_status_types():
     """Test that model result status types are defined."""
     from llm_council.council import (
@@ -48,6 +51,7 @@ def test_model_result_status_types():
 # =============================================================================
 # Test 3: Stage 1 with Structured Results
 # =============================================================================
+
 
 @pytest.mark.asyncio
 async def test_stage1_returns_structured_results():
@@ -68,8 +72,10 @@ async def test_stage1_returns_structured_results():
         },
     }
 
-    with patch('llm_council.council.COUNCIL_MODELS', ['model-a', 'model-b']), \
-         patch('llm_council.council.query_models_with_progress') as mock_query:
+    with (
+        patch("llm_council.council.COUNCIL_MODELS", ["model-a", "model-b"]),
+        patch("llm_council.council.query_models_with_progress") as mock_query,
+    ):
         mock_query.return_value = mock_responses
 
         results, usage, model_statuses = await stage1_collect_responses_with_status("test query")
@@ -99,8 +105,10 @@ async def test_stage1_with_timeout_returns_partial():
         "model-d": {"status": "timeout", "error": "Timeout", "latency_ms": 25000},
     }
 
-    with patch('llm_council.council.COUNCIL_MODELS', ['model-a', 'model-b', 'model-c', 'model-d']), \
-         patch('llm_council.council.query_models_with_progress') as mock_query:
+    with (
+        patch("llm_council.council.COUNCIL_MODELS", ["model-a", "model-b", "model-c", "model-d"]),
+        patch("llm_council.council.query_models_with_progress") as mock_query,
+    ):
         mock_query.return_value = mock_responses
 
         results, usage, model_statuses = await stage1_collect_responses_with_status("test")
@@ -117,6 +125,7 @@ async def test_stage1_with_timeout_returns_partial():
 # Test 4: Council with Fallback - Partial Results
 # =============================================================================
 
+
 @pytest.mark.asyncio
 async def test_run_council_with_fallback_returns_structured_metadata():
     """Test that run_council_with_fallback returns structured result schema."""
@@ -127,17 +136,18 @@ async def test_run_council_with_fallback_returns_structured_metadata():
     mock_stage2 = [{"model": "test", "ranking": "Test", "parsed_ranking": {}}]
     mock_stage3 = {"model": "chairman", "response": "Synthesis"}
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
-         patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
-         patch('llm_council.council.stage2_collect_rankings') as mock_s2, \
-         patch('llm_council.council.stage3_synthesize_final') as mock_s3, \
-         patch('llm_council.council.calculate_aggregate_rankings') as mock_agg, \
-         patch('llm_council.council.COUNCIL_MODELS', ['test']):
-
+    with (
+        patch("llm_council.council.stage1_collect_responses_with_status") as mock_s1,
+        patch("llm_council.council.stage1_5_normalize_styles") as mock_s15,
+        patch("llm_council.council.stage2_collect_rankings") as mock_s2,
+        patch("llm_council.council.stage3_synthesize_final") as mock_s3,
+        patch("llm_council.council.calculate_aggregate_rankings") as mock_agg,
+        patch("llm_council.council.COUNCIL_MODELS", ["test"]),
+    ):
         mock_s1.return_value = (
             mock_stage1,
             {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            {"test": {"status": "ok", "latency_ms": 1000}}
+            {"test": {"status": "ok", "latency_ms": 1000}},
         )
         mock_s15.return_value = (mock_stage1, {})
         mock_s2.return_value = (mock_stage2, {"Response A": "test"}, {})
@@ -166,7 +176,9 @@ async def test_run_council_with_fallback_partial_on_timeout():
         return [], {}, {}
 
     # Mock stage1 that also populates shared_raw_responses for timeout handling
-    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None):
+    async def mock_stage1_fn(
+        user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None
+    ):
         # Simulate the shared dict being populated (for timeout diagnostic preservation)
         if shared_raw_responses is not None:
             shared_raw_responses["model-a"] = {"status": "ok", "content": "A", "latency_ms": 100}
@@ -174,16 +186,25 @@ async def test_run_council_with_fallback_partial_on_timeout():
         return (
             [{"model": "model-a", "response": "A"}, {"model": "model-b", "response": "B"}],
             {},
-            {"model-a": {"status": "ok", "response": "A"}, "model-b": {"status": "ok", "response": "B"}}
+            {
+                "model-a": {"status": "ok", "response": "A"},
+                "model-b": {"status": "ok", "response": "B"},
+            },
         )
 
-    with patch('llm_council.council.stage1_collect_responses_with_status', side_effect=mock_stage1_fn), \
-         patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
-         patch('llm_council.council.stage2_collect_rankings', side_effect=slow_stage2), \
-         patch('llm_council.council.quick_synthesis') as mock_quick, \
-         patch('llm_council.council.COUNCIL_MODELS', ['model-a', 'model-b']):
-
-        mock_s15.return_value = ([{"model": "model-a", "response": "A"}, {"model": "model-b", "response": "B"}], {})
+    with (
+        patch(
+            "llm_council.council.stage1_collect_responses_with_status", side_effect=mock_stage1_fn
+        ),
+        patch("llm_council.council.stage1_5_normalize_styles") as mock_s15,
+        patch("llm_council.council.stage2_collect_rankings", side_effect=slow_stage2),
+        patch("llm_council.council.quick_synthesis") as mock_quick,
+        patch("llm_council.council.COUNCIL_MODELS", ["model-a", "model-b"]),
+    ):
+        mock_s15.return_value = (
+            [{"model": "model-a", "response": "A"}, {"model": "model-b", "response": "B"}],
+            {},
+        )
         mock_quick.return_value = ("Quick synthesis from partial data", {})
 
         # Pass short timeout explicitly
@@ -200,22 +221,19 @@ async def test_run_council_with_fallback_includes_model_statuses():
     """Test that result includes per-model status information."""
     from llm_council.council import run_council_with_fallback
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
-         patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
-         patch('llm_council.council.stage2_collect_rankings') as mock_s2, \
-         patch('llm_council.council.stage3_synthesize_final') as mock_s3, \
-         patch('llm_council.council.calculate_aggregate_rankings') as mock_agg, \
-         patch('llm_council.council.COUNCIL_MODELS', ['model-a', 'model-b']):
-
+    with (
+        patch("llm_council.council.stage1_collect_responses_with_status") as mock_s1,
+        patch("llm_council.council.stage1_5_normalize_styles") as mock_s15,
+        patch("llm_council.council.stage2_collect_rankings") as mock_s2,
+        patch("llm_council.council.stage3_synthesize_final") as mock_s3,
+        patch("llm_council.council.calculate_aggregate_rankings") as mock_agg,
+        patch("llm_council.council.COUNCIL_MODELS", ["model-a", "model-b"]),
+    ):
         model_statuses = {
             "model-a": {"status": "ok", "latency_ms": 1200},
             "model-b": {"status": "timeout", "latency_ms": 25000, "error": "Timeout"},
         }
-        mock_s1.return_value = (
-            [{"model": "model-a", "response": "A"}],
-            {},
-            model_statuses
-        )
+        mock_s1.return_value = ([{"model": "model-a", "response": "A"}], {}, model_statuses)
         mock_s15.return_value = ([{"model": "model-a", "response": "A"}], {})
         mock_s2.return_value = ([], {"Response A": "model-a"}, {})
         mock_s3.return_value = ({"model": "chairman", "response": "Synthesis"}, {}, None)
@@ -235,6 +253,7 @@ async def test_run_council_with_fallback_includes_model_statuses():
 # Test 5: Quick Synthesis (Fallback)
 # =============================================================================
 
+
 @pytest.mark.asyncio
 async def test_quick_synthesis_function():
     """Test quick_synthesis generates response from partial data."""
@@ -245,10 +264,10 @@ async def test_quick_synthesis_function():
         "model-b": {"status": "ok", "response": "Response B content"},
     }
 
-    with patch('llm_council.council.query_model') as mock_query:
+    with patch("llm_council.council.query_model") as mock_query:
         mock_query.return_value = {
             "content": "Synthesized from available responses",
-            "usage": {"total_tokens": 50}
+            "usage": {"total_tokens": 50},
         }
 
         synthesis, usage = await quick_synthesis("test query", partial_responses)
@@ -267,7 +286,7 @@ async def test_quick_synthesis_handles_chairman_failure():
         "model-a": {"status": "ok", "response": "Best response here"},
     }
 
-    with patch('llm_council.council.query_model') as mock_query:
+    with patch("llm_council.council.query_model") as mock_query:
         mock_query.return_value = None  # Chairman fails
 
         synthesis, usage = await quick_synthesis("test query", partial_responses)
@@ -279,6 +298,7 @@ async def test_quick_synthesis_handles_chairman_failure():
 # =============================================================================
 # Test 6: Warning Messages
 # =============================================================================
+
 
 def test_generate_partial_warning():
     """Test that partial result warning is generated correctly."""
@@ -315,6 +335,7 @@ def test_generate_partial_warning_all_ok():
 # Test 7: Integration - Full Council with Fallback
 # =============================================================================
 
+
 @pytest.mark.asyncio
 async def test_full_council_fallback_stage1_only():
     """Test fallback synthesis when only Stage 1 completes."""
@@ -325,29 +346,45 @@ async def test_full_council_fallback_stage1_only():
         await asyncio.sleep(100)
 
     # Mock stage1 that also populates shared_raw_responses for timeout handling
-    async def mock_stage1_fn(user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None):
+    async def mock_stage1_fn(
+        user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None
+    ):
         # Simulate the shared dict being populated (for timeout diagnostic preservation)
         if shared_raw_responses is not None:
             shared_raw_responses["a"] = {"status": "ok", "content": "A", "latency_ms": 100}
             shared_raw_responses["b"] = {"status": "ok", "content": "B", "latency_ms": 100}
             shared_raw_responses["c"] = {"status": "ok", "content": "C", "latency_ms": 100}
         return (
-            [{"model": "a", "response": "A"}, {"model": "b", "response": "B"}, {"model": "c", "response": "C"}],
+            [
+                {"model": "a", "response": "A"},
+                {"model": "b", "response": "B"},
+                {"model": "c", "response": "C"},
+            ],
             {},
-            {"a": {"status": "ok", "response": "A"}, "b": {"status": "ok", "response": "B"}, "c": {"status": "ok", "response": "C"}}
+            {
+                "a": {"status": "ok", "response": "A"},
+                "b": {"status": "ok", "response": "B"},
+                "c": {"status": "ok", "response": "C"},
+            },
         )
 
-    with patch('llm_council.council.stage1_collect_responses_with_status', side_effect=mock_stage1_fn), \
-         patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
-         patch('llm_council.council.stage2_collect_rankings', side_effect=timeout_stage2), \
-         patch('llm_council.council.quick_synthesis') as mock_quick, \
-         patch('llm_council.council.COUNCIL_MODELS', ['a', 'b', 'c']):
-
-        mock_s15.return_value = ([
-            {"model": "a", "response": "A"},
-            {"model": "b", "response": "B"},
-            {"model": "c", "response": "C"}
-        ], {})
+    with (
+        patch(
+            "llm_council.council.stage1_collect_responses_with_status", side_effect=mock_stage1_fn
+        ),
+        patch("llm_council.council.stage1_5_normalize_styles") as mock_s15,
+        patch("llm_council.council.stage2_collect_rankings", side_effect=timeout_stage2),
+        patch("llm_council.council.quick_synthesis") as mock_quick,
+        patch("llm_council.council.COUNCIL_MODELS", ["a", "b", "c"]),
+    ):
+        mock_s15.return_value = (
+            [
+                {"model": "a", "response": "A"},
+                {"model": "b", "response": "B"},
+                {"model": "c", "response": "C"},
+            ],
+            {},
+        )
         mock_quick.return_value = ("Fallback synthesis", {})
 
         # Pass short timeout explicitly
@@ -363,20 +400,28 @@ async def test_full_council_returns_complete_on_success():
     """Test that successful council returns complete status."""
     from llm_council.council import run_council_with_fallback
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
-         patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
-         patch('llm_council.council.stage2_collect_rankings') as mock_s2, \
-         patch('llm_council.council.stage3_synthesize_final') as mock_s3, \
-         patch('llm_council.council.calculate_aggregate_rankings') as mock_agg, \
-         patch('llm_council.council.COUNCIL_MODELS', ['a', 'b']):
-
+    with (
+        patch("llm_council.council.stage1_collect_responses_with_status") as mock_s1,
+        patch("llm_council.council.stage1_5_normalize_styles") as mock_s15,
+        patch("llm_council.council.stage2_collect_rankings") as mock_s2,
+        patch("llm_council.council.stage3_synthesize_final") as mock_s3,
+        patch("llm_council.council.calculate_aggregate_rankings") as mock_agg,
+        patch("llm_council.council.COUNCIL_MODELS", ["a", "b"]),
+    ):
         mock_s1.return_value = (
             [{"model": "a", "response": "A"}, {"model": "b", "response": "B"}],
             {},
-            {"a": {"status": "ok"}, "b": {"status": "ok"}}
+            {"a": {"status": "ok"}, "b": {"status": "ok"}},
         )
-        mock_s15.return_value = ([{"model": "a", "response": "A"}, {"model": "b", "response": "B"}], {})
-        mock_s2.return_value = ([{"model": "a", "ranking": "R", "parsed_ranking": {}}], {"Response A": "a"}, {})
+        mock_s15.return_value = (
+            [{"model": "a", "response": "A"}, {"model": "b", "response": "B"}],
+            {},
+        )
+        mock_s2.return_value = (
+            [{"model": "a", "ranking": "R", "parsed_ranking": {}}],
+            {"Response A": "a"},
+            {},
+        )
         mock_s3.return_value = ({"model": "chair", "response": "Full synthesis"}, {}, None)
         mock_agg.return_value = []
 
@@ -391,14 +436,16 @@ async def test_full_council_returns_complete_on_success():
 # Test 8: All Models Timeout - Failed Status
 # =============================================================================
 
+
 @pytest.mark.asyncio
 async def test_council_fails_when_all_models_timeout():
     """Test that council returns failed status when all models timeout."""
     from llm_council.council import run_council_with_fallback
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
-         patch('llm_council.council.COUNCIL_MODELS', ['a', 'b', 'c']):
-
+    with (
+        patch("llm_council.council.stage1_collect_responses_with_status") as mock_s1,
+        patch("llm_council.council.COUNCIL_MODELS", ["a", "b", "c"]),
+    ):
         # All models timeout
         mock_s1.return_value = (
             [],  # No successful responses
@@ -407,7 +454,7 @@ async def test_council_fails_when_all_models_timeout():
                 "a": {"status": "timeout", "error": "Timeout"},
                 "b": {"status": "timeout", "error": "Timeout"},
                 "c": {"status": "timeout", "error": "Timeout"},
-            }
+            },
         )
 
         result = await run_council_with_fallback("test")
@@ -421,6 +468,7 @@ async def test_council_fails_when_all_models_timeout():
 # Test 9: Progress Callback Integration
 # =============================================================================
 
+
 @pytest.mark.asyncio
 async def test_council_with_progress_callback():
     """Test that run_council_with_fallback supports progress callbacks."""
@@ -431,13 +479,14 @@ async def test_council_with_progress_callback():
     async def track_progress(step, total, message):
         progress_updates.append((step, total, message))
 
-    with patch('llm_council.council.stage1_collect_responses_with_status') as mock_s1, \
-         patch('llm_council.council.stage1_5_normalize_styles') as mock_s15, \
-         patch('llm_council.council.stage2_collect_rankings') as mock_s2, \
-         patch('llm_council.council.stage3_synthesize_final') as mock_s3, \
-         patch('llm_council.council.calculate_aggregate_rankings') as mock_agg, \
-         patch('llm_council.council.COUNCIL_MODELS', ['a']):
-
+    with (
+        patch("llm_council.council.stage1_collect_responses_with_status") as mock_s1,
+        patch("llm_council.council.stage1_5_normalize_styles") as mock_s15,
+        patch("llm_council.council.stage2_collect_rankings") as mock_s2,
+        patch("llm_council.council.stage3_synthesize_final") as mock_s3,
+        patch("llm_council.council.calculate_aggregate_rankings") as mock_agg,
+        patch("llm_council.council.COUNCIL_MODELS", ["a"]),
+    ):
         mock_s1.return_value = ([{"model": "a", "response": "A"}], {}, {"a": {"status": "ok"}})
         mock_s15.return_value = ([{"model": "a", "response": "A"}], {})
         mock_s2.return_value = ([], {"Response A": "a"}, {})

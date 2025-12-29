@@ -2,6 +2,7 @@
 
 ADR-032: Migrated from config.py to unified_config.py.
 """
+
 import os
 import tempfile
 from pathlib import Path
@@ -78,14 +79,11 @@ def test_yaml_config_file_loading():
 
         test_config = {
             "council": {
-                "council": {
-                    "models": ["custom1", "custom2"],
-                    "chairman": "custom-chairman"
-                }
+                "council": {"models": ["custom1", "custom2"], "chairman": "custom-chairman"}
             }
         }
 
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             yaml.dump(test_config, f)
 
         # Point env var to temp config file
@@ -106,7 +104,7 @@ def test_default_models_used():
 
     with patch.dict(os.environ, {}, clear=True):
         # Point to non-existent config
-        with patch('llm_council.unified_config._find_config_file', return_value=None):
+        with patch("llm_council.unified_config._find_config_file", return_value=None):
             unified_config.reload_config()
             config = unified_config.get_config()
 

@@ -60,7 +60,7 @@ class TestGatewayRouterModelRouting:
         custom_gateway = OpenRouterGateway(api_key="custom-key")
         router = GatewayRouter(
             gateways={"openrouter": OpenRouterGateway(), "custom": custom_gateway},
-            model_routing={"anthropic/*": "custom"}
+            model_routing={"anthropic/*": "custom"},
         )
 
         # Claude models should route to custom gateway
@@ -76,18 +76,18 @@ class TestGatewayRouterComplete:
         """complete() should return GatewayResponse."""
         from llm_council.gateway.router import GatewayRouter
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         router = GatewayRouter()
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = GatewayResponse(
@@ -98,9 +98,7 @@ class TestGatewayRouterComplete:
         )
 
         with patch.object(
-            router.gateways["openrouter"],
-            "complete",
-            new_callable=AsyncMock
+            router.gateways["openrouter"], "complete", new_callable=AsyncMock
         ) as mock_complete:
             mock_complete.return_value = mock_response
             response = await router.complete(request)
@@ -113,7 +111,10 @@ class TestGatewayRouterComplete:
         """complete() should respect circuit breaker state."""
         from llm_council.gateway.router import GatewayRouter
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
         from llm_council.gateway.errors import CircuitOpenError
 
@@ -121,11 +122,8 @@ class TestGatewayRouterComplete:
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         # Trip the circuit breaker
@@ -185,9 +183,7 @@ class TestGatewayRouterHealthCheck:
         )
 
         with patch.object(
-            router.gateways["openrouter"],
-            "health_check",
-            new_callable=AsyncMock
+            router.gateways["openrouter"], "health_check", new_callable=AsyncMock
         ) as mock_hc:
             mock_hc.return_value = mock_health
             results = await router.health_check_all()
@@ -211,9 +207,7 @@ class TestGatewayRouterHealthCheck:
         )
 
         with patch.object(
-            router.gateways["openrouter"],
-            "health_check",
-            new_callable=AsyncMock
+            router.gateways["openrouter"], "health_check", new_callable=AsyncMock
         ) as mock_hc:
             mock_hc.return_value = mock_health
             healthy = await router.get_healthy_gateways()
@@ -244,7 +238,10 @@ class TestGatewayRouterParallelQueries:
         """complete_many() should execute requests in parallel."""
         from llm_council.gateway.router import GatewayRouter
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         router = GatewayRouter()
@@ -254,10 +251,9 @@ class TestGatewayRouterParallelQueries:
                 model=f"openai/gpt-4o-{i}",
                 messages=[
                     CanonicalMessage(
-                        role="user",
-                        content=[ContentBlock(type="text", text=f"Query {i}")]
+                        role="user", content=[ContentBlock(type="text", text=f"Query {i}")]
                     )
-                ]
+                ],
             )
             for i in range(3)
         ]
@@ -273,9 +269,7 @@ class TestGatewayRouterParallelQueries:
         ]
 
         with patch.object(
-            router.gateways["openrouter"],
-            "complete",
-            new_callable=AsyncMock
+            router.gateways["openrouter"], "complete", new_callable=AsyncMock
         ) as mock_complete:
             mock_complete.side_effect = mock_responses
             results = await router.complete_many(requests)
@@ -288,7 +282,10 @@ class TestGatewayRouterParallelQueries:
         """complete_many() should return partial results on failures."""
         from llm_council.gateway.router import GatewayRouter
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         router = GatewayRouter()
@@ -298,10 +295,9 @@ class TestGatewayRouterParallelQueries:
                 model=f"openai/gpt-4o-{i}",
                 messages=[
                     CanonicalMessage(
-                        role="user",
-                        content=[ContentBlock(type="text", text=f"Query {i}")]
+                        role="user", content=[ContentBlock(type="text", text=f"Query {i}")]
                     )
-                ]
+                ],
             )
             for i in range(2)
         ]
@@ -325,9 +321,7 @@ class TestGatewayRouterParallelQueries:
                 )
 
         with patch.object(
-            router.gateways["openrouter"],
-            "complete",
-            new_callable=AsyncMock
+            router.gateways["openrouter"], "complete", new_callable=AsyncMock
         ) as mock_complete:
             mock_complete.side_effect = side_effect
             results = await router.complete_many(requests)

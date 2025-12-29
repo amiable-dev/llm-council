@@ -196,9 +196,7 @@ class TestRegistryMetrics:
         registry = get_registry()
 
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(
-            side_effect=Exception("API error")
-        )
+        mock_provider.list_available_models = MagicMock(side_effect=Exception("API error"))
 
         await registry.refresh_registry(mock_provider, max_retries=1)
 
@@ -232,15 +230,11 @@ class TestRegistryMetrics:
         clear_layer_events()
 
         # Second refresh fails
-        mock_provider.list_available_models = MagicMock(
-            side_effect=Exception("API error")
-        )
+        mock_provider.list_available_models = MagicMock(side_effect=Exception("API error"))
         await registry.refresh_registry(mock_provider, max_retries=1)
 
         events = get_layer_events()
-        stale_events = [
-            e for e in events if e.event_type == LayerEventType.DISCOVERY_STALE_SERVE
-        ]
+        stale_events = [e for e in events if e.event_type == LayerEventType.DISCOVERY_STALE_SERVE]
         assert len(stale_events) >= 1
         assert stale_events[0].data["model_count"] == 1
 

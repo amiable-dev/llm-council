@@ -99,6 +99,7 @@ class NotDiamondClient:
     def _get_cache_key(self, endpoint: str, data: Dict) -> str:
         """Generate cache key for request."""
         import json
+
         key_str = f"{endpoint}:{json.dumps(data, sort_keys=True)}"
         return hashlib.sha256(key_str.encode()).hexdigest()[:16]
 

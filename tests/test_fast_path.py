@@ -30,11 +30,14 @@ class TestFastPathConfig:
 
     def test_config_from_env(self):
         """Config should be loadable from environment variables."""
-        with patch.dict("os.environ", {
-            "LLM_COUNCIL_FAST_PATH_ENABLED": "true",
-            "LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD": "0.95",
-            "LLM_COUNCIL_FAST_PATH_MODEL": "openai/gpt-4o",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_COUNCIL_FAST_PATH_ENABLED": "true",
+                "LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD": "0.95",
+                "LLM_COUNCIL_FAST_PATH_MODEL": "openai/gpt-4o",
+            },
+        ):
             config = FastPathConfig.from_env()
             assert config.enabled is True
             assert config.confidence_threshold == 0.95
@@ -322,7 +325,9 @@ class TestFastPathObservability:
 
         # Check event was emitted
         events = get_layer_events()
-        fast_path_events = [e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED]
+        fast_path_events = [
+            e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED
+        ]
         assert len(fast_path_events) == 1
 
         event = fast_path_events[0]
@@ -349,7 +354,9 @@ class TestFastPathObservability:
 
         # Event should still be emitted
         events = get_layer_events()
-        fast_path_events = [e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED]
+        fast_path_events = [
+            e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED
+        ]
         assert len(fast_path_events) == 1
         assert fast_path_events[0].data["escalated"] is True
 
@@ -370,5 +377,7 @@ class TestFastPathObservability:
 
         # No fast path events
         events = get_layer_events()
-        fast_path_events = [e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED]
+        fast_path_events = [
+            e for e in events if e.event_type == LayerEventType.L2_FAST_PATH_TRIGGERED
+        ]
         assert len(fast_path_events) == 0

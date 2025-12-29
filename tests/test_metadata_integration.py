@@ -237,10 +237,13 @@ class TestDynamicProviderIntegration:
         from llm_council.metadata import get_provider, reload_provider
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
-        with patch.dict(os.environ, {
-            "LLM_COUNCIL_MODEL_INTELLIGENCE": "true",
-            "LLM_COUNCIL_OFFLINE": "true",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_COUNCIL_MODEL_INTELLIGENCE": "true",
+                "LLM_COUNCIL_OFFLINE": "true",
+            },
+        ):
             reload_provider()
             provider = get_provider()
             assert isinstance(provider, StaticRegistryProvider)

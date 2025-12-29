@@ -116,16 +116,18 @@ class TestModelSessionMetricSerialization:
         """Should deserialize from JSONL line."""
         from llm_council.performance.types import ModelSessionMetric
 
-        line = json.dumps({
-            "schema_version": "1.0.0",
-            "session_id": "sess-789",
-            "model_id": "anthropic/claude-3-opus",
-            "timestamp": "2025-12-24T00:00:00Z",
-            "latency_ms": 2000,
-            "borda_score": 0.85,
-            "parse_success": True,
-            "reasoning_tokens_used": None,
-        })
+        line = json.dumps(
+            {
+                "schema_version": "1.0.0",
+                "session_id": "sess-789",
+                "model_id": "anthropic/claude-3-opus",
+                "timestamp": "2025-12-24T00:00:00Z",
+                "latency_ms": 2000,
+                "borda_score": 0.85,
+                "parse_success": True,
+                "reasoning_tokens_used": None,
+            }
+        )
 
         metric = ModelSessionMetric.from_jsonl_line(line)
         assert metric.session_id == "sess-789"
@@ -175,16 +177,18 @@ class TestModelSessionMetricSerialization:
         from llm_council.performance.types import ModelSessionMetric
 
         # Simulate older schema without reasoning_tokens_used
-        line = json.dumps({
-            "schema_version": "0.9.0",
-            "session_id": "old-session",
-            "model_id": "openai/gpt-4",
-            "timestamp": "2025-01-01T00:00:00Z",
-            "latency_ms": 1000,
-            "borda_score": 0.5,
-            "parse_success": True,
-            # Missing: reasoning_tokens_used
-        })
+        line = json.dumps(
+            {
+                "schema_version": "0.9.0",
+                "session_id": "old-session",
+                "model_id": "openai/gpt-4",
+                "timestamp": "2025-01-01T00:00:00Z",
+                "latency_ms": 1000,
+                "borda_score": 0.5,
+                "parse_success": True,
+                # Missing: reasoning_tokens_used
+            }
+        )
 
         metric = ModelSessionMetric.from_jsonl_line(line)
         assert metric.session_id == "old-session"
@@ -329,10 +333,7 @@ class TestAppendPerformanceRecords:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "metrics.jsonl"
 
-            records = [
-                ModelSessionMetric(session_id=f"s{i}", model_id=f"m{i}")
-                for i in range(5)
-            ]
+            records = [ModelSessionMetric(session_id=f"s{i}", model_id=f"m{i}") for i in range(5)]
             count = append_performance_records(records, path)
 
             assert count == 5

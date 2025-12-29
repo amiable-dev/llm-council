@@ -109,20 +109,14 @@ class TestGetModelVotingAuthority:
         from llm_council.voting import VotingAuthority, get_model_voting_authority
 
         # Model in frontier tier should get ADVISORY by default
-        authority = get_model_voting_authority(
-            model_id="frontier/preview-model",
-            tier="frontier"
-        )
+        authority = get_model_voting_authority(model_id="frontier/preview-model", tier="frontier")
         assert authority == VotingAuthority.ADVISORY
 
     def test_get_model_voting_authority_high_tier(self):
         """High tier models should get FULL by default."""
         from llm_council.voting import VotingAuthority, get_model_voting_authority
 
-        authority = get_model_voting_authority(
-            model_id="openai/gpt-4o",
-            tier="high"
-        )
+        authority = get_model_voting_authority(model_id="openai/gpt-4o", tier="high")
         assert authority == VotingAuthority.FULL
 
     def test_get_model_voting_authority_respects_override(self):
@@ -131,9 +125,7 @@ class TestGetModelVotingAuthority:
 
         # Override frontier model to have FULL authority
         authority = get_model_voting_authority(
-            model_id="frontier/preview-model",
-            tier="frontier",
-            override=VotingAuthority.FULL
+            model_id="frontier/preview-model", tier="frontier", override=VotingAuthority.FULL
         )
         assert authority == VotingAuthority.FULL
 
@@ -141,8 +133,5 @@ class TestGetModelVotingAuthority:
         """Unknown tier should default to FULL for safety."""
         from llm_council.voting import VotingAuthority, get_model_voting_authority
 
-        authority = get_model_voting_authority(
-            model_id="unknown/model",
-            tier="unknown_tier"
-        )
+        authority = get_model_voting_authority(model_id="unknown/model", tier="unknown_tier")
         assert authority == VotingAuthority.FULL

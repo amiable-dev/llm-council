@@ -212,9 +212,7 @@ def parse_binary_verdict(chairman_response: str) -> VerdictResult:
     # Validate verdict value
     verdict = data["verdict"].lower()
     if verdict not in ["approved", "rejected"]:
-        raise ValueError(
-            f"Binary verdict must be 'approved' or 'rejected', got '{verdict}'"
-        )
+        raise ValueError(f"Binary verdict must be 'approved' or 'rejected', got '{verdict}'")
 
     return VerdictResult(
         verdict_type=VerdictType.BINARY,
@@ -320,9 +318,7 @@ Output ONLY valid JSON with no additional text:
 }}"""
 
 
-def _get_tie_breaker_chairman_prompt(
-    query: str, rankings: str, top_candidates: str
-) -> str:
+def _get_tie_breaker_chairman_prompt(query: str, rankings: str, top_candidates: str) -> str:
     """Generate chairman prompt for tie-breaker mode."""
     return f"""You are the Chairman resolving a DEADLOCKED deliberation.
 

@@ -57,7 +57,8 @@ class CouncilRequest(BaseModel):
         default=None, description="URL to receive webhook notifications"
     )
     webhook_events: Optional[List[str]] = Field(
-        default=None, description="Events to subscribe to (default: council.complete, council.error)"
+        default=None,
+        description="Events to subscribe to (default: council.complete, council.error)",
     )
     webhook_secret: Optional[str] = Field(
         default=None, description="HMAC secret for webhook signature verification"
@@ -65,11 +66,10 @@ class CouncilRequest(BaseModel):
     # ADR-025b Jury Mode
     verdict_type: Optional[str] = Field(
         default="synthesis",
-        description="Type of verdict: 'synthesis' (default), 'binary' (approved/rejected), or 'tie_breaker'"
+        description="Type of verdict: 'synthesis' (default), 'binary' (approved/rejected), or 'tie_breaker'",
     )
     include_dissent: Optional[bool] = Field(
-        default=False,
-        description="Extract minority opinions from Stage 2 evaluations (ADR-025b)"
+        default=False, description="Extract minority opinions from Stage 2 evaluations (ADR-025b)"
     )
 
 
@@ -133,7 +133,9 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
 
     # Parse verdict_type (ADR-025b)
     try:
-        verdict_type_enum = VerdictType(request.verdict_type.lower() if request.verdict_type else "synthesis")
+        verdict_type_enum = VerdictType(
+            request.verdict_type.lower() if request.verdict_type else "synthesis"
+        )
     except ValueError:
         verdict_type_enum = VerdictType.SYNTHESIS
 

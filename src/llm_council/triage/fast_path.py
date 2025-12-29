@@ -65,16 +65,12 @@ class FastPathConfig:
         enabled_str = os.environ.get("LLM_COUNCIL_FAST_PATH_ENABLED", "false")
         enabled = enabled_str.lower() in ("true", "1", "yes")
 
-        threshold_str = os.environ.get(
-            "LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD", "0.92"
-        )
+        threshold_str = os.environ.get("LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD", "0.92")
         threshold = float(threshold_str)
 
         model = os.environ.get("LLM_COUNCIL_FAST_PATH_MODEL", "auto")
 
-        max_length_str = os.environ.get(
-            "LLM_COUNCIL_FAST_PATH_MAX_QUERY_LENGTH", "500"
-        )
+        max_length_str = os.environ.get("LLM_COUNCIL_FAST_PATH_MAX_QUERY_LENGTH", "500")
         max_length = int(max_length_str)
 
         return cls(
@@ -108,15 +104,36 @@ class FastPathResult:
 
 # High confidence keywords
 HIGH_CONFIDENCE_KEYWORDS = {
-    "certain", "definitely", "absolutely", "clearly", "obviously",
-    "undoubtedly", "without doubt", "certainly", "surely", "confident",
+    "certain",
+    "definitely",
+    "absolutely",
+    "clearly",
+    "obviously",
+    "undoubtedly",
+    "without doubt",
+    "certainly",
+    "surely",
+    "confident",
 }
 
 # Low confidence keywords
 LOW_CONFIDENCE_KEYWORDS = {
-    "maybe", "perhaps", "possibly", "might", "could be", "not sure",
-    "uncertain", "unclear", "I think", "I believe", "seems like",
-    "probably", "likely", "appears to", "guess", "assume",
+    "maybe",
+    "perhaps",
+    "possibly",
+    "might",
+    "could be",
+    "not sure",
+    "uncertain",
+    "unclear",
+    "I think",
+    "I believe",
+    "seems like",
+    "probably",
+    "likely",
+    "appears to",
+    "guess",
+    "assume",
 }
 
 
@@ -250,9 +267,7 @@ class FastPathRouter:
         # Simple and medium queries are eligible
         return True
 
-    def select_fast_path_model(
-        self, tier_contract: Optional[TierContract] = None
-    ) -> str:
+    def select_fast_path_model(self, tier_contract: Optional[TierContract] = None) -> str:
         """Select model for fast path.
 
         Args:

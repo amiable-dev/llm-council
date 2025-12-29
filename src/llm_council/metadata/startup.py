@@ -41,10 +41,7 @@ def _is_discovery_enabled() -> bool:
         from ..unified_config import get_config
 
         config = get_config()
-        return (
-            config.model_intelligence.enabled
-            and config.model_intelligence.discovery.enabled
-        )
+        return config.model_intelligence.enabled and config.model_intelligence.discovery.enabled
     except Exception:
         return False
 
@@ -113,9 +110,7 @@ async def start_discovery_worker() -> None:
         )
     )
 
-    logger.info(
-        f"Discovery worker started (interval: {config.refresh_interval_seconds}s)"
-    )
+    logger.info(f"Discovery worker started (interval: {config.refresh_interval_seconds}s)")
 
 
 async def stop_discovery_worker() -> None:

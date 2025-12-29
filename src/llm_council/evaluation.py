@@ -23,6 +23,7 @@ from datetime import datetime
 @dataclass
 class EvaluationCriteria:
     """A single evaluation criterion for a question."""
+
     description: str
     keywords: List[str] = field(default_factory=list)  # Keywords to look for
     required: bool = True  # Is this criterion required for a "good" answer?
@@ -31,6 +32,7 @@ class EvaluationCriteria:
 @dataclass
 class BenchmarkQuestion:
     """A question in the benchmark dataset."""
+
     id: str
     query: str
     criteria: List[EvaluationCriteria]
@@ -42,6 +44,7 @@ class BenchmarkQuestion:
 @dataclass
 class ResponseScore:
     """Score for a single response."""
+
     criteria_met: int
     criteria_total: int
     coverage_score: float  # criteria_met / criteria_total
@@ -52,6 +55,7 @@ class ResponseScore:
 @dataclass
 class BenchmarkResult:
     """Result of a single benchmark run."""
+
     question_id: str
     question_category: str
     council_score: ResponseScore
@@ -61,10 +65,7 @@ class BenchmarkResult:
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
-def evaluate_response(
-    response: str,
-    criteria: List[EvaluationCriteria]
-) -> ResponseScore:
+def evaluate_response(response: str, criteria: List[EvaluationCriteria]) -> ResponseScore:
     """Score a response against evaluation criteria.
 
     Uses keyword matching for objective scoring. For more sophisticated
@@ -92,7 +93,9 @@ def evaluate_response(
             # Require at least 2 significant words to match
             significant_words = [w for w in desc_words if len(w) > 4]
             if significant_words:
-                met = sum(1 for w in significant_words if w in response_lower) >= min(2, len(significant_words))
+                met = sum(1 for w in significant_words if w in response_lower) >= min(
+                    2, len(significant_words)
+                )
 
         criteria_details[criterion.description] = met
         if met:
@@ -106,7 +109,7 @@ def evaluate_response(
         criteria_total=criteria_total,
         coverage_score=round(coverage_score, 3),
         response_length=len(response),
-        criteria_details=criteria_details
+        criteria_details=criteria_details,
     )
 
 
@@ -145,18 +148,20 @@ def load_test_dataset(path: str) -> List[BenchmarkQuestion]:
             EvaluationCriteria(
                 description=c["description"],
                 keywords=c.get("keywords", []),
-                required=c.get("required", True)
+                required=c.get("required", True),
             )
             for c in q.get("criteria", [])
         ]
-        questions.append(BenchmarkQuestion(
-            id=q["id"],
-            query=q["query"],
-            criteria=criteria,
-            category=q.get("category", "general"),
-            difficulty=q.get("difficulty", "medium"),
-            reference_answer=q.get("reference_answer")
-        ))
+        questions.append(
+            BenchmarkQuestion(
+                id=q["id"],
+                query=q["query"],
+                criteria=criteria,
+                category=q.get("category", "general"),
+                difficulty=q.get("difficulty", "medium"),
+                reference_answer=q.get("reference_answer"),
+            )
+        )
 
     return questions
 
@@ -165,7 +170,7 @@ async def run_benchmark(
     dataset_path: str,
     models: Optional[List[str]] = None,
     include_council: bool = True,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> List[BenchmarkResult]:
     """Run the full benchmark suite.
 
@@ -182,6 +187,7 @@ async def run_benchmark(
     """
     from llm_council.council import run_full_council
     from llm_council.openrouter import query_model
+
     # ADR-032: Migrated to unified_config
     from llm_council.unified_config import get_config
 
@@ -228,14 +234,16 @@ async def run_benchmark(
                 if verbose:
                     print(f"    Council error: {e}")
 
-        results.append(BenchmarkResult(
-            question_id=question.id,
-            question_category=question.category,
-            council_score=council_score,
-            single_model_scores=single_model_scores,
-            council_response=council_response,
-            single_model_responses=single_model_responses
-        ))
+        results.append(
+            BenchmarkResult(
+                question_id=question.id,
+                question_category=question.category,
+                council_score=council_score,
+                single_model_scores=single_model_scores,
+                council_response=council_response,
+                single_model_responses=single_model_responses,
+            )
+        )
 
     return results
 
@@ -266,7 +274,8 @@ def calculate_aggregate_stats(results: List[BenchmarkResult]) -> Dict[str, Any]:
             if model in r.single_model_scores
         ]
         wins_vs_council = sum(
-            1 for r in results
+            1
+            for r in results
             if model in r.single_model_scores
             and r.single_model_scores[model].coverage_score > r.council_score.coverage_score
         )
@@ -275,14 +284,14 @@ def calculate_aggregate_stats(results: List[BenchmarkResult]) -> Dict[str, Any]:
             "avg_coverage": round(sum(coverages) / len(coverages), 3) if coverages else 0,
             "wins_vs_council": wins_vs_council,
             "win_rate_vs_council": round(wins_vs_council / len(results), 3) if results else 0,
-            "samples": len(coverages)
+            "samples": len(coverages),
         }
 
     return {
         "total_questions": len(results),
         "council_avg_coverage": round(council_avg, 3),
         "model_stats": model_stats,
-        "categories": list(set(r.question_category for r in results))
+        "categories": list(set(r.question_category for r in results)),
     }
 
 
@@ -315,13 +324,15 @@ def print_benchmark_report(results: List[BenchmarkResult]) -> str:
             f"{model_stat['win_rate_vs_council']*100:.1f}%"
         )
 
-    lines.extend([
-        "-" * 70,
-        "",
-        "Coverage = fraction of evaluation criteria met in response",
-        "Win Rate = how often single model beat council",
-        "=" * 70,
-    ])
+    lines.extend(
+        [
+            "-" * 70,
+            "",
+            "Coverage = fraction of evaluation criteria met in response",
+            "Win Rate = how often single model beat council",
+            "=" * 70,
+        ]
+    )
 
     report = "\n".join(lines)
     print(report)
@@ -340,12 +351,11 @@ def save_results(results: List[BenchmarkResult], path: str) -> None:
                 "council_coverage": r.council_score.coverage_score,
                 "council_criteria_met": r.council_score.criteria_met,
                 "single_model_coverages": {
-                    model: score.coverage_score
-                    for model, score in r.single_model_scores.items()
-                }
+                    model: score.coverage_score for model, score in r.single_model_scores.items()
+                },
             }
             for r in results
-        ]
+        ],
     }
 
     with open(path, "w") as f:
@@ -363,25 +373,30 @@ SAMPLE_BENCHMARK = {
             "criteria": [
                 {
                     "description": "Explains data fetching differences",
-                    "keywords": ["over-fetching", "under-fetching", "single endpoint", "multiple endpoints"],
-                    "required": True
+                    "keywords": [
+                        "over-fetching",
+                        "under-fetching",
+                        "single endpoint",
+                        "multiple endpoints",
+                    ],
+                    "required": True,
                 },
                 {
                     "description": "Mentions schema/type system",
                     "keywords": ["schema", "type", "typed", "introspection"],
-                    "required": True
+                    "required": True,
                 },
                 {
                     "description": "Discusses caching implications",
                     "keywords": ["cache", "caching", "HTTP cache", "CDN"],
-                    "required": False
+                    "required": False,
                 },
                 {
                     "description": "Mentions versioning approaches",
                     "keywords": ["version", "versioning", "evolution", "deprecation"],
-                    "required": False
-                }
-            ]
+                    "required": False,
+                },
+            ],
         },
         {
             "id": "tech-002",
@@ -392,24 +407,24 @@ SAMPLE_BENCHMARK = {
                 {
                     "description": "Defines all three properties (Consistency, Availability, Partition tolerance)",
                     "keywords": ["consistency", "availability", "partition"],
-                    "required": True
+                    "required": True,
                 },
                 {
                     "description": "Explains the trade-off (can only have 2 of 3)",
                     "keywords": ["trade-off", "choose two", "sacrifice", "cannot have all"],
-                    "required": True
+                    "required": True,
                 },
                 {
                     "description": "Gives practical database examples",
                     "keywords": ["MongoDB", "Cassandra", "PostgreSQL", "DynamoDB", "Spanner"],
-                    "required": False
+                    "required": False,
                 },
                 {
                     "description": "Mentions eventual consistency",
                     "keywords": ["eventual consistency", "eventually consistent"],
-                    "required": False
-                }
-            ]
+                    "required": False,
+                },
+            ],
         },
         {
             "id": "reasoning-001",
@@ -420,25 +435,25 @@ SAMPLE_BENCHMARK = {
                 {
                     "description": "Considers productivity differences",
                     "keywords": ["productivity", "output", "velocity", "experience", "ramp-up"],
-                    "required": True
+                    "required": True,
                 },
                 {
                     "description": "Mentions mentorship/management overhead",
                     "keywords": ["mentor", "management", "oversight", "training", "guidance"],
-                    "required": True
+                    "required": True,
                 },
                 {
                     "description": "Discusses risk factors",
                     "keywords": ["risk", "bus factor", "turnover", "retention"],
-                    "required": False
+                    "required": False,
                 },
                 {
                     "description": "Considers company stage/needs",
                     "keywords": ["stage", "growth", "scale", "early-stage", "startup"],
-                    "required": False
-                }
-            ]
-        }
+                    "required": False,
+                },
+            ],
+        },
     ]
 }
 

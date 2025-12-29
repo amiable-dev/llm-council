@@ -68,7 +68,7 @@ class TestRequestyBYOK:
             byok_keys={
                 "anthropic": "sk-ant-test-key",
                 "openai": "sk-openai-test-key",
-            }
+            },
         )
         assert gateway.byok_keys.get("anthropic") == "sk-ant-test-key"
         assert gateway.byok_keys.get("openai") == "sk-openai-test-key"
@@ -77,10 +77,7 @@ class TestRequestyBYOK:
         """BYOK should inject provider API key into request headers."""
         from llm_council.gateway.requesty import RequestyGateway
 
-        gateway = RequestyGateway(
-            byok_enabled=True,
-            byok_keys={"anthropic": "sk-ant-test"}
-        )
+        gateway = RequestyGateway(byok_enabled=True, byok_keys={"anthropic": "sk-ant-test"})
 
         headers = gateway._get_byok_headers("anthropic/claude-3-5-sonnet-20241022")
         assert "x-provider-api-key" in headers or "X-Provider-API-Key" in headers
@@ -96,8 +93,7 @@ class TestRequestyMessageConversion:
 
         gateway = RequestyGateway()
         msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello, world!")]
+            role="user", content=[ContentBlock(type="text", text="Hello, world!")]
         )
 
         result = gateway._convert_message(msg)
@@ -116,7 +112,7 @@ class TestRequestyMessageConversion:
             content=[
                 ContentBlock(type="text", text="What's in this image?"),
                 ContentBlock(type="image", image_url="https://example.com/img.png"),
-            ]
+            ],
         )
 
         result = gateway._convert_message(msg)
@@ -133,28 +129,28 @@ class TestRequestyComplete:
         """complete() should return GatewayResponse."""
         from llm_council.gateway.requesty import RequestyGateway
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         gateway = RequestyGateway()
         request = GatewayRequest(
             model="anthropic/claude-3-5-sonnet-20241022",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = {
             "status": "ok",
             "content": "Hi there!",
             "latency_ms": 150,
-            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
         }
 
-        with patch.object(gateway, '_query_requesty', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_requesty", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -168,32 +164,19 @@ class TestRequestyComplete:
     async def test_complete_with_byok(self):
         """complete() should use BYOK headers when enabled."""
         from llm_council.gateway.requesty import RequestyGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
-        gateway = RequestyGateway(
-            byok_enabled=True,
-            byok_keys={"anthropic": "sk-ant-test"}
-        )
+        gateway = RequestyGateway(byok_enabled=True, byok_keys={"anthropic": "sk-ant-test"})
         request = GatewayRequest(
             model="anthropic/claude-3-5-sonnet-20241022",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
-        mock_response = {
-            "status": "ok",
-            "content": "Hi!",
-            "latency_ms": 100,
-            "usage": {}
-        }
+        mock_response = {"status": "ok", "content": "Hi!", "latency_ms": 100, "usage": {}}
 
-        with patch.object(gateway, '_query_requesty', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_requesty", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -207,29 +190,20 @@ class TestRequestyComplete:
     async def test_complete_handles_timeout(self):
         """complete() should handle timeout properly."""
         from llm_council.gateway.requesty import RequestyGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = RequestyGateway()
         request = GatewayRequest(
             model="anthropic/claude-3-5-sonnet-20241022",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
-            timeout=30.0
+            timeout=30.0,
         )
 
-        mock_response = {
-            "status": "timeout",
-            "latency_ms": 30000,
-            "error": "Timeout after 30s"
-        }
+        mock_response = {"status": "timeout", "latency_ms": 30000, "error": "Timeout after 30s"}
 
-        with patch.object(gateway, '_query_requesty', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_requesty", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -240,29 +214,24 @@ class TestRequestyComplete:
     async def test_complete_handles_rate_limit(self):
         """complete() should handle rate limiting with retry_after."""
         from llm_council.gateway.requesty import RequestyGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = RequestyGateway()
         request = GatewayRequest(
             model="anthropic/claude-3-5-sonnet-20241022",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = {
             "status": "rate_limited",
             "latency_ms": 50,
             "error": "Rate limited",
-            "retry_after": 60
+            "retry_after": 60,
         }
 
-        with patch.object(gateway, '_query_requesty', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_requesty", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -281,14 +250,9 @@ class TestRequestyHealthCheck:
 
         gateway = RequestyGateway()
 
-        mock_response = {
-            "status": "ok",
-            "content": "pong",
-            "latency_ms": 50,
-            "usage": {}
-        }
+        mock_response = {"status": "ok", "content": "pong", "latency_ms": 50, "usage": {}}
 
-        with patch.object(gateway, '_query_requesty', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_requesty", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             health = await gateway.health_check()
 
@@ -305,13 +269,9 @@ class TestRequestyHealthCheck:
 
         gateway = RequestyGateway()
 
-        mock_response = {
-            "status": "error",
-            "latency_ms": 100,
-            "error": "Connection refused"
-        }
+        mock_response = {"status": "error", "latency_ms": 100, "error": "Connection refused"}
 
-        with patch.object(gateway, '_query_requesty', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_requesty", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             health = await gateway.health_check()
 
@@ -326,9 +286,9 @@ class TestRequestyGatewayConfig:
         """Gateway should use REQUESTY_API_KEY from environment."""
         from llm_council.gateway.requesty import RequestyGateway
 
-        with patch.dict('os.environ', {'REQUESTY_API_KEY': 'test-requesty-key'}):
+        with patch.dict("os.environ", {"REQUESTY_API_KEY": "test-requesty-key"}):
             gateway = RequestyGateway()
-            assert gateway._api_key == 'test-requesty-key'
+            assert gateway._api_key == "test-requesty-key"
 
     def test_gateway_allows_custom_api_key(self):
         """Gateway should accept custom API key."""
@@ -370,7 +330,7 @@ class TestRequestyIntegrationWithRouter:
         router = GatewayRouter(
             gateways={"openrouter": openrouter, "requesty": requesty},
             default_gateway="openrouter",
-            fallback_chains={"openrouter": ["requesty"]}
+            fallback_chains={"openrouter": ["requesty"]},
         )
 
         assert router._fallback_chains.get("openrouter") == ["requesty"]

@@ -37,7 +37,9 @@ class TestFrontierLayerEvents:
         from llm_council.layer_contracts import LayerEventType
 
         assert hasattr(LayerEventType, "FRONTIER_COST_CEILING_EXCEEDED")
-        assert LayerEventType.FRONTIER_COST_CEILING_EXCEEDED.value == "frontier_cost_ceiling_exceeded"
+        assert (
+            LayerEventType.FRONTIER_COST_CEILING_EXCEEDED.value == "frontier_cost_ceiling_exceeded"
+        )
 
     def test_frontier_graduation_candidate_exists(self):
         """FRONTIER_GRADUATION_CANDIDATE should be a valid event type."""

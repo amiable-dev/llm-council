@@ -21,6 +21,7 @@ def _get_tier_model_pools() -> Dict[str, List[str]]:
     """Get tier model pools from unified config."""
     # Lazy import to avoid circular dependency
     from .unified_config import get_config
+
     config = get_config()
 
     def get_models(tier: str) -> List[str]:
@@ -29,7 +30,7 @@ def _get_tier_model_pools() -> Dict[str, List[str]]:
         if pool is None:
             return []
         # TierPoolConfig has a 'models' attribute
-        if hasattr(pool, 'models'):
+        if hasattr(pool, "models"):
             return pool.models
         # Fallback if it's already a list
         if isinstance(pool, list):
@@ -49,6 +50,7 @@ def _get_tier_timeout(tier: str) -> Dict[str, int]:
     """Get tier timeout config from unified config."""
     # Lazy import to avoid circular dependency
     from .unified_config import get_config
+
     config = get_config()
     timeouts = config.timeouts
     return {
@@ -75,7 +77,12 @@ def get_tier_timeout(tier: str) -> Dict[str, int]:
 _DEFAULT_TIER_MODEL_POOLS = {
     "quick": ["openai/gpt-4o-mini", "google/gemini-2.0-flash-001"],
     "balanced": ["openai/gpt-4o", "anthropic/claude-sonnet-4", "google/gemini-2.0-pro-exp"],
-    "high": ["openai/gpt-4o", "anthropic/claude-sonnet-4", "google/gemini-2.5-pro-preview", "x-ai/grok-3"],
+    "high": [
+        "openai/gpt-4o",
+        "anthropic/claude-sonnet-4",
+        "google/gemini-2.5-pro-preview",
+        "x-ai/grok-3",
+    ],
     "reasoning": ["openai/o1", "openai/o3-mini", "deepseek/deepseek-r1"],
     "frontier": ["openai/o3", "anthropic/claude-opus-4-5-20250514"],
 }
@@ -150,6 +157,7 @@ def _get_allowed_models(tier: str, task_domain: Optional[str] = None) -> List[st
     if _is_model_intelligence_enabled():
         # Lazy import to avoid circular dependencies
         from .metadata.selection import select_tier_models
+
         return select_tier_models(tier=tier, task_domain=task_domain)
 
     # Fall back to static pools
@@ -268,7 +276,8 @@ def get_default_tier_contracts() -> Dict[str, TierContract]:
     global _default_tier_contracts
     if _default_tier_contracts is None:
         _default_tier_contracts = {
-            tier: create_tier_contract(tier) for tier in ["quick", "balanced", "high", "reasoning", "frontier"]
+            tier: create_tier_contract(tier)
+            for tier in ["quick", "balanced", "high", "reasoning", "frontier"]
         }
     return _default_tier_contracts
 

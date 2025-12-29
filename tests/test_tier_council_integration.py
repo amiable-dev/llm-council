@@ -21,16 +21,20 @@ class TestCouncilTierContractParameter:
 
         # Mock the underlying functions to avoid actual API calls
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Quick response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Quick response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 # Should not raise TypeError
-                result = await run_council_with_fallback(
-                    "Test query",
-                    tier_contract=tier_contract
-                )
+                result = await run_council_with_fallback("Test query", tier_contract=tier_contract)
 
                 assert "synthesis" in result
 
@@ -42,15 +46,19 @@ class TestCouncilTierContractParameter:
         custom_models = ["openai/gpt-4o-mini", "anthropic/claude-3-5-haiku-20241022"]
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Quick response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
-
-                result = await run_council_with_fallback(
-                    "Test query",
-                    models=custom_models
+                mock_synthesis.return_value = (
+                    "Quick response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                 )
+
+                result = await run_council_with_fallback("Test query", models=custom_models)
 
                 assert "synthesis" in result
 
@@ -68,15 +76,19 @@ class TestTierContractUsesAllowedModels:
         expected_models = tier_contract.allowed_models
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Quick response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
-
-                await run_council_with_fallback(
-                    "Test query",
-                    tier_contract=tier_contract
+                mock_synthesis.return_value = (
+                    "Quick response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                 )
+
+                await run_council_with_fallback("Test query", tier_contract=tier_contract)
 
                 # Verify stage1 was called with tier_contract's models
                 call_kwargs = mock_stage1.call_args
@@ -93,15 +105,20 @@ class TestTierContractUsesAllowedModels:
         explicit_models = ["test/model-a", "test/model-b"]
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Quick response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Quick response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 await run_council_with_fallback(
-                    "Test query",
-                    models=explicit_models,
-                    tier_contract=tier_contract
+                    "Test query", models=explicit_models, tier_contract=tier_contract
                 )
 
                 # Should use explicit_models, not tier_contract.allowed_models
@@ -171,10 +188,17 @@ class TestBackwardCompatibility:
         from llm_council.council import run_council_with_fallback
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Quick response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Quick response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 # No tier_contract parameter - should use defaults
                 result = await run_council_with_fallback("Test query")
@@ -195,15 +219,19 @@ class TestTierContractMetadata:
         tier_contract = create_tier_contract("quick")
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Quick response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
-
-                result = await run_council_with_fallback(
-                    "Test query",
-                    tier_contract=tier_contract
+                mock_synthesis.return_value = (
+                    "Quick response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                 )
+
+                result = await run_council_with_fallback("Test query", tier_contract=tier_contract)
 
                 # Metadata should include tier information
                 assert "metadata" in result
