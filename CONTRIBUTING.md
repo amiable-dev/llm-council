@@ -38,6 +38,16 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
    uv run pytest tests/ -v
    ```
 
+5. **Install pre-commit hooks (recommended):**
+   ```bash
+   pip install pre-commit
+   pre-commit install
+   ```
+
+   This enables automatic checks before each commit:
+   - **Gitleaks**: Secret detection
+   - **Ruff**: Python linting and formatting
+
 ## Development Workflow
 
 ### Creating a Branch
