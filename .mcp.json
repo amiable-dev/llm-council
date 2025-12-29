@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "pixeltable-memory": {
+      "type": "stdio",
+      "command": "/Users/christopherjoseph/.local/share/mise/installs/python/3.11.14/bin/python3",
+      "args": [
+        "/Users/christopherjoseph/projects/amiable/context-aware-ai-system/pixeltable_mcp_server.py"
+      ],
+      "env": {}
+    },
+    "session-memory": {
+      "type": "stdio",
+      "command": "/Users/christopherjoseph/.local/share/mise/installs/python/3.11.14/bin/python3",
+      "args": [
+        "/Users/christopherjoseph/projects/amiable/context-aware-ai-system/session_memory_server.py"
+      ],
+      "env": {
+        "REPO_PATH": "/Users/christopherjoseph/projects/amiable/llm-council"
+      }
+    },
+    "llm-council": {
+      "type": "stdio",
+      "command": "/Users/christopherjoseph/projects/amiable/llm-council/.venv/bin/llm-council",
+      "args": [],
+      "env": {}
+    }
+  }
+}
