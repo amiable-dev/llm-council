@@ -45,11 +45,24 @@ rules:
   # Rule 3: Detect unbounded loops with LLM calls (DoS risk)
   - id: unbounded-llm-loop
     patterns:
-      - pattern: |
+      # Match any code that is inside an infinite loop
+      - pattern-inside: |
           while True:
             ...
-            $CLIENT.chat.completions.create(...)
-            ...
+      # Within that loop, look for common LLM client call patterns
+      - pattern-either:
+          # OpenAI-style chat completions
+          - pattern: $CLIENT.chat.completions.create(...)
+          # Generic completions.create (many SDKs use this)
+          - pattern: $CLIENT.completions.create(...)
+          # Anthropic / OpenRouter-style messages.create
+          - pattern: $CLIENT.messages.create(...)
+          # Generic responses.create used by some providers
+          - pattern: $CLIENT.responses.create(...)
+          # Simpler chat(...) entrypoint sometimes used
+          - pattern: $CLIENT.chat(...)
+          # Fallback: any $CLIENT.$API.create(...) call in the loop
+          - pattern: $CLIENT.$API.create(...)
     message: |
       Unbounded loop with LLM API calls detected.
       This can lead to runaway costs and denial of service.
