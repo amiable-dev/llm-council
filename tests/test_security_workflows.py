@@ -172,7 +172,7 @@ class TestSecurityWorkflow:
 
 
 class TestSecurityWorkflowMasterJobs:
-    """Tests for master-only security jobs (require secrets)."""
+    """Tests for master-only security jobs (require secrets or avoid rate limits)."""
 
     @pytest.fixture
     def workflow_path(self, workflows_dir: Path) -> Path:
@@ -208,12 +208,17 @@ class TestSecurityWorkflowMasterJobs:
         jobs = workflow_config.get("jobs", {})
         assert "sbom-generate" in jobs, "Workflow should have SBOM generation job"
 
-    def test_secret_requiring_jobs_are_master_only(self, workflow_config: dict):
-        """Verify jobs requiring secrets only run on master push."""
-        secret_jobs = ["sonarcloud", "snyk-monitor", "trivy-sca"]
+    def test_master_only_jobs_are_properly_conditioned(self, workflow_config: dict):
+        """Verify jobs that should only run on master are properly conditioned.
+        
+        These jobs are master-only for various reasons:
+        - sonarcloud, snyk-monitor: Require secrets
+        - trivy-sca: Avoid rate limits on fork PRs
+        """
+        master_only_jobs = ["sonarcloud", "snyk-monitor", "trivy-sca"]
         jobs = workflow_config.get("jobs", {})
 
-        for job_name in secret_jobs:
+        for job_name in master_only_jobs:
             if job_name not in jobs:
                 continue
             job = jobs[job_name]
