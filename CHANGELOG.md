@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **ADR-035 DevSecOps Implementation**: Complete 5-layer security pipeline
+  - `.github/dependabot.yml`: Automated dependency updates (pip + GitHub Actions)
+  - `.github/workflows/security.yml`: Main security workflow with all scans
+  - `.github/workflows/release-security.yml`: SBOM attachment to releases
+  - `.gitleaks.toml`: Custom secret patterns for OpenRouter, Anthropic, OpenAI
+  - `.pre-commit-config.yaml`: Ruff + Gitleaks pre-commit hooks
+  - `.semgrep/llm-security.yaml`: LLM-specific security rules
+  - `sonar-project.properties`: SonarCloud configuration
+  - Security badge added to README
+  - Automated scanning section added to SECURITY.md
+  - TDD test suites for security configurations
+
+### Changed
+
+- **Security Visibility**: Updated SECURITY.md with automated scanning documentation
+  - Documents 5-layer security architecture
+  - Pre-commit installation instructions
+  - Links to ADR-035 for architecture details
+
 ## [0.19.2] - 2025-12-28
 
 ### Changed

@@ -1,0 +1,120 @@
+# Custom Semgrep Rules for LLM Security
+# ADR-035: DevSecOps Implementation - Phase 2
+# Issue: #208
+
+rules:
+  # Rule 1: Detect unsafe pickle loading (arbitrary code execution)
+  - id: unsafe-pickle-load
+    patterns:
+      - pattern-either:
+          - pattern: pickle.load(...)
+          - pattern: pickle.loads(...)
+          - pattern: cPickle.load(...)
+          - pattern: cPickle.loads(...)
+    message: |
+      Pickle deserialization can execute arbitrary code.
+      Avoid using pickle for untrusted data. Consider using JSON or a safer serialization format.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A8:2017 Insecure Deserialization"
+      references:
+        - https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data
+
+  # Rule 2: Detect LLM output passed directly to exec/eval
+  - id: llm-output-to-exec
+    patterns:
+      - pattern-either:
+          - pattern: exec($LLM_OUTPUT)
+          - pattern: eval($LLM_OUTPUT)
+          - pattern: compile($LLM_OUTPUT, ...)
+    message: |
+      LLM output should never be passed directly to exec/eval.
+      This can lead to arbitrary code execution from prompt injection attacks.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-94: Improper Control of Generation of Code"
+      owasp: "A3:2017 Injection"
+      references:
+        - https://owasp.org/www-project-top-ten/
+
+  # Rule 3: Detect unbounded loops with LLM calls (DoS risk)
+  - id: unbounded-llm-loop
+    patterns:
+      - pattern: |
+          while True:
+            ...
+            $CLIENT.chat.completions.create(...)
+            ...
+    message: |
+      Unbounded loop with LLM API calls detected.
+      This can lead to runaway costs and denial of service.
+      Add a maximum iteration limit or termination condition.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-835: Loop with Unreachable Exit Condition"
+      references:
+        - https://cwe.mitre.org/data/definitions/835.html
+
+  # Rule 4: Detect hardcoded API keys
+  - id: hardcoded-api-key
+    patterns:
+      - pattern-either:
+          - pattern: $KEY = "sk-..."
+          - pattern: $KEY = "sk-or-..."
+          - pattern: $KEY = "sk-ant-..."
+          - pattern: $KEY = "sk-proj-..."
+    message: |
+      Hardcoded API key detected. Use environment variables instead.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      owasp: "A2:2017 Broken Authentication"
+
+  # Rule 5: Detect prompt injection via f-strings with user input
+  - id: prompt-injection-risk
+    patterns:
+      - pattern: |
+          f"...$USER_INPUT..."
+      - metavariable-regex:
+          metavariable: $USER_INPUT
+          regex: (user_input|user_query|query|prompt|request|message)
+    message: |
+      User input in f-string may be vulnerable to prompt injection.
+      Consider sanitizing input or using structured prompts.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-74: Improper Neutralization of Special Elements in Output"
+
+  # Rule 6: Detect missing rate limiting on API endpoints
+  - id: missing-rate-limit
+    patterns:
+      - pattern: |
+          @$APP.route(...)
+          def $FUNC(...):
+            ...
+            $CLIENT.chat.completions.create(...)
+            ...
+      - pattern-not: |
+          @limiter.limit(...)
+          @$APP.route(...)
+          def $FUNC(...):
+            ...
+    message: |
+      API endpoint with LLM call lacks rate limiting.
+      Add rate limiting to prevent abuse and cost overruns.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-770: Allocation of Resources Without Limits"

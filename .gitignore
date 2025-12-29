@@ -57,3 +57,6 @@ site/
 
 # Claude Code agent workspace
 .agent/
+
+# MCP server configuration (may contain API keys)
+.mcp.json
