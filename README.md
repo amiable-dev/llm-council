@@ -9,6 +9,7 @@
 <p align="center">
   <a href="https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml"><img src="https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/amiable-dev/llm-council/actions/workflows/security.yml"><img src="https://github.com/amiable-dev/llm-council/actions/workflows/security.yml/badge.svg" alt="Security Scanning"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/amiable-dev/llm-council"><img src="https://api.scorecard.dev/projects/github.com/amiable-dev/llm-council/badge" alt="OpenSSF Scorecard"></a>
   <a href="https://pypi.org/project/llm-council-core/"><img src="https://img.shields.io/pypi/v/llm-council-core.svg" alt="PyPI version"></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue.svg" alt="Python 3.11+"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>

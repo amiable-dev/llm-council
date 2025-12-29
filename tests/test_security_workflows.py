@@ -395,3 +395,139 @@ class TestDependencyReviewConfig:
         assert (
             sonar_allowed
         ), "SonarQube action should be allowed (build-time tool, not distributed)"
+
+
+# =============================================================================
+# OpenSSF Scorecard Workflow Tests (Phase 4 - Visibility)
+# Issue: #220
+# =============================================================================
+
+
+class TestScorecardWorkflow:
+    """Tests for .github/workflows/scorecard.yml."""
+
+    @pytest.fixture
+    def workflow_path(self, workflows_dir: Path) -> Path:
+        """Path to scorecard workflow."""
+        return workflows_dir / "scorecard.yml"
+
+    @pytest.fixture
+    def workflow_config(self, workflow_path: Path) -> dict:
+        """Load scorecard workflow configuration."""
+        if not workflow_path.exists():
+            pytest.skip("scorecard.yml not yet created")
+        with open(workflow_path) as f:
+            config = yaml.safe_load(f)
+        return normalize_yaml_on_key(config)
+
+    def test_scorecard_workflow_exists(self, workflow_path: Path):
+        """Verify scorecard.yml workflow exists."""
+        assert workflow_path.exists(), "scorecard.yml must exist for OpenSSF Scorecard"
+
+    def test_scorecard_workflow_valid_yaml(self, workflow_path: Path):
+        """Verify scorecard.yml is valid YAML."""
+        if not workflow_path.exists():
+            pytest.skip("scorecard.yml not yet created")
+        with open(workflow_path) as f:
+            try:
+                yaml.safe_load(f)
+            except yaml.YAMLError as e:
+                pytest.fail(f"scorecard.yml is not valid YAML: {e}")
+
+    def test_scorecard_workflow_has_name(self, workflow_config: dict):
+        """Verify workflow has a name."""
+        assert "name" in workflow_config
+        assert "Scorecard" in workflow_config["name"]
+
+    def test_scorecard_workflow_triggers_on_push_master(self, workflow_config: dict):
+        """Verify workflow runs on push to master."""
+        on = workflow_config.get("on", {})
+        push = on.get("push", {})
+        branches = push.get("branches", [])
+        assert "master" in branches, "Scorecard should trigger on push to master"
+
+    def test_scorecard_workflow_has_schedule(self, workflow_config: dict):
+        """Verify workflow runs on a schedule."""
+        on = workflow_config.get("on", {})
+        assert "schedule" in on, "Scorecard should have scheduled runs"
+
+    def test_scorecard_workflow_has_analysis_job(self, workflow_config: dict):
+        """Verify workflow has analysis job."""
+        jobs = workflow_config.get("jobs", {})
+        assert "analysis" in jobs, "Workflow should have analysis job"
+
+    def test_scorecard_workflow_uses_scorecard_action(self, workflow_config: dict):
+        """Verify workflow uses ossf/scorecard-action."""
+        jobs = workflow_config.get("jobs", {})
+        analysis = jobs.get("analysis", {})
+        steps = analysis.get("steps", [])
+
+        scorecard_step = None
+        for step in steps:
+            uses = step.get("uses", "")
+            if "scorecard-action" in uses:
+                scorecard_step = step
+                break
+
+        assert scorecard_step is not None, "Should use ossf/scorecard-action"
+
+    def test_scorecard_workflow_publishes_results(self, workflow_config: dict):
+        """Verify workflow publishes results for badge/API access."""
+        jobs = workflow_config.get("jobs", {})
+        analysis = jobs.get("analysis", {})
+        steps = analysis.get("steps", [])
+
+        scorecard_step = None
+        for step in steps:
+            uses = step.get("uses", "")
+            if "scorecard-action" in uses:
+                scorecard_step = step
+                break
+
+        assert scorecard_step is not None
+        with_config = scorecard_step.get("with", {})
+        assert with_config.get("publish_results") is True, "Scorecard should publish results"
+
+    def test_scorecard_workflow_has_required_permissions(self, workflow_config: dict):
+        """Verify workflow has required permissions for publishing."""
+        jobs = workflow_config.get("jobs", {})
+        analysis = jobs.get("analysis", {})
+        permissions = analysis.get("permissions", {})
+
+        # Required for publishing results
+        assert (
+            permissions.get("security-events") == "write"
+        ), "Need security-events: write for SARIF upload"
+        assert (
+            permissions.get("id-token") == "write"
+        ), "Need id-token: write for OIDC token (publish_results)"
+
+    def test_scorecard_workflow_uploads_sarif(self, workflow_config: dict):
+        """Verify workflow uploads SARIF to code-scanning."""
+        jobs = workflow_config.get("jobs", {})
+        analysis = jobs.get("analysis", {})
+        steps = analysis.get("steps", [])
+
+        sarif_upload_found = False
+        for step in steps:
+            uses = step.get("uses", "")
+            if "upload-sarif" in uses:
+                sarif_upload_found = True
+                break
+
+        assert sarif_upload_found, "Workflow should upload SARIF to code-scanning"
+
+    def test_scorecard_workflow_actions_are_version_pinned(self, workflow_config: dict):
+        """Verify all actions are pinned to specific versions."""
+        jobs = workflow_config.get("jobs", {})
+        for job_name, job in jobs.items():
+            steps = job.get("steps", [])
+            for step in steps:
+                uses = step.get("uses", "")
+                if uses and "@" in uses:
+                    version = uses.split("@")[1]
+                    assert version not in [
+                        "master",
+                        "main",
+                        "latest",
+                    ], f"Scorecard job uses unpinned action: {uses}"
