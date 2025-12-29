@@ -102,8 +102,7 @@ class TestWebhookEventEmission:
 
         # Should have emitted deliberation_start
         start_events = [
-            e for e in emitted_events
-            if e.event == WebhookEventType.DELIBERATION_START.value
+            e for e in emitted_events if e.event == WebhookEventType.DELIBERATION_START.value
         ]
         assert len(start_events) >= 1
 
@@ -125,11 +124,12 @@ class TestWebhookEventEmission:
         )
 
         # Mock a successful council run
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1, \
-             patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5, \
-             patch("llm_council.council.stage2_collect_rankings") as mock_stage2, \
-             patch("llm_council.council.stage3_synthesize_final") as mock_stage3:
-
+        with (
+            patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1,
+            patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5,
+            patch("llm_council.council.stage2_collect_rankings") as mock_stage2,
+            patch("llm_council.council.stage3_synthesize_final") as mock_stage3,
+        ):
             mock_stage1.return_value = (
                 [{"model": "test/model", "response": "Test response"}],
                 {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
@@ -158,10 +158,7 @@ class TestWebhookEventEmission:
                 )
 
         # Should have emitted complete
-        complete_events = [
-            e for e in emitted_events
-            if e.event == WebhookEventType.COMPLETE.value
-        ]
+        complete_events = [e for e in emitted_events if e.event == WebhookEventType.COMPLETE.value]
         assert len(complete_events) >= 1
 
     @pytest.mark.asyncio
@@ -187,11 +184,12 @@ class TestWebhookEventEmission:
         )
 
         # Mock a successful council run
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1, \
-             patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5, \
-             patch("llm_council.council.stage2_collect_rankings") as mock_stage2, \
-             patch("llm_council.council.stage3_synthesize_final") as mock_stage3:
-
+        with (
+            patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1,
+            patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5,
+            patch("llm_council.council.stage2_collect_rankings") as mock_stage2,
+            patch("llm_council.council.stage3_synthesize_final") as mock_stage3,
+        ):
             mock_stage1.return_value = (
                 [{"model": "test/model", "response": "Test response"}],
                 {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
@@ -248,7 +246,9 @@ class TestWebhookErrorHandling:
             # Simulate an error
             mock_stage1.side_effect = Exception("Test error")
 
-            with patch("llm_council.webhooks.event_bridge.WebhookDispatcher") as mock_dispatcher_class:
+            with patch(
+                "llm_council.webhooks.event_bridge.WebhookDispatcher"
+            ) as mock_dispatcher_class:
                 mock_dispatcher = MagicMock()
                 mock_dispatcher.dispatch = capture_dispatch
                 mock_dispatcher_class.return_value = mock_dispatcher
@@ -263,10 +263,7 @@ class TestWebhookErrorHandling:
                 assert result["metadata"]["status"] == "failed"
 
         # Should have emitted error event
-        error_events = [
-            e for e in emitted_events
-            if e.event == WebhookEventType.ERROR.value
-        ]
+        error_events = [e for e in emitted_events if e.event == WebhookEventType.ERROR.value]
         # Note: Error events may or may not be emitted depending on implementation
         # The key is that the function completes without raising
 
@@ -301,7 +298,9 @@ class TestWebhookConfigHierarchy:
                 {},
             )
 
-            with patch("llm_council.webhooks.event_bridge.WebhookDispatcher") as mock_dispatcher_class:
+            with patch(
+                "llm_council.webhooks.event_bridge.WebhookDispatcher"
+            ) as mock_dispatcher_class:
                 mock_dispatcher = MagicMock()
                 mock_dispatcher.dispatch = capture_dispatch
                 mock_dispatcher_class.return_value = mock_dispatcher
@@ -432,11 +431,12 @@ class TestIntegrationWithExistingLayerEvents:
         )
 
         # Mock a successful council run so L3_COUNCIL_COMPLETE is emitted
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1, \
-             patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5, \
-             patch("llm_council.council.stage2_collect_rankings") as mock_stage2, \
-             patch("llm_council.council.stage3_synthesize_final") as mock_stage3:
-
+        with (
+            patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1,
+            patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5,
+            patch("llm_council.council.stage2_collect_rankings") as mock_stage2,
+            patch("llm_council.council.stage3_synthesize_final") as mock_stage3,
+        ):
             mock_stage1.return_value = (
                 [{"model": "test/model", "response": "Test response"}],
                 {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},

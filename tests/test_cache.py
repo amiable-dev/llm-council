@@ -106,10 +106,10 @@ class TestCacheOperations:
 
                     # Manually set cached_at to past
                     cache_file = cache_dir / f"{cache_key}.json"
-                    with open(cache_file, 'r') as f:
+                    with open(cache_file, "r") as f:
                         data = json.load(f)
                     data["_cached_at"] = time.time() - 100
-                    with open(cache_file, 'w') as f:
+                    with open(cache_file, "w") as f:
                         json.dump(data, f)
 
                     # Now check with TTL = 60 (entry should be expired)
@@ -130,10 +130,10 @@ class TestCacheOperations:
 
                         # Manually set cached_at to very old time
                         cache_file = cache_dir / f"{cache_key}.json"
-                        with open(cache_file, 'r') as f:
+                        with open(cache_file, "r") as f:
                             data = json.load(f)
                         data["_cached_at"] = time.time() - 86400 * 365  # 1 year ago
-                        with open(cache_file, 'w') as f:
+                        with open(cache_file, "w") as f:
                             json.dump(data, f)
 
                         # Should still be valid with TTL = 0

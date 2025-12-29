@@ -80,21 +80,15 @@ def should_graduate(
 
     # Check age requirement
     if stats.days_tracked < criteria.min_age_days:
-        failures.append(
-            f"age: {stats.days_tracked} < {criteria.min_age_days} days"
-        )
+        failures.append(f"age: {stats.days_tracked} < {criteria.min_age_days} days")
 
     # Check session count requirement
     if stats.completed_sessions < criteria.min_completed_sessions:
-        failures.append(
-            f"sessions: {stats.completed_sessions} < {criteria.min_completed_sessions}"
-        )
+        failures.append(f"sessions: {stats.completed_sessions} < {criteria.min_completed_sessions}")
 
     # Check error rate requirement
     if stats.error_rate > criteria.max_error_rate:
-        failures.append(
-            f"error_rate: {stats.error_rate:.1%} > {criteria.max_error_rate:.1%}"
-        )
+        failures.append(f"error_rate: {stats.error_rate:.1%} > {criteria.max_error_rate:.1%}")
 
     # Check quality percentile requirement
     if stats.quality_percentile < criteria.min_quality_percentile:

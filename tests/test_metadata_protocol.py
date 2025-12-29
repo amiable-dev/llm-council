@@ -111,6 +111,7 @@ class TestMockProviderCompliance:
         class IncompleteProvider:
             def get_model_info(self, model_id: str):
                 return None
+
             # Missing other methods
 
         provider = IncompleteProvider()

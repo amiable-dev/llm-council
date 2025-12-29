@@ -21,6 +21,7 @@ def _get_council_models() -> list:
     """Get council models from unified config."""
     return get_config().council.models
 
+
 from .types import (
     DEFAULT_SPECIALIST_POOLS,
     DomainCategory,

@@ -1,4 +1,5 @@
 """Basic tests for council orchestration."""
+
 import pytest
 from llm_council.council import parse_ranking_from_text, calculate_aggregate_rankings
 
@@ -6,16 +7,17 @@ from llm_council.council import parse_ranking_from_text, calculate_aggregate_ran
 def test_council_imports():
     """Test that council module can be imported."""
     from llm_council import council
-    assert hasattr(council, 'run_full_council')
-    assert hasattr(council, 'stage1_collect_responses')
-    assert hasattr(council, 'stage2_collect_rankings')
-    assert hasattr(council, 'stage3_synthesize_final')
+
+    assert hasattr(council, "run_full_council")
+    assert hasattr(council, "stage1_collect_responses")
+    assert hasattr(council, "stage2_collect_rankings")
+    assert hasattr(council, "stage3_synthesize_final")
 
 
 def test_parse_ranking_from_text():
     """Test ranking parser function."""
     from llm_council.council import parse_ranking_from_text
-    
+
     test_text = """
     Some analysis here...
     
@@ -24,7 +26,7 @@ def test_parse_ranking_from_text():
     2. Response B
     3. Response C
     """
-    
+
     result = parse_ranking_from_text(test_text)
     # New API returns dict with ranking and scores
     assert "ranking" in result
@@ -34,33 +36,24 @@ def test_parse_ranking_from_text():
 def test_calculate_aggregate_rankings():
     """Test aggregate ranking calculation."""
     from llm_council.council import calculate_aggregate_rankings
-    
+
     stage2_results = [
         {
             "model": "model1",
             "ranking": "FINAL RANKING:\n1. Response A\n2. Response B",
-            "parsed_ranking": {
-                "ranking": ["Response A", "Response B"],
-                "scores": {}
-            }
+            "parsed_ranking": {"ranking": ["Response A", "Response B"], "scores": {}},
         },
         {
-            "model": "model2", 
+            "model": "model2",
             "ranking": "FINAL RANKING:\n1. Response B\n2. Response A",
-            "parsed_ranking": {
-                "ranking": ["Response B", "Response A"],
-                "scores": {}
-            }
+            "parsed_ranking": {"ranking": ["Response B", "Response A"], "scores": {}},
         },
     ]
-    
-    label_to_model = {
-        "Response A": "openai/gpt-4",
-        "Response B": "anthropic/claude"
-    }
-    
+
+    label_to_model = {"Response A": "openai/gpt-4", "Response B": "anthropic/claude"}
+
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
-    
+
     # Both models should be in results
     assert len(result) == 2
     assert all("model" in r for r in result)
@@ -145,24 +138,20 @@ def test_borda_count_calculation():
             "ranking": "",
             "parsed_ranking": {
                 "ranking": ["Response A", "Response B", "Response C"],
-                "scores": {"Response A": 9, "Response B": 7, "Response C": 5}
-            }
+                "scores": {"Response A": 9, "Response B": 7, "Response C": 5},
+            },
         },
         {
             "model": "reviewer2",
             "ranking": "",
             "parsed_ranking": {
                 "ranking": ["Response B", "Response A", "Response C"],
-                "scores": {"Response A": 7, "Response B": 9, "Response C": 5}
-            }
+                "scores": {"Response A": 7, "Response B": 9, "Response C": 5},
+            },
         },
     ]
 
-    label_to_model = {
-        "Response A": "model_a",
-        "Response B": "model_b",
-        "Response C": "model_c"
-    }
+    label_to_model = {"Response A": "model_a", "Response B": "model_b", "Response C": "model_c"}
 
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
 
@@ -188,7 +177,7 @@ def test_borda_normalization_council_size_independence():
         {
             "model": "reviewer1",
             "ranking": "",
-            "parsed_ranking": {"ranking": ["Response A", "Response B", "Response C"], "scores": {}}
+            "parsed_ranking": {"ranking": ["Response A", "Response B", "Response C"], "scores": {}},
         },
     ]
     label_small = {"Response A": "model_a", "Response B": "model_b", "Response C": "model_c"}
@@ -200,13 +189,16 @@ def test_borda_normalization_council_size_independence():
             "ranking": "",
             "parsed_ranking": {
                 "ranking": ["Response A", "Response B", "Response C", "Response D", "Response E"],
-                "scores": {}
-            }
+                "scores": {},
+            },
         },
     ]
     label_large = {
-        "Response A": "model_a", "Response B": "model_b", "Response C": "model_c",
-        "Response D": "model_d", "Response E": "model_e"
+        "Response A": "model_a",
+        "Response B": "model_b",
+        "Response C": "model_c",
+        "Response D": "model_d",
+        "Response E": "model_e",
     }
 
     result_small = calculate_aggregate_rankings(stage2_small, label_small)
@@ -230,10 +222,7 @@ def test_borda_count_excludes_abstentions():
         {
             "model": "reviewer1",
             "ranking": "",
-            "parsed_ranking": {
-                "ranking": ["Response A", "Response B"],
-                "scores": {}
-            }
+            "parsed_ranking": {"ranking": ["Response A", "Response B"], "scores": {}},
         },
         {
             "model": "reviewer2",
@@ -242,15 +231,12 @@ def test_borda_count_excludes_abstentions():
                 "abstained": True,
                 "abstention_reason": "Safety refusal",
                 "ranking": [],
-                "scores": {}
-            }
+                "scores": {},
+            },
         },
     ]
 
-    label_to_model = {
-        "Response A": "model_a",
-        "Response B": "model_b"
-    }
+    label_to_model = {"Response A": "model_a", "Response B": "model_b"}
 
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
 

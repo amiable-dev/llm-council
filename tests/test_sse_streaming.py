@@ -23,7 +23,9 @@ class TestCouncilRunnerEventGeneration:
         from llm_council.webhooks._council_runner import run_council
 
         # Mock the council execution
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = {
                 "synthesis": "Test synthesis",
                 "model_responses": {},
@@ -50,7 +52,9 @@ class TestCouncilRunnerEventGeneration:
             "metadata": {"status": "complete", "synthesis_type": "full"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -73,7 +77,9 @@ class TestCouncilRunnerEventGeneration:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -97,7 +103,9 @@ class TestCouncilRunnerEventGeneration:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -125,7 +133,9 @@ class TestCouncilRunnerEventGeneration:
             "metadata": {"status": "failed", "error": "Test error"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -147,7 +157,9 @@ class TestCouncilRunnerEventGeneration:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -173,7 +185,9 @@ class TestCouncilRunnerWithModels:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -196,7 +210,9 @@ class TestCouncilRunnerWithModels:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -221,7 +237,9 @@ class TestSSEEventFormatting:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -245,7 +263,9 @@ class TestSSEEventFormatting:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -284,7 +304,9 @@ class TestHTTPEndpoint:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             # Use test client - note: SSE might need special handling
@@ -329,7 +351,9 @@ class TestHTTPEndpoint:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             client = TestClient(app)
@@ -360,7 +384,9 @@ class TestEventBridgeIntegration:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -381,7 +407,9 @@ class TestEventBridgeIntegration:
             "metadata": {"status": "complete"},
         }
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.return_value = mock_result
 
             events = []
@@ -401,7 +429,9 @@ class TestErrorHandling:
         """run_council should yield error event on exception."""
         from llm_council.webhooks._council_runner import run_council
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.side_effect = Exception("Test error")
 
             events = []
@@ -417,7 +447,9 @@ class TestErrorHandling:
         """Error event should include error message."""
         from llm_council.webhooks._council_runner import run_council
 
-        with patch("llm_council.webhooks._council_runner.run_council_with_fallback") as mock_council:
+        with patch(
+            "llm_council.webhooks._council_runner.run_council_with_fallback"
+        ) as mock_council:
             mock_council.side_effect = Exception("Specific error message")
 
             events = []

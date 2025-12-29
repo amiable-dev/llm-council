@@ -252,7 +252,9 @@ class TestCircuitBreakerEventEmission:
         record_model_result("openai/gpt-4o", success=True)
 
         events = get_layer_events()
-        close_events = [e for e in events if e.event_type == LayerEventType.L4_CIRCUIT_BREAKER_CLOSE]
+        close_events = [
+            e for e in events if e.event_type == LayerEventType.L4_CIRCUIT_BREAKER_CLOSE
+        ]
         assert len(close_events) >= 1
 
         event = close_events[-1]

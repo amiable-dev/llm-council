@@ -90,9 +90,7 @@ def read_performance_records(
             if cutoff_date is not None and record.timestamp:
                 try:
                     # Parse ISO timestamp
-                    record_time = datetime.fromisoformat(
-                        record.timestamp.replace("Z", "+00:00")
-                    )
+                    record_time = datetime.fromisoformat(record.timestamp.replace("Z", "+00:00"))
                     if record_time < cutoff_date:
                         continue
                 except ValueError:

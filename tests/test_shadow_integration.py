@@ -253,8 +253,5 @@ class TestNonFrontierTierOptimization:
 
         # For observability: no FRONTIER_SHADOW_VOTE events for non-frontier
         events = get_layer_events()
-        frontier_events = [
-            e for e in events
-            if e.event_type == LayerEventType.FRONTIER_SHADOW_VOTE
-        ]
+        frontier_events = [e for e in events if e.event_type == LayerEventType.FRONTIER_SHADOW_VOTE]
         assert len(frontier_events) == 0

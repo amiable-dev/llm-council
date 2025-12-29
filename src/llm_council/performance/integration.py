@@ -17,9 +17,12 @@ from .types import ModelSessionMetric
 logger = logging.getLogger(__name__)
 
 # Configuration (can be overridden in config.py later)
-PERFORMANCE_TRACKING_ENABLED = os.getenv(
-    "LLM_COUNCIL_PERFORMANCE_TRACKING", "true"
-).lower() in ("true", "1", "yes", "on")
+PERFORMANCE_TRACKING_ENABLED = os.getenv("LLM_COUNCIL_PERFORMANCE_TRACKING", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+    "on",
+)
 
 PERFORMANCE_STORE_PATH = Path(
     os.getenv("LLM_COUNCIL_PERFORMANCE_STORE", str(DEFAULT_STORE_PATH))

@@ -15,7 +15,16 @@ def get_model_provider(model_id: str) -> str:
     provider = model_id.split("/")[0].lower()
 
     # Normalize known providers
-    known_providers = {"anthropic", "openai", "google", "meta-llama", "mistralai", "cohere", "deepseek", "x-ai"}
+    known_providers = {
+        "anthropic",
+        "openai",
+        "google",
+        "meta-llama",
+        "mistralai",
+        "cohere",
+        "deepseek",
+        "x-ai",
+    }
 
     if provider in known_providers:
         return provider
@@ -152,6 +161,7 @@ class PromptOptimizer:
         for prompt in prompts.values():
             # Strip XML tags
             import re
+
             content = re.sub(r"<[^>]+>", "", prompt).strip()
             contents.append(content)
 

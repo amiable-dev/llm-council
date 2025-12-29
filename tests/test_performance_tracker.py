@@ -104,8 +104,22 @@ class TestGetModelIndex:
 
             now = datetime.now(timezone.utc).isoformat()
             metrics = [
-                ModelSessionMetric(session_id="s1", model_id="openai/gpt-4o", timestamp=now, latency_ms=1000, borda_score=0.8, parse_success=True),
-                ModelSessionMetric(session_id="s2", model_id="openai/gpt-4o", timestamp=now, latency_ms=1200, borda_score=0.7, parse_success=True),
+                ModelSessionMetric(
+                    session_id="s1",
+                    model_id="openai/gpt-4o",
+                    timestamp=now,
+                    latency_ms=1000,
+                    borda_score=0.8,
+                    parse_success=True,
+                ),
+                ModelSessionMetric(
+                    session_id="s2",
+                    model_id="openai/gpt-4o",
+                    timestamp=now,
+                    latency_ms=1200,
+                    borda_score=0.7,
+                    parse_success=True,
+                ),
             ]
             tracker.record_session("s1", [metrics[0]])
             tracker.record_session("s2", [metrics[1]])
@@ -142,9 +156,17 @@ class TestGetModelIndex:
 
             now = datetime.now(timezone.utc).isoformat()
             for i, score in enumerate([0.6, 0.8, 0.7]):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="test-model", timestamp=now, borda_score=score),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(
+                            session_id=f"s{i}",
+                            model_id="test-model",
+                            timestamp=now,
+                            borda_score=score,
+                        ),
+                    ],
+                )
 
             index = tracker.get_model_index("test-model")
             # Mean of [0.6, 0.8, 0.7] = 0.7
@@ -161,10 +183,38 @@ class TestGetModelIndex:
 
             now = datetime.now(timezone.utc).isoformat()
             # 3 successes, 1 failure = 75% success rate
-            tracker.record_session("s1", [ModelSessionMetric(session_id="s1", model_id="m1", timestamp=now, parse_success=True)])
-            tracker.record_session("s2", [ModelSessionMetric(session_id="s2", model_id="m1", timestamp=now, parse_success=True)])
-            tracker.record_session("s3", [ModelSessionMetric(session_id="s3", model_id="m1", timestamp=now, parse_success=True)])
-            tracker.record_session("s4", [ModelSessionMetric(session_id="s4", model_id="m1", timestamp=now, parse_success=False)])
+            tracker.record_session(
+                "s1",
+                [
+                    ModelSessionMetric(
+                        session_id="s1", model_id="m1", timestamp=now, parse_success=True
+                    )
+                ],
+            )
+            tracker.record_session(
+                "s2",
+                [
+                    ModelSessionMetric(
+                        session_id="s2", model_id="m1", timestamp=now, parse_success=True
+                    )
+                ],
+            )
+            tracker.record_session(
+                "s3",
+                [
+                    ModelSessionMetric(
+                        session_id="s3", model_id="m1", timestamp=now, parse_success=True
+                    )
+                ],
+            )
+            tracker.record_session(
+                "s4",
+                [
+                    ModelSessionMetric(
+                        session_id="s4", model_id="m1", timestamp=now, parse_success=False
+                    )
+                ],
+            )
 
             index = tracker.get_model_index("m1")
             assert index.parse_success_rate == 0.75
@@ -185,9 +235,14 @@ class TestLatencyPercentiles:
             now = datetime.now(timezone.utc).isoformat()
             latencies = [1000, 1200, 1100, 1300, 1150]
             for i, lat in enumerate(latencies):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now, latency_ms=lat),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(
+                            session_id=f"s{i}", model_id="m1", timestamp=now, latency_ms=lat
+                        ),
+                    ],
+                )
 
             index = tracker.get_model_index("m1")
             # Sorted: [1000, 1100, 1150, 1200, 1300], median = 1150
@@ -206,9 +261,14 @@ class TestLatencyPercentiles:
             # 20 samples to make percentiles meaningful
             latencies = list(range(100, 2100, 100))  # [100, 200, ..., 2000]
             for i, lat in enumerate(latencies):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now, latency_ms=lat),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(
+                            session_id=f"s{i}", model_id="m1", timestamp=now, latency_ms=lat
+                        ),
+                    ],
+                )
 
             index = tracker.get_model_index("m1")
             # 95th percentile of [100..2000] should be around 1900-2000
@@ -232,13 +292,23 @@ class TestRollingWindowDecay:
             recent_date = now.isoformat()
 
             # Old session with low score
-            tracker.record_session("old", [
-                ModelSessionMetric(session_id="old", model_id="m1", timestamp=old_date, borda_score=0.2),
-            ])
+            tracker.record_session(
+                "old",
+                [
+                    ModelSessionMetric(
+                        session_id="old", model_id="m1", timestamp=old_date, borda_score=0.2
+                    ),
+                ],
+            )
             # Recent session with high score
-            tracker.record_session("recent", [
-                ModelSessionMetric(session_id="recent", model_id="m1", timestamp=recent_date, borda_score=0.9),
-            ])
+            tracker.record_session(
+                "recent",
+                [
+                    ModelSessionMetric(
+                        session_id="recent", model_id="m1", timestamp=recent_date, borda_score=0.9
+                    ),
+                ],
+            )
 
             index = tracker.get_model_index("m1")
             # With decay, mean should be closer to 0.9 (recent) than 0.55 (simple mean)
@@ -258,13 +328,23 @@ class TestRollingWindowDecay:
             recent = now.isoformat()
 
             # Very old session with extreme low score
-            tracker.record_session("old", [
-                ModelSessionMetric(session_id="old", model_id="m1", timestamp=very_old, borda_score=0.0),
-            ])
+            tracker.record_session(
+                "old",
+                [
+                    ModelSessionMetric(
+                        session_id="old", model_id="m1", timestamp=very_old, borda_score=0.0
+                    ),
+                ],
+            )
             # Recent session with normal score
-            tracker.record_session("recent", [
-                ModelSessionMetric(session_id="recent", model_id="m1", timestamp=recent, borda_score=0.7),
-            ])
+            tracker.record_session(
+                "recent",
+                [
+                    ModelSessionMetric(
+                        session_id="recent", model_id="m1", timestamp=recent, borda_score=0.7
+                    ),
+                ],
+            )
 
             index = tracker.get_model_index("m1")
             # Very old session should barely affect the score
@@ -285,9 +365,12 @@ class TestConfidenceLevels:
 
             now = datetime.now(timezone.utc).isoformat()
             for i in range(5):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                    ],
+                )
 
             index = tracker.get_model_index("m1")
             assert index.confidence_level == "INSUFFICIENT"
@@ -303,9 +386,12 @@ class TestConfidenceLevels:
 
             now = datetime.now(timezone.utc).isoformat()
             for i in range(15):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                    ],
+                )
 
             index = tracker.get_model_index("m1")
             assert index.confidence_level == "PRELIMINARY"
@@ -321,9 +407,12 @@ class TestConfidenceLevels:
 
             now = datetime.now(timezone.utc).isoformat()
             for i in range(50):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                    ],
+                )
 
             index = tracker.get_model_index("m1")
             assert index.confidence_level == "MODERATE"
@@ -339,9 +428,12 @@ class TestConfidenceLevels:
 
             now = datetime.now(timezone.utc).isoformat()
             for i in range(120):
-                tracker.record_session(f"s{i}", [
-                    ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
-                ])
+                tracker.record_session(
+                    f"s{i}",
+                    [
+                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                    ],
+                )
 
             index = tracker.get_model_index("m1")
             assert index.confidence_level == "HIGH"
@@ -360,9 +452,14 @@ class TestGetQualityScore:
             tracker = InternalPerformanceTracker(store_path=path)
 
             now = datetime.now(timezone.utc).isoformat()
-            tracker.record_session("s1", [
-                ModelSessionMetric(session_id="s1", model_id="m1", timestamp=now, borda_score=0.75),
-            ])
+            tracker.record_session(
+                "s1",
+                [
+                    ModelSessionMetric(
+                        session_id="s1", model_id="m1", timestamp=now, borda_score=0.75
+                    ),
+                ],
+            )
 
             score = tracker.get_quality_score("m1")
             assert 0 <= score <= 100
@@ -389,9 +486,14 @@ class TestGetQualityScore:
 
             now = datetime.now(timezone.utc).isoformat()
             # Record high Borda score
-            tracker.record_session("s1", [
-                ModelSessionMetric(session_id="s1", model_id="m1", timestamp=now, borda_score=0.9),
-            ])
+            tracker.record_session(
+                "s1",
+                [
+                    ModelSessionMetric(
+                        session_id="s1", model_id="m1", timestamp=now, borda_score=0.9
+                    ),
+                ],
+            )
 
             score = tracker.get_quality_score("m1")
             # 0.9 * 100 = 90

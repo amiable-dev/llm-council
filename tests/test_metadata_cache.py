@@ -187,10 +187,7 @@ class TestModelIntelligenceCache:
         """Cache TTLs should be configurable."""
         from llm_council.metadata.cache import ModelIntelligenceCache
 
-        cache = ModelIntelligenceCache(
-            registry_ttl=7200,
-            availability_ttl=600
-        )
+        cache = ModelIntelligenceCache(registry_ttl=7200, availability_ttl=600)
         assert cache.registry_cache.ttl == 7200
         assert cache.availability_cache.ttl == 600
 

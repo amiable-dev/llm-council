@@ -169,7 +169,11 @@ class TestSelectWildcard:
         from llm_council.triage.wildcard import select_wildcard
         from llm_council.triage.types import DomainCategory
 
-        base_council = ["openai/gpt-4o", "anthropic/claude-3-5-sonnet-20241022", "google/gemini-1.5-pro"]
+        base_council = [
+            "openai/gpt-4o",
+            "anthropic/claude-3-5-sonnet-20241022",
+            "google/gemini-1.5-pro",
+        ]
         result = select_wildcard(DomainCategory.CODE, exclude_models=base_council)
 
         assert result not in base_council

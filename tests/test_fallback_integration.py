@@ -114,8 +114,7 @@ class TestExecuteWithFallbackDetailed:
             assert result.used_fallback is False
             events = get_layer_events()
             fallback_events = [
-                e for e in events
-                if e.event_type == LayerEventType.FRONTIER_FALLBACK_TRIGGERED
+                e for e in events if e.event_type == LayerEventType.FRONTIER_FALLBACK_TRIGGERED
             ]
             assert len(fallback_events) == 0
 
@@ -147,8 +146,7 @@ class TestExecuteWithFallbackDetailed:
 
                 events = get_layer_events()
                 fallback_events = [
-                    e for e in events
-                    if e.event_type == LayerEventType.FRONTIER_FALLBACK_TRIGGERED
+                    e for e in events if e.event_type == LayerEventType.FRONTIER_FALLBACK_TRIGGERED
                 ]
                 assert len(fallback_events) == 1
                 assert fallback_events[0].data["model_id"] == "openai/gpt-5-preview"

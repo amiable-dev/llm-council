@@ -143,9 +143,7 @@ class DirectGateway(BaseRouter):
         """
         return PROVIDER_ENDPOINTS.get(provider, f"https://api.{provider}.com/v1")
 
-    def _convert_message_for_provider(
-        self, msg: CanonicalMessage, provider: str
-    ) -> Dict[str, Any]:
+    def _convert_message_for_provider(self, msg: CanonicalMessage, provider: str) -> Dict[str, Any]:
         """Convert CanonicalMessage to provider-specific format.
 
         Args:
@@ -173,15 +171,13 @@ class DirectGateway(BaseRouter):
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
                 elif block.type == "image" and block.image_url:
-                    content_parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": block.image_url}
-                    })
+                    content_parts.append(
+                        {"type": "image_url", "image_url": {"url": block.image_url}}
+                    )
             return {"role": msg.role, "content": content_parts}
         else:
             text_content = " ".join(
-                block.text for block in msg.content
-                if block.type == "text" and block.text
+                block.text for block in msg.content if block.type == "text" and block.text
             )
             return {"role": msg.role, "content": text_content}
 
@@ -195,18 +191,13 @@ class DirectGateway(BaseRouter):
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
                 elif block.type == "image" and block.image_url:
-                    content_parts.append({
-                        "type": "image",
-                        "source": {
-                            "type": "url",
-                            "url": block.image_url
-                        }
-                    })
+                    content_parts.append(
+                        {"type": "image", "source": {"type": "url", "url": block.image_url}}
+                    )
             return {"role": msg.role, "content": content_parts}
         else:
             text_content = " ".join(
-                block.text for block in msg.content
-                if block.type == "text" and block.text
+                block.text for block in msg.content if block.type == "text" and block.text
             )
             return {"role": msg.role, "content": text_content}
 
@@ -217,12 +208,7 @@ class DirectGateway(BaseRouter):
             if block.type == "text" and block.text:
                 parts.append({"text": block.text})
             elif block.type == "image" and block.image_url:
-                parts.append({
-                    "inlineData": {
-                        "mimeType": "image/png",
-                        "data": block.image_url
-                    }
-                })
+                parts.append({"inlineData": {"mimeType": "image/png", "data": block.image_url}})
 
         # Google uses 'user' and 'model' roles
         role = "model" if msg.role == "assistant" else msg.role
@@ -349,18 +335,18 @@ class DirectGateway(BaseRouter):
             response.raise_for_status()
 
             data = response.json()
-            message = data['choices'][0]['message']
-            usage = data.get('usage', {})
+            message = data["choices"][0]["message"]
+            usage = data.get("usage", {})
 
             return {
                 "status": "ok",
-                "content": message.get('content'),
+                "content": message.get("content"),
                 "latency_ms": latency_ms,
                 "usage": {
-                    'prompt_tokens': usage.get('prompt_tokens', 0),
-                    'completion_tokens': usage.get('completion_tokens', 0),
-                    'total_tokens': usage.get('total_tokens', 0)
-                }
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                },
             }
 
     async def _query_anthropic(
@@ -440,10 +426,10 @@ class DirectGateway(BaseRouter):
                 "content": content,
                 "latency_ms": latency_ms,
                 "usage": {
-                    'prompt_tokens': usage.get('input_tokens', 0),
-                    'completion_tokens': usage.get('output_tokens', 0),
-                    'total_tokens': usage.get('input_tokens', 0) + usage.get('output_tokens', 0)
-                }
+                    "prompt_tokens": usage.get("input_tokens", 0),
+                    "completion_tokens": usage.get("output_tokens", 0),
+                    "total_tokens": usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+                },
             }
 
     async def _query_google(
@@ -479,9 +465,7 @@ class DirectGateway(BaseRouter):
         start_time = time.time()
 
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                endpoint, headers=headers, params=params, json=payload
-            )
+            response = await client.post(endpoint, headers=headers, params=params, json=payload)
             latency_ms = int((time.time() - start_time) * 1000)
 
             if response.status_code == 429:
@@ -507,8 +491,7 @@ class DirectGateway(BaseRouter):
                 candidate = data["candidates"][0]
                 if candidate.get("content", {}).get("parts"):
                     content = "".join(
-                        part.get("text", "")
-                        for part in candidate["content"]["parts"]
+                        part.get("text", "") for part in candidate["content"]["parts"]
                     )
 
             usage = data.get("usageMetadata", {})
@@ -518,10 +501,10 @@ class DirectGateway(BaseRouter):
                 "content": content,
                 "latency_ms": latency_ms,
                 "usage": {
-                    'prompt_tokens': usage.get('promptTokenCount', 0),
-                    'completion_tokens': usage.get('candidatesTokenCount', 0),
-                    'total_tokens': usage.get('totalTokenCount', 0)
-                }
+                    "prompt_tokens": usage.get("promptTokenCount", 0),
+                    "completion_tokens": usage.get("candidatesTokenCount", 0),
+                    "total_tokens": usage.get("totalTokenCount", 0),
+                },
             }
 
     async def complete(self, request: GatewayRequest) -> GatewayResponse:
@@ -610,7 +593,11 @@ class DirectGateway(BaseRouter):
                 # Use a minimal query to check health
                 result = await self._query_provider(
                     provider=provider,
-                    model="gpt-4o-mini" if provider == "openai" else "claude-3-5-haiku-20241022" if provider == "anthropic" else "gemini-2.0-flash-001",
+                    model="gpt-4o-mini"
+                    if provider == "openai"
+                    else "claude-3-5-haiku-20241022"
+                    if provider == "anthropic"
+                    else "gemini-2.0-flash-001",
                     messages=[{"role": "user", "content": "ping"}],
                     timeout=10.0,
                 )

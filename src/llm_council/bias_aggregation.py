@@ -35,12 +35,14 @@ def _get_bias_store_path() -> Path:
     except Exception:
         return Path.home() / ".llm-council" / "bias_metrics.jsonl"
 
+
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
 # Statistical Confidence Enum
 # =============================================================================
+
 
 class StatisticalConfidence(Enum):
     """Confidence level based on sample size.
@@ -51,6 +53,7 @@ class StatisticalConfidence(Enum):
         MODERATE: 20 <= N < 50
         HIGH: N >= 50
     """
+
     INSUFFICIENT = "insufficient"
     PRELIMINARY = "preliminary"
     MODERATE = "moderate"
@@ -79,6 +82,7 @@ def determine_confidence_level(sample_size: int) -> StatisticalConfidence:
 # =============================================================================
 # Fisher z-Transform Utilities
 # =============================================================================
+
 
 def fisher_z_transform(r: float) -> float:
     """Apply Fisher z-transformation to correlation coefficient.
@@ -118,6 +122,7 @@ def inverse_fisher_z(z: float) -> float:
 # Dataclasses
 # =============================================================================
 
+
 @dataclass
 class ReviewerProfile:
     """Aggregated profile of a single reviewer across sessions.
@@ -131,6 +136,7 @@ class ReviewerProfile:
         ci_lower: 95% CI lower bound on mean
         ci_upper: 95% CI upper bound on mean
     """
+
     reviewer_id: str
     sample_size: int
     mean_score: float
@@ -146,6 +152,7 @@ class LengthCorrelationReport:
 
     Uses Fisher z-transformation for proper CI calculation.
     """
+
     metric_name: str = "length_correlation"
     point_estimate: float = 0.0
     ci_lower: float = 0.0
@@ -161,6 +168,7 @@ class LengthCorrelationReport:
 @dataclass
 class PositionBiasReport:
     """Report on position bias with variance of position means."""
+
     metric_name: str = "position_bias"
     point_estimate: float = 0.0  # Variance of position means
     ci_lower: float = 0.0
@@ -180,6 +188,7 @@ class AggregatedBiasAuditResult:
     Aggregates length correlation, position bias, and reviewer profiles
     across a time window of sessions.
     """
+
     # Window metadata
     window_start: Optional[str] = None
     window_end: Optional[str] = None
@@ -199,6 +208,7 @@ class AggregatedBiasAuditResult:
 # =============================================================================
 # Aggregation Functions
 # =============================================================================
+
 
 def _calculate_pearson_correlation(x: List[float], y: List[float]) -> float:
     """Pure Python Pearson correlation calculation.
@@ -360,15 +370,17 @@ def aggregate_reviewer_profiles(
             ci_lower = mean_score
             ci_upper = mean_score
 
-        profiles.append(ReviewerProfile(
-            reviewer_id=reviewer_id,
-            sample_size=n,
-            mean_score=mean_score,
-            std_score=std_score,
-            harshness_z_score=harshness_z,
-            ci_lower=ci_lower,
-            ci_upper=ci_upper,
-        ))
+        profiles.append(
+            ReviewerProfile(
+                reviewer_id=reviewer_id,
+                sample_size=n,
+                mean_score=mean_score,
+                std_score=std_score,
+                harshness_z_score=harshness_z,
+                ci_lower=ci_lower,
+                ci_upper=ci_upper,
+            )
+        )
 
     return profiles
 
@@ -482,16 +494,22 @@ def run_aggregated_bias_audit(
     # Generate warnings
     warnings = []
     if confidence == StatisticalConfidence.INSUFFICIENT:
-        warnings.append(f"Only {unique_sessions} sessions - need at least 10 for preliminary analysis")
+        warnings.append(
+            f"Only {unique_sessions} sessions - need at least 10 for preliminary analysis"
+        )
     elif confidence == StatisticalConfidence.PRELIMINARY:
         warnings.append(f"Only {unique_sessions} sessions - results are preliminary")
 
     # Check for harsh/generous reviewers
     for profile in reviewer_profiles:
         if profile.harshness_z_score < -1.5:
-            warnings.append(f"Reviewer {profile.reviewer_id} appears harsh (z={profile.harshness_z_score:.2f})")
+            warnings.append(
+                f"Reviewer {profile.reviewer_id} appears harsh (z={profile.harshness_z_score:.2f})"
+            )
         elif profile.harshness_z_score > 1.5:
-            warnings.append(f"Reviewer {profile.reviewer_id} appears generous (z={profile.harshness_z_score:.2f})")
+            warnings.append(
+                f"Reviewer {profile.reviewer_id} appears generous (z={profile.harshness_z_score:.2f})"
+            )
 
     return AggregatedBiasAuditResult(
         window_start=window_start,
@@ -515,18 +533,18 @@ def _generate_ascii_chart(data: Dict[str, float], title: str, width: int = 40) -
     """Generate a simple ASCII bar chart."""
     if not data:
         return ""
-        
+
     lines = [f"\n{title}:"]
     max_val = max(data.values()) if data else 1.0
-    
+
     # Sort by value descending
     sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
-    
+
     for label, val in sorted_items:
         bar_len = int((val / max_val) * width) if max_val > 0 else 0
         bar = "█" * bar_len
         lines.append(f"{label[:15]:<15} |{bar:<{width}}| {val:.2f}")
-        
+
     return "\n".join(lines)
 
 
@@ -538,7 +556,7 @@ def generate_bias_report_text(
 ) -> str:
     """Generate a human-readable text report of the bias audit."""
     result = run_aggregated_bias_audit(store_path, max_sessions, max_days)
-    
+
     lines = []
     lines.append("LLM Council - Cross-Session Bias Audit")
     lines.append("======================================")
@@ -547,7 +565,7 @@ def generate_bias_report_text(
     lines.append(f"Total Reviews: {result.total_records}")
     lines.append(f"Confidence Level: {result.overall_confidence}")
     lines.append("")
-    
+
     # 1. Length Correlation (Verbosity Bias)
     lines.append("1. Response Length Correlation (Verbosity Bias)")
     lines.append("----------------------------------------------")
@@ -555,7 +573,7 @@ def generate_bias_report_text(
         lc = result.length_correlation
         lines.append(f"Pooled Correlation (r): {lc.point_estimate:.3f}")
         lines.append(f"95% CI: [{lc.ci_lower:.3f}, {lc.ci_upper:.3f}]")
-        
+
         threshold = 0.3
         if abs(lc.point_estimate) > threshold:
             lines.append("⚠️  Significant verbosity bias detected.")
@@ -564,7 +582,7 @@ def generate_bias_report_text(
     else:
         lines.append("Insufficient data for length correlation analysis.")
     lines.append("")
-    
+
     # 2. Position Bias
     lines.append("2. Position Bias (Score by Position)")
     lines.append("------------------------------------")
@@ -576,7 +594,7 @@ def generate_bias_report_text(
     else:
         lines.append("Insufficient data for position analysis.")
     lines.append("")
-    
+
     # 3. Reviewer Profiles (Harshness)
     lines.append("3. Reviewer Profiles (Harshness Analysis)")
     lines.append("-----------------------------------------")
@@ -585,7 +603,7 @@ def generate_bias_report_text(
         z_scores = {r.reviewer_id: r.harshness_z_score for r in result.reviewer_profiles}
         lines.append(_generate_ascii_chart(z_scores, "Reviewer Harshness (Z-Score)"))
         lines.append("")
-        
+
         for profile in sorted(result.reviewer_profiles, key=lambda p: p.harshness_z_score):
             if verbose:
                 lines.append(f"Reviewer: {profile.reviewer_id}")
@@ -641,39 +659,51 @@ def generate_bias_report_csv(
     """Generate a CSV export of raw bias metrics."""
     import csv
     import io
-    
+
     # Fetch records directly instead of aggregated result
     records = read_bias_records(store_path, max_sessions, max_days)
-    
+
     output = io.StringIO()
     writer = csv.writer(output)
-    
+
     # Header
-    writer.writerow([
-        "session_id", "timestamp", "reviewer_id", "model_id", 
-        "position", "score", "length_chars", "query_category", "token_bucket"
-    ])
-    
+    writer.writerow(
+        [
+            "session_id",
+            "timestamp",
+            "reviewer_id",
+            "model_id",
+            "position",
+            "score",
+            "length_chars",
+            "query_category",
+            "token_bucket",
+        ]
+    )
+
     for r in records:
-        writer.writerow([
-            r.session_id,
-            r.timestamp,
-            r.reviewer_id,
-            r.model_id,
-            r.position,
-            r.score_value,
-            r.response_length_chars,
-            # Metadata might be None for old records
-            r.query_metadata.get("category", "") if r.query_metadata else "",
-            r.query_metadata.get("token_bucket", "") if r.query_metadata else "",
-        ])
-        
+        writer.writerow(
+            [
+                r.session_id,
+                r.timestamp,
+                r.reviewer_id,
+                r.model_id,
+                r.position,
+                r.score_value,
+                r.response_length_chars,
+                # Metadata might be None for old records
+                r.query_metadata.get("category", "") if r.query_metadata else "",
+                r.query_metadata.get("token_bucket", "") if r.query_metadata else "",
+            ]
+        )
+
     return output.getvalue()
 
 
 # =============================================================================
 # Phase 3: Temporal Trends and Anomaly Detection
 # =============================================================================
+
 
 def detect_temporal_trends(
     records: List[BiasMetricRecord],
@@ -698,8 +728,8 @@ def detect_temporal_trends(
 
     # Calculate early and late averages
     n = len(sorted_records)
-    early_half = sorted_records[:n // 2]
-    late_half = sorted_records[n // 2:]
+    early_half = sorted_records[: n // 2]
+    late_half = sorted_records[n // 2 :]
 
     early_mean = sum(r.score_value for r in early_half) / len(early_half)
     late_mean = sum(r.score_value for r in late_half) / len(late_half)
@@ -769,12 +799,14 @@ def detect_anomalies(
         z_score = (session_mean - mean_score) / std_score
 
         if abs(z_score) > z_threshold:
-            anomalies.append({
-                "type": "outlier_session",
-                "session_id": session_id,
-                "session_mean": session_mean,
-                "z_score": z_score,
-                "direction": "low" if z_score < 0 else "high",
-            })
+            anomalies.append(
+                {
+                    "type": "outlier_session",
+                    "session_id": session_id,
+                    "session_mean": session_mean,
+                    "z_score": z_score,
+                    "direction": "low" if z_score < 0 else "high",
+                }
+            )
 
     return anomalies

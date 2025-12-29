@@ -39,8 +39,7 @@ class TestWebhookConfig:
         from llm_council.webhooks.types import WebhookConfig
 
         config = WebhookConfig(
-            url="https://example.com/webhook",
-            events=["council.complete", "council.error"]
+            url="https://example.com/webhook", events=["council.complete", "council.error"]
         )
 
         assert config.url == "https://example.com/webhook"
@@ -58,10 +57,7 @@ class TestWebhookConfig:
         """Should accept optional HMAC secret."""
         from llm_council.webhooks.types import WebhookConfig
 
-        config = WebhookConfig(
-            url="https://example.com/webhook",
-            secret="my-hmac-secret"
-        )
+        config = WebhookConfig(url="https://example.com/webhook", secret="my-hmac-secret")
 
         assert config.secret == "my-hmac-secret"
 
@@ -94,7 +90,7 @@ class TestWebhookPayload:
             event="council.complete",
             request_id="req-123",
             timestamp=now,
-            data={"result": "success"}
+            data={"result": "success"},
         )
 
         assert payload.event == "council.complete"
@@ -111,7 +107,7 @@ class TestWebhookPayload:
             request_id="req-123",
             timestamp=datetime.now(),
             data={},
-            duration_ms=1234
+            duration_ms=1234,
         )
 
         assert payload.duration_ms == 1234
@@ -121,10 +117,7 @@ class TestWebhookPayload:
         from llm_council.webhooks.types import WebhookPayload
 
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         assert payload.duration_ms is None
@@ -138,7 +131,7 @@ class TestWebhookPayload:
             event="council.complete",
             request_id="req-123",
             timestamp=now,
-            data={"result": "success"}
+            data={"result": "success"},
         )
 
         d = payload.model_dump()
@@ -152,10 +145,7 @@ class TestWebhookPayload:
 
         now = datetime.now()
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=now,
-            data={}
+            event="council.complete", request_id="req-123", timestamp=now, data={}
         )
 
         json_str = payload.model_dump_json()
@@ -169,11 +159,7 @@ class TestWebhookDeliveryResult:
         """Should represent successful delivery."""
         from llm_council.webhooks.types import WebhookDeliveryResult
 
-        result = WebhookDeliveryResult(
-            success=True,
-            status_code=200,
-            attempt=1
-        )
+        result = WebhookDeliveryResult(success=True, status_code=200, attempt=1)
 
         assert result.success is True
         assert result.status_code == 200
@@ -184,10 +170,7 @@ class TestWebhookDeliveryResult:
         from llm_council.webhooks.types import WebhookDeliveryResult
 
         result = WebhookDeliveryResult(
-            success=False,
-            status_code=500,
-            attempt=3,
-            error="Internal server error"
+            success=False, status_code=500, attempt=3, error="Internal server error"
         )
 
         assert result.success is False
@@ -198,11 +181,6 @@ class TestWebhookDeliveryResult:
         """Should include latency_ms."""
         from llm_council.webhooks.types import WebhookDeliveryResult
 
-        result = WebhookDeliveryResult(
-            success=True,
-            status_code=200,
-            attempt=1,
-            latency_ms=45
-        )
+        result = WebhookDeliveryResult(success=True, status_code=200, attempt=1, latency_ms=45)
 
         assert result.latency_ms == 45

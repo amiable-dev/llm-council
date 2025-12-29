@@ -79,7 +79,9 @@ class TestOpenRouterClient:
 
         with patch("httpx.AsyncClient") as mock_client_cls:
             mock_client_instance = AsyncMock()
-            mock_client_instance.get = AsyncMock(side_effect=httpx.ConnectError("Connection failed"))
+            mock_client_instance.get = AsyncMock(
+                side_effect=httpx.ConnectError("Connection failed")
+            )
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
             mock_client_instance.__aexit__ = AsyncMock(return_value=None)
             mock_client_cls.return_value = mock_client_instance

@@ -63,6 +63,7 @@ def _get_bias_consent_level() -> int:
     except Exception:
         return 1  # LOCAL_ONLY default
 
+
 # Hash secret from environment
 BIAS_HASH_SECRET = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
 
@@ -70,6 +71,7 @@ BIAS_HASH_SECRET = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-n
 # =============================================================================
 # ConsentLevel Enum
 # =============================================================================
+
 
 class ConsentLevel(Enum):
     """ADR-018: Unified consent model aligned with council-cloud ADR-001.
@@ -81,6 +83,7 @@ class ConsentLevel(Enum):
         ENHANCED (3): + Cloud bias summary transmission
         RESEARCH (4): + Query hashes for similarity grouping
     """
+
     OFF = 0
     LOCAL_ONLY = 1
     ANONYMOUS = 2
@@ -91,6 +94,7 @@ class ConsentLevel(Enum):
 # =============================================================================
 # BiasMetricRecord Dataclass
 # =============================================================================
+
 
 @dataclass
 class BiasMetricRecord:
@@ -114,6 +118,7 @@ class BiasMetricRecord:
         query_hash: Optional HMAC hash for query grouping (RESEARCH only)
         query_metadata: Optional metadata about the query
     """
+
     schema_version: str = "1.1.0"
     session_id: str = ""
     timestamp: str = ""
@@ -169,6 +174,7 @@ class BiasMetricRecord:
 # Query Hashing (Privacy)
 # =============================================================================
 
+
 def hash_query_if_enabled(
     query: str,
     consent_level: ConsentLevel,
@@ -193,11 +199,7 @@ def hash_query_if_enabled(
 
     # HMAC with deployment-specific secret
     secret = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
-    hash_bytes = hmac.new(
-        secret.encode(),
-        query_sample.encode(),
-        hashlib.sha256
-    ).hexdigest()
+    hash_bytes = hmac.new(secret.encode(), query_sample.encode(), hashlib.sha256).hexdigest()
 
     # Truncate to 16 chars
     return hash_bytes[:16]
@@ -206,6 +208,7 @@ def hash_query_if_enabled(
 # =============================================================================
 # JSONL Storage Operations
 # =============================================================================
+
 
 def append_bias_records(
     records: List[BiasMetricRecord],
@@ -233,9 +236,9 @@ def append_bias_records(
     store_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Append records atomically (one line at a time)
-    with open(store_path, 'a') as f:
+    with open(store_path, "a") as f:
         for record in records:
-            f.write(record.to_jsonl_line() + '\n')
+            f.write(record.to_jsonl_line() + "\n")
 
     return len(records)
 
@@ -268,7 +271,7 @@ def read_bias_records(
 
     records = []
 
-    with open(store_path, 'r') as f:
+    with open(store_path, "r") as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:
@@ -284,17 +287,11 @@ def read_bias_records(
     # Filter by max_days
     if max_days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_days)
-        records = [
-            r for r in records
-            if _parse_timestamp(r.timestamp) >= cutoff
-        ]
+        records = [r for r in records if _parse_timestamp(r.timestamp) >= cutoff]
 
     # Filter by since datetime
     if since is not None:
-        records = [
-            r for r in records
-            if _parse_timestamp(r.timestamp) >= since
-        ]
+        records = [r for r in records if _parse_timestamp(r.timestamp) >= since]
 
     # Sort chronologically (oldest first)
     records.sort(key=lambda r: r.timestamp)
@@ -326,8 +323,8 @@ def _parse_timestamp(timestamp_str: str) -> datetime:
 
     try:
         # Try standard ISO format
-        if timestamp_str.endswith('Z'):
-            timestamp_str = timestamp_str[:-1] + '+00:00'
+        if timestamp_str.endswith("Z"):
+            timestamp_str = timestamp_str[:-1] + "+00:00"
         return datetime.fromisoformat(timestamp_str)
     except (ValueError, TypeError):
         return datetime.min.replace(tzinfo=timezone.utc)
@@ -388,6 +385,7 @@ def get_bias_store_stats(
 # Session-to-Records Conversion
 # =============================================================================
 
+
 def _get_model_from_label_value(label_value: Any) -> str:
     """Extract model string from label_to_model value.
 
@@ -412,28 +410,28 @@ def _get_position_from_label(label: str, label_value: Any) -> int:
     if len(parts) >= 2:
         letter = parts[-1].upper()
         if letter.isalpha() and len(letter) == 1:
-            return ord(letter) - ord('A')
+            return ord(letter) - ord("A")
 
     return 0
 
 
 def _extract_query_metadata(query: str) -> Dict[str, Any]:
     """Extract metadata from the user query for bias analysis (ADR-018).
-    
+
     Extracts:
     - category: Simple heuristic-based classification
     - token_bucket: 'short' (<50 chars), 'medium' (<200), 'long' (>200)
     - language: Defaults to 'en' (placeholder for future detection)
-    
+
     Args:
         query: The user's query string (potentially sensitive)
-        
+
     Returns:
         Dict with metadata fields
     """
     if not query:
         return {"category": "unknown", "token_bucket": "unknown", "language": "en"}
-        
+
     # 1. Token bucket (using char length as proxy for speed/privacy)
     length = len(query)
     if length < 50:
@@ -442,27 +440,23 @@ def _extract_query_metadata(query: str) -> Dict[str, Any]:
         bucket = "medium"
     else:
         bucket = "long"
-        
+
     # 2. Category heuristic
     query_lower = query.lower()
     category = "general"
-    
-    code_keywords = ['def', 'function', 'class', 'import', 'python', 'javascript']
-    math_keywords = ['calculate', 'compute', 'equation', 'math', '+', '=']
-    creative_keywords = ['write', 'story', 'poem', 'creative', 'imagine']
-    
+
+    code_keywords = ["def", "function", "class", "import", "python", "javascript"]
+    math_keywords = ["calculate", "compute", "equation", "math", "+", "="]
+    creative_keywords = ["write", "story", "poem", "creative", "imagine"]
+
     if any(k in query_lower for k in code_keywords):
         category = "coding"
     elif any(k in query_lower for k in math_keywords):
         category = "math_reasoning"
     elif any(k in query_lower for k in creative_keywords):
         category = "creative_writing"
-        
-    return {
-        "category": category,
-        "token_bucket": bucket,
-        "language": "en"
-    }
+
+    return {"category": category, "token_bucket": bucket, "language": "en"}
 
 
 def create_bias_records_from_session(
@@ -489,10 +483,10 @@ def create_bias_records_from_session(
     """
     records = []
     timestamp = datetime.now(timezone.utc).isoformat()
-    
+
     # 1. Calculate query hash if consent allows (RESEARCH level)
     query_hash = hash_query_if_enabled(query, consent_level) if query else None
-    
+
     # 2. Extract query metadata (safely, no PII)
     query_metadata = _extract_query_metadata(query) if query else None
 
@@ -507,62 +501,65 @@ def create_bias_records_from_session(
     for ranking_result in stage2_results:
         # One record per (reviewer, candidate) pair
         reviewer_id = ranking_result.get("model", "")
-        
+
         parsed = ranking_result.get("parsed_ranking") or {}
-        
+
         # Determine score scale
         score_scale = "1-10"
-        
+
         # Process explicit scores if available
         scores = parsed.get("scores", {})
         ranked_labels = parsed.get("ranking", [])
-        
+
         # Determine which labels to process (ranking list prefers order, but fallback to score keys)
         labels_to_process = ranked_labels if ranked_labels else list(scores.keys())
-        
+
         for idx, label in enumerate(labels_to_process):
             model_id = get_model_from_label(label)
             if not model_id:
                 continue
-                
+
             # Get the score if available
             score_value = float(scores.get(label, 0.0))
-            
+
             # Position is 0-indexed index in the processed list
             position = idx
-            
+
             # Find usage stats if available
-            # Note: We don't have per-candidate response length easily accessible here 
+            # Note: We don't have per-candidate response length easily accessible here
             # without looking back at stage1_results, but we can do a quick lookup
             response_length = 0
             for r in stage1_results:
                 if r.get("model") == model_id:
                     response_length = len(r.get("response", ""))
                     break
-            
+
             record = BiasMetricRecord(
                 schema_version="1.1.0",
                 session_id=session_id,
                 timestamp=timestamp,
-                consent_level=consent_level.value if hasattr(consent_level, "value") else int(consent_level),
+                consent_level=consent_level.value
+                if hasattr(consent_level, "value")
+                else int(consent_level),
                 reviewer_id=reviewer_id,
                 model_id=model_id,
                 position=position,
                 response_length_chars=response_length,
                 score_value=score_value,
                 score_scale=score_scale,
-                council_config_version="0.1.0", 
+                council_config_version="0.1.0",
                 query_hash=query_hash,
                 query_metadata=query_metadata,
             )
             records.append(record)
-            
+
     return records
 
 
 # =============================================================================
 # High-Level Integration
 # =============================================================================
+
 
 def persist_session_bias_data(
     session_id: str,

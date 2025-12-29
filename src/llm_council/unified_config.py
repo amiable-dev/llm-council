@@ -218,9 +218,7 @@ class TriageConfig(BaseModel):
     complexity_classification: ComplexityClassificationConfig = Field(
         default_factory=ComplexityClassificationConfig
     )
-    prompt_optimization: PromptOptimizationConfig = Field(
-        default_factory=PromptOptimizationConfig
-    )
+    prompt_optimization: PromptOptimizationConfig = Field(default_factory=PromptOptimizationConfig)
     wildcard: WildcardConfig = Field(default_factory=WildcardConfig)
     fast_path: FastPathConfig = Field(default_factory=FastPathConfig)
 
@@ -244,9 +242,9 @@ class OllamaProviderConfig(BaseModel):
     enabled: bool = True
     base_url: str = Field(default="http://localhost:11434")
     timeout_seconds: float = Field(default=120.0, ge=1.0, le=3600.0)
-    hardware_profile: Optional[
-        Literal["minimum", "recommended", "professional", "enterprise"]
-    ] = None
+    hardware_profile: Optional[Literal["minimum", "recommended", "professional", "enterprise"]] = (
+        None
+    )
 
 
 class WebhookConfig(BaseModel):
@@ -260,9 +258,7 @@ class WebhookConfig(BaseModel):
     timeout_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
     max_retries: int = Field(default=3, ge=0, le=10)
     https_only: bool = True
-    default_events: List[str] = Field(
-        default_factory=lambda: ["council.complete", "council.error"]
-    )
+    default_events: List[str] = Field(default_factory=lambda: ["council.complete", "council.error"])
 
 
 class FallbackConfig(BaseModel):
@@ -270,9 +266,7 @@ class FallbackConfig(BaseModel):
 
     enabled: bool = True
     chain: List[str] = Field(default_factory=lambda: ["openrouter", "requesty", "direct"])
-    retry_on: List[str] = Field(
-        default_factory=lambda: ["timeout", "rate_limit", "server_error"]
-    )
+    retry_on: List[str] = Field(default_factory=lambda: ["timeout", "rate_limit", "server_error"])
     do_not_retry_on: List[str] = Field(
         default_factory=lambda: ["auth_error", "invalid_request", "content_filter"]
     )
@@ -304,7 +298,9 @@ class GatewayConfig(BaseModel):
             providers = data.get("providers", {})
             if isinstance(providers, dict) and "ollama" in providers:
                 ollama_data = providers["ollama"]
-                if isinstance(ollama_data, dict) and not isinstance(ollama_data, OllamaProviderConfig):
+                if isinstance(ollama_data, dict) and not isinstance(
+                    ollama_data, OllamaProviderConfig
+                ):
                     providers["ollama"] = OllamaProviderConfig(**ollama_data)
         return data
 
@@ -516,12 +512,8 @@ class ReasoningOptimizationConfig(BaseModel):
     """
 
     enabled: bool = True  # Enabled by default when model intelligence is on
-    effort_by_tier: ReasoningEffortByTierConfig = Field(
-        default_factory=ReasoningEffortByTierConfig
-    )
-    domain_overrides: DomainOverridesConfig = Field(
-        default_factory=DomainOverridesConfig
-    )
+    effort_by_tier: ReasoningEffortByTierConfig = Field(default_factory=ReasoningEffortByTierConfig)
+    domain_overrides: DomainOverridesConfig = Field(default_factory=DomainOverridesConfig)
     stages: ReasoningStageConfig = Field(default_factory=ReasoningStageConfig)
     max_budget_tokens: int = Field(default=32000, ge=1024, le=100000)
     min_budget_tokens: int = Field(default=1024, ge=256, le=32000)
@@ -609,24 +601,16 @@ class ModelIntelligenceConfig(BaseModel):
     """
 
     enabled: bool = False  # Opt-in; requires API connectivity
-    refresh: ModelIntelligenceRefreshConfig = Field(
-        default_factory=ModelIntelligenceRefreshConfig
-    )
+    refresh: ModelIntelligenceRefreshConfig = Field(default_factory=ModelIntelligenceRefreshConfig)
     selection: ModelIntelligenceSelectionConfig = Field(
         default_factory=ModelIntelligenceSelectionConfig
     )
     anti_herding: AntiHerdingConfig = Field(default_factory=AntiHerdingConfig)
     scoring: ScoringConfig = Field(default_factory=ScoringConfig)  # ADR-030
-    circuit_breaker: CircuitBreakerConfig = Field(
-        default_factory=CircuitBreakerConfig
-    )  # ADR-030
+    circuit_breaker: CircuitBreakerConfig = Field(default_factory=CircuitBreakerConfig)  # ADR-030
     discovery: DiscoveryConfig = Field(default_factory=DiscoveryConfig)  # ADR-028
-    reasoning: ReasoningOptimizationConfig = Field(
-        default_factory=ReasoningOptimizationConfig
-    )
-    performance_tracker: PerformanceTrackerConfig = Field(
-        default_factory=PerformanceTrackerConfig
-    )
+    reasoning: ReasoningOptimizationConfig = Field(default_factory=ReasoningOptimizationConfig)
+    performance_tracker: PerformanceTrackerConfig = Field(default_factory=PerformanceTrackerConfig)
     audition: AuditionConfig = Field(default_factory=AuditionConfig)  # ADR-029
 
 
@@ -785,9 +769,7 @@ class CacheConfig(BaseModel):
         ge=0,
         alias="LLM_COUNCIL_CACHE_TTL",
     )
-    directory: Path = Field(
-        default_factory=lambda: Path.home() / ".cache" / "llm-council"
-    )
+    directory: Path = Field(default_factory=lambda: Path.home() / ".cache" / "llm-council")
 
 
 class TelemetryConfig(BaseModel):
@@ -799,9 +781,7 @@ class TelemetryConfig(BaseModel):
         default="off",
         alias="LLM_COUNCIL_TELEMETRY",
     )
-    endpoint: str = Field(
-        default="https://ingest.llmcouncil.ai/v1/events"
-    )
+    endpoint: str = Field(default="https://ingest.llmcouncil.ai/v1/events")
 
     @property
     def enabled(self) -> bool:
@@ -883,15 +863,15 @@ class BiasConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
     audit_enabled: bool = Field(default=False, validation_alias="BIAS_AUDIT_ENABLED")
-    persistence_enabled: bool = Field(
-        default=False, validation_alias="BIAS_PERSISTENCE_ENABLED"
-    )
+    persistence_enabled: bool = Field(default=False, validation_alias="BIAS_PERSISTENCE_ENABLED")
     store_path: str = Field(default="data/bias_metrics.jsonl")
-    consent_level: Literal["OFF", "LOCAL_ONLY", "ANONYMOUS", "ENHANCED", "RESEARCH"] = (
-        "LOCAL_ONLY"
-    )
-    length_correlation_threshold: float = Field(default=0.3, ge=0.0, le=1.0)  # |r| above this = bias
-    position_variance_threshold: float = Field(default=0.5, ge=0.0)  # Match original config.py default
+    consent_level: Literal["OFF", "LOCAL_ONLY", "ANONYMOUS", "ENHANCED", "RESEARCH"] = "LOCAL_ONLY"
+    length_correlation_threshold: float = Field(
+        default=0.3, ge=0.0, le=1.0
+    )  # |r| above this = bias
+    position_variance_threshold: float = Field(
+        default=0.5, ge=0.0
+    )  # Match original config.py default
 
 
 class EvaluationConfig(BaseModel):
@@ -923,9 +903,7 @@ class UnifiedConfig(BaseModel):
     credentials: CredentialsConfig = Field(default_factory=CredentialsConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     webhooks: WebhookConfig = Field(default_factory=WebhookConfig)
-    model_intelligence: ModelIntelligenceConfig = Field(
-        default_factory=ModelIntelligenceConfig
-    )
+    model_intelligence: ModelIntelligenceConfig = Field(default_factory=ModelIntelligenceConfig)
     frontier: FrontierConfig = Field(default_factory=FrontierConfig)  # ADR-027
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)  # ADR-031
     # ADR-032: Complete Configuration Migration
@@ -1119,7 +1097,9 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
         models_env = os.getenv(f"LLM_COUNCIL_MODELS_{tier.upper()}")
         if models_env:
             models = [m.strip() for m in models_env.split(",")]
-            config_dict.setdefault("tiers", {}).setdefault("pools", {}).setdefault(tier, {})["models"] = models
+            config_dict.setdefault("tiers", {}).setdefault("pools", {}).setdefault(tier, {})[
+                "models"
+            ] = models
 
     # Gateway overrides
     gateway_env = os.getenv("LLM_COUNCIL_DEFAULT_GATEWAY")
@@ -1134,12 +1114,16 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     # Wildcard override
     wildcard_env = os.getenv("LLM_COUNCIL_WILDCARD_ENABLED")
     if wildcard_env:
-        config_dict.setdefault("triage", {}).setdefault("wildcard", {})["enabled"] = wildcard_env.lower() in ("true", "1", "yes")
+        config_dict.setdefault("triage", {}).setdefault("wildcard", {})["enabled"] = (
+            wildcard_env.lower() in ("true", "1", "yes")
+        )
 
     # Prompt optimization override
     prompt_opt_env = os.getenv("LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED")
     if prompt_opt_env:
-        config_dict.setdefault("triage", {}).setdefault("prompt_optimization", {})["enabled"] = prompt_opt_env.lower() in ("true", "1", "yes")
+        config_dict.setdefault("triage", {}).setdefault("prompt_optimization", {})["enabled"] = (
+            prompt_opt_env.lower() in ("true", "1", "yes")
+        )
 
     # Gateway fallback chain
     fallback_env = os.getenv("LLM_COUNCIL_GATEWAY_FALLBACK_CHAIN")
@@ -1160,15 +1144,23 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     # Ollama overrides (ADR-025a)
     ollama_base_url = os.getenv("LLM_COUNCIL_OLLAMA_BASE_URL")
     if ollama_base_url:
-        config_dict.setdefault("gateways", {}).setdefault("providers", {}).setdefault("ollama", {})["base_url"] = ollama_base_url
+        config_dict.setdefault("gateways", {}).setdefault("providers", {}).setdefault("ollama", {})[
+            "base_url"
+        ] = ollama_base_url
     ollama_timeout = os.getenv("LLM_COUNCIL_OLLAMA_TIMEOUT")
     if ollama_timeout:
-        config_dict.setdefault("gateways", {}).setdefault("providers", {}).setdefault("ollama", {})["timeout_seconds"] = float(ollama_timeout)
+        config_dict.setdefault("gateways", {}).setdefault("providers", {}).setdefault("ollama", {})[
+            "timeout_seconds"
+        ] = float(ollama_timeout)
 
     # Webhook overrides (ADR-025a)
     webhooks_enabled = os.getenv("LLM_COUNCIL_WEBHOOKS_ENABLED")
     if webhooks_enabled:
-        config_dict.setdefault("webhooks", {})["enabled"] = webhooks_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("webhooks", {})["enabled"] = webhooks_enabled.lower() in (
+            "true",
+            "1",
+            "yes",
+        )
     webhook_timeout = os.getenv("LLM_COUNCIL_WEBHOOK_TIMEOUT")
     if webhook_timeout:
         config_dict.setdefault("webhooks", {})["timeout_seconds"] = float(webhook_timeout)
@@ -1179,98 +1171,142 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     # Model Intelligence overrides (ADR-026)
     model_intelligence_enabled = os.getenv("LLM_COUNCIL_MODEL_INTELLIGENCE")
     if model_intelligence_enabled:
-        config_dict.setdefault("model_intelligence", {})["enabled"] = model_intelligence_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("model_intelligence", {})["enabled"] = (
+            model_intelligence_enabled.lower() in ("true", "1", "yes")
+        )
 
     # Reasoning optimization overrides (ADR-026 Phase 2)
     reasoning_enabled = os.getenv("LLM_COUNCIL_REASONING_ENABLED")
     if reasoning_enabled:
-        config_dict.setdefault("model_intelligence", {}).setdefault("reasoning", {})["enabled"] = reasoning_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("model_intelligence", {}).setdefault("reasoning", {})["enabled"] = (
+            reasoning_enabled.lower() in ("true", "1", "yes")
+        )
 
     # Scoring overrides (ADR-030)
     cost_scale = os.getenv("LLM_COUNCIL_COST_SCALE")
     if cost_scale and cost_scale.lower() in ("linear", "log_ratio", "exponential"):
-        config_dict.setdefault("model_intelligence", {}).setdefault("scoring", {})["cost_scale"] = cost_scale.lower()
+        config_dict.setdefault("model_intelligence", {}).setdefault("scoring", {})["cost_scale"] = (
+            cost_scale.lower()
+        )
 
     # Circuit breaker overrides (ADR-030)
     circuit_breaker_enabled = os.getenv("LLM_COUNCIL_CIRCUIT_BREAKER")
     if circuit_breaker_enabled:
-        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})["enabled"] = circuit_breaker_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})[
+            "enabled"
+        ] = circuit_breaker_enabled.lower() in ("true", "1", "yes")
 
     circuit_threshold = os.getenv("LLM_COUNCIL_CIRCUIT_THRESHOLD")
     if circuit_threshold:
-        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})["failure_threshold"] = float(circuit_threshold)
+        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})[
+            "failure_threshold"
+        ] = float(circuit_threshold)
 
     circuit_min_requests = os.getenv("LLM_COUNCIL_CIRCUIT_MIN_REQUESTS")
     if circuit_min_requests:
-        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})["min_requests"] = int(circuit_min_requests)
+        config_dict.setdefault("model_intelligence", {}).setdefault("circuit_breaker", {})[
+            "min_requests"
+        ] = int(circuit_min_requests)
 
     # Discovery overrides (ADR-028)
     discovery_enabled = os.getenv("LLM_COUNCIL_DISCOVERY_ENABLED")
     if discovery_enabled:
-        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["enabled"] = discovery_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["enabled"] = (
+            discovery_enabled.lower() in ("true", "1", "yes")
+        )
 
     discovery_interval = os.getenv("LLM_COUNCIL_DISCOVERY_INTERVAL")
     if discovery_interval:
-        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["refresh_interval_seconds"] = int(discovery_interval)
+        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})[
+            "refresh_interval_seconds"
+        ] = int(discovery_interval)
 
     discovery_min_candidates = os.getenv("LLM_COUNCIL_DISCOVERY_MIN_CANDIDATES")
     if discovery_min_candidates:
-        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})["min_candidates_per_tier"] = int(discovery_min_candidates)
+        config_dict.setdefault("model_intelligence", {}).setdefault("discovery", {})[
+            "min_candidates_per_tier"
+        ] = int(discovery_min_candidates)
 
     # Metrics overrides (ADR-030)
     metrics_enabled = os.getenv("LLM_COUNCIL_METRICS_ENABLED")
     if metrics_enabled:
-        config_dict.setdefault("observability", {}).setdefault("metrics", {})["enabled"] = metrics_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["enabled"] = (
+            metrics_enabled.lower() in ("true", "1", "yes")
+        )
 
     metrics_backend = os.getenv("LLM_COUNCIL_METRICS_BACKEND")
     if metrics_backend and metrics_backend.lower() in ("none", "statsd", "prometheus"):
-        config_dict.setdefault("observability", {}).setdefault("metrics", {})["backend"] = metrics_backend.lower()
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["backend"] = (
+            metrics_backend.lower()
+        )
 
     statsd_host = os.getenv("LLM_COUNCIL_STATSD_HOST")
     if statsd_host:
-        config_dict.setdefault("observability", {}).setdefault("metrics", {})["statsd_host"] = statsd_host
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["statsd_host"] = (
+            statsd_host
+        )
 
     statsd_port = os.getenv("LLM_COUNCIL_STATSD_PORT")
     if statsd_port:
-        config_dict.setdefault("observability", {}).setdefault("metrics", {})["statsd_port"] = int(statsd_port)
+        config_dict.setdefault("observability", {}).setdefault("metrics", {})["statsd_port"] = int(
+            statsd_port
+        )
 
     # Audition overrides (ADR-029)
     audition_enabled = os.getenv("LLM_COUNCIL_AUDITION_ENABLED")
     if audition_enabled:
-        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {})["enabled"] = audition_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {})["enabled"] = (
+            audition_enabled.lower() in ("true", "1", "yes")
+        )
 
     audition_max_seats = os.getenv("LLM_COUNCIL_AUDITION_MAX_SEATS")
     if audition_max_seats:
-        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {})["max_audition_seats"] = int(audition_max_seats)
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {})[
+            "max_audition_seats"
+        ] = int(audition_max_seats)
 
     audition_shadow_sessions = os.getenv("LLM_COUNCIL_AUDITION_SHADOW_SESSIONS")
     if audition_shadow_sessions:
-        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault("shadow", {})["min_sessions"] = int(audition_shadow_sessions)
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault(
+            "shadow", {}
+        )["min_sessions"] = int(audition_shadow_sessions)
 
     audition_eval_sessions = os.getenv("LLM_COUNCIL_AUDITION_EVAL_SESSIONS")
     if audition_eval_sessions:
-        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault("evaluation", {})["min_sessions"] = int(audition_eval_sessions)
+        config_dict.setdefault("model_intelligence", {}).setdefault("audition", {}).setdefault(
+            "evaluation", {}
+        )["min_sessions"] = int(audition_eval_sessions)
 
     # Evaluation overrides (ADR-031)
     rubric_enabled = os.getenv("RUBRIC_SCORING_ENABLED")
     if rubric_enabled:
-        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})["enabled"] = rubric_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})["enabled"] = (
+            rubric_enabled.lower() in ("true", "1", "yes")
+        )
 
     accuracy_ceiling_enabled = os.getenv("ACCURACY_CEILING_ENABLED")
     if accuracy_ceiling_enabled:
-        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})["accuracy_ceiling_enabled"] = accuracy_ceiling_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})[
+            "accuracy_ceiling_enabled"
+        ] = accuracy_ceiling_enabled.lower() in ("true", "1", "yes")
 
     safety_enabled = os.getenv("SAFETY_GATE_ENABLED")
     if safety_enabled:
-        config_dict.setdefault("evaluation", {}).setdefault("safety", {})["enabled"] = safety_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("evaluation", {}).setdefault("safety", {})["enabled"] = (
+            safety_enabled.lower() in ("true", "1", "yes")
+        )
 
     bias_audit_enabled = os.getenv("BIAS_AUDIT_ENABLED")
     if bias_audit_enabled:
-        config_dict.setdefault("evaluation", {}).setdefault("bias", {})["audit_enabled"] = bias_audit_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("evaluation", {}).setdefault("bias", {})["audit_enabled"] = (
+            bias_audit_enabled.lower() in ("true", "1", "yes")
+        )
 
     bias_persistence_enabled = os.getenv("BIAS_PERSISTENCE_ENABLED")
     if bias_persistence_enabled:
-        config_dict.setdefault("evaluation", {}).setdefault("bias", {})["persistence_enabled"] = bias_persistence_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("evaluation", {}).setdefault("bias", {})["persistence_enabled"] = (
+            bias_persistence_enabled.lower() in ("true", "1", "yes")
+        )
 
     # ADR-032: Council configuration overrides
     council_models = os.getenv("LLM_COUNCIL_MODELS")
@@ -1287,14 +1323,18 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
 
     council_exclude_self = os.getenv("LLM_COUNCIL_EXCLUDE_SELF_VOTES")
     if council_exclude_self:
-        config_dict.setdefault("council", {})["exclude_self_votes"] = council_exclude_self.lower() in ("true", "1", "yes")
+        config_dict.setdefault("council", {})["exclude_self_votes"] = (
+            council_exclude_self.lower() in ("true", "1", "yes")
+        )
 
     council_style_norm = os.getenv("LLM_COUNCIL_STYLE_NORMALIZATION")
     if council_style_norm:
         if council_style_norm.lower() == "auto":
             config_dict.setdefault("council", {})["style_normalization"] = "auto"
         else:
-            config_dict.setdefault("council", {})["style_normalization"] = council_style_norm.lower() in ("true", "1", "yes")
+            config_dict.setdefault("council", {})["style_normalization"] = (
+                council_style_norm.lower() in ("true", "1", "yes")
+            )
 
     council_normalizer = os.getenv("LLM_COUNCIL_NORMALIZER_MODEL")
     if council_normalizer:
@@ -1312,7 +1352,11 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     # ADR-032: Cache configuration overrides
     cache_enabled = os.getenv("LLM_COUNCIL_CACHE")
     if cache_enabled:
-        config_dict.setdefault("cache", {})["enabled"] = cache_enabled.lower() in ("true", "1", "yes")
+        config_dict.setdefault("cache", {})["enabled"] = cache_enabled.lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
     cache_ttl = os.getenv("LLM_COUNCIL_CACHE_TTL")
     if cache_ttl:
@@ -1414,6 +1458,7 @@ def _is_fail_backend() -> bool:
     if keyring is None:
         try:
             import keyring as kr
+
             keyring = kr
         except ImportError:
             keyring = False
@@ -1424,6 +1469,7 @@ def _is_fail_backend() -> bool:
 
     try:
         from keyring.backends import fail
+
         return isinstance(keyring.get_keyring(), fail.Keyring)
     except ImportError:
         return False
@@ -1442,6 +1488,7 @@ def _get_api_key_from_keychain(provider: str = "openrouter_api_key") -> Optional
     if keyring is None:
         try:
             import keyring as kr
+
             keyring = kr
         except ImportError:
             keyring = False
@@ -1509,10 +1556,11 @@ def _get_api_key(provider: str = "openrouter") -> Optional[str]:
         # Emit warning unless suppressed
         if not os.environ.get("LLM_COUNCIL_SUPPRESS_WARNINGS"):
             import sys
+
             print(
                 f"Warning: Loading API key from config file is insecure. "
                 f"Use environment variables or keychain instead.",
-                file=sys.stderr
+                file=sys.stderr,
             )
         return _user_config[f"{provider}_api_key"]
 

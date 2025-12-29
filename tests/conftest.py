@@ -1,4 +1,5 @@
 """Shared test configuration and fixtures."""
+
 from pathlib import Path
 
 import pytest
@@ -103,6 +104,8 @@ def _filter_request_body(request):
 
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')")
+    config.addinivalue_line(
+        "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
+    )
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "vcr: marks tests to use VCR cassette recording")

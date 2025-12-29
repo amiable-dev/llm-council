@@ -59,8 +59,12 @@ def test_env_example_has_no_real_secrets(env_example_content: str):
 
     # OpenAI API key patterns (but allow "sk-..." as placeholder)
     lines_with_sk = [
-        line for line in env_example_content.split("\n")
-        if "sk-" in line and not line.strip().startswith("#") and "=sk-..." not in line and "=sk-ant-..." not in line
+        line
+        for line in env_example_content.split("\n")
+        if "sk-" in line
+        and not line.strip().startswith("#")
+        and "=sk-..." not in line
+        and "=sk-ant-..." not in line
     ]
     assert len(lines_with_sk) == 0, f"Potential real key found in lines: {lines_with_sk}"
 
@@ -72,9 +76,9 @@ def test_env_example_has_comments(env_example_content: str):
     assert "OPTIONAL" in env_example_content, "Missing OPTIONAL section header"
 
     # Should have instructions
-    assert "Copy this file" in env_example_content or "copy" in env_example_content.lower(), (
-        "Missing copy instructions"
-    )
+    assert (
+        "Copy this file" in env_example_content or "copy" in env_example_content.lower()
+    ), "Missing copy instructions"
 
 
 def test_env_example_warns_about_committing(env_example_content: str):

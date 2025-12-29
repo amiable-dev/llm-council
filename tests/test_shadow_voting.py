@@ -12,27 +12,15 @@ class TestShadowVotingIntegration:
     """Test Shadow Mode voting integration in calculate_aggregate_rankings()."""
 
     def _create_stage2_result(
-        self,
-        reviewer: str,
-        ranking: List[str],
-        scores: Dict[str, float] = None
+        self, reviewer: str, ranking: List[str], scores: Dict[str, float] = None
     ) -> Dict[str, Any]:
         """Helper to create a stage2 result dict."""
-        return {
-            "model": reviewer,
-            "parsed_ranking": {
-                "ranking": ranking,
-                "scores": scores or {}
-            }
-        }
+        return {"model": reviewer, "parsed_ranking": {"ranking": ranking, "scores": scores or {}}}
 
     def _create_label_to_model(self, models: List[str]) -> Dict[str, Any]:
         """Helper to create label_to_model mapping."""
         labels = ["Response A", "Response B", "Response C", "Response D"]
-        return {
-            labels[i]: {"model": model, "display_index": i}
-            for i, model in enumerate(models)
-        }
+        return {labels[i]: {"model": model, "display_index": i} for i, model in enumerate(models)}
 
     def test_backward_compatible_without_voting_authorities(self):
         """calculate_aggregate_rankings should work without voting_authorities parameter."""
@@ -66,9 +54,7 @@ class TestShadowVotingIntegration:
         }
 
         rankings = calculate_aggregate_rankings(
-            stage2_results,
-            label_to_model,
-            voting_authorities=voting_authorities
+            stage2_results, label_to_model, voting_authorities=voting_authorities
         )
 
         assert rankings[0]["model"] == "model-a"
@@ -93,9 +79,7 @@ class TestShadowVotingIntegration:
         }
 
         rankings = calculate_aggregate_rankings(
-            stage2_results,
-            label_to_model,
-            voting_authorities=voting_authorities
+            stage2_results, label_to_model, voting_authorities=voting_authorities
         )
 
         # Model B should win (2 FULL first-place votes)
@@ -123,9 +107,7 @@ class TestShadowVotingIntegration:
         }
 
         rankings = calculate_aggregate_rankings(
-            stage2_results,
-            label_to_model,
-            voting_authorities=voting_authorities
+            stage2_results, label_to_model, voting_authorities=voting_authorities
         )
 
         # No effective votes - both models should have 0 vote_count
@@ -153,9 +135,7 @@ class TestShadowVotingIntegration:
         }
 
         rankings = calculate_aggregate_rankings(
-            stage2_results,
-            label_to_model,
-            voting_authorities=voting_authorities
+            stage2_results, label_to_model, voting_authorities=voting_authorities
         )
 
         # Model A should win (2 FULL votes)
@@ -178,9 +158,7 @@ class TestShadowVotingIntegration:
         }
 
         rankings = calculate_aggregate_rankings(
-            stage2_results,
-            label_to_model,
-            voting_authorities=voting_authorities
+            stage2_results, label_to_model, voting_authorities=voting_authorities
         )
 
         # Only 1 effective vote from gpt-4o
@@ -197,21 +175,12 @@ class TestShadowVoteTracking:
         ranking: List[str],
     ) -> Dict[str, Any]:
         """Helper to create a stage2 result dict."""
-        return {
-            "model": reviewer,
-            "parsed_ranking": {
-                "ranking": ranking,
-                "scores": {}
-            }
-        }
+        return {"model": reviewer, "parsed_ranking": {"ranking": ranking, "scores": {}}}
 
     def _create_label_to_model(self, models: List[str]) -> Dict[str, Any]:
         """Helper to create label_to_model mapping."""
         labels = ["Response A", "Response B", "Response C", "Response D"]
-        return {
-            labels[i]: {"model": model, "display_index": i}
-            for i, model in enumerate(models)
-        }
+        return {labels[i]: {"model": model, "display_index": i} for i, model in enumerate(models)}
 
     def test_shadow_votes_returned_in_result(self):
         """Shadow votes should be returned for observability."""
@@ -232,7 +201,7 @@ class TestShadowVoteTracking:
             stage2_results,
             label_to_model,
             voting_authorities=voting_authorities,
-            return_shadow_votes=True
+            return_shadow_votes=True,
         )
 
         # Rankings should include shadow_votes metadata
@@ -257,9 +226,7 @@ class TestShadowVoteTracking:
 
         # Should not raise
         rankings = calculate_aggregate_rankings(
-            stage2_results,
-            label_to_model,
-            voting_authorities=voting_authorities
+            stage2_results, label_to_model, voting_authorities=voting_authorities
         )
 
         assert len(rankings) == 2

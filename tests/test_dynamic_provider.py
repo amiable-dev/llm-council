@@ -99,7 +99,7 @@ class TestDynamicProviderFallback:
         test_model = ModelInfo(
             id="openai/gpt-4o",
             context_window=999999,  # Different from static
-            quality_tier=QualityTier.FRONTIER
+            quality_tier=QualityTier.FRONTIER,
         )
         provider._cache.registry_cache.set("openai/gpt-4o", test_model)
 
@@ -260,10 +260,9 @@ class TestGetProviderFactory:
         from llm_council.metadata import get_provider, reload_provider
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
-        with patch.dict(os.environ, {
-            "LLM_COUNCIL_OFFLINE": "true",
-            "LLM_COUNCIL_MODEL_INTELLIGENCE": "true"
-        }):
+        with patch.dict(
+            os.environ, {"LLM_COUNCIL_OFFLINE": "true", "LLM_COUNCIL_MODEL_INTELLIGENCE": "true"}
+        ):
             reload_provider()
             provider = get_provider()
             # Offline takes precedence

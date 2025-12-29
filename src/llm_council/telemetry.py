@@ -161,11 +161,13 @@ def _auto_init_telemetry() -> None:
     try:
         # ADR-032: Migrated to unified_config
         from llm_council.unified_config import get_config
+
         config = get_config()
         telemetry_config = config.telemetry
 
         if telemetry_config.enabled:
             from llm_council.telemetry_client import HttpTelemetry
+
             client = HttpTelemetry(
                 endpoint=telemetry_config.endpoint,
                 level=telemetry_config.level,

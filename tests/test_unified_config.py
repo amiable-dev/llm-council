@@ -483,10 +483,13 @@ council:
         base_url: http://localhost:11434
         timeout_seconds: 120.0
 """)
-        with patch.dict(os.environ, {
-            "LLM_COUNCIL_OLLAMA_BASE_URL": "http://custom:11434",
-            "LLM_COUNCIL_OLLAMA_TIMEOUT": "600.0"
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_COUNCIL_OLLAMA_BASE_URL": "http://custom:11434",
+                "LLM_COUNCIL_OLLAMA_TIMEOUT": "600.0",
+            },
+        ):
             config = get_effective_config(config_file)
             ollama_config = config.gateways.providers["ollama"]
             assert ollama_config.base_url == "http://custom:11434"
@@ -567,11 +570,14 @@ council:
     enabled: false
     timeout_seconds: 5.0
 """)
-        with patch.dict(os.environ, {
-            "LLM_COUNCIL_WEBHOOKS_ENABLED": "true",
-            "LLM_COUNCIL_WEBHOOK_TIMEOUT": "15.0",
-            "LLM_COUNCIL_WEBHOOK_RETRIES": "7"
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "LLM_COUNCIL_WEBHOOKS_ENABLED": "true",
+                "LLM_COUNCIL_WEBHOOK_TIMEOUT": "15.0",
+                "LLM_COUNCIL_WEBHOOK_RETRIES": "7",
+            },
+        ):
             config = get_effective_config(config_file)
             assert config.webhooks.enabled is True
             assert config.webhooks.timeout_seconds == 15.0
@@ -1004,34 +1010,40 @@ class TestRubricConfig:
         from llm_council.unified_config import RubricConfig
 
         # Valid weights summing to 1.0
-        config = RubricConfig(weights={
-            "accuracy": 0.40,
-            "relevance": 0.15,
-            "completeness": 0.20,
-            "conciseness": 0.10,
-            "clarity": 0.15,
-        })
+        config = RubricConfig(
+            weights={
+                "accuracy": 0.40,
+                "relevance": 0.15,
+                "completeness": 0.20,
+                "conciseness": 0.10,
+                "clarity": 0.15,
+            }
+        )
         assert sum(config.weights.values()) == pytest.approx(1.0, abs=0.01)
 
         # Invalid: weights sum to 0.8
         with pytest.raises(ValueError, match="sum to 1.0"):
-            RubricConfig(weights={
-                "accuracy": 0.30,
-                "relevance": 0.10,
-                "completeness": 0.20,
-                "conciseness": 0.10,
-                "clarity": 0.10,
-            })
+            RubricConfig(
+                weights={
+                    "accuracy": 0.30,
+                    "relevance": 0.10,
+                    "completeness": 0.20,
+                    "conciseness": 0.10,
+                    "clarity": 0.10,
+                }
+            )
 
         # Invalid: weights sum to 1.2
         with pytest.raises(ValueError, match="sum to 1.0"):
-            RubricConfig(weights={
-                "accuracy": 0.40,
-                "relevance": 0.20,
-                "completeness": 0.25,
-                "conciseness": 0.20,
-                "clarity": 0.15,
-            })
+            RubricConfig(
+                weights={
+                    "accuracy": 0.40,
+                    "relevance": 0.20,
+                    "completeness": 0.25,
+                    "conciseness": 0.20,
+                    "clarity": 0.15,
+                }
+            )
 
     def test_rubric_weights_non_negative(self):
         """Rubric weights cannot be negative."""
@@ -1039,13 +1051,15 @@ class TestRubricConfig:
 
         # Invalid: negative weight
         with pytest.raises(ValueError, match="negative"):
-            RubricConfig(weights={
-                "accuracy": -0.10,
-                "relevance": 0.30,
-                "completeness": 0.30,
-                "conciseness": 0.25,
-                "clarity": 0.25,
-            })
+            RubricConfig(
+                weights={
+                    "accuracy": -0.10,
+                    "relevance": 0.30,
+                    "completeness": 0.30,
+                    "conciseness": 0.25,
+                    "clarity": 0.25,
+                }
+            )
 
     def test_rubric_weights_required_dimensions(self):
         """Rubric weights must include all 5 dimensions."""
@@ -1053,19 +1067,23 @@ class TestRubricConfig:
 
         # Invalid: missing clarity
         with pytest.raises(ValueError, match="dimensions"):
-            RubricConfig(weights={
-                "accuracy": 0.35,
-                "relevance": 0.15,
-                "completeness": 0.25,
-                "conciseness": 0.25,
-            })
+            RubricConfig(
+                weights={
+                    "accuracy": 0.35,
+                    "relevance": 0.15,
+                    "completeness": 0.25,
+                    "conciseness": 0.25,
+                }
+            )
 
         # Invalid: missing multiple dimensions
         with pytest.raises(ValueError, match="dimensions"):
-            RubricConfig(weights={
-                "accuracy": 0.50,
-                "clarity": 0.50,
-            })
+            RubricConfig(
+                weights={
+                    "accuracy": 0.50,
+                    "clarity": 0.50,
+                }
+            )
 
 
 class TestSafetyConfig:

@@ -52,8 +52,7 @@ class TestOpenRouterMessageConversion:
 
         gateway = OpenRouterGateway()
         msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello, world!")]
+            role="user", content=[ContentBlock(type="text", text="Hello, world!")]
         )
 
         result = gateway._convert_message(msg)
@@ -72,7 +71,7 @@ class TestOpenRouterMessageConversion:
             content=[
                 ContentBlock(type="text", text="Part 1."),
                 ContentBlock(type="text", text="Part 2."),
-            ]
+            ],
         )
 
         result = gateway._convert_message(msg)
@@ -92,7 +91,7 @@ class TestOpenRouterMessageConversion:
             content=[
                 ContentBlock(type="text", text="What's in this image?"),
                 ContentBlock(type="image", image_url="https://example.com/img.png"),
-            ]
+            ],
         )
 
         result = gateway._convert_message(msg)
@@ -110,8 +109,7 @@ class TestOpenRouterMessageConversion:
 
         gateway = OpenRouterGateway()
         msg = CanonicalMessage(
-            role="system",
-            content=[ContentBlock(type="text", text="You are helpful.")]
+            role="system", content=[ContentBlock(type="text", text="You are helpful.")]
         )
 
         result = gateway._convert_message(msg)
@@ -128,18 +126,18 @@ class TestOpenRouterComplete:
         """complete() should return GatewayResponse."""
         from llm_council.gateway.openrouter import OpenRouterGateway
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         # Mock the underlying HTTP call
@@ -147,10 +145,10 @@ class TestOpenRouterComplete:
             "status": "ok",
             "content": "Hi there!",
             "latency_ms": 150,
-            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
         }
 
-        with patch.object(gateway, '_query_openrouter', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_openrouter", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -165,28 +163,28 @@ class TestOpenRouterComplete:
         """complete() should include usage info when available."""
         from llm_council.gateway.openrouter import OpenRouterGateway
         from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock, UsageInfo
+            GatewayRequest,
+            CanonicalMessage,
+            ContentBlock,
+            UsageInfo,
         )
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = {
             "status": "ok",
             "content": "Hi!",
             "latency_ms": 100,
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         }
 
-        with patch.object(gateway, '_query_openrouter', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_openrouter", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -199,29 +197,20 @@ class TestOpenRouterComplete:
     async def test_complete_handles_timeout(self):
         """complete() should handle timeout properly."""
         from llm_council.gateway.openrouter import OpenRouterGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
-            timeout=30.0
+            timeout=30.0,
         )
 
-        mock_response = {
-            "status": "timeout",
-            "latency_ms": 30000,
-            "error": "Timeout after 30s"
-        }
+        mock_response = {"status": "timeout", "latency_ms": 30000, "error": "Timeout after 30s"}
 
-        with patch.object(gateway, '_query_openrouter', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_openrouter", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -232,29 +221,24 @@ class TestOpenRouterComplete:
     async def test_complete_handles_rate_limit(self):
         """complete() should handle rate limiting with retry_after."""
         from llm_council.gateway.openrouter import OpenRouterGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = {
             "status": "rate_limited",
             "latency_ms": 50,
             "error": "Rate limited",
-            "retry_after": 60
+            "retry_after": 60,
         }
 
-        with patch.object(gateway, '_query_openrouter', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_openrouter", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -273,14 +257,9 @@ class TestOpenRouterHealthCheck:
 
         gateway = OpenRouterGateway()
 
-        mock_response = {
-            "status": "ok",
-            "content": "pong",
-            "latency_ms": 50,
-            "usage": {}
-        }
+        mock_response = {"status": "ok", "content": "pong", "latency_ms": 50, "usage": {}}
 
-        with patch.object(gateway, '_query_openrouter', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_openrouter", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             health = await gateway.health_check()
 
@@ -297,13 +276,9 @@ class TestOpenRouterHealthCheck:
 
         gateway = OpenRouterGateway()
 
-        mock_response = {
-            "status": "error",
-            "latency_ms": 100,
-            "error": "Connection refused"
-        }
+        mock_response = {"status": "error", "latency_ms": 100, "error": "Connection refused"}
 
-        with patch.object(gateway, '_query_openrouter', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_openrouter", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             health = await gateway.health_check()
 
@@ -318,9 +293,9 @@ class TestOpenRouterGatewayConfig:
         """Gateway should use OPENROUTER_API_KEY from config."""
         from llm_council.gateway.openrouter import OpenRouterGateway
 
-        with patch('llm_council.gateway.openrouter.OPENROUTER_API_KEY', 'test-key'):
+        with patch("llm_council.gateway.openrouter.OPENROUTER_API_KEY", "test-key"):
             gateway = OpenRouterGateway()
-            assert gateway._api_key == 'test-key'
+            assert gateway._api_key == "test-key"
 
     def test_gateway_allows_custom_api_key(self):
         """Gateway should accept custom API key."""

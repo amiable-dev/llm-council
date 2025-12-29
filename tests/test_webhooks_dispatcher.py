@@ -43,9 +43,7 @@ class TestWebhookDispatch:
     async def test_dispatch_success(self):
         """Should dispatch webhook successfully."""
         from llm_council.webhooks.dispatcher import WebhookDispatcher
-        from llm_council.webhooks.types import (
-            WebhookConfig, WebhookPayload, WebhookDeliveryResult
-        )
+        from llm_council.webhooks.types import WebhookConfig, WebhookPayload, WebhookDeliveryResult
 
         dispatcher = WebhookDispatcher()
         config = WebhookConfig(url="https://example.com/webhook")
@@ -53,7 +51,7 @@ class TestWebhookDispatch:
             event="council.complete",
             request_id="req-123",
             timestamp=datetime.now(),
-            data={"result": "success"}
+            data={"result": "success"},
         )
 
         # Mock httpx
@@ -77,15 +75,9 @@ class TestWebhookDispatch:
         from llm_council.webhooks.types import WebhookConfig, WebhookPayload
 
         dispatcher = WebhookDispatcher()
-        config = WebhookConfig(
-            url="https://example.com/webhook",
-            secret="my-secret"
-        )
+        config = WebhookConfig(url="https://example.com/webhook", secret="my-secret")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -111,10 +103,7 @@ class TestWebhookDispatch:
         dispatcher = WebhookDispatcher(max_retries=3)
         config = WebhookConfig(url="https://example.com/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -142,10 +131,7 @@ class TestWebhookDispatch:
         dispatcher = WebhookDispatcher(max_retries=3)
         config = WebhookConfig(url="https://example.com/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -168,10 +154,7 @@ class TestWebhookDispatch:
         dispatcher = WebhookDispatcher(max_retries=2)
         config = WebhookConfig(url="https://example.com/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -197,10 +180,7 @@ class TestWebhookDispatch:
         dispatcher = WebhookDispatcher(max_retries=3)
         config = WebhookConfig(url="https://example.com/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -225,10 +205,7 @@ class TestWebhookDispatch:
         dispatcher = WebhookDispatcher(timeout=1.0)
         config = WebhookConfig(url="https://example.com/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -251,10 +228,7 @@ class TestWebhookDispatch:
         dispatcher = WebhookDispatcher()
         config = WebhookConfig(url="https://example.com/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -280,15 +254,12 @@ class TestWebhookEventFiltering:
         dispatcher = WebhookDispatcher()
         config = WebhookConfig(
             url="https://example.com/webhook",
-            events=["council.complete"]  # Only subscribed to complete
+            events=["council.complete"],  # Only subscribed to complete
         )
 
         # Event that matches subscription
         payload_complete = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         # Event that doesn't match subscription
@@ -296,7 +267,7 @@ class TestWebhookEventFiltering:
             event="council.deliberation_start",
             request_id="req-123",
             timestamp=datetime.now(),
-            data={}
+            data={},
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -333,10 +304,7 @@ class TestDispatcherHTTPSOnly:
         dispatcher = WebhookDispatcher(https_only=True)
         config = WebhookConfig(url="http://example.com/webhook")  # HTTP!
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         result = await dispatcher.dispatch(config, payload)
@@ -353,10 +321,7 @@ class TestDispatcherHTTPSOnly:
         dispatcher = WebhookDispatcher(https_only=True)
         config = WebhookConfig(url="http://localhost:8080/webhook")
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:
@@ -386,10 +351,7 @@ class TestBatchDispatch:
             WebhookConfig(url="https://example2.com/webhook"),
         ]
         payload = WebhookPayload(
-            event="council.complete",
-            request_id="req-123",
-            timestamp=datetime.now(),
-            data={}
+            event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
         )
 
         with patch("llm_council.webhooks.dispatcher.httpx.AsyncClient") as mock_client:

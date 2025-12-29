@@ -100,16 +100,20 @@ class TestDependabotConfig:
         for update in updates:
             schedule = update.get("schedule", {})
             interval = schedule.get("interval", "")
-            assert interval in ["daily", "weekly"], (
-                f"Schedule should be daily or weekly, got {interval}"
-            )
+            assert interval in [
+                "daily",
+                "weekly",
+            ], f"Schedule should be daily or weekly, got {interval}"
 
     def test_dependabot_has_labels(self, dependabot_config: dict):
         """Verify Dependabot PRs get labels."""
         pip_update = next(
-            (u for u in dependabot_config.get("updates", [])
-             if u.get("package-ecosystem") == "pip"),
-            None
+            (
+                u
+                for u in dependabot_config.get("updates", [])
+                if u.get("package-ecosystem") == "pip"
+            ),
+            None,
         )
         assert pip_update is not None
         labels = pip_update.get("labels", [])
@@ -213,9 +217,7 @@ class TestPreCommitConfig:
         """Verify pre-commit has Gitleaks for secret detection."""
         repos = pre_commit_config.get("repos", [])
         repo_urls = [r.get("repo", "") for r in repos]
-        assert any("gitleaks" in url for url in repo_urls), (
-            "Pre-commit must have Gitleaks hook"
-        )
+        assert any("gitleaks" in url for url in repo_urls), "Pre-commit must have Gitleaks hook"
 
     def test_pre_commit_versions_are_pinned(self, pre_commit_config: dict):
         """Verify all pre-commit hook versions are pinned."""
@@ -225,9 +227,7 @@ class TestPreCommitConfig:
             # Should start with 'v' (version tag) or be a SHA (40 chars)
             is_version_tag = rev.startswith("v")
             is_sha = len(rev) == 40 and rev.isalnum()
-            assert is_version_tag or is_sha, (
-                f"Hook {repo.get('repo')} has unpinned version: {rev}"
-            )
+            assert is_version_tag or is_sha, f"Hook {repo.get('repo')} has unpinned version: {rev}"
 
 
 # =============================================================================
@@ -289,9 +289,9 @@ class TestSemgrepRules:
         with open(llm_rules_path) as f:
             config = yaml.safe_load(f)
         rule_ids = [r.get("id", "") for r in config.get("rules", [])]
-        assert any("pickle" in rid for rid in rule_ids), (
-            "Should have a rule for unsafe pickle deserialization"
-        )
+        assert any(
+            "pickle" in rid for rid in rule_ids
+        ), "Should have a rule for unsafe pickle deserialization"
 
     def test_semgrep_has_exec_rule(self, llm_rules_path: Path):
         """Verify Semgrep has rule for unsafe exec/eval of LLM output."""
@@ -300,9 +300,9 @@ class TestSemgrepRules:
         with open(llm_rules_path) as f:
             config = yaml.safe_load(f)
         rule_ids = [r.get("id", "") for r in config.get("rules", [])]
-        assert any("exec" in rid or "eval" in rid for rid in rule_ids), (
-            "Should have a rule for unsafe exec/eval"
-        )
+        assert any(
+            "exec" in rid or "eval" in rid for rid in rule_ids
+        ), "Should have a rule for unsafe exec/eval"
 
 
 # =============================================================================
@@ -387,10 +387,7 @@ class TestSecurityVisibility:
 
     def test_security_md_has_automation_section(self, security_md_content: str):
         """Verify SECURITY.md documents automated scanning."""
-        has_automation = (
-            "Automated" in security_md_content or
-            "automated" in security_md_content
-        )
+        has_automation = "Automated" in security_md_content or "automated" in security_md_content
         assert has_automation, "SECURITY.md should have automated scanning section"
         assert "scanning" in security_md_content.lower()
 
@@ -398,17 +395,15 @@ class TestSecurityVisibility:
         """Verify SECURITY.md mentions key security tools."""
         # Should mention at least some of the tools
         tools_mentioned = sum(
-            1 for tool in ["CodeQL", "Dependabot", "Gitleaks", "Semgrep"]
+            1
+            for tool in ["CodeQL", "Dependabot", "Gitleaks", "Semgrep"]
             if tool in security_md_content
         )
-        assert tools_mentioned >= 2, (
-            "SECURITY.md should mention at least 2 security tools"
-        )
+        assert tools_mentioned >= 2, "SECURITY.md should mention at least 2 security tools"
 
     def test_security_md_mentions_sbom(self, security_md_content: str):
         """Verify SECURITY.md mentions SBOM availability."""
         has_sbom = (
-            "SBOM" in security_md_content or
-            "Software Bill of Materials" in security_md_content
+            "SBOM" in security_md_content or "Software Bill of Materials" in security_md_content
         )
         assert has_sbom, "SECURITY.md should mention SBOM"

@@ -34,9 +34,7 @@ async def test_query_model_with_status_success():
     from llm_council.openrouter import STATUS_OK, query_model_with_status
 
     with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"):
-        result = await query_model_with_status(
-            "test-model", [{"role": "user", "content": "test"}]
-        )
+        result = await query_model_with_status("test-model", [{"role": "user", "content": "test"}])
 
         assert result["status"] == STATUS_OK
         assert result["content"] == "Test response"
@@ -49,9 +47,10 @@ async def test_query_model_with_status_timeout():
     """Test query_model_with_status handles timeout correctly."""
     from llm_council.openrouter import STATUS_TIMEOUT, query_model_with_status
 
-    with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with (
+        patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"),
+        patch("httpx.AsyncClient") as mock_client,
+    ):
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
             side_effect=httpx.TimeoutException("Connection timeout")
         )
@@ -74,16 +73,15 @@ async def test_query_model_with_status_rate_limited():
     mock_response.status_code = 429
     mock_response.headers = {"Retry-After": "30"}
 
-    with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with (
+        patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"),
+        patch("httpx.AsyncClient") as mock_client,
+    ):
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
             return_value=mock_response
         )
 
-        result = await query_model_with_status(
-            "test-model", [{"role": "user", "content": "test"}]
-        )
+        result = await query_model_with_status("test-model", [{"role": "user", "content": "test"}])
 
         assert result["status"] == STATUS_RATE_LIMITED
         assert result["retry_after"] == 30
@@ -98,16 +96,15 @@ async def test_query_model_with_status_auth_error():
     mock_response = MagicMock()
     mock_response.status_code = 401
 
-    with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with (
+        patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"),
+        patch("httpx.AsyncClient") as mock_client,
+    ):
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
             return_value=mock_response
         )
 
-        result = await query_model_with_status(
-            "test-model", [{"role": "user", "content": "test"}]
-        )
+        result = await query_model_with_status("test-model", [{"role": "user", "content": "test"}])
 
         assert result["status"] == STATUS_AUTH_ERROR
         assert "authentication" in result["error"].lower()
@@ -118,16 +115,15 @@ async def test_query_model_with_status_generic_error():
     """Test query_model_with_status handles generic errors."""
     from llm_council.openrouter import STATUS_ERROR, query_model_with_status
 
-    with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with (
+        patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"),
+        patch("httpx.AsyncClient") as mock_client,
+    ):
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
             side_effect=Exception("Network error")
         )
 
-        result = await query_model_with_status(
-            "test-model", [{"role": "user", "content": "test"}]
-        )
+        result = await query_model_with_status("test-model", [{"role": "user", "content": "test"}])
 
         assert result["status"] == STATUS_ERROR
         assert "Network error" in result["error"]
@@ -139,9 +135,10 @@ async def test_query_model_backwards_compatible():
     """Test that query_model still returns None on failure (backwards compatibility)."""
     from llm_council.openrouter import query_model
 
-    with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"), patch(
-        "httpx.AsyncClient"
-    ) as mock_client:
+    with (
+        patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"),
+        patch("httpx.AsyncClient") as mock_client,
+    ):
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
             side_effect=httpx.TimeoutException("Connection timeout")
         )

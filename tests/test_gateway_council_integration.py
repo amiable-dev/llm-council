@@ -74,8 +74,8 @@ class TestAdapterGatewayEnabled:
         """query_model should use gateway layer when enabled."""
         from llm_council.gateway.types import GatewayResponse
 
-        with patch('llm_council.gateway_adapter.USE_GATEWAY_LAYER', True):
-            with patch('llm_council.gateway_adapter._gateway_router') as mock_router:
+        with patch("llm_council.gateway_adapter.USE_GATEWAY_LAYER", True):
+            with patch("llm_council.gateway_adapter._gateway_router") as mock_router:
                 mock_response = GatewayResponse(
                     content="Hello from gateway",
                     model="openai/gpt-4o",
@@ -85,10 +85,8 @@ class TestAdapterGatewayEnabled:
                 mock_router.complete = AsyncMock(return_value=mock_response)
 
                 from llm_council.gateway_adapter import query_model
-                result = await query_model(
-                    "openai/gpt-4o",
-                    [{"role": "user", "content": "Hello"}]
-                )
+
+                result = await query_model("openai/gpt-4o", [{"role": "user", "content": "Hello"}])
 
                 assert result is not None
                 assert result["content"] == "Hello from gateway"
@@ -100,15 +98,13 @@ class TestAdapterGatewayDisabled:
     @pytest.mark.asyncio
     async def test_query_model_uses_openrouter_when_disabled(self):
         """query_model should use direct openrouter when disabled."""
-        with patch('llm_council.gateway_adapter.USE_GATEWAY_LAYER', False):
-            with patch('llm_council.gateway_adapter._direct_query_model') as mock_direct:
+        with patch("llm_council.gateway_adapter.USE_GATEWAY_LAYER", False):
+            with patch("llm_council.gateway_adapter._direct_query_model") as mock_direct:
                 mock_direct.return_value = {"content": "Hello from openrouter"}
 
                 from llm_council.gateway_adapter import query_model
-                result = await query_model(
-                    "openai/gpt-4o",
-                    [{"role": "user", "content": "Hello"}]
-                )
+
+                result = await query_model("openai/gpt-4o", [{"role": "user", "content": "Hello"}])
 
                 mock_direct.assert_called_once()
 

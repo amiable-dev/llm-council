@@ -101,9 +101,7 @@ class BaseRouter(ABC):
         pass
 
     @abstractmethod
-    async def complete_stream(
-        self, request: GatewayRequest
-    ) -> AsyncIterator[str]:
+    async def complete_stream(self, request: GatewayRequest) -> AsyncIterator[str]:
         """Send a streaming completion request.
 
         Args:

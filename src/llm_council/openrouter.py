@@ -7,15 +7,18 @@ import httpx
 import asyncio
 import time
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
+
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_api_key, get_config
 
 # Default OpenRouter API URL (can be overridden via gateways config)
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+
 def _get_openrouter_api_key() -> str:
     """Get OpenRouter API key from unified config resolution."""
     return get_api_key("openrouter") or ""
+
 
 # Module-level alias for backwards compatibility with tests
 OPENROUTER_API_KEY = _get_openrouter_api_key()
@@ -103,11 +106,7 @@ async def query_model_with_status(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                OPENROUTER_API_URL,
-                headers=headers,
-                json=payload
-            )
+            response = await client.post(OPENROUTER_API_URL, headers=headers, json=payload)
             latency_ms = int((time.time() - start_time) * 1000)
 
             # Handle specific HTTP status codes (ADR-012 failure taxonomy)
@@ -130,19 +129,19 @@ async def query_model_with_status(
             response.raise_for_status()
 
             data = response.json()
-            message = data['choices'][0]['message']
-            usage = data.get('usage', {})
+            message = data["choices"][0]["message"]
+            usage = data.get("usage", {})
 
             return {
                 "status": STATUS_OK,
-                "content": message.get('content'),
-                "reasoning_details": message.get('reasoning_details'),
+                "content": message.get("content"),
+                "reasoning_details": message.get("reasoning_details"),
                 "latency_ms": latency_ms,
                 "usage": {
-                    'prompt_tokens': usage.get('prompt_tokens', 0),
-                    'completion_tokens': usage.get('completion_tokens', 0),
-                    'total_tokens': usage.get('total_tokens', 0)
-                }
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                },
             }
 
     except httpx.TimeoutException:
@@ -186,8 +185,11 @@ async def query_models_parallel(
     # Create tasks for all models
     tasks = [
         query_model(
-            model, messages, timeout=timeout, disable_tools=disable_tools,
-            reasoning_params=reasoning_params
+            model,
+            messages,
+            timeout=timeout,
+            disable_tools=disable_tools,
+            reasoning_params=reasoning_params,
         )
         for model in models
     ]
@@ -239,7 +241,9 @@ async def query_models_with_progress(
 
     # Create tasks with model tracking
     async def query_with_tracking(model: str) -> tuple[str, Dict[str, Any]]:
-        result = await query_model_with_status(model, messages, timeout=timeout, disable_tools=disable_tools)
+        result = await query_model_with_status(
+            model, messages, timeout=timeout, disable_tools=disable_tools
+        )
         return model, result
 
     tasks = [query_with_tracking(model) for model in models]
@@ -261,6 +265,8 @@ async def query_models_with_progress(
                     pending_str += f" +{len(pending)-3}"
             else:
                 pending_str = ""
-            await on_progress(completed, total, f"{status_emoji} {model_short} ({completed}/{total}){pending_str}")
+            await on_progress(
+                completed, total, f"{status_emoji} {model_short} ({completed}/{total}){pending_str}"
+            )
 
     return results

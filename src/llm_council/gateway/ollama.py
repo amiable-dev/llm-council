@@ -161,6 +161,7 @@ class OllamaGateway(BaseRouter):
         if self._litellm is None:
             try:
                 import litellm
+
                 self._litellm = litellm
             except ImportError as e:
                 raise ImportError(
@@ -225,16 +226,14 @@ class OllamaGateway(BaseRouter):
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
                 elif block.type == "image" and block.image_url:
-                    content_parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": block.image_url}
-                    })
+                    content_parts.append(
+                        {"type": "image_url", "image_url": {"url": block.image_url}}
+                    )
             return {"role": msg.role, "content": content_parts}
         else:
             # Simple text content - concatenate all text blocks
             text_content = " ".join(
-                block.text for block in msg.content
-                if block.type == "text" and block.text
+                block.text for block in msg.content if block.type == "text" and block.text
             )
             return {"role": msg.role, "content": text_content}
 

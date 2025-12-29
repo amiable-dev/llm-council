@@ -22,8 +22,8 @@ class BiasAuditResult:
 
     # Length bias
     length_score_correlation: float  # Pearson r
-    length_score_p_value: float      # Statistical significance
-    length_bias_detected: bool       # |r| > 0.3 and p < 0.05
+    length_score_p_value: float  # Statistical significance
+    length_bias_detected: bool  # |r| > 0.3 and p < 0.05
 
     # Position bias (if randomization data available)
     position_score_variance: Optional[float]
@@ -32,8 +32,8 @@ class BiasAuditResult:
     # Reviewer calibration
     reviewer_mean_scores: Dict[str, float]
     reviewer_score_variance: Dict[str, float]
-    harsh_reviewers: List[str]      # Mean score < median - 1 std
-    generous_reviewers: List[str]   # Mean score > median + 1 std
+    harsh_reviewers: List[str]  # Mean score < median - 1 std
+    generous_reviewers: List[str]  # Mean score > median + 1 std
 
     # Summary
     overall_bias_risk: str  # "low", "medium", "high"
@@ -77,7 +77,7 @@ def _pearson_correlation(x: List[float], y: List[float]) -> Tuple[float, float]:
     if abs(r) >= 1.0:
         p = 0.0 if abs(r) == 1.0 else 1.0
     else:
-        t_stat = r * math.sqrt(n - 2) / math.sqrt(1 - r ** 2)
+        t_stat = r * math.sqrt(n - 2) / math.sqrt(1 - r**2)
         # Rough p-value approximation (two-tailed)
         # For n-2 degrees of freedom, use normal approximation for simplicity
         # This is not exact but sufficient for bias detection
@@ -109,8 +109,7 @@ def _normal_cdf(x: float) -> float:
 
 
 def calculate_length_correlation(
-    responses: List[Dict[str, Any]],
-    scores: Dict[str, Dict[str, float]]
+    responses: List[Dict[str, Any]], scores: Dict[str, Dict[str, float]]
 ) -> Tuple[float, float]:
     """Calculate Pearson correlation between response length and average score.
 
@@ -125,7 +124,7 @@ def calculate_length_correlation(
         return 0.0, 1.0
 
     # Calculate word counts
-    word_counts = {r['model']: len(r['response'].split()) for r in responses}
+    word_counts = {r["model"]: len(r["response"].split()) for r in responses}
 
     # Calculate average score per response
     avg_scores: Dict[str, float] = {}
@@ -156,9 +155,7 @@ def calculate_length_correlation(
     return _pearson_correlation(lengths, score_values)
 
 
-def audit_reviewer_calibration(
-    scores: Dict[str, Dict[str, float]]
-) -> Dict[str, Dict[str, float]]:
+def audit_reviewer_calibration(scores: Dict[str, Dict[str, float]]) -> Dict[str, Dict[str, float]]:
     """Analyze score calibration across reviewers.
 
     Args:
@@ -178,15 +175,14 @@ def audit_reviewer_calibration(
             calibration[reviewer] = {
                 "mean": reviewer_mean,
                 "std": reviewer_std,
-                "count": len(values)
+                "count": len(values),
             }
 
     return calibration
 
 
 def calculate_position_bias(
-    scores: Dict[str, Dict[str, float]],
-    position_mapping: Optional[Dict[str, int]]
+    scores: Dict[str, Dict[str, float]], position_mapping: Optional[Dict[str, int]]
 ) -> Tuple[Optional[float], Optional[bool]]:
     """Calculate position bias from score distribution by position.
 
@@ -225,9 +221,7 @@ def calculate_position_bias(
     return round(pos_variance, 3), detected
 
 
-def derive_position_mapping(
-    label_to_model: Optional[Dict[str, Any]]
-) -> Dict[str, int]:
+def derive_position_mapping(label_to_model: Optional[Dict[str, Any]]) -> Dict[str, int]:
     """Derive position mapping from label_to_model mapping.
 
     Supports two formats:
@@ -251,6 +245,7 @@ def derive_position_mapping(
         return {}
 
     import re
+
     position_mapping: Dict[str, int] = {}
 
     for label, value in label_to_model.items():
@@ -265,18 +260,18 @@ def derive_position_mapping(
                     position_mapping[model] = display_index
                 else:
                     # Fall back to letter parsing if display_index missing
-                    match = re.match(r'^[Rr]esponse\s+([A-Za-z])$', label.strip())
+                    match = re.match(r"^[Rr]esponse\s+([A-Za-z])$", label.strip())
                     if match:
                         letter = match.group(1).upper()
-                        position = ord(letter) - ord('A')
+                        position = ord(letter) - ord("A")
                         position_mapping[model] = position
         else:
             # Legacy format: value is the model name string
             model = value
-            match = re.match(r'^[Rr]esponse\s+([A-Za-z])$', label.strip())
+            match = re.match(r"^[Rr]esponse\s+([A-Za-z])$", label.strip())
             if match:
                 letter = match.group(1).upper()
-                position = ord(letter) - ord('A')
+                position = ord(letter) - ord("A")
                 position_mapping[model] = position
 
     return position_mapping
@@ -297,8 +292,7 @@ def _get_model_from_label_value(value: Any) -> Optional[str]:
 
 
 def extract_scores_from_stage2(
-    stage2_results: List[Dict[str, Any]],
-    label_to_model: Dict[str, Any]
+    stage2_results: List[Dict[str, Any]], label_to_model: Dict[str, Any]
 ) -> Dict[str, Dict[str, float]]:
     """Extract scores from Stage 2 parsed rankings.
 
@@ -348,7 +342,7 @@ def extract_scores_from_stage2(
 def run_bias_audit(
     stage1_responses: List[Dict[str, Any]],
     stage2_scores: Dict[str, Dict[str, float]],
-    position_mapping: Optional[Dict[str, int]] = None
+    position_mapping: Optional[Dict[str, int]] = None,
 ) -> BiasAuditResult:
     """Run full bias audit on a council session.
 
@@ -387,12 +381,9 @@ def run_bias_audit(
     position_variance, position_bias = calculate_position_bias(stage2_scores, position_mapping)
 
     # Overall risk assessment
-    risk_factors = sum([
-        length_bias,
-        position_bias or False,
-        len(harsh_reviewers) > 0,
-        len(generous_reviewers) > 0
-    ])
+    risk_factors = sum(
+        [length_bias, position_bias or False, len(harsh_reviewers) > 0, len(generous_reviewers) > 0]
+    )
 
     if risk_factors == 0:
         overall_risk = "low"
@@ -411,5 +402,5 @@ def run_bias_audit(
         reviewer_score_variance={r: round(c["std"], 2) for r, c in calibration.items()},
         harsh_reviewers=harsh_reviewers,
         generous_reviewers=generous_reviewers,
-        overall_bias_risk=overall_risk
+        overall_bias_risk=overall_risk,
     )

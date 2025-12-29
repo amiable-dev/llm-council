@@ -17,6 +17,7 @@ from llm_council import __version__
 keyring = None
 try:
     import keyring as _keyring_module
+
     keyring = _keyring_module
 except ImportError:
     pass  # keyring not installed - this is fine
@@ -28,6 +29,7 @@ def _is_fail_backend() -> bool:
         return True
     try:
         from keyring.backends import fail
+
         return isinstance(keyring.get_keyring(), fail.Keyring)
     except Exception:
         return True
@@ -40,7 +42,8 @@ def main():
         description="LLM Council - Multi-model deliberation system",
     )
     parser.add_argument(
-        "--version", "-V",
+        "--version",
+        "-V",
         action="version",
         version=f"%(prog)s {__version__}",
     )
@@ -203,7 +206,7 @@ def setup_key(from_stdin: bool = False):
         print("Warning: Key doesn't look like an OpenRouter key (expected sk-or-...)")
         if not from_stdin:
             confirm = input("Store anyway? [y/N]: ")
-            if confirm.lower() != 'y':
+            if confirm.lower() != "y":
                 print("Aborted.")
                 sys.exit(1)
 

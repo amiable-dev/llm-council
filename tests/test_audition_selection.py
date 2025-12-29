@@ -132,18 +132,15 @@ class TestSelectWithAudition:
             )
 
         # All SHADOW models with varying scores
-        scored = [
-            (f"shadow-{i}", 0.9 - i * 0.1) for i in range(4)
-        ]
+        scored = [(f"shadow-{i}", 0.9 - i * 0.1) for i in range(4)]
 
         # Request 4 models, but max_audition_seats=1
-        selected = select_with_audition(
-            scored, tracker, count=4, max_audition_seats=1
-        )
+        selected = select_with_audition(scored, tracker, count=4, max_audition_seats=1)
 
         # Should only include 1 audition model
         audition_count = sum(
-            1 for m in selected
+            1
+            for m in selected
             if tracker.get_status(m) and tracker.get_status(m).state != AuditionState.FULL
         )
         assert audition_count <= 1
@@ -166,9 +163,7 @@ class TestSelectWithAudition:
         scored = [(f"full-{i}", 0.9 - i * 0.1) for i in range(4)]
 
         # Request 4 models
-        selected = select_with_audition(
-            scored, tracker, count=4, max_audition_seats=1
-        )
+        selected = select_with_audition(scored, tracker, count=4, max_audition_seats=1)
 
         # Should include all 4 FULL models
         assert len(selected) == 4

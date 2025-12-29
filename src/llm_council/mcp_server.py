@@ -9,6 +9,7 @@ Implements ADR-012: MCP Server Reliability and Long-Running Operation Handling
 - Partial results on timeout
 - Tier-Sovereign timeout configuration (2025-12-19)
 """
+
 import json
 import time
 from typing import Optional
@@ -20,6 +21,7 @@ from llm_council.council import (
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
 from llm_council.verdict import VerdictType
+
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config, get_api_key
 from llm_council.tier_contract import create_tier_contract
@@ -60,6 +62,7 @@ def _get_tier_timeout(tier: str) -> dict:
 def _get_key_source() -> str:
     """Determine the source of the API key."""
     import os
+
     if os.environ.get("OPENROUTER_API_KEY"):
         return "environment"
     # Could add keychain detection here
@@ -230,7 +233,9 @@ async def consult_council(
             model_short = model.split("/")[-1]
             status_icon = "✓" if info.get("status") == "ok" else "✗"
             latency = info.get("latency_ms", 0)
-            result += f"- {status_icon} {model_short}: {info.get('status', 'unknown')} ({latency}ms)\n"
+            result += (
+                f"- {status_icon} {model_short}: {info.get('status', 'unknown')} ({latency}ms)\n"
+            )
 
         # Add Stage 1 details (Individual Responses) - only successful ones
         result += "\n#### Stage 1: Individual Opinions\n"
@@ -283,7 +288,7 @@ async def council_health_check() -> str:
             response = await query_model_with_status(
                 "google/gemini-2.0-flash-001",  # Fast and cheap
                 [{"role": "user", "content": "ping"}],
-                timeout=10.0
+                timeout=10.0,
             )
             latency_ms = int((time.time() - start) * 1000)
 
@@ -298,7 +303,9 @@ async def council_health_check() -> str:
                 checks["message"] = "Council is ready. Use consult_council to ask questions."
             else:
                 checks["ready"] = False
-                checks["message"] = f"API connectivity issue: {response.get('error', 'Unknown error')}"
+                checks["message"] = (
+                    f"API connectivity issue: {response.get('error', 'Unknown error')}"
+                )
 
         except Exception as e:
             checks["api_connectivity"] = {

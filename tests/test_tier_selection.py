@@ -44,11 +44,7 @@ class TestTierWeights:
         from llm_council.metadata.selection import TIER_WEIGHTS
 
         quick = TIER_WEIGHTS["quick"]
-        assert quick["latency"] >= max(
-            quick["quality"],
-            quick["cost"],
-            quick["diversity"]
-        )
+        assert quick["latency"] >= max(quick["quality"], quick["cost"], quick["diversity"])
 
     def test_reasoning_tier_prioritizes_quality(self):
         """Reasoning tier should have quality as highest weight."""
@@ -56,9 +52,7 @@ class TestTierWeights:
 
         reasoning = TIER_WEIGHTS["reasoning"]
         assert reasoning["quality"] >= max(
-            reasoning["latency"],
-            reasoning["cost"],
-            reasoning["diversity"]
+            reasoning["latency"], reasoning["cost"], reasoning["diversity"]
         )
 
     def test_balanced_tier_weights_balanced(self):
@@ -100,7 +94,9 @@ class TestTierWeights:
         frontier = TIER_WEIGHTS["frontier"]
 
         # Frontier should have higher quality weight than high
-        assert frontier["quality"] > high["quality"], "Frontier should weight quality more than high"
+        assert (
+            frontier["quality"] > high["quality"]
+        ), "Frontier should weight quality more than high"
         # Frontier should care less about cost
         assert frontier["cost"] <= high["cost"], "Frontier should not care about cost"
 
@@ -333,7 +329,7 @@ class TestModelCandidateScoring:
             model_id="test/model",
             latency_score=0.95,  # Fast
             cost_score=0.8,
-            quality_score=0.5,   # Low quality
+            quality_score=0.5,  # Low quality
             availability_score=0.99,
             diversity_score=0.5,
         )
@@ -462,8 +458,8 @@ class TestFrontierTier:
         # High quality, slow, expensive model
         candidate = ModelCandidate(
             model_id="test/frontier-model",
-            latency_score=0.3,   # Slow
-            cost_score=0.2,      # Expensive
+            latency_score=0.3,  # Slow
+            cost_score=0.2,  # Expensive
             quality_score=0.99,  # Excellent
             availability_score=0.8,  # Slightly unstable
             diversity_score=0.5,
@@ -501,7 +497,7 @@ class TestFrontierTier:
         high_quality = ModelCandidate(
             model_id="expensive/quality",
             latency_score=0.4,
-            cost_score=0.2,      # Expensive
+            cost_score=0.2,  # Expensive
             quality_score=0.98,  # Best quality
             availability_score=0.9,
             diversity_score=0.5,
@@ -511,8 +507,8 @@ class TestFrontierTier:
         budget_model = ModelCandidate(
             model_id="cheap/budget",
             latency_score=0.9,
-            cost_score=0.95,     # Cheap
-            quality_score=0.7,   # Lower quality
+            cost_score=0.95,  # Cheap
+            quality_score=0.7,  # Lower quality
             availability_score=0.95,
             diversity_score=0.5,
         )

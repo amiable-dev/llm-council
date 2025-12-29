@@ -23,6 +23,7 @@ from llm_council.council import (
     calculate_aggregate_rankings,
     parse_ranking_from_text,
 )
+
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config
 

@@ -148,16 +148,14 @@ class RequestyGateway(BaseRouter):
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
                 elif block.type == "image" and block.image_url:
-                    content_parts.append({
-                        "type": "image_url",
-                        "image_url": {"url": block.image_url}
-                    })
+                    content_parts.append(
+                        {"type": "image_url", "image_url": {"url": block.image_url}}
+                    )
             return {"role": msg.role, "content": content_parts}
         else:
             # Simple text content
             text_content = " ".join(
-                block.text for block in msg.content
-                if block.type == "text" and block.text
+                block.text for block in msg.content if block.type == "text" and block.text
             )
             return {"role": msg.role, "content": text_content}
 
@@ -213,11 +211,7 @@ class RequestyGateway(BaseRouter):
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
-                    self._base_url,
-                    headers=headers,
-                    json=payload
-                )
+                response = await client.post(self._base_url, headers=headers, json=payload)
                 latency_ms = int((time.time() - start_time) * 1000)
 
                 # Handle specific HTTP status codes
@@ -240,18 +234,18 @@ class RequestyGateway(BaseRouter):
                 response.raise_for_status()
 
                 data = response.json()
-                message = data['choices'][0]['message']
-                usage = data.get('usage', {})
+                message = data["choices"][0]["message"]
+                usage = data.get("usage", {})
 
                 return {
                     "status": "ok",
-                    "content": message.get('content'),
+                    "content": message.get("content"),
                     "latency_ms": latency_ms,
                     "usage": {
-                        'prompt_tokens': usage.get('prompt_tokens', 0),
-                        'completion_tokens': usage.get('completion_tokens', 0),
-                        'total_tokens': usage.get('total_tokens', 0)
-                    }
+                        "prompt_tokens": usage.get("prompt_tokens", 0),
+                        "completion_tokens": usage.get("completion_tokens", 0),
+                        "total_tokens": usage.get("total_tokens", 0),
+                    },
                 }
 
         except httpx.TimeoutException:

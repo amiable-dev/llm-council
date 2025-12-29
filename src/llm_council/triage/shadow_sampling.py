@@ -41,9 +41,7 @@ class ShadowSamplingConfig:
     def __post_init__(self):
         """Validate configuration."""
         if not 0 <= self.sampling_rate <= 1:
-            raise ValueError(
-                f"Sampling rate must be between 0 and 1, got {self.sampling_rate}"
-            )
+            raise ValueError(f"Sampling rate must be between 0 and 1, got {self.sampling_rate}")
         if not 0 <= self.disagreement_threshold <= 1:
             raise ValueError(
                 f"Disagreement threshold must be between 0 and 1, "
@@ -54,9 +52,7 @@ class ShadowSamplingConfig:
     def from_env(cls) -> "ShadowSamplingConfig":
         """Create config from environment variables."""
         rate_str = os.environ.get("LLM_COUNCIL_SHADOW_SAMPLING_RATE", "0.05")
-        threshold_str = os.environ.get(
-            "LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD", "0.08"
-        )
+        threshold_str = os.environ.get("LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD", "0.08")
         window_str = os.environ.get("LLM_COUNCIL_SHADOW_WINDOW_SIZE", "100")
 
         return cls(
@@ -214,11 +210,12 @@ class DisagreementDetector:
 
     def _ngram_overlap(self, text_a: str, text_b: str, n: int = 3) -> float:
         """Compute n-gram overlap between texts."""
+
         def get_ngrams(text: str, n: int) -> set:
             words = text.split()
             if len(words) < n:
                 return {tuple(words)}
-            return {tuple(words[i:i+n]) for i in range(len(words) - n + 1)}
+            return {tuple(words[i : i + n]) for i in range(len(words) - n + 1)}
 
         ngrams_a = get_ngrams(text_a, n)
         ngrams_b = get_ngrams(text_b, n)
@@ -289,7 +286,7 @@ class ShadowMetricStore:
                         self._results.append(ShadowSampleResult.from_dict(data))
 
             # Keep only window_size most recent
-            self._results = self._results[-self.config.window_size:]
+            self._results = self._results[-self.config.window_size :]
         except (json.JSONDecodeError, IOError):
             # Start fresh on error
             self._results = []
@@ -312,7 +309,7 @@ class ShadowMetricStore:
 
         # Maintain rolling window
         if len(self._results) > self.config.window_size:
-            self._results = self._results[-self.config.window_size:]
+            self._results = self._results[-self.config.window_size :]
 
         # Persist
         self._save_result(result)
@@ -334,9 +331,7 @@ class ShadowMetricStore:
         if not self._results:
             return 0.0
 
-        disagreements = sum(
-            1 for r in self._results if not r.is_agreement
-        )
+        disagreements = sum(1 for r in self._results if not r.is_agreement)
         return disagreements / len(self._results)
 
     def is_threshold_breached(self) -> bool:

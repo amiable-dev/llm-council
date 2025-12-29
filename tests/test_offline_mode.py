@@ -91,10 +91,7 @@ class TestOfflineModeLogging:
             with caplog.at_level(logging.INFO):
                 check_offline_mode_startup()
                 # Check that something was logged about offline mode
-                assert any(
-                    "offline" in record.message.lower()
-                    for record in caplog.records
-                )
+                assert any("offline" in record.message.lower() for record in caplog.records)
 
 
 class TestOfflineModeCoreOperations:

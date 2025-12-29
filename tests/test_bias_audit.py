@@ -71,7 +71,10 @@ class TestLengthCorrelation:
         responses = [
             {"model": "model-a", "response": "short"},  # 1 word
             {"model": "model-b", "response": "medium length response here"},  # 4 words
-            {"model": "model-c", "response": "this is a much longer response with many words"},  # 9 words
+            {
+                "model": "model-c",
+                "response": "this is a much longer response with many words",
+            },  # 9 words
         ]
         # Scores increase with length
         scores = {
@@ -87,7 +90,10 @@ class TestLengthCorrelation:
         responses = [
             {"model": "model-a", "response": "short"},  # 1 word
             {"model": "model-b", "response": "medium length response here"},  # 4 words
-            {"model": "model-c", "response": "this is a much longer response with many words"},  # 9 words
+            {
+                "model": "model-c",
+                "response": "this is a much longer response with many words",
+            },  # 9 words
         ]
         # Scores decrease with length
         scores = {
@@ -170,15 +176,16 @@ class TestReviewerCalibration:
         """Identify reviewer with mean significantly below median."""
         scores = {
             "generous": {"m1": 10, "m2": 10, "m3": 10},  # mean = 10.0
-            "normal-1": {"m1": 7, "m2": 6, "m3": 7},     # mean = 6.67
-            "normal-2": {"m1": 7, "m2": 7, "m3": 6},     # mean = 6.67
-            "harsh": {"m1": 2, "m2": 3, "m3": 2},        # mean = 2.33
+            "normal-1": {"m1": 7, "m2": 6, "m3": 7},  # mean = 6.67
+            "normal-2": {"m1": 7, "m2": 7, "m3": 6},  # mean = 6.67
+            "harsh": {"m1": 2, "m2": 3, "m3": 2},  # mean = 2.33
         }
         calibration = audit_reviewer_calibration(scores)
 
         # Calculate harsh/generous thresholds
         means = [c["mean"] for c in calibration.values()]
         from statistics import median, stdev
+
         med = median(means)
         std = stdev(means)
 
@@ -305,9 +312,9 @@ class TestOverallRiskAssessment:
         ]
         # Strong length correlation + harsh/generous reviewers + position bias
         scores = {
-            "harsh": {"m1": 1, "m2": 2, "m3": 3},     # Very low scores (mean=2)
-            "generous": {"m1": 9, "m2": 10, "m3": 10}, # Very high scores (mean=9.67)
-            "normal": {"m1": 4, "m2": 6, "m3": 8},     # Normal scores (mean=6)
+            "harsh": {"m1": 1, "m2": 2, "m3": 3},  # Very low scores (mean=2)
+            "generous": {"m1": 9, "m2": 10, "m3": 10},  # Very high scores (mean=9.67)
+            "normal": {"m1": 4, "m2": 6, "m3": 8},  # Normal scores (mean=6)
         }
         # Position mapping showing first position gets highest scores consistently
         position_mapping = {"m1": 0, "m2": 1, "m3": 2}
@@ -326,15 +333,15 @@ class TestExtractScoresFromStage2:
                 "model": "reviewer-a",
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
-                    "scores": {"Response A": 8, "Response B": 6}
-                }
+                    "scores": {"Response A": 8, "Response B": 6},
+                },
             },
             {
                 "model": "reviewer-b",
                 "parsed_ranking": {
                     "ranking": ["Response B", "Response A"],
-                    "scores": {"Response A": 7, "Response B": 9}
-                }
+                    "scores": {"Response A": 7, "Response B": 9},
+                },
             },
         ]
         label_to_model = {
@@ -363,7 +370,7 @@ class TestExtractScoresFromStage2:
                         "Response B": {"accuracy": 6, "clarity": 7},
                     },
                     "rubric_scoring": True,
-                }
+                },
             },
         ]
         label_to_model = {
@@ -383,7 +390,7 @@ class TestExtractScoresFromStage2:
                 "parsed_ranking": {
                     "ranking": ["Response A"],
                     # No scores dict
-                }
+                },
             },
         ]
         label_to_model = {"Response A": "model-1"}
@@ -402,7 +409,7 @@ class TestExtractScoresFromStage2:
                     "ranking": [],
                     "scores": {},
                     "abstained": True,
-                }
+                },
             },
         ]
         label_to_model = {"Response A": "model-1"}

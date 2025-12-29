@@ -210,10 +210,7 @@ class TestVerifyWebhookRequest:
 
     def test_verify_request_valid(self):
         """Should verify valid request with all headers."""
-        from llm_council.webhooks.hmac_auth import (
-            generate_webhook_headers,
-            verify_webhook_request
-        )
+        from llm_council.webhooks.hmac_auth import generate_webhook_headers, verify_webhook_request
 
         payload = '{"event": "council.complete"}'
         secret = "test-secret"
@@ -230,7 +227,7 @@ class TestVerifyWebhookRequest:
         headers = {
             "X-Council-Signature": "sha256=" + "0" * 64,
             "X-Council-Timestamp": str(int(time.time())),
-            "X-Council-Version": "1.0"
+            "X-Council-Version": "1.0",
         }
         secret = "test-secret"
 
@@ -238,10 +235,7 @@ class TestVerifyWebhookRequest:
 
     def test_verify_request_expired_timestamp(self):
         """Should reject expired timestamp."""
-        from llm_council.webhooks.hmac_auth import (
-            generate_signature,
-            verify_webhook_request
-        )
+        from llm_council.webhooks.hmac_auth import generate_signature, verify_webhook_request
 
         payload = '{"event": "council.complete"}'
         secret = "test-secret"
@@ -249,7 +243,7 @@ class TestVerifyWebhookRequest:
         headers = {
             "X-Council-Signature": "sha256=" + generate_signature(payload, secret),
             "X-Council-Timestamp": old_timestamp,
-            "X-Council-Version": "1.0"
+            "X-Council-Version": "1.0",
         }
 
         assert verify_webhook_request(payload, headers, secret) is False
@@ -260,10 +254,7 @@ class TestVerifyWebhookRequest:
         import time
 
         payload = '{"event": "council.complete"}'
-        headers = {
-            "X-Council-Timestamp": str(int(time.time())),
-            "X-Council-Version": "1.0"
-        }
+        headers = {"X-Council-Timestamp": str(int(time.time())), "X-Council-Version": "1.0"}
         secret = "test-secret"
 
         assert verify_webhook_request(payload, headers, secret) is False
@@ -274,10 +265,7 @@ class TestVerifyWebhookRequest:
         import time
 
         payload = '{"event": "council.complete"}'
-        headers = {
-            "X-Council-Timestamp": str(int(time.time())),
-            "X-Council-Version": "1.0"
-        }
+        headers = {"X-Council-Timestamp": str(int(time.time())), "X-Council-Version": "1.0"}
 
         # No secret = no signature verification
         assert verify_webhook_request(payload, headers, secret=None) is True

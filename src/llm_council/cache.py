@@ -130,7 +130,7 @@ def get_cached_response(cache_key: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        with open(cache_file, 'r') as f:
+        with open(cache_file, "r") as f:
             cached = json.load(f)
 
         # Check TTL if configured
@@ -153,7 +153,7 @@ def save_to_cache(
     stage1_results: List[Dict[str, Any]],
     stage2_results: List[Dict[str, Any]],
     stage3_result: Dict[str, Any],
-    metadata: Dict[str, Any]
+    metadata: Dict[str, Any],
 ) -> None:
     """Save council response to cache.
 
@@ -182,7 +182,7 @@ def save_to_cache(
     }
 
     try:
-        with open(cache_file, 'w') as f:
+        with open(cache_file, "w") as f:
             json.dump(cache_data, f, indent=2, default=str)
     except OSError:
         # Silently fail on cache write errors

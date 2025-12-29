@@ -88,6 +88,6 @@ def test_devcontainer_has_python_settings(devcontainer_config: dict):
     settings = vscode.get("settings", {})
 
     # Check for Python interpreter path
-    assert "python.defaultInterpreterPath" in settings or "[python]" in settings, (
-        "Should have Python settings"
-    )
+    assert (
+        "python.defaultInterpreterPath" in settings or "[python]" in settings
+    ), "Should have Python settings"

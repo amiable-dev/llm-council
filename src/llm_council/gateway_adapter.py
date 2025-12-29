@@ -21,7 +21,7 @@ from llm_council.unified_config import get_config
 def _use_gateway_layer() -> bool:
     """Check if gateway layer is enabled from unified config."""
     config = get_config()
-    return getattr(config.gateways, 'enabled', False) if hasattr(config, 'gateways') else False
+    return getattr(config.gateways, "enabled", False) if hasattr(config, "gateways") else False
 
 
 USE_GATEWAY_LAYER = _use_gateway_layer()
@@ -62,6 +62,7 @@ def _get_gateway_router():
     global _gateway_router
     if _gateway_router is None:
         from llm_council.gateway.router import GatewayRouter
+
         _gateway_router = GatewayRouter()
     return _gateway_router
 
@@ -92,10 +93,7 @@ def _gateway_response_to_dict(response) -> Dict[str, Any]:
 
 
 async def query_model(
-    model: str,
-    messages: List[Dict[str, str]],
-    timeout: float = 120.0,
-    disable_tools: bool = False
+    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -114,15 +112,12 @@ async def query_model(
         or None if failed
     """
     if USE_GATEWAY_LAYER:
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         # Convert messages to canonical format
         canonical_messages = [
             CanonicalMessage(
-                role=msg["role"],
-                content=[ContentBlock(type="text", text=msg.get("content", ""))]
+                role=msg["role"], content=[ContentBlock(type="text", text=msg.get("content", ""))]
             )
             for msg in messages
         ]
@@ -152,10 +147,7 @@ async def query_model(
 
 
 async def query_model_with_status(
-    model: str,
-    messages: List[Dict[str, str]],
-    timeout: float = 120.0,
-    disable_tools: bool = False
+    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False
 ) -> Dict[str, Any]:
     """
     Query a single model with structured status (ADR-012).
@@ -172,14 +164,11 @@ async def query_model_with_status(
         Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
     """
     if USE_GATEWAY_LAYER:
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         canonical_messages = [
             CanonicalMessage(
-                role=msg["role"],
-                content=[ContentBlock(type="text", text=msg.get("content", ""))]
+                role=msg["role"], content=[ContentBlock(type="text", text=msg.get("content", ""))]
             )
             for msg in messages
         ]
@@ -218,14 +207,11 @@ async def query_models_parallel(
         Dict mapping model identifier to response dict (or None if failed)
     """
     if USE_GATEWAY_LAYER:
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         canonical_messages = [
             CanonicalMessage(
-                role=msg["role"],
-                content=[ContentBlock(type="text", text=msg.get("content", ""))]
+                role=msg["role"], content=[ContentBlock(type="text", text=msg.get("content", ""))]
             )
             for msg in messages
         ]
@@ -250,7 +236,9 @@ async def query_models_parallel(
                     "reasoning_details": None,
                     "usage": {
                         "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                        "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+                        "completion_tokens": response.usage.completion_tokens
+                        if response.usage
+                        else 0,
                         "total_tokens": response.usage.total_tokens if response.usage else 0,
                     },
                 }
@@ -291,9 +279,7 @@ async def query_models_with_progress(
         Dict mapping model identifier to structured result with status
     """
     if USE_GATEWAY_LAYER:
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         results: Dict[str, Dict[str, Any]] = shared_results if shared_results is not None else {}
         total = len(models)
@@ -304,8 +290,7 @@ async def query_models_with_progress(
 
         canonical_messages = [
             CanonicalMessage(
-                role=msg["role"],
-                content=[ContentBlock(type="text", text=msg.get("content", ""))]
+                role=msg["role"], content=[ContentBlock(type="text", text=msg.get("content", ""))]
             )
             for msg in messages
         ]
@@ -329,7 +314,9 @@ async def query_models_with_progress(
             if on_progress:
                 status_emoji = "✓" if result["status"] == STATUS_OK else "✗"
                 model_short = model.split("/")[-1]
-                await on_progress(completed, total, f"{status_emoji} {model_short} ({completed}/{total})")
+                await on_progress(
+                    completed, total, f"{status_emoji} {model_short} ({completed}/{total})"
+                )
 
             return model, result
 

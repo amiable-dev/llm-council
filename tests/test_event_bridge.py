@@ -483,25 +483,33 @@ class TestIntegration:
             await bridge.start()
 
             # Simulate council lifecycle
-            await bridge.emit(LayerEvent(
-                event_type=LayerEventType.L3_COUNCIL_START,
-                data={"query": "What is AI?", "model_count": 4},
-            ))
+            await bridge.emit(
+                LayerEvent(
+                    event_type=LayerEventType.L3_COUNCIL_START,
+                    data={"query": "What is AI?", "model_count": 4},
+                )
+            )
 
-            await bridge.emit(LayerEvent(
-                event_type=LayerEventType.L3_STAGE_COMPLETE,
-                data={"stage": 1, "responses": 4},
-            ))
+            await bridge.emit(
+                LayerEvent(
+                    event_type=LayerEventType.L3_STAGE_COMPLETE,
+                    data={"stage": 1, "responses": 4},
+                )
+            )
 
-            await bridge.emit(LayerEvent(
-                event_type=LayerEventType.L3_STAGE_COMPLETE,
-                data={"stage": 2, "rankings": 4},
-            ))
+            await bridge.emit(
+                LayerEvent(
+                    event_type=LayerEventType.L3_STAGE_COMPLETE,
+                    data={"stage": 2, "rankings": 4},
+                )
+            )
 
-            await bridge.emit(LayerEvent(
-                event_type=LayerEventType.L3_COUNCIL_COMPLETE,
-                data={"result": "success", "duration_ms": 5000},
-            ))
+            await bridge.emit(
+                LayerEvent(
+                    event_type=LayerEventType.L3_COUNCIL_COMPLETE,
+                    data={"result": "success", "duration_ms": 5000},
+                )
+            )
 
             await bridge.shutdown()
 

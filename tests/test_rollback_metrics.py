@@ -31,12 +31,15 @@ class TestRollbackConfig:
 
     def test_config_from_env(self):
         """Config should be loadable from environment variables."""
-        with patch.dict("os.environ", {
-            "LLM_COUNCIL_ROLLBACK_ENABLED": "true",
-            "LLM_COUNCIL_ROLLBACK_WINDOW": "200",
-            "LLM_COUNCIL_ROLLBACK_DISAGREEMENT_THRESHOLD": "0.10",
-            "LLM_COUNCIL_ROLLBACK_ESCALATION_THRESHOLD": "0.20",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_COUNCIL_ROLLBACK_ENABLED": "true",
+                "LLM_COUNCIL_ROLLBACK_WINDOW": "200",
+                "LLM_COUNCIL_ROLLBACK_DISAGREEMENT_THRESHOLD": "0.10",
+                "LLM_COUNCIL_ROLLBACK_ESCALATION_THRESHOLD": "0.20",
+            },
+        ):
             config = RollbackConfig.from_env()
             assert config.enabled is True
             assert config.window_size == 200
@@ -158,8 +161,10 @@ class TestRollbackMonitor:
 
         events = get_layer_events()
         rollback_events = [
-            e for e in events
-            if "rollback" in e.event_type.value.lower() or "escalation" in e.event_type.value.lower()
+            e
+            for e in events
+            if "rollback" in e.event_type.value.lower()
+            or "escalation" in e.event_type.value.lower()
         ]
         # Should have emitted an event about the breach
         assert len(rollback_events) >= 0  # Event emission is optional

@@ -89,7 +89,7 @@ class TestDirectProviderKeys:
         """Should use ANTHROPIC_API_KEY from environment."""
         from llm_council.gateway.direct import DirectGateway
 
-        with patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'sk-ant-test'}):
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test"}):
             gateway = DirectGateway()
             assert gateway._get_api_key("anthropic") == "sk-ant-test"
 
@@ -97,7 +97,7 @@ class TestDirectProviderKeys:
         """Should use OPENAI_API_KEY from environment."""
         from llm_council.gateway.direct import DirectGateway
 
-        with patch.dict('os.environ', {'OPENAI_API_KEY': 'sk-openai-test'}):
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "sk-openai-test"}):
             gateway = DirectGateway()
             assert gateway._get_api_key("openai") == "sk-openai-test"
 
@@ -105,7 +105,7 @@ class TestDirectProviderKeys:
         """Should use GOOGLE_API_KEY from environment."""
         from llm_council.gateway.direct import DirectGateway
 
-        with patch.dict('os.environ', {'GOOGLE_API_KEY': 'google-test-key'}):
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "google-test-key"}):
             gateway = DirectGateway()
             assert gateway._get_api_key("google") == "google-test-key"
 
@@ -133,10 +133,7 @@ class TestDirectMessageConversion:
         from llm_council.gateway.types import CanonicalMessage, ContentBlock
 
         gateway = DirectGateway()
-        msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello!")]
-        )
+        msg = CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello!")])
 
         result = gateway._convert_message_for_provider(msg, "anthropic")
 
@@ -150,10 +147,7 @@ class TestDirectMessageConversion:
         from llm_council.gateway.types import CanonicalMessage, ContentBlock
 
         gateway = DirectGateway()
-        msg = CanonicalMessage(
-            role="user",
-            content=[ContentBlock(type="text", text="Hello!")]
-        )
+        msg = CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello!")])
 
         result = gateway._convert_message_for_provider(msg, "openai")
 
@@ -167,8 +161,7 @@ class TestDirectMessageConversion:
 
         gateway = DirectGateway()
         msg = CanonicalMessage(
-            role="system",
-            content=[ContentBlock(type="text", text="You are helpful.")]
+            role="system", content=[ContentBlock(type="text", text="You are helpful.")]
         )
 
         # System message handling varies by provider
@@ -184,28 +177,28 @@ class TestDirectComplete:
         """complete() should return GatewayResponse."""
         from llm_council.gateway.direct import DirectGateway
         from llm_council.gateway.types import (
-            GatewayRequest, GatewayResponse, CanonicalMessage, ContentBlock
+            GatewayRequest,
+            GatewayResponse,
+            CanonicalMessage,
+            ContentBlock,
         )
 
         gateway = DirectGateway(provider_keys={"openai": "test-key"})
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         mock_response = {
             "status": "ok",
             "content": "Hi there!",
             "latency_ms": 150,
-            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
         }
 
-        with patch.object(gateway, '_query_provider', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_provider", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -218,29 +211,19 @@ class TestDirectComplete:
     async def test_complete_routes_to_correct_provider(self):
         """complete() should route to the correct provider based on model."""
         from llm_council.gateway.direct import DirectGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = DirectGateway(provider_keys={"anthropic": "ant-key"})
         request = GatewayRequest(
             model="anthropic/claude-3-5-sonnet-20241022",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
-        mock_response = {
-            "status": "ok",
-            "content": "Hi!",
-            "latency_ms": 100,
-            "usage": {}
-        }
+        mock_response = {"status": "ok", "content": "Hi!", "latency_ms": 100, "usage": {}}
 
-        with patch.object(gateway, '_query_provider', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_provider", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -254,29 +237,20 @@ class TestDirectComplete:
     async def test_complete_handles_timeout(self):
         """complete() should handle timeout properly."""
         from llm_council.gateway.direct import DirectGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = DirectGateway(provider_keys={"openai": "test-key"})
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
-            timeout=30.0
+            timeout=30.0,
         )
 
-        mock_response = {
-            "status": "timeout",
-            "latency_ms": 30000,
-            "error": "Timeout after 30s"
-        }
+        mock_response = {"status": "timeout", "latency_ms": 30000, "error": "Timeout after 30s"}
 
-        with patch.object(gateway, '_query_provider', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_provider", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             response = await gateway.complete(request)
 
@@ -287,20 +261,15 @@ class TestDirectComplete:
     async def test_complete_handles_missing_api_key(self):
         """complete() should handle missing API key gracefully."""
         from llm_council.gateway.direct import DirectGateway
-        from llm_council.gateway.types import (
-            GatewayRequest, CanonicalMessage, ContentBlock
-        )
+        from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         # No keys provided
         gateway = DirectGateway()
         request = GatewayRequest(
             model="openai/gpt-4o",
             messages=[
-                CanonicalMessage(
-                    role="user",
-                    content=[ContentBlock(type="text", text="Hello")]
-                )
-            ]
+                CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
+            ],
         )
 
         response = await gateway.complete(request)
@@ -320,14 +289,9 @@ class TestDirectHealthCheck:
 
         gateway = DirectGateway(provider_keys={"openai": "test-key"})
 
-        mock_response = {
-            "status": "ok",
-            "content": "pong",
-            "latency_ms": 50,
-            "usage": {}
-        }
+        mock_response = {"status": "ok", "content": "pong", "latency_ms": 50, "usage": {}}
 
-        with patch.object(gateway, '_query_provider', new_callable=AsyncMock) as mock_query:
+        with patch.object(gateway, "_query_provider", new_callable=AsyncMock) as mock_query:
             mock_query.return_value = mock_response
             health = await gateway.health_check()
 
@@ -361,7 +325,7 @@ class TestDirectIntegrationWithRouter:
         router = GatewayRouter(
             gateways={"openrouter": openrouter, "direct": direct},
             default_gateway="openrouter",
-            fallback_chains={"openrouter": ["direct"]}
+            fallback_chains={"openrouter": ["direct"]},
         )
 
         assert router._fallback_chains.get("openrouter") == ["direct"]
@@ -377,7 +341,11 @@ class TestDirectProviderEndpoints:
         gateway = DirectGateway()
         endpoint = gateway._get_provider_endpoint("anthropic")
 
-        assert "anthropic" in endpoint.lower() or "claude" in endpoint.lower() or "messages" in endpoint
+        assert (
+            "anthropic" in endpoint.lower()
+            or "claude" in endpoint.lower()
+            or "messages" in endpoint
+        )
 
     def test_openai_endpoint(self):
         """Should use correct OpenAI API endpoint."""

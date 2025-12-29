@@ -25,11 +25,7 @@ def generate_signature(payload: str, secret: str) -> str:
     Returns:
         Hex-encoded signature string (64 characters).
     """
-    return hmac.new(
-        secret.encode("utf-8"),
-        payload.encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
+    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def verify_signature(payload: str, signature: str, secret: str) -> bool:
@@ -71,10 +67,7 @@ def generate_webhook_headers(payload: str, secret: Optional[str] = None) -> Dict
     return headers
 
 
-def validate_timestamp(
-    timestamp: str,
-    tolerance_seconds: int = 300
-) -> bool:
+def validate_timestamp(timestamp: str, tolerance_seconds: int = 300) -> bool:
     """Validate timestamp to prevent replay attacks.
 
     Args:
@@ -107,7 +100,7 @@ def verify_webhook_request(
     payload: str,
     headers: Dict[str, str],
     secret: Optional[str] = None,
-    timestamp_tolerance: int = 300
+    timestamp_tolerance: int = 300,
 ) -> bool:
     """Verify a complete webhook request.
 

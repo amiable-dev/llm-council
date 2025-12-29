@@ -60,6 +60,7 @@ def emit_discovery_fallback(
     except Exception as e:
         logger.debug(f"Failed to emit discovery fallback event: {e}")
 
+
 # Minimum candidates before falling back to static
 MIN_CANDIDATES_PER_TIER = 3
 

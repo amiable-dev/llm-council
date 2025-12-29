@@ -37,10 +37,13 @@ class TestNotDiamondConfig:
 
     def test_config_from_env_with_key(self):
         """Config should be enabled with API key."""
-        with patch.dict("os.environ", {
-            "NOT_DIAMOND_API_KEY": "test-key",
-            "LLM_COUNCIL_USE_NOT_DIAMOND": "true",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "NOT_DIAMOND_API_KEY": "test-key",
+                "LLM_COUNCIL_USE_NOT_DIAMOND": "true",
+            },
+        ):
             config = NotDiamondConfig.from_env()
             assert config.enabled is True
             assert config.api_key == "test-key"
@@ -226,10 +229,13 @@ class TestNotDiamondAvailability:
 
     def test_available_with_key(self):
         """Should be available with API key and enabled flag."""
-        with patch.dict("os.environ", {
-            "NOT_DIAMOND_API_KEY": "test-key",
-            "LLM_COUNCIL_USE_NOT_DIAMOND": "true",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "NOT_DIAMOND_API_KEY": "test-key",
+                "LLM_COUNCIL_USE_NOT_DIAMOND": "true",
+            },
+        ):
             # Availability depends on config
             assert is_not_diamond_available() in [True, False]
 
@@ -263,7 +269,10 @@ class TestCaching:
         assert cached["model"] == "cached-model"
 
         # Different data should not hit cache
-        different_data = {"messages": [{"role": "user", "content": "Different"}], "model": ["model-a"]}
+        different_data = {
+            "messages": [{"role": "user", "content": "Different"}],
+            "model": ["model-a"],
+        }
         assert client._get_cached(client._get_cache_key(endpoint, different_data)) is None
 
     @pytest.mark.asyncio

@@ -89,9 +89,6 @@ def calculate_shadow_agreement(
     if not shadow_votes:
         return None
 
-    agreeing = sum(
-        1 for vote in shadow_votes
-        if vote.get("top_pick") == consensus_winner
-    )
+    agreeing = sum(1 for vote in shadow_votes if vote.get("top_pick") == consensus_winner)
 
     return agreeing / len(shadow_votes)

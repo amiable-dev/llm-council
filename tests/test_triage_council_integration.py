@@ -53,10 +53,17 @@ class TestCouncilTriageIntegration:
         from llm_council.council import run_council_with_fallback
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 # Should not raise - accepts triage parameters
                 await run_council_with_fallback(
@@ -71,10 +78,17 @@ class TestCouncilTriageIntegration:
         from llm_council.council import run_council_with_fallback
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 # Should work exactly as before
                 result = await run_council_with_fallback("Test query")
@@ -90,10 +104,17 @@ class TestCouncilTriageIntegration:
         COUNCIL_MODELS = get_config().council.models
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 with patch("llm_council.council.run_triage") as mock_triage:
                     from llm_council.triage import TriageResult
@@ -122,10 +143,17 @@ class TestCouncilTriageIntegration:
         COUNCIL_MODELS = get_config().council.models
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 await run_council_with_fallback(
                     "Write a Python function",  # CODE domain
@@ -146,10 +174,17 @@ class TestTriageMetadataInResult:
         from llm_council.council import run_council_with_fallback
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 result = await run_council_with_fallback(
                     "Write a Python function",
@@ -170,10 +205,17 @@ class TestPromptOptimizationIntegration:
         from llm_council.council import run_council_with_fallback
 
         with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = ([], {}, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            mock_stage1.return_value = (
+                [],
+                {},
+                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            )
 
             with patch("llm_council.council.quick_synthesis") as mock_synthesis:
-                mock_synthesis.return_value = ("Response", {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+                mock_synthesis.return_value = (
+                    "Response",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
 
                 await run_council_with_fallback(
                     "Test query",

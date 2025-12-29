@@ -171,11 +171,11 @@ class TestCalculateWeightedScore:
     def test_weighted_calculation(self):
         """Test specific weighted calculation."""
         scores = {
-            "accuracy": 8,      # 0.35 * 8 = 2.80
-            "relevance": 7,     # 0.10 * 7 = 0.70
+            "accuracy": 8,  # 0.35 * 8 = 2.80
+            "relevance": 7,  # 0.10 * 7 = 0.70
             "completeness": 9,  # 0.20 * 9 = 1.80
-            "conciseness": 6,   # 0.15 * 6 = 0.90
-            "clarity": 8,       # 0.20 * 8 = 1.60
+            "conciseness": 6,  # 0.15 * 6 = 0.90
+            "clarity": 8,  # 0.20 * 8 = 1.60
         }
         # Total: 2.80 + 0.70 + 1.80 + 0.90 + 1.60 = 7.80
         result = calculate_weighted_score(scores, UPDATED_RUBRIC_WEIGHTS)
@@ -292,11 +292,11 @@ class TestAccuracyCeiling:
         score well no matter how well-written it is.
         """
         scores = {
-            "accuracy": 3,      # Hallucination/factual error
-            "relevance": 9,     # Addresses the question
+            "accuracy": 3,  # Hallucination/factual error
+            "relevance": 9,  # Addresses the question
             "completeness": 9,  # Comprehensive
-            "conciseness": 9,   # Well-written
-            "clarity": 9,       # Clear presentation
+            "conciseness": 9,  # Well-written
+            "clarity": 9,  # Clear presentation
         }
         result = calculate_weighted_score_with_accuracy_ceiling(scores)
         # Without ceiling: 0.35*3 + 0.65*9 = 1.05 + 5.85 = 6.90
@@ -347,7 +347,7 @@ class TestParseRubricEvaluation:
 
     def test_parse_valid_json(self):
         """Parse well-formed rubric evaluation JSON."""
-        response_text = '''
+        response_text = """
 Here is my evaluation of the responses.
 
 Response A is accurate and comprehensive.
@@ -378,7 +378,7 @@ Response B has some issues with completeness.
   }
 }
 ```
-'''
+"""
         result = parse_rubric_evaluation(response_text)
 
         assert result is not None
@@ -389,7 +389,7 @@ Response B has some issues with completeness.
 
     def test_parse_json_without_code_block(self):
         """Parse JSON that's not in a code block."""
-        response_text = '''
+        response_text = """
 My evaluation:
 
 {
@@ -406,29 +406,29 @@ My evaluation:
     }
   }
 }
-'''
+"""
         result = parse_rubric_evaluation(response_text)
         assert result is not None
         assert result["ranking"] == ["Response A"]
 
     def test_parse_invalid_json_returns_none(self):
         """Invalid JSON should return None for fallback handling."""
-        response_text = '''
+        response_text = """
 I think Response A is best because it's accurate.
 Response B is not as good.
-'''
+"""
         result = parse_rubric_evaluation(response_text)
         assert result is None
 
     def test_parse_partial_rubric_returns_none(self):
         """JSON missing required fields should return None."""
-        response_text = '''
+        response_text = """
 ```json
 {
   "ranking": ["Response A", "Response B"]
 }
 ```
-'''
+"""
         # Missing "evaluations" field
         result = parse_rubric_evaluation(response_text)
         assert result is None
@@ -440,7 +440,7 @@ Response B is not as good.
 
     def test_parse_extracts_from_long_response(self):
         """Should extract JSON from a long response with other content."""
-        response_text = '''
+        response_text = """
 Let me analyze each response carefully.
 
 ## Analysis
@@ -483,7 +483,7 @@ Based on my analysis, Response A is the better answer.
 ```
 
 That concludes my evaluation.
-'''
+"""
         result = parse_rubric_evaluation(response_text)
         assert result is not None
         assert result["evaluations"]["Response A"]["accuracy"] == 9
@@ -496,7 +496,7 @@ class TestFallbackBehavior:
     def test_fallback_returns_none_for_invalid_json(self):
         """When rubric parsing fails, should return None for fallback to holistic."""
         # Response without proper JSON structure
-        response_text = '''
+        response_text = """
 I've evaluated the responses.
 
 Response A is better because it's more accurate.
@@ -505,7 +505,7 @@ Response B lacks completeness.
 FINAL RANKING:
 1. Response A
 2. Response B
-'''
+"""
         result = parse_rubric_evaluation(response_text)
         # Should return None, allowing fallback to holistic scoring
         assert result is None
@@ -514,7 +514,7 @@ FINAL RANKING:
         """Holistic format should be parseable by the main council parser."""
         from llm_council.council import parse_ranking_from_text
 
-        response_text = '''
+        response_text = """
 Let me evaluate these responses.
 
 Response A is very accurate and complete.
@@ -529,7 +529,7 @@ Response B has some issues.
   }
 }
 ```
-'''
+"""
         # Rubric parser should return None (no evaluations field)
         rubric_result = parse_rubric_evaluation(response_text)
         assert rubric_result is None
@@ -541,14 +541,14 @@ Response B has some issues.
 
     def test_malformed_evaluations_returns_none(self):
         """Malformed evaluations structure should return None."""
-        response_text = '''
+        response_text = """
 ```json
 {
   "ranking": ["Response A"],
   "evaluations": "not a dict"
 }
 ```
-'''
+"""
         result = parse_rubric_evaluation(response_text)
         # Should return None because evaluations is not a dict
         assert result is None or not isinstance(result.get("evaluations"), dict)
@@ -567,12 +567,18 @@ class TestRubricPipelineIntegration:
         # Simulate parsed rubric evaluation from Stage 2
         evaluations = {
             "Response A": {
-                "accuracy": 9, "relevance": 8, "completeness": 8,
-                "conciseness": 7, "clarity": 8
+                "accuracy": 9,
+                "relevance": 8,
+                "completeness": 8,
+                "conciseness": 7,
+                "clarity": 8,
             },
             "Response B": {
-                "accuracy": 4, "relevance": 9, "completeness": 9,
-                "conciseness": 9, "clarity": 9
+                "accuracy": 4,
+                "relevance": 9,
+                "completeness": 9,
+                "conciseness": 9,
+                "clarity": 9,
             },
         }
 
@@ -608,7 +614,7 @@ class TestRubricPipelineIntegration:
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 8.2, "Response B": 4.0},
                     "rubric_scoring": True,
-                }
+                },
             },
             {
                 "model": "reviewer-2",
@@ -616,7 +622,7 @@ class TestRubricPipelineIntegration:
                     "ranking": ["Response A", "Response B"],
                     "scores": {"Response A": 7.5, "Response B": 5.0},
                     "rubric_scoring": True,
-                }
+                },
             },
         ]
         label_to_model = {
@@ -640,7 +646,7 @@ class TestRubricIntegration:
 
     def test_parsed_scores_calculate_correctly(self):
         """Parse rubric and verify weighted calculation matches."""
-        response_text = '''
+        response_text = """
 ```json
 {
   "ranking": ["Response A"],
@@ -657,7 +663,7 @@ class TestRubricIntegration:
   }
 }
 ```
-'''
+"""
         parsed = parse_rubric_evaluation(response_text)
         assert parsed is not None
 
@@ -676,7 +682,7 @@ class TestRubricIntegration:
 
     def test_ceiling_applied_to_parsed_scores(self):
         """Verify ceiling is applied when parsing low-accuracy evaluation."""
-        response_text = '''
+        response_text = """
 ```json
 {
   "ranking": ["Response A"],
@@ -693,7 +699,7 @@ class TestRubricIntegration:
   }
 }
 ```
-'''
+"""
         parsed = parse_rubric_evaluation(response_text)
         assert parsed is not None
 

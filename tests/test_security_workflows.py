@@ -122,9 +122,7 @@ class TestSecurityWorkflow:
         jobs = workflow_config.get("jobs", {})
         assert "dependency-review" in jobs, "Workflow should have Dependency Review job"
 
-    def test_security_workflow_fork_compatible_jobs_have_no_secrets(
-        self, workflow_config: dict
-    ):
+    def test_security_workflow_fork_compatible_jobs_have_no_secrets(self, workflow_config: dict):
         """Verify fork-compatible jobs don't require secrets.
 
         Jobs in Layer 2 (PR checks) should work without repo secrets
@@ -141,11 +139,12 @@ class TestSecurityWorkflow:
             job_yaml = yaml.dump(job)
             # Find all secrets.XXX patterns
             import re
-            secret_refs = re.findall(r'secrets\.(\w+)', job_yaml)
+
+            secret_refs = re.findall(r"secrets\.(\w+)", job_yaml)
             non_github_secrets = [s for s in secret_refs if s != "GITHUB_TOKEN"]
-            assert len(non_github_secrets) == 0, (
-                f"Fork-compatible job {job_name} references secrets: {non_github_secrets}"
-            )
+            assert (
+                len(non_github_secrets) == 0
+            ), f"Fork-compatible job {job_name} references secrets: {non_github_secrets}"
 
     def test_security_workflow_actions_are_version_pinned(self, workflow_config: dict):
         """Verify all GitHub Actions are pinned to specific versions.
@@ -160,9 +159,11 @@ class TestSecurityWorkflow:
                 if uses and "@" in uses:
                     # Extract version after @
                     version = uses.split("@")[1]
-                    assert version not in ["master", "main", "latest"], (
-                        f"Job {job_name} uses unpinned action: {uses}"
-                    )
+                    assert version not in [
+                        "master",
+                        "main",
+                        "latest",
+                    ], f"Job {job_name} uses unpinned action: {uses}"
 
 
 # =============================================================================
@@ -221,9 +222,9 @@ class TestSecurityWorkflowMasterJobs:
             # Must have condition limiting to push on master
             has_push_condition = "push" in condition
             has_master_condition = "refs/heads/master" in condition or "master" in condition
-            assert has_push_condition or has_master_condition, (
-                f"Job {job_name} should only run on master push, got: {condition}"
-            )
+            assert (
+                has_push_condition or has_master_condition
+            ), f"Job {job_name} should only run on master push, got: {condition}"
 
 
 # =============================================================================
@@ -267,9 +268,9 @@ class TestReleaseSecurityWorkflow:
         """Verify workflow has required permissions for release attachment."""
         permissions = workflow_config.get("permissions", {})
         # Need write access to attach files to releases
-        assert permissions.get("contents") == "write", (
-            "Workflow needs contents: write to attach files to releases"
-        )
+        assert (
+            permissions.get("contents") == "write"
+        ), "Workflow needs contents: write to attach files to releases"
 
 
 # =============================================================================
@@ -304,9 +305,11 @@ class TestCIWorkflowVersionPinning:
                 uses = step.get("uses", "")
                 if uses and "@" in uses:
                     version = uses.split("@")[1]
-                    assert version not in ["master", "main", "latest"], (
-                        f"CI job {job_name} uses unpinned action: {uses}"
-                    )
+                    assert version not in [
+                        "master",
+                        "main",
+                        "latest",
+                    ], f"CI job {job_name} uses unpinned action: {uses}"
 
 
 # =============================================================================
@@ -367,9 +370,9 @@ class TestDependencyReviewConfig:
 
         with_config = dep_review_step.get("with", {})
         config_file = with_config.get("config-file", "")
-        assert "dependency-review-config.yml" in config_file, (
-            "Workflow should reference dependency-review-config.yml"
-        )
+        assert (
+            "dependency-review-config.yml" in config_file
+        ), "Workflow should reference dependency-review-config.yml"
 
     def test_dependency_review_blocks_gpl(self, config: dict):
         """Verify Dependency Review blocks GPL licenses."""
@@ -378,21 +381,17 @@ class TestDependencyReviewConfig:
         # Check for GPL licenses in deny list
         gpl_licenses = ["GPL-2.0", "GPL-3.0", "AGPL-3.0"]
         for license_id in gpl_licenses:
-            assert license_id in deny_licenses, (
-                f"Dependency Review should block {license_id}"
-            )
+            assert license_id in deny_licenses, f"Dependency Review should block {license_id}"
 
     def test_dependency_review_fails_on_high_severity(self, config: dict):
         """Verify Dependency Review fails on high severity vulnerabilities."""
         fail_on = config.get("fail-on-severity", "")
-        assert fail_on == "high", (
-            "Dependency Review should fail on high severity"
-        )
+        assert fail_on == "high", "Dependency Review should fail on high severity"
 
     def test_dependency_review_allows_sonarqube_action(self, config: dict):
         """Verify SonarQube action is allowed despite LGPL-3.0 license."""
         allow_list = config.get("allow-dependencies-licenses", [])
         sonar_allowed = any("sonarqube-scan-action" in pkg for pkg in allow_list)
-        assert sonar_allowed, (
-            "SonarQube action should be allowed (build-time tool, not distributed)"
-        )
+        assert (
+            sonar_allowed
+        ), "SonarQube action should be allowed (build-time tool, not distributed)"
