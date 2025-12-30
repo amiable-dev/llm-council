@@ -6,7 +6,7 @@ Deploy LLM Council to the cloud in under 5 minutes with one-click deployment, or
 
 | Platform | Deploy | Best For |
 |----------|--------|----------|
-| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/llm-council?referralCode=amiable-dev) | Production use, webhook integrations |
+| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github) | Production use, webhook integrations |
 | **Render** | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/amiable-dev/llm-council) | Evaluation, free tier testing |
 
 !!! warning "Render Cold Start"

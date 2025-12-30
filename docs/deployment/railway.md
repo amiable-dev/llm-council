@@ -1,23 +1,29 @@
 # Railway Deployment
 
-Deploy LLM Council to Railway in under 2 minutes with one-click deployment.
+Deploy LLM Council to Railway in under 5 minutes.
 
 ## Why Railway?
 
 - **No Cold Starts**: Unlike Render Free tier, Railway instances stay warm
 - **Webhook Reliable**: Perfect for n8n and other automation platforms
-- **Template Marketplace**: Discover and deploy with one click
-- **Revenue Sharing**: Railway shares template revenue with creators
+- **Auto-Deploy**: Deploys automatically when you push to GitHub
 
-## One-Click Deploy
+## Deploy from GitHub
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/llm-council?referralCode=amiable-dev)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github)
+
+Click the button above, then:
+
+1. **Connect GitHub**: Link your GitHub account if not already connected
+2. **Select Repository**: Search for `amiable-dev/llm-council` (or fork it first)
+3. **Configure Variables**: Add the required environment variables (see below)
+4. **Deploy**: Railway will build and deploy automatically
 
 ## Manual Setup
 
-### 1. Fork the Repository
+### 1. Fork the Repository (Optional)
 
-Fork [amiable-dev/llm-council](https://github.com/amiable-dev/llm-council) to your GitHub account.
+Fork [amiable-dev/llm-council](https://github.com/amiable-dev/llm-council) to your GitHub account for customization.
 
 ### 2. Create Railway Project
 

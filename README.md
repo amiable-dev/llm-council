@@ -24,12 +24,16 @@
 
 ## Quick Deploy
 
-Deploy your own LLM Council instance in one click:
+Deploy your own LLM Council instance:
 
 | Platform | Deploy | Best For |
 |----------|--------|----------|
-| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/llm-council?referralCode=amiable-dev) | Production, webhooks |
+| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github) | Production, webhooks |
 | **Render** | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/amiable-dev/llm-council) | Evaluation, free tier |
+
+**Required Environment Variables:**
+- `OPENROUTER_API_KEY` - Your [OpenRouter](https://openrouter.ai) API key
+- `LLM_COUNCIL_API_TOKEN` - A secure token for API authentication (generate with `openssl rand -hex 16`)
 
 > **Note**: Railway is recommended for [n8n integration](https://llm-council.dev/integrations/n8n/) (no cold-start). Render Free tier spins down after 15 minutes which may cause webhook timeouts.
 

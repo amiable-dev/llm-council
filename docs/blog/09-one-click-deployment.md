@@ -30,10 +30,10 @@ With [ADR-038](../adr/ADR-038-one-click-deployment-strategy.md) (our Architectur
 
 | Platform | Deploy | Cost |
 |----------|--------|------|
-| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/llm-council?referralCode=amiable-dev) | ~$5/mo |
+| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github) | ~$5/mo |
 | **Render** | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/amiable-dev/llm-council) | Free tier |
 
-Click the button. Add your API keys. Done.
+Click the button, select the repository, add your API keys (`OPENROUTER_API_KEY` and `LLM_COUNCIL_API_TOKEN`). Done.
 
 ## Why Two Platforms?
 
@@ -101,9 +101,14 @@ The council is now running at `http://localhost:8000`.
 
 1. **Click Deploy on Railway**
 
-   [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/llm-council?referralCode=amiable-dev)
+   [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github)
 
-2. **Configure Environment Variables**
+2. **Select the Repository**
+
+   - Connect your GitHub account if not already linked
+   - Search for `amiable-dev/llm-council` (or fork it first for customization)
+
+3. **Configure Environment Variables**
 
    Railway will prompt you for:
 
@@ -117,11 +122,11 @@ The council is now running at `http://localhost:8000`.
    openssl rand -hex 16
    ```
 
-3. **Deploy**
+4. **Deploy**
 
    Railway builds and deploys automatically. Within 2-3 minutes, you'll have a live URL.
 
-4. **Test Your Deployment**
+5. **Test Your Deployment**
 
    ```bash
    # Health check
@@ -163,7 +168,7 @@ See the [full n8n integration guide](../integrations/n8n.md) for complete workfl
 
 Why Railway as the primary platform? Beyond technical fit, Railway's Open Source Kickback program provides up to 25% revenue sharing for template creators. This creates a sustainability path for open-source projects.
 
-When you deploy via our template, a portion of your Railway spend supports LLM Council development. Thank you for contributing to open-source sustainability.
+Once we publish an official Railway template, a portion of your Railway spend will support LLM Council development. Thank you for contributing to open-source sustainability.
 
 ## What's Next?
 
