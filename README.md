@@ -22,6 +22,13 @@
   <em>A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.</em>
 </p>
 
+## What is This?
+
+Instead of asking a single LLM for answers, this MCP server:
+1. **Stage 1**: Sends your question to multiple LLMs in parallel (GPT, Claude, Gemini, Grok, etc.)
+2. **Stage 2**: Each LLM reviews and ranks the other responses (anonymized to prevent bias)
+3. **Stage 3**: A Chairman LLM synthesizes all responses into a final, high-quality answer
+
 ## Quick Deploy
 
 Deploy your own LLM Council instance:
@@ -39,12 +46,6 @@ Deploy your own LLM Council instance:
 
 For detailed deployment instructions, see the [Deployment Guide](https://llm-council.dev/deployment/).
 
-## What is This?
-
-Instead of asking a single LLM for answers, this MCP server:
-1. **Stage 1**: Sends your question to multiple LLMs in parallel (GPT, Claude, Gemini, Grok, etc.)
-2. **Stage 2**: Each LLM reviews and ranks the other responses (anonymized to prevent bias)
-3. **Stage 3**: A Chairman LLM synthesizes all responses into a final, high-quality answer
 
 ## Credits & Attribution
 
@@ -1159,7 +1160,7 @@ models = provider.list_available_models()  # 31 models
 | `LLM_COUNCIL_NOT_DIAMOND_TIMEOUT` | Not Diamond API timeout in seconds | 5.0 |
 | `LLM_COUNCIL_NOT_DIAMOND_CACHE_TTL` | Not Diamond response cache TTL in seconds | 300 |
 
-## Credits & Attribution
+## Credits & Attribution Continued
 
 This project is a derivative work based on the original [llm-council](https://github.com/karpathy/llm-council) by Andrej Karpathy.
 
