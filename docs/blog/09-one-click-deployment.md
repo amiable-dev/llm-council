@@ -2,6 +2,14 @@
 
 *Published: December 2025*
 
+## Prerequisites
+
+Before deploying, you'll need:
+
+- An [OpenRouter account](https://openrouter.ai) with API key
+- A Railway or Render account (free to create)
+- For local development: Docker Desktop installed
+
 ## The Problem
 
 You want to try LLM Council. You read the documentation, you understand the 3-stage deliberation process. Now you want to run it.
@@ -70,7 +78,7 @@ LLM_COUNCIL_API_TOKEN=your-secure-token-here
 All protected endpoints now require a Bearer token:
 
 ```bash
-curl -X POST https://your-council.railway.app/v1/council/run \
+curl -X POST https://your-app.railway.app/v1/council/run \
   -H "Authorization: Bearer your-secure-token-here" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "What is the best way to learn programming?"}'
@@ -103,10 +111,10 @@ The council is now running at `http://localhost:8000`.
 
    [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/llm-council?referralCode=K9dsYj)
 
-2. **Select the Repository**
+2. **Connect GitHub (if prompted)**
 
-   - Connect your GitHub account if not already linked
-   - Search for `amiable-dev/llm-council` (or fork it first for customization)
+   - The template deploys from `amiable-dev/llm-council` automatically
+   - Connect your GitHub account if Railway prompts you
 
 3. **Configure Environment Variables**
 
@@ -129,27 +137,48 @@ The council is now running at `http://localhost:8000`.
 5. **Test Your Deployment**
 
    ```bash
-   # Health check
+   # Health check (no auth required)
    curl https://your-app.railway.app/health
+   # Expected: {"status":"ok","service":"llm-council-local"}
 
-   # API request
+   # API request (auth required)
    curl -X POST https://your-app.railway.app/v1/council/run \
      -H "Authorization: Bearer your-token" \
      -H "Content-Type: application/json" \
      -d '{"prompt": "What is the capital of France?"}'
    ```
 
+   A successful council response looks like:
+   ```json
+   {
+     "stage1": [...],
+     "stage2": [...],
+     "stage3": {"synthesis": "Paris is the capital of France..."},
+     "metadata": {"tier": "balanced", "models_used": 3}
+   }
+   ```
+
+## Troubleshooting
+
+| Symptom | Cause | Solution |
+|---------|-------|----------|
+| **401 Unauthorized** | Missing or incorrect token | Verify `Authorization: Bearer <token>` header format |
+| **500 Internal Server Error** | Invalid OpenRouter API key | Check `OPENROUTER_API_KEY` is set correctly |
+| **502 Bad Gateway** | App crashed on startup | Check deployment logs for errors |
+| **Timeout on first request** | Cold start (Render free tier) | Wait 60s and retry, or use Railway |
+| **Health check fails** | Port binding issue | Ensure app binds to `$PORT` (handled automatically) |
+
 ## n8n Integration
 
-With a deployed council endpoint, n8n integration is straightforward. Add an HTTP Request node with these settings:
+With a deployed council endpoint, n8n integration is straightforward. In your n8n workflow, add an **HTTP Request** node with these settings:
 
 | Setting | Value |
 |---------|-------|
 | **Method** | POST |
-| **URL** | `https://your-council.railway.app/v1/council/run` |
+| **URL** | `https://your-app.railway.app/v1/council/run` |
 | **Authentication** | Header Auth |
 | **Header Name** | Authorization |
-| **Header Value** | `Bearer {{$env.COUNCIL_TOKEN}}` |
+| **Header Value** | `Bearer your-token-here` |
 | **Body** | JSON |
 
 **Request Body:**
@@ -160,15 +189,19 @@ With a deployed council endpoint, n8n integration is straightforward. Add an HTT
 }
 ```
 
-Store your `COUNCIL_TOKEN` in n8n credentials, not in the workflow JSON.
+!!! tip "Secure Token Storage"
+    Store your API token in n8n environment variables (`Settings → Variables`) as `COUNCIL_TOKEN`, then reference it as `{{$env.COUNCIL_TOKEN}}` in the Header Value field.
+
+!!! note "Input Field"
+    The `{{$json.question}}` syntax assumes the previous node outputs a JSON field named `question`. Adjust to match your workflow trigger.
 
 See the [full n8n integration guide](../integrations/n8n.md) for complete workflow examples including code review automation and support ticket triage.
 
 ## Revenue Sustainability
 
-Why Railway as the primary platform? Beyond technical fit, Railway's Open Source Kickback program provides up to 25% revenue sharing for template creators. This creates a sustainability path for open-source projects.
+Why Railway as the primary platform? Beyond technical fit, Railway's [Open Source Kickback program](https://blog.railway.com/p/1M-open-source-kickbacks) provides revenue sharing for template creators. This creates a sustainability path for open-source projects.
 
-Once we publish an official Railway template, a portion of your Railway spend will support LLM Council development. Thank you for contributing to open-source sustainability.
+By using our [official Railway template](https://railway.com/deploy/llm-council?referralCode=K9dsYj), a portion of your Railway spend supports LLM Council development.
 
 ## What's Next?
 
