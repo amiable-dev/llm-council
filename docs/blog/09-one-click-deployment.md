@@ -148,13 +148,16 @@ The council is now running at `http://localhost:8000`.
      -d '{"prompt": "What is the capital of France?"}'
    ```
 
-   A successful council response looks like:
+   A successful response returns the 3-stage deliberation results plus metadata:
    ```json
    {
-     "stage1": [...],
-     "stage2": [...],
+     "stage1": [{"model": "...", "content": "..."}],
+     "stage2": [{"model": "...", "evaluation": "...", "parsed_ranking": [...]}],
      "stage3": {"synthesis": "Paris is the capital of France..."},
-     "metadata": {"tier": "balanced", "models_used": 3}
+     "metadata": {
+       "aggregate_rankings": {"Response A": 1.5, "Response B": 2.0},
+       "config": {"council_size": 3, "verdict_type": "synthesis"}
+     }
    }
    ```
 
