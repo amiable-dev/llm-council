@@ -113,6 +113,7 @@ nav:
       - ADR-034 Agent Skills: adr/ADR-034-agent-skills-verification.md
       - ADR-035 DevSecOps: adr/ADR-035-devsecops-implementation.md
       - ADR-036 Output Quality: adr/ADR-036-output-quality-quantification.md
+      - ADR-037 n8n Integration: adr/ADR-037-n8n-workflow-integration.md
   - Blog:
     - Multi-Model Architecture: blog/01-multi-model-architecture.md
     - Fault-Tolerant Gateway: blog/02-fault-tolerant-gateway.md
