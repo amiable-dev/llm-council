@@ -821,7 +821,6 @@ The council unanimously agreed that the **Layered Architecture** (fork-compatibl
 |----------------|--------|
 | Garak/Promptfoo LLM red-teaming | No runtime API yet; implement with Council Cloud |
 | Socket.dev for typosquatting | pip-audit covers basic cases; Socket is Phase 5 |
-| Full SLSA Level 3 | Level 2 sufficient initially; Level 3 in Phase 5 |
 
 ---
 
@@ -854,14 +853,19 @@ The ADR was reviewed by the LLM Council using reasoning tier (openai/o1, google/
 | Recommendation | Reason |
 |----------------|--------|
 | Modelscan/Picklescan | LLM Council doesn't load external model weights |
-| SLSA/Sigstore provenance | Adds complexity, implement in Phase 5 |
 | Custom Semgrep rules for prompts | Create after establishing patterns |
+
+### Recommendations Implemented (Post-Review)
+
+| Recommendation | Implementation |
+|----------------|----------------|
+| SLSA/Sigstore provenance | Implemented as SLSA Level 3 in Phase 4 using `actions/attest-build-provenance` |
 
 ## References
 
 - [GitHub Security Features](https://docs.github.com/en/code-security)
 - [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/)
-- [OpenSSF Scorecard](https://securityscorecards.dev/)
+- [OpenSSF Scorecard](https://scorecard.dev/)
 - [CycloneDX Specification](https://cyclonedx.org/specification/overview/)
 - [Trivy Documentation](https://aquasecurity.github.io/trivy/)
 - [Semgrep Registry](https://semgrep.dev/r)
