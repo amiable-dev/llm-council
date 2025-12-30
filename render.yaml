@@ -1,0 +1,24 @@
+# Render Blueprint for LLM Council
+# Deploy: https://render.com/deploy?repo=https://github.com/amiable-dev/llm-council
+#
+# Note: Render Free tier spins down after 15 minutes of inactivity.
+# For n8n/webhook integration, use Railway or paid Render tier.
+
+services:
+  - type: web
+    name: llm-council
+    runtime: docker
+    dockerfilePath: deploy/railway/Dockerfile
+    envVars:
+      # Required: OpenRouter API key for outgoing LLM calls
+      - key: OPENROUTER_API_KEY
+        sync: false  # User must provide
+      # Required: API token for incoming request authentication (ADR-038)
+      - key: LLM_COUNCIL_API_TOKEN
+        sync: false  # User must provide
+      # Port configuration (Render provides this automatically)
+      - key: PORT
+        value: 8000
+    healthCheckPath: /health
+    # IMPORTANT: Disable auto-deploy to prevent cascading deploys
+    autoDeploy: false

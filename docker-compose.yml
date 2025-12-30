@@ -1,0 +1,38 @@
+# Docker Compose for Local LLM Council Development
+#
+# Usage:
+#   # Create .env file with your credentials
+#   echo "OPENROUTER_API_KEY=sk-or-v1-..." > .env
+#   echo "LLM_COUNCIL_API_TOKEN=my-secret-token" >> .env
+#
+#   # Start the server
+#   docker compose up --build
+#
+#   # Test the API (replace $TOKEN with your LLM_COUNCIL_API_TOKEN value)
+#   curl -X POST http://localhost:8000/v1/council/run \
+#     -H "Authorization: Bearer $TOKEN" \
+#     -H "Content-Type: application/json" \
+#     -d '{"prompt": "What is the best programming language?"}'
+
+version: '3.8'
+
+services:
+  llm-council:
+    build:
+      context: .
+      dockerfile: deploy/railway/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # API credentials (from .env or environment)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LLM_COUNCIL_API_TOKEN=${LLM_COUNCIL_API_TOKEN}
+      # Server configuration
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped

@@ -22,11 +22,63 @@ Or programmatically:
 import os
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Security
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from llm_council.council import run_full_council
+
+
+# Security scheme for Bearer token authentication (ADR-038)
+security = HTTPBearer(auto_error=False)
+
+
+def get_api_token() -> Optional[str]:
+    """Get the configured API token from environment.
+
+    Returns None if no token is configured, meaning auth is optional.
+    """
+    token = os.environ.get("LLM_COUNCIL_API_TOKEN")
+    # Treat empty string as not configured
+    return token if token else None
+
+
+async def verify_token(
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security),
+) -> None:
+    """Verify the Bearer token if LLM_COUNCIL_API_TOKEN is configured.
+
+    ADR-038 Security Requirement:
+    - If LLM_COUNCIL_API_TOKEN is set, all protected endpoints require auth
+    - If not set, auth is optional (backwards compatible)
+    - Health endpoint bypasses this check entirely
+
+    Raises:
+        HTTPException: 401 if token is required but missing/invalid
+    """
+    api_token = get_api_token()
+
+    # No token configured = auth not required (backwards compatible)
+    if api_token is None:
+        return
+
+    # Token configured = auth required
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API token. Provide Authorization: Bearer <token>",
+        )
+
+    if credentials.credentials != api_token:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API token. Provide Authorization: Bearer <token>",
+        )
+
+
+# Dependency for protected endpoints
+auth_dependency = Depends(verify_token)
 from llm_council.webhooks.sse import council_event_generator, get_sse_headers
 from llm_council.webhooks.types import WebhookConfig
 from llm_council.verdict import VerdictType
@@ -98,7 +150,12 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok", service="llm-council-local")
 
 
-@app.post("/v1/council/run", response_model=CouncilResponse, tags=["Council"])
+@app.post(
+    "/v1/council/run",
+    response_model=CouncilResponse,
+    tags=["Council"],
+    dependencies=[auth_dependency],
+)
 async def council_run(request: CouncilRequest) -> CouncilResponse:
     """Run the full council deliberation.
 
@@ -163,7 +220,7 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
             del os.environ["OPENROUTER_API_KEY"]
 
 
-@app.get("/v1/council/stream", tags=["Council"])
+@app.get("/v1/council/stream", tags=["Council"], dependencies=[auth_dependency])
 async def council_stream(
     prompt: str = Query(..., description="The question to deliberate"),
     models: Optional[str] = Query(

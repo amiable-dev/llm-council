@@ -22,6 +22,19 @@
   <em>A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.</em>
 </p>
 
+## Quick Deploy
+
+Deploy your own LLM Council instance in one click:
+
+| Platform | Deploy | Best For |
+|----------|--------|----------|
+| **Railway** | [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/llm-council?referralCode=amiable-dev) | Production, webhooks |
+| **Render** | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/amiable-dev/llm-council) | Evaluation, free tier |
+
+> **Note**: Railway is recommended for [n8n integration](https://llm-council.dev/integrations/n8n/) (no cold-start). Render Free tier spins down after 15 minutes which may cause webhook timeouts.
+
+For detailed deployment instructions, see the [Deployment Guide](https://llm-council.dev/deployment/).
+
 ## What is This?
 
 Instead of asking a single LLM for answers, this MCP server:

@@ -1,0 +1,100 @@
+# Validate Deployment Templates (ADR-038)
+#
+# Ensures Railway/Render/Docker Compose templates remain valid and functional.
+# Triggered on changes to deployment-related files.
+
+name: Validate Deploy Templates
+
+on:
+  push:
+    paths:
+      - 'deploy/**'
+      - 'render.yaml'
+      - 'docker-compose.yml'
+      - '.github/workflows/validate-templates.yml'
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'render.yaml'
+      - 'docker-compose.yml'
+
+jobs:
+  validate-configs:
+    name: Validate Configuration Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate railway.json
+        run: |
+          echo "Validating railway.json..."
+          jq . deploy/railway/railway.json
+          echo "railway.json is valid JSON"
+
+      - name: Validate render.yaml
+        run: |
+          echo "Validating render.yaml..."
+          python3 -c "import yaml; yaml.safe_load(open('render.yaml'))"
+          echo "render.yaml is valid YAML"
+
+      - name: Validate docker-compose.yml
+        run: |
+          echo "Validating docker-compose.yml..."
+          docker compose config --quiet
+          echo "docker-compose.yml is valid"
+
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/railway/Dockerfile
+          push: false
+          tags: llm-council-test:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test-container:
+    name: Test Container Health
+    runs-on: ubuntu-latest
+    needs: build-docker
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -f deploy/railway/Dockerfile -t llm-council-test .
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name llm-council-test \
+            -p 8000:8000 \
+            -e PORT=8000 \
+            llm-council-test
+
+      - name: Wait for startup
+        run: sleep 15
+
+      - name: Test health endpoint
+        run: |
+          curl -f http://localhost:8000/health
+          echo "Health check passed"
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker logs llm-council-test
+
+      - name: Cleanup
+        if: always()
+        run: docker stop llm-council-test || true
