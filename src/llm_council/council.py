@@ -117,6 +117,7 @@ from llm_council.verdict import (
     calculate_borda_spread,
 )
 from llm_council.dissent import extract_dissent_from_stage2
+from llm_council.voting import VotingAuthority, get_vote_weight
 
 
 # =============================================================================
@@ -1583,7 +1584,6 @@ def calculate_aggregate_rankings(
         List of dicts with model name, normalized Borda score [0,1], sorted best to worst
     """
     from collections import defaultdict
-    from .voting import VotingAuthority, get_vote_weight
 
     num_candidates = len(label_to_model)
 
