@@ -57,7 +57,7 @@
 
 .hero .hero-buttons a:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .hero .hero-buttons .primary {
@@ -104,28 +104,4 @@
 /* Navigation */
 .md-nav__link {
   font-size: 0.75rem;
-}
-
-/* Badges section */
-.badges {
-  text-align: center;
-  margin: 1.5rem 0 2rem;
-  padding: 0 1rem;
-}
-
-.badges p {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.badges a {
-  display: inline-block;
-}
-
-.badges img {
-  height: 20px;
-  vertical-align: middle;
 }

@@ -8,16 +8,6 @@
   </div>
 </div>
 
-<div class="badges" markdown>
-[![CI](https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml/badge.svg)](https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml)
-[![Security](https://github.com/amiable-dev/llm-council/actions/workflows/security.yml/badge.svg)](https://github.com/amiable-dev/llm-council/actions/workflows/security.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/amiable-dev/llm-council/badge)](https://scorecard.dev/viewer/?uri=github.com/amiable-dev/llm-council)
-[![PyPI](https://img.shields.io/pypi/v/llm-council-core.svg)](https://pypi.org/project/llm-council-core/)
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Roadmap](https://img.shields.io/badge/roadmap-project%20board-blue?logo=github)](https://github.com/users/amiable-dev/projects/1)
-</div>
-
 ## What is LLM Council?
 
 Instead of asking a single LLM for answers, LLM Council:
