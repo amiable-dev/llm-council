@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2025-12-30
+
 ### Added
+
+- **One-Click Deployment (ADR-038)**: Deploy LLM Council to cloud platforms in minutes
+  - Railway template with deploy button and marketplace listing
+  - Render blueprint with free tier support
+  - Docker Compose for local development
+  - `deploy/railway/Dockerfile` optimized for cloud deployment
+  - `railway.json` configuration for Railway platform
+  - `render.yaml` blueprint for Render platform
+  - `docker-compose.yml` for local development
+  - `.github/workflows/validate-templates.yml` CI for template validation
+  - Comprehensive deployment documentation (`docs/deployment/`)
+  - Blog post: "From Clone to Cloud in 60 Seconds"
+
+- **API Token Authentication**: Secure HTTP API endpoints
+  - `LLM_COUNCIL_API_TOKEN` environment variable for Bearer token auth
+  - Protected endpoints require `Authorization: Bearer <token>` header
+  - `/health` endpoint remains public for load balancer checks
+  - Backwards compatible: auth optional when token not configured
+
+- **n8n Workflow Integration**: Connect LLM Council to workflow automation
+  - Blog post with code review, support triage, and design decision examples
+  - HTTP Request node configuration guide
+  - Webhook security with HMAC verification
+  - Authentication best practices
 
 - **ADR-035 DevSecOps Implementation**: Complete 5-layer security pipeline
   - `.github/dependabot.yml`: Automated dependency updates (pip + GitHub Actions)
@@ -21,12 +47,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automated scanning section added to SECURITY.md
   - TDD test suites for security configurations
 
+- **Supply Chain Security**: SLSA Level 3 provenance and OpenSSF Scorecard
+  - SLSA provenance attestations for releases (#234)
+  - OpenSSF Scorecard workflow for security visibility (#233)
+
+- **Documentation Site**: Custom domain and branding
+  - `llm-council.dev` custom domain
+  - Brand typography and styling
+  - Improved navigation with ADRs and blog
+
 ### Changed
 
 - **Security Visibility**: Updated SECURITY.md with automated scanning documentation
   - Documents 5-layer security architecture
   - Pre-commit installation instructions
   - Links to ADR-035 for architecture details
+
+### Fixed
+
+- **Railway Deployment**: Fixed `$PORT` variable expansion (#253)
+  - Wrapped start command in `sh -c` for proper shell expansion
+- **Render Blueprint**: Set `plan: free` to use free tier by default
+- **SBOM/Snyk Workflows**: Fixed Layer 3 workflow failures (#230)
 
 ## [0.19.2] - 2025-12-28
 
