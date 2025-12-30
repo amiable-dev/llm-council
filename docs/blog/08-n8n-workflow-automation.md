@@ -61,15 +61,23 @@ n8n calls LLM Council via HTTP Request node:
 
 LLM Council is open source and self-hosted. You'll need:
 
-1. **Deploy the council server** (Docker or direct):
+1. **Deploy the council server** (one-click or manual):
+
+   **Option A: One-click deploy** (recommended):
+
+   [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github)
+
+   **Option B: Local/manual:**
    ```bash
    pip install "llm-council-core[http]"
    export OPENROUTER_API_KEY="sk-or-v1-..."
+   export LLM_COUNCIL_API_TOKEN=$(openssl rand -hex 16)
    llm-council serve --host 0.0.0.0 --port 8000
    ```
 
 2. **Configure n8n environment variables**:
-   - `LLM_COUNCIL_URL`: Your council server URL (e.g., `http://council:8000`)
+   - `LLM_COUNCIL_URL`: Your council server URL (e.g., `https://your-app.railway.app`)
+   - `LLM_COUNCIL_TOKEN`: Your API token for authentication
 
 ### Basic Workflow Pattern
 
@@ -79,6 +87,7 @@ LLM Council is open source and self-hosted. You'll need:
   "method": "POST",
   "url": "{{ $env.LLM_COUNCIL_URL }}/v1/council/run",
   "headers": {
+    "Authorization": "Bearer {{ $env.LLM_COUNCIL_TOKEN }}",
     "Content-Type": "application/json"
   },
   "body": {
@@ -90,6 +99,9 @@ LLM Council is open source and self-hosted. You'll need:
   }
 }
 ```
+
+!!! warning "Authentication Required"
+    All council endpoints (except `/health`) require Bearer token authentication. Store your token in n8n credentials or environment variables—never hardcode it in workflows.
 
 **Note on timeouts**: Council deliberation involves multiple LLM calls. Set the HTTP Request node timeout to at least 60-120 seconds to avoid premature failures.
 
@@ -286,10 +298,17 @@ Fallback options:
 
 ## Getting Started
 
-1. **Start the council server:**
+1. **Deploy the council server:**
+
+   **Option A: One-click deploy** (recommended for production):
+
+   [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/github)
+
+   **Option B: Local development:**
    ```bash
    pip install "llm-council-core[http]"
    export OPENROUTER_API_KEY="sk-or-v1-..."
+   export LLM_COUNCIL_API_TOKEN=$(openssl rand -hex 16)
    llm-council serve --port 8000
    ```
 
@@ -298,8 +317,9 @@ Fallback options:
    - [Support Triage Workflow](../examples/n8n/support-triage-workflow.json)
    - [Design Decision Workflow](../examples/n8n/design-decision-workflow.json)
 
-3. **Configure environment:**
-   - Set `LLM_COUNCIL_URL` in n8n
+3. **Configure n8n environment:**
+   - Set `LLM_COUNCIL_URL` (e.g., `https://your-app.railway.app`)
+   - Set `LLM_COUNCIL_TOKEN` for API authentication
    - Set `WEBHOOK_SECRET` for secure callbacks
 
 4. **Test and iterate:**
@@ -315,8 +335,13 @@ The council pattern works anywhere you'd use an LLM for decision-making. Beyond 
 
 The key insight: automation doesn't have to be dumb. With a council of models deliberating, your workflows can make nuanced decisions—and you get transparency into *why* each decision was made.
 
+**Related guides:**
+- [One-Click Deployment](09-one-click-deployment.md) - Deploy to Railway or Render in 60 seconds
+- [Deployment Guide](../deployment/index.md) - Platform-specific deployment instructions
+- [HTTP API Reference](../guides/http-api.md) - Full API documentation
+
 ---
 
-*This is post 8 of the LLM Council series. Previous: [Shadow Mode & Auditions](07-shadow-mode-auditions.md)*
+*This is post 8 of the LLM Council series. Previous: [Shadow Mode & Auditions](07-shadow-mode-auditions.md). Next: [One-Click Deployment](09-one-click-deployment.md)*
 
 LLM Council is open source: [github.com/amiable-dev/llm-council](https://github.com/amiable-dev/llm-council)
