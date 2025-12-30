@@ -5,7 +5,7 @@
     "dockerfilePath": "deploy/railway/Dockerfile"
   },
   "deploy": {
-    "startCommand": "llm-council serve --host 0.0.0.0 --port $PORT",
+    "startCommand": "sh -c 'llm-council serve --host 0.0.0.0 --port $PORT'",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30,
     "restartPolicyType": "ON_FAILURE",
