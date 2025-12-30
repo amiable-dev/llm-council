@@ -9,12 +9,14 @@ on:
   push:
     paths:
       - 'deploy/**'
+      - 'railway.json'
       - 'render.yaml'
       - 'docker-compose.yml'
       - '.github/workflows/validate-templates.yml'
   pull_request:
     paths:
       - 'deploy/**'
+      - 'railway.json'
       - 'render.yaml'
       - 'docker-compose.yml'
 
@@ -29,7 +31,7 @@ jobs:
       - name: Validate railway.json
         run: |
           echo "Validating railway.json..."
-          jq . deploy/railway/railway.json
+          jq . railway.json
           echo "railway.json is valid JSON"
 
       - name: Validate render.yaml
