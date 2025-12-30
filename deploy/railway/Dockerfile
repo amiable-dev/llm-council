@@ -17,6 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
+# Version for setuptools-scm (hatch-vcs requires git metadata, which isn't available in Docker)
+# This can be overridden at build time: docker build --build-arg VERSION=0.19.0 ...
+ARG VERSION=0.0.0.dev0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
+
 # Install with HTTP support
 RUN pip install --no-cache-dir ".[http]"
 
