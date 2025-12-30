@@ -582,8 +582,12 @@ Total: 28 passed
 
 ## References
 
+### Related ADRs
 - [ADR-009: HTTP API Open Core Boundary](ADR-009-http-api-open-core-boundary.md)
 - [ADR-025: Future Integration Capabilities](ADR-025-future-integration-capabilities.md)
+- [ADR-038: One-Click Deployment Strategy](ADR-038-one-click-deployment-strategy.md) - Enables easy deployment for n8n integration
+
+### External Resources
 - [n8n HTTP Request Node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/)
 - [n8n Community Templates](https://n8n.io/workflows/)
 - [n8n LLM Agents Guide](https://blog.n8n.io/llm-agents/)

@@ -114,6 +114,7 @@ nav:
       - ADR-035 DevSecOps: adr/ADR-035-devsecops-implementation.md
       - ADR-036 Output Quality: adr/ADR-036-output-quality-quantification.md
       - ADR-037 n8n Integration: adr/ADR-037-n8n-workflow-integration.md
+      - ADR-038 One-Click Deployment: adr/ADR-038-one-click-deployment-strategy.md
   - Blog:
     - Multi-Model Architecture: blog/01-multi-model-architecture.md
     - Fault-Tolerant Gateway: blog/02-fault-tolerant-gateway.md
