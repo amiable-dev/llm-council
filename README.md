@@ -15,6 +15,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <a href="https://llm-council.dev"><img src="https://img.shields.io/badge/docs-llm--council.dev-blue" alt="Documentation"></a>
   <a href="https://discord.gg/y467DGHF"><img src="https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://github.com/users/amiable-dev/projects/1"><img src="https://img.shields.io/badge/roadmap-project%20board-blue?logo=github" alt="Roadmap"></a>
 </p>
 
 <p align="center">
