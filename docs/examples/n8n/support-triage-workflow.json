@@ -1,0 +1,245 @@
+{
+  "name": "LLM Council - Support Ticket Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "support-triage-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_COUNCIL_URL }}/v1/council/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"You are a support ticket triage specialist. Determine if this ticket requires URGENT escalation.\\n\\nCriteria for URGENT (approve):\\n- Production system down\\n- Data loss or corruption\\n- Security incident\\n- Multiple users affected\\n- Revenue impact\\n\\nCriteria for STANDARD (reject):\\n- Feature requests\\n- Questions/how-to\\n- Minor bugs\\n- Single user issues\\n- Non-critical enhancement\\n\\nTicket Subject: {{ $json.subject }}\\nTicket Body: {{ $json.body }}\\nCustomer Tier: {{ $json.customer_tier || 'standard' }}\\n\\nRespond with approved (URGENT) or rejected (STANDARD).\",\n  \"verdict_type\": \"binary\"\n}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "id": "council-request",
+      "name": "LLM Council Triage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-urgent",
+              "leftValue": "={{ $json.stage3.verdict }}",
+              "rightValue": "approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-verdict",
+      "name": "Is Urgent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "urgent-result",
+              "name": "priority",
+              "value": "urgent",
+              "type": "string"
+            },
+            {
+              "id": "confidence",
+              "name": "confidence",
+              "value": "={{ $json.stage3.confidence }}",
+              "type": "number"
+            },
+            {
+              "id": "rationale",
+              "name": "rationale",
+              "value": "={{ $json.stage3.rationale }}",
+              "type": "string"
+            },
+            {
+              "id": "queue",
+              "name": "route_to",
+              "value": "urgent-support-queue",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-urgent",
+      "name": "Set Urgent Priority",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "standard-result",
+              "name": "priority",
+              "value": "standard",
+              "type": "string"
+            },
+            {
+              "id": "confidence",
+              "name": "confidence",
+              "value": "={{ $json.stage3.confidence }}",
+              "type": "number"
+            },
+            {
+              "id": "rationale",
+              "name": "rationale",
+              "value": "={{ $json.stage3.rationale }}",
+              "type": "string"
+            },
+            {
+              "id": "queue",
+              "name": "route_to",
+              "value": "standard-support-queue",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-standard",
+      "name": "Set Standard Priority",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"priority\": \"{{ $json.priority }}\",\n  \"confidence\": {{ $json.confidence }},\n  \"rationale\": \"{{ $json.rationale }}\",\n  \"route_to\": \"{{ $json.route_to }}\"\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "LLM Council Triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Council Triage": {
+      "main": [
+        [
+          {
+            "node": "Is Urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Urgent?": {
+      "main": [
+        [
+          {
+            "node": "Set Urgent Priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Standard Priority",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Urgent Priority": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Standard Priority": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "llm-council-example"
+  },
+  "tags": [
+    {
+      "name": "llm-council",
+      "id": "1"
+    },
+    {
+      "name": "support-triage",
+      "id": "3"
+    }
+  ]
+}

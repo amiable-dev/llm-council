@@ -1,0 +1,153 @@
+{
+  "name": "LLM Council - Technical Design Decision",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "design-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "design-review-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_COUNCIL_URL }}/v1/council/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"You are a council of senior software architects. Evaluate this technical design proposal.\\n\\n## Design Document\\n{{ $json.design_doc }}\\n\\n## Context\\nTeam Size: {{ $json.team_size || 'Not specified' }}\\nTimeline: {{ $json.timeline || 'Not specified' }}\\nBudget Constraints: {{ $json.budget || 'Not specified' }}\\n\\n## Evaluation Criteria\\n\\n1. **Scalability**: Will this design handle 10x growth?\\n2. **Maintainability**: Can a new engineer understand and modify this in 6 months?\\n3. **Security**: Are there obvious security concerns?\\n4. **Cost**: Is this cost-effective for the scale?\\n5. **Complexity**: Is this the simplest solution that works?\\n\\nProvide:\\n- Overall recommendation (proceed/revise/reject)\\n- Specific concerns with severity (critical/major/minor)\\n- Suggested improvements\\n- Alternative approaches to consider\",\n  \"verdict_type\": \"synthesis\",\n  \"include_dissent\": true\n}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "council-request",
+      "name": "LLM Council Design Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "synthesis",
+              "name": "council_decision",
+              "value": "={{ $json.stage3.synthesis }}",
+              "type": "string"
+            },
+            {
+              "id": "dissent",
+              "name": "dissenting_opinions",
+              "value": "={{ $json.stage3.dissent ? JSON.stringify($json.stage3.dissent) : '[]' }}",
+              "type": "string"
+            },
+            {
+              "id": "rankings",
+              "name": "model_agreement",
+              "value": "={{ JSON.stringify($json.metadata.aggregate_rankings) }}",
+              "type": "string"
+            },
+            {
+              "id": "stage1-count",
+              "name": "models_consulted",
+              "value": "={{ $json.stage1.length }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-result",
+      "name": "Extract Design Review",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"council_decision\": \"{{ $json.council_decision }}\",\n  \"dissenting_opinions\": {{ $json.dissenting_opinions }},\n  \"model_agreement\": {{ $json.model_agreement }},\n  \"models_consulted\": {{ $json.models_consulted }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "LLM Council Design Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Council Design Review": {
+      "main": [
+        [
+          {
+            "node": "Extract Design Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Design Review": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "llm-council-example"
+  },
+  "tags": [
+    {
+      "name": "llm-council",
+      "id": "1"
+    },
+    {
+      "name": "architecture",
+      "id": "4"
+    },
+    {
+      "name": "design-review",
+      "id": "5"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "name": "LLM Council - Code Review",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "code-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "code-review-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.LLM_COUNCIL_URL }}/v1/council/run",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"You are a code review expert. Review this code change for:\\n1. Security vulnerabilities (injection, XSS, etc.)\\n2. Performance issues\\n3. Code style and best practices\\n4. Potential bugs\\n\\nCode to review:\\n{{ $json.code }}\\n\\nProvide specific, actionable feedback.\",\n  \"verdict_type\": \"synthesis\"\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "council-request",
+      "name": "LLM Council Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "review-result",
+              "name": "review",
+              "value": "={{ $json.stage3.synthesis }}",
+              "type": "string"
+            },
+            {
+              "id": "rankings",
+              "name": "model_rankings",
+              "value": "={{ JSON.stringify($json.metadata.aggregate_rankings) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-result",
+      "name": "Extract Review Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"review\": \"{{ $json.review }}\",\n  \"model_rankings\": {{ $json.model_rankings }}\n}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "LLM Council Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Council Request": {
+      "main": [
+        [
+          {
+            "node": "Extract Review Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Review Result": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "llm-council-example"
+  },
+  "tags": [
+    {
+      "name": "llm-council",
+      "id": "1"
+    },
+    {
+      "name": "code-review",
+      "id": "2"
+    }
+  ]
+}
