@@ -162,13 +162,13 @@ class TestRailwayTemplate:
         assert RAILWAY_DIR.is_dir()
 
     def test_railway_json_exists(self):
-        """deploy/railway/railway.json should exist."""
-        railway_json = RAILWAY_DIR / "railway.json"
+        """railway.json should exist at project root (required by Railway)."""
+        railway_json = PROJECT_ROOT / "railway.json"
         assert railway_json.exists(), f"Expected file: {railway_json}"
 
     def test_railway_json_valid(self):
         """railway.json should be valid JSON."""
-        railway_json = RAILWAY_DIR / "railway.json"
+        railway_json = PROJECT_ROOT / "railway.json"
         if not railway_json.exists():
             pytest.skip("railway.json not yet created")
 
@@ -181,7 +181,7 @@ class TestRailwayTemplate:
 
     def test_railway_json_has_required_fields(self):
         """railway.json should have build and deploy sections."""
-        railway_json = RAILWAY_DIR / "railway.json"
+        railway_json = PROJECT_ROOT / "railway.json"
         if not railway_json.exists():
             pytest.skip("railway.json not yet created")
 
