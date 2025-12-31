@@ -1,0 +1,50 @@
+{
+  "$schema": "https://agentskills.io/schemas/marketplace.json",
+  "name": "llm-council-skills",
+  "version": "2.0.0",
+  "description": "Multi-model verification and code review skills using LLM Council deliberation",
+  "author": "amiable-dev",
+  "repository": "https://github.com/amiable-dev/llm-council",
+  "license": "Apache-2.0",
+  "skills": [
+    {
+      "name": "council-verify",
+      "path": "./council-verify/SKILL.md",
+      "description": "Verify code, documents, or implementation against requirements using multi-model consensus",
+      "category": "verification",
+      "tags": ["verify", "validate", "review", "consensus", "multi-model"]
+    },
+    {
+      "name": "council-review",
+      "path": "./council-review/SKILL.md",
+      "description": "Multi-model code review with structured feedback and rubric scoring",
+      "category": "code-review",
+      "tags": ["code-review", "PR", "pull-request", "quality", "feedback"]
+    },
+    {
+      "name": "council-gate",
+      "path": "./council-gate/SKILL.md",
+      "description": "CI/CD quality gate using LLM Council multi-model consensus",
+      "category": "ci-cd",
+      "tags": ["gate", "CI", "CD", "pipeline", "automation", "GitHub-Actions"]
+    }
+  ],
+  "compatibility": {
+    "llm-council": ">=2.0.0",
+    "mcp": ">=1.0.0"
+  },
+  "platforms": [
+    "claude-code",
+    "github-copilot",
+    "vs-code",
+    "cursor",
+    "codex-cli",
+    "windsurf",
+    "cline"
+  ],
+  "links": {
+    "documentation": "https://llm-council.dev/docs/skills",
+    "issues": "https://github.com/amiable-dev/llm-council/issues",
+    "changelog": "https://github.com/amiable-dev/llm-council/blob/master/CHANGELOG.md"
+  }
+}
