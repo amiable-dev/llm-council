@@ -1083,6 +1083,34 @@ supports = provider.supports_reasoning("openai/o1")  # True
 models = provider.list_available_models()  # 31 models
 ```
 
+### Agent Skills (ADR-034)
+
+LLM Council includes agent skills for AI-assisted code verification, review, and CI/CD quality gates. Skills use progressive disclosure to minimize token usage while providing detailed scoring rubrics when needed.
+
+**Available Skills:**
+
+| Skill | Category | Use Case |
+|-------|----------|----------|
+| `council-verify` | verification | General work verification with multi-dimensional scoring |
+| `council-review` | code-review | PR reviews with security, performance, and testing focus |
+| `council-gate` | ci-cd | Quality gates for pipelines with exit codes (0=PASS, 1=FAIL, 2=UNCLEAR) |
+
+**Exit Codes for CI/CD:**
+
+```bash
+# In GitHub Actions or any CI pipeline
+llm-council gate --snapshot $GITHUB_SHA --rubric-focus Security
+
+# Exit codes:
+# 0 = PASS (confidence >= threshold, no blocking issues)
+# 1 = FAIL (blocking issues present)
+# 2 = UNCLEAR (needs human review)
+```
+
+**Skills are located in `.github/skills/`** and work with Claude Code, VS Code Copilot, Cursor, and other MCP-compatible clients.
+
+For detailed documentation, see the [Skills Guide](https://llm-council.dev/guides/skills/).
+
 ### All Environment Variables
 
 #### Gateway Configuration (ADR-023)
