@@ -26,7 +26,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system -e ".[dev]"
+          uv pip install --system -e ".[dev,http,mcp]"
 
       - name: Run tests
         run: |
@@ -70,7 +70,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install mypy
-          pip install -e .
+          pip install -e ".[http,mcp]"
 
       - name: Run type checker
         run: mypy src/llm_council --ignore-missing-imports || echo "Type checking warnings (non-blocking)"

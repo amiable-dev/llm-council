@@ -5,8 +5,6 @@ Provides types, context isolation, transcript persistence, and API
 for structured work verification using LLM Council deliberation.
 """
 
-from llm_council.verification.api import router as verification_router
-from llm_council.verification.api import run_verification
 from llm_council.verification.context import (
     ContextIsolationError,
     InvalidSnapshotError,
@@ -62,7 +60,17 @@ __all__ = [
     "TranscriptError",
     "TranscriptNotFoundError",
     "TranscriptIntegrityError",
-    # API (ADR-034 A4)
-    "verification_router",
-    "run_verification",
 ]
+
+# API exports (ADR-034 A4) - requires fastapi optional dependency
+# Import conditionally to avoid breaking when fastapi is not installed
+try:
+    from llm_council.verification.api import router as verification_router
+    from llm_council.verification.api import run_verification
+
+    __all__.extend(["verification_router", "run_verification"])
+except ImportError:
+    # FastAPI not installed - API not available
+    # Users should install with: pip install llm-council-core[http]
+    verification_router = None  # type: ignore
+    run_verification = None  # type: ignore
