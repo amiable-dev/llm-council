@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2025-12-31
+
+### Added
+
+- **Agent Skills (ADR-034)**: AI-assisted verification, code review, and CI/CD quality gates
+  - `council-verify`: General work verification with multi-dimensional scoring
+  - `council-review`: Code review with 35% accuracy weight, security/performance/testing focus
+  - `council-gate`: CI/CD quality gates with structured exit codes (0=PASS, 1=FAIL, 2=UNCLEAR)
+  - Progressive disclosure for token efficiency (Level 1: ~200 tokens, Level 2: ~1000 tokens)
+  - Cross-platform compatibility (Claude Code, VS Code Copilot, Cursor, Codex CLI)
+  - Skills located at `.github/skills/` for cross-platform discovery
+
+- **Skill Loader**: Python API for progressive skill loading
+  - `SkillLoader` class with metadata caching
+  - `load_metadata()`: Level 1 - YAML frontmatter only
+  - `load_full()`: Level 2 - Complete SKILL.md content
+  - `load_resource()`: Level 3 - On-demand resource loading
+  - `list_skills()` and `list_resources()` discovery methods
+
+- **Rubric Scoring**: ADR-016 multi-dimensional evaluation
+  - 5 dimensions: Accuracy, Completeness, Clarity, Conciseness, Relevance
+  - Configurable weights (council-review uses 35% accuracy vs 30% default)
+  - Accuracy ceiling rule: prevents eloquent incorrect answers from ranking highly
+
+- **Code Review Rubrics**: Specialized scoring for PR reviews
+  - Security focus: SQL injection, XSS, secrets, authentication
+  - Performance focus: Algorithm complexity, N+1 queries, memory leaks
+  - Testing focus: Coverage gaps, flaky tests, mocking issues
+  - Blocking issues by severity: Critical (auto-FAIL), Major, Minor
+
+- **CI/CD Rubrics**: Pipeline integration patterns
+  - GitHub Actions, GitLab CI, Azure DevOps examples
+  - Exit code documentation (0/1/2 mapping)
+  - Security, Performance, Compliance focus areas
+  - Confidence threshold configuration
+
+- **Documentation**: Comprehensive guides for agent skills
+  - User guide: `docs/guides/skills.md`
+  - Developer guide: `docs/guides/creating-skills.md`
+  - README section with quick reference table
+  - ADR-034 implementation status update
+
+- **Blog Posts**: Three posts documenting the release
+  - "Introducing Agent Skills" - Feature announcement
+  - "Defense-in-Depth Security" - 8-layer security architecture
+  - "CI/CD Quality Gates" - Pipeline integration guide
+
+- **Social Media Announcements**: Launch content prepared
+  - Twitter/X threads (feature + technical deep dive)
+  - Hacker News "Show HN" post
+  - Reddit posts (r/LocalLLaMA, r/MachineLearning)
+  - LinkedIn and Discord/Slack announcements
+
+### Changed
+
+- **mkdocs.yml**: Added navigation for skills guides and blog posts
+- **README.md**: Added Agent Skills section with installation and usage
+
 ## [0.20.0] - 2025-12-30
 
 ### Added
