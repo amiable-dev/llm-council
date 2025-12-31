@@ -24,7 +24,11 @@ from llm_council.council import (
 from llm_council.verdict import VerdictType
 from llm_council.verification.api import run_verification, VerifyRequest
 from llm_council.verification.context import InvalidSnapshotError
-from llm_council.verification.transcript import create_transcript_store
+from llm_council.verification.transcript import (
+    create_transcript_store,
+    TranscriptNotFoundError,
+    TranscriptIntegrityError,
+)
 
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config, get_api_key
@@ -417,6 +421,88 @@ async def verify(
                 "exit_code": 2,  # UNCLEAR for unexpected errors
                 "verdict": "unclear",
                 "confidence": 0.0,
+            },
+            indent=2,
+        )
+
+
+@mcp.tool()
+async def audit(
+    verification_id: Optional[str] = None,
+    validate_integrity: bool = False,
+    expected_hash: Optional[str] = None,
+    ctx: Optional[Context] = None,
+) -> str:
+    """
+    Retrieve and validate verification audit transcripts (ADR-034).
+
+    Provides access to verification audit trails for compliance, debugging,
+    and integrity validation. Can retrieve a single verification by ID or
+    list all verifications.
+
+    Args:
+        verification_id: Optional ID to retrieve specific verification.
+            If not provided, lists all available verifications.
+        validate_integrity: If True, validates transcript integrity against
+            expected_hash.
+        expected_hash: Expected SHA256 hash for integrity validation.
+            Required when validate_integrity is True.
+        ctx: MCP context (injected automatically).
+
+    Returns:
+        JSON string containing:
+        - For single verification: stages, integrity_hash, optional validation result
+        - For listing: verifications array with metadata, total_count
+    """
+    try:
+        store = create_transcript_store(readonly=True)
+
+        # If no verification_id, list all verifications
+        if verification_id is None:
+            verifications = store.list_verifications()
+            return json.dumps(
+                {
+                    "verifications": verifications,
+                    "total_count": len(verifications),
+                },
+                indent=2,
+            )
+
+        # Retrieve specific verification
+        stages = store.read_all_stages(verification_id)
+        integrity_hash = store.compute_integrity_hash(verification_id)
+
+        result: dict = {
+            "verification_id": verification_id,
+            "stages": stages,
+            "integrity_hash": integrity_hash,
+        }
+
+        # Validate integrity if requested
+        if validate_integrity and expected_hash:
+            try:
+                store.validate_integrity(verification_id, expected_hash)
+                result["integrity_valid"] = True
+            except TranscriptIntegrityError as e:
+                result["integrity_valid"] = False
+                result["integrity_error"] = str(e)
+
+        return json.dumps(result, indent=2)
+
+    except TranscriptNotFoundError as e:
+        return json.dumps(
+            {
+                "error": f"Verification not found: {e}",
+                "verification_id": verification_id,
+            },
+            indent=2,
+        )
+
+    except Exception as e:
+        return json.dumps(
+            {
+                "error": f"Unexpected error: {e}",
+                "verification_id": verification_id,
             },
             indent=2,
         )
