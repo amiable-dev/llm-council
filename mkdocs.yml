@@ -80,6 +80,8 @@ nav:
     - MCP Server: guides/mcp.md
     - HTTP API: guides/http-api.md
     - Python Library: guides/python.md
+    - Agent Skills: guides/skills.md
+    - Creating Skills: guides/creating-skills.md
   - Integrations:
     - Overview: integrations/index.md
     - n8n: integrations/n8n.md

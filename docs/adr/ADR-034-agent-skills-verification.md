@@ -881,7 +881,81 @@ All verification deliberations saved for audit:
 
 ---
 
+## Implementation Status
+
+**Updated**: 2025-12-31
+
+### Track A: Verification API + MCP Foundation ✅
+
+| Component | Status | PR |
+|-----------|--------|-----|
+| `VerificationRequest` / `VerificationResult` schemas | ✅ Complete | #279 |
+| Context isolation layer | ✅ Complete | #279 |
+| Transcript persistence | ✅ Complete | #279 |
+| Exit codes (0=PASS, 1=FAIL, 2=UNCLEAR) | ✅ Complete | #279 |
+| MCP server: `mcp://llm-council/verify` | ✅ Complete | #279 |
+| MCP server: `mcp://llm-council/audit` | ✅ Complete | #279 |
+
+### Track B: Agent Skills ✅
+
+| Component | Status | PR |
+|-----------|--------|-----|
+| SKILL.md standard compliance (B1) | ✅ Complete | Pre-existing |
+| Progressive disclosure loader (B2) | ✅ Complete | #283 |
+| `council-verify` skill (B3) | ✅ Complete | #283 |
+| `council-review` skill (B4) | ✅ Complete | #285 |
+| `council-gate` skill (B5) | ✅ Complete | #287 |
+
+### Skills Location
+
+Skills are deployed at `.github/skills/` for cross-platform compatibility:
+
+```
+.github/skills/
+├── council-verify/
+│   ├── SKILL.md
+│   └── references/rubrics.md
+├── council-review/
+│   ├── SKILL.md
+│   └── references/code-review-rubric.md
+└── council-gate/
+    ├── SKILL.md
+    └── references/ci-cd-rubric.md
+```
+
+**Supported Platforms**:
+- Claude Code
+- VS Code Copilot
+- Cursor
+- Codex CLI
+- Other MCP-compatible clients
+
+### Test Coverage
+
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| Unit tests (loader) | 26 | Progressive disclosure |
+| Integration tests (council-verify) | 26 | Skill discovery, rubrics |
+| Integration tests (council-review) | 34 | Code review rubrics |
+| Integration tests (council-gate) | 41 | CI/CD, exit codes |
+| **Total** | **127** | Track B complete |
+
+### Documentation
+
+| Document | Status | Location |
+|----------|--------|----------|
+| README Skills section | ✅ Complete | README.md |
+| Skills User Guide | ✅ Complete | docs/guides/skills.md |
+| Creating Skills Guide | ✅ Complete | docs/guides/creating-skills.md |
+| ADR-034 Implementation Status | ✅ Complete | This section |
+
+---
+
 ## Changelog
+
+### v2.1 (2025-12-31)
+- **Implementation**: Added Implementation Status section documenting Track A and Track B completion
+- **Documentation**: Added skills guide and developer documentation
 
 ### v2.0 (2025-12-31)
 - **Context**: Updated to reflect Agent Skills as open standard (Dec 18, 2025)
