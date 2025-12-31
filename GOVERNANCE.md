@@ -48,19 +48,15 @@ All contributors are listed in the commit history and release notes.
 
 ### Architecture Decision Records (ADRs)
 
-Significant technical decisions are documented as ADRs in `docs/adr/`. ADRs:
+Significant technical decisions are documented as ADRs in `docs/adr/`. We follow the Michael Nygard format.
 
-- Capture the context and rationale for decisions
-- Provide a record of architectural choices
-- Enable future contributors to understand "why"
+For detailed instructions on formats, templates, and the decision lifecycle (including deprecation), please refer to the **[ADR Process Guide](docs/architecture/adrs.md)**.
 
-**ADR Process:**
+**Summary of Process:**
 
-1. **Proposal**: Create draft ADR with proposed changes
-2. **Discussion**: Open PR for community feedback
-3. **Review**: Maintainers review and refine
-4. **Approval**: Maintainers approve via PR merge
-5. **Implementation**: Referenced in implementation PRs
+1. **Draft**: Create an ADR using the [template](docs/adr/ADR-000-template.md).
+2. **Propose**: Open a PR for discussion.
+3. **Decide**: Maintainers review and merge (Status: Accepted).
 
 ### Consensus-Based Decisions
 

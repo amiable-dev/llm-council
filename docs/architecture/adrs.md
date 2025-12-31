@@ -23,19 +23,39 @@ This project uses Architecture Decision Records (ADRs) to document significant t
 
 ## ADR Format
 
-Each ADR follows this structure:
+Each ADR follows the [Michael Nygard format](https://github.com/joelparkerhenderson/architecture-decision-record?tab=readme-ov-file#parameter-michael-nygard) as defined in the template `docs/adr/ADR-000-template.md`:
 
-1. **Title** - Short descriptive title
-2. **Status** - Draft, Proposed, Accepted, Implemented, Deprecated
-3. **Context** - What problem are we solving?
-4. **Decision** - What did we decide?
-5. **Consequences** - What are the trade-offs?
+1.  **Title**: Short descriptive title.
+2.  **Status**: The lifecycle state of the decision.
+3.  **Context**: The problem and forces at play.
+4.  **Decision**: The agreed-upon solution.
+5.  **Consequences**: The trade-offs and outcomes (positive/negative).
+
+### Status Lifecycle
+
+The `Status` field tracks the lifecycle of a decision:
+
+- **Draft**: Work in progress, not ready for review.
+- **Proposed**: Ready for council review and discussion.
+- **Accepted**: Approved and currently active. This is the **implementation status**.
+- **Rejected**: Decision was considered but not taken.
+- **Deprecated**: Decision was once active but is no longer valid (e.g., technology shift), without a direct replacement.
+- **Superseded**: Decision has been explicitly replaced by a newer ADR. The header must link to the new ADR.
 
 ## Creating New ADRs
 
-1. Copy the template from `docs/adr/ADR-000-template.md`
-2. Number sequentially (ADR-034, ADR-035, etc.)
-3. Open PR for discussion
-4. Update status as implementation progresses
+1.  Copy the template from `docs/adr/ADR-000-template.md`.
+2.  Number sequentially (e.g., `ADR-040`).
+3.  Open a Pull Request for discussion (Status: `Proposed`).
+4.  Upon approval, merge and update Status to `Accepted`.
 
-See the project GOVERNANCE.md for the decision process.
+## Deprecating or Superseding
+
+When a new decision replaces an old one:
+1.  Create the new ADR (Status: `Accepted`).
+2.  Update the old ADR's header:
+    - Change Status to `Superseded`.
+    - Add `Superseded By: [Link to new ADR]`.
+    - (Optional) Add a note in the Context section explaining why it was replaced.
+
+See the project GOVERNANCE.md for the detailed decision process.
