@@ -12,7 +12,8 @@ Implements ADR-012: MCP Server Reliability and Long-Running Operation Handling
 
 import json
 import time
-from typing import Optional
+import asyncio
+from typing import List, Optional
 
 from mcp.server.fastmcp import FastMCP, Context
 
@@ -21,6 +22,13 @@ from llm_council.council import (
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
 from llm_council.verdict import VerdictType
+from llm_council.verification.api import run_verification, VerifyRequest
+from llm_council.verification.context import InvalidSnapshotError
+from llm_council.verification.transcript import (
+    create_transcript_store,
+    TranscriptNotFoundError,
+    TranscriptIntegrityError,
+)
 
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config, get_api_key
@@ -319,6 +327,185 @@ async def council_health_check() -> str:
         checks["message"] = "OPENROUTER_API_KEY not configured. Set it in environment or .env file."
 
     return json.dumps(checks, indent=2)
+
+
+@mcp.tool()
+async def verify(
+    snapshot_id: str,
+    target_paths: Optional[List[str]] = None,
+    rubric_focus: Optional[str] = None,
+    confidence_threshold: float = 0.7,
+    ctx: Optional[Context] = None,
+) -> str:
+    """
+    Verify agent work using the LLM Council verification system (ADR-034).
+
+    Uses multi-model consensus to verify code changes, implementations, or other
+    work artifacts against quality rubrics. Returns a structured verdict with
+    confidence score and rationale.
+
+    Args:
+        snapshot_id: Git commit SHA to verify (7-40 hex characters).
+        target_paths: Optional list of specific file paths to verify.
+        rubric_focus: Optional rubric focus area (e.g., "security", "performance").
+        confidence_threshold: Minimum confidence for pass verdict (0.0-1.0, default 0.7).
+        ctx: MCP context for progress reporting (injected automatically).
+
+    Returns:
+        JSON string containing verification result with verdict, confidence,
+        exit_code (0=PASS, 1=FAIL, 2=UNCLEAR), rubric scores, blocking issues,
+        rationale, and transcript location for audit trail.
+    """
+    # Report initial progress
+    if ctx:
+        try:
+            await ctx.report_progress(1, 3, "Starting verification...")
+        except Exception:
+            pass  # Progress reporting is best-effort
+
+    try:
+        # Report verification in progress
+        if ctx:
+            try:
+                await ctx.report_progress(2, 3, "Running council verification...")
+            except Exception:
+                pass
+
+        # Create request object and transcript store
+        request = VerifyRequest(
+            snapshot_id=snapshot_id,
+            target_paths=target_paths,
+            rubric_focus=rubric_focus,
+            confidence_threshold=confidence_threshold,
+        )
+        store = create_transcript_store()
+
+        # Run the verification
+        result = await run_verification(request, store)
+
+        # Report completion
+        if ctx:
+            try:
+                await ctx.report_progress(3, 3, "Verification complete")
+            except Exception:
+                pass
+
+        return json.dumps(result, indent=2)
+
+    except InvalidSnapshotError as e:
+        return json.dumps(
+            {
+                "error": str(e),
+                "exit_code": 2,  # UNCLEAR for invalid input
+                "verdict": "unclear",
+                "confidence": 0.0,
+            },
+            indent=2,
+        )
+
+    except asyncio.TimeoutError as e:
+        return json.dumps(
+            {
+                "error": f"Verification timed out: {e}",
+                "exit_code": 2,  # UNCLEAR for timeouts
+                "verdict": "unclear",
+                "confidence": 0.0,
+            },
+            indent=2,
+        )
+
+    except Exception as e:
+        return json.dumps(
+            {
+                "error": f"Unexpected error: {e}",
+                "exit_code": 2,  # UNCLEAR for unexpected errors
+                "verdict": "unclear",
+                "confidence": 0.0,
+            },
+            indent=2,
+        )
+
+
+@mcp.tool()
+async def audit(
+    verification_id: Optional[str] = None,
+    validate_integrity: bool = False,
+    expected_hash: Optional[str] = None,
+    ctx: Optional[Context] = None,
+) -> str:
+    """
+    Retrieve and validate verification audit transcripts (ADR-034).
+
+    Provides access to verification audit trails for compliance, debugging,
+    and integrity validation. Can retrieve a single verification by ID or
+    list all verifications.
+
+    Args:
+        verification_id: Optional ID to retrieve specific verification.
+            If not provided, lists all available verifications.
+        validate_integrity: If True, validates transcript integrity against
+            expected_hash.
+        expected_hash: Expected SHA256 hash for integrity validation.
+            Required when validate_integrity is True.
+        ctx: MCP context (injected automatically).
+
+    Returns:
+        JSON string containing:
+        - For single verification: stages, integrity_hash, optional validation result
+        - For listing: verifications array with metadata, total_count
+    """
+    try:
+        store = create_transcript_store(readonly=True)
+
+        # If no verification_id, list all verifications
+        if verification_id is None:
+            verifications = store.list_verifications()
+            return json.dumps(
+                {
+                    "verifications": verifications,
+                    "total_count": len(verifications),
+                },
+                indent=2,
+            )
+
+        # Retrieve specific verification
+        stages = store.read_all_stages(verification_id)
+        integrity_hash = store.compute_integrity_hash(verification_id)
+
+        result: dict = {
+            "verification_id": verification_id,
+            "stages": stages,
+            "integrity_hash": integrity_hash,
+        }
+
+        # Validate integrity if requested
+        if validate_integrity and expected_hash:
+            try:
+                store.validate_integrity(verification_id, expected_hash)
+                result["integrity_valid"] = True
+            except TranscriptIntegrityError as e:
+                result["integrity_valid"] = False
+                result["integrity_error"] = str(e)
+
+        return json.dumps(result, indent=2)
+
+    except TranscriptNotFoundError as e:
+        return json.dumps(
+            {
+                "error": f"Verification not found: {e}",
+                "verification_id": verification_id,
+            },
+            indent=2,
+        )
+
+    except Exception as e:
+        return json.dumps(
+            {
+                "error": f"Unexpected error: {e}",
+                "verification_id": verification_id,
+            },
+            indent=2,
+        )
 
 
 def main():

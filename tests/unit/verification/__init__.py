@@ -1,1 +1,1 @@
-# Verification tests package
+"""Tests for verification module (ADR-034)."""
