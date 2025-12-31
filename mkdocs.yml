@@ -132,6 +132,9 @@ nav:
     - Shadow Mode Auditions: blog/07-shadow-mode-auditions.md
     - n8n Workflow Automation: blog/08-n8n-workflow-automation.md
     - One-Click Deployment: blog/09-one-click-deployment.md
+    - Agent Skills Introduction: blog/10-agent-skills-introduction.md
+    - Verification Security Architecture: blog/11-verification-security-architecture.md
+    - CI/CD Quality Gates: blog/12-cicd-quality-gates.md
   - API Reference: api.md
   - Contributing: contributing.md
 
