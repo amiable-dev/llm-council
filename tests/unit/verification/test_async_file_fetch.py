@@ -65,29 +65,63 @@ class TestAsyncFileFetching:
 
     @pytest.mark.asyncio
     async def test_fetch_file_truncates_large_files(self):
-        """Large files should be truncated to MAX_FILE_CHARS."""
+        """Large files should be truncated to MAX_FILE_CHARS via streaming read."""
         from llm_council.verification.api import (
             _fetch_file_at_commit_async,
             MAX_FILE_CHARS,
         )
 
-        # Mock a large file response
-        large_content = "x" * (MAX_FILE_CHARS + 1000)
+        # Mock a large file response with streaming behavior
+        # Content must be significantly larger than MAX_FILE_CHARS to trigger truncation
+        large_content = b"x" * (MAX_FILE_CHARS + 10000)
+        read_position = 0
 
-        with patch("asyncio.create_subprocess_exec") as mock_subprocess:
-            mock_proc = AsyncMock()
-            mock_proc.communicate.return_value = (
-                large_content.encode(),
-                b"",
-            )
-            mock_proc.returncode = 0
-            mock_subprocess.return_value = mock_proc
+        async def mock_read(size: int) -> bytes:
+            """Simulate streaming read returning chunks."""
+            nonlocal read_position
+            chunk = large_content[read_position : read_position + size]
+            read_position += size
+            return chunk
 
+        # Create mock stdout that simulates streaming read
+        mock_stdout = MagicMock()
+        mock_stdout.read = mock_read  # This is an async function
+
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        # returncode will be -9 (killed) or we can ignore it since truncation sets it
+        mock_proc.returncode = 0  # Normal exit before we kill it
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch(
+                "llm_council.verification.api._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.api._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+        ):
             content, truncated = await _fetch_file_at_commit_async("HEAD", "large_file.txt")
 
             assert truncated is True
             assert len(content) <= MAX_FILE_CHARS + 100  # Allow for truncation message
             assert "truncated" in content.lower()
+            # Verify process was killed to avoid buffering remaining data
+            mock_proc.kill.assert_called()
 
 
 class TestConcurrentFileFetching:
@@ -145,24 +179,55 @@ class TestAsyncTimeout:
     @pytest.mark.asyncio
     async def test_fetch_respects_timeout(self):
         """File fetch should timeout after configured duration."""
-        from llm_council.verification.api import _fetch_file_at_commit_async
+        from llm_council.verification.api import (
+            _fetch_file_at_commit_async,
+            ASYNC_SUBPROCESS_TIMEOUT,
+        )
 
-        # Mock a slow git command
-        async def slow_communicate():
-            await asyncio.sleep(30)  # Simulate slow operation
-            return (b"content", b"")
+        # Mock a slow streaming read that takes longer than the timeout
+        async def slow_read(size: int) -> bytes:
+            await asyncio.sleep(ASYNC_SUBPROCESS_TIMEOUT + 1)  # Exceed timeout
+            return b"content"
 
-        with patch("asyncio.create_subprocess_exec") as mock_subprocess:
-            mock_proc = AsyncMock()
-            mock_proc.communicate = slow_communicate
-            mock_proc.returncode = 0
-            mock_proc.kill = MagicMock()
-            mock_subprocess.return_value = mock_proc
+        # Create mock stdout that simulates slow streaming read
+        mock_stdout = MagicMock()
+        mock_stdout.read = slow_read
 
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        mock_proc.returncode = 0
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch(
+                "llm_council.verification.api._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.api._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+            # Override the timeout to a short value for testing
+            patch("llm_council.verification.api.ASYNC_SUBPROCESS_TIMEOUT", 0.1),
+        ):
             content, truncated = await _fetch_file_at_commit_async("HEAD", "file.txt")
 
             # Should have timed out and returned error
             assert "[Error:" in content or "Timeout" in content
+            # Process should have been killed
+            mock_proc.kill.assert_called()
 
 
 class TestPathValidation:
@@ -233,6 +298,125 @@ class TestConcurrencyLimiting:
         ), f"MAX_CONCURRENT_GIT_OPS={MAX_CONCURRENT_GIT_OPS} should be between 1 and 50"
 
 
+class TestStreamingMemoryBounded:
+    """Tests for memory-bounded streaming read (DoS protection)."""
+
+    @pytest.mark.asyncio
+    async def test_streaming_read_doesnt_buffer_entire_file(self):
+        """Streaming should read in chunks, not buffer entire file."""
+        from llm_council.verification.api import MAX_FILE_CHARS
+
+        # Track actual bytes read by chunks
+        bytes_read_tracker: list = []
+        large_content = b"x" * (MAX_FILE_CHARS * 2)  # 2x max to ensure truncation
+        read_pos = 0
+
+        async def tracking_read(size: int) -> bytes:
+            """Track each read call size."""
+            nonlocal read_pos
+            chunk = large_content[read_pos : read_pos + size]
+            read_pos += size
+            bytes_read_tracker.append(len(chunk))
+            return chunk
+
+        # Create mock stdout that simulates streaming read
+        mock_stdout = MagicMock()
+        mock_stdout.read = tracking_read
+
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        mock_proc.returncode = 0
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch(
+                "llm_council.verification.api._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.api._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+        ):
+            from llm_council.verification.api import _fetch_file_at_commit_async
+
+            content, truncated = await _fetch_file_at_commit_async("HEAD", "huge_file.txt")
+
+            # Should have read in chunks (8KB each based on implementation)
+            assert len(bytes_read_tracker) > 1, "Should read in multiple chunks"
+            # Total bytes read should be approximately MAX_FILE_CHARS + 1 (for truncation check)
+            total_read = sum(bytes_read_tracker)
+            assert (
+                total_read <= MAX_FILE_CHARS + 8192 + 1
+            ), f"Should not buffer entire file: read {total_read} bytes"
+            assert truncated is True
+
+    @pytest.mark.asyncio
+    async def test_process_killed_on_large_file_truncation(self):
+        """Process should be killed when large file is truncated to save resources."""
+        from llm_council.verification.api import MAX_FILE_CHARS
+
+        # Content must be significantly larger than MAX_FILE_CHARS to trigger truncation
+        large_content = b"x" * (MAX_FILE_CHARS + 10000)
+        read_pos = 0
+
+        async def mock_read(size: int) -> bytes:
+            nonlocal read_pos
+            chunk = large_content[read_pos : read_pos + size]
+            read_pos += size
+            return chunk
+
+        # Create mock stdout that simulates streaming read
+        mock_stdout = MagicMock()
+        mock_stdout.read = mock_read
+
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        mock_proc.returncode = 0
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch(
+                "llm_council.verification.api._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.api._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+        ):
+            from llm_council.verification.api import _fetch_file_at_commit_async
+
+            await _fetch_file_at_commit_async("HEAD", "large_file.txt")
+
+            # Process should have been killed
+            mock_proc.kill.assert_called_once()
+
+
 class TestEventLoopNotBlocked:
     """Tests that event loop is not blocked by file operations."""
 
@@ -263,6 +447,16 @@ class TestEventLoopNotBlocked:
         """Should use asyncio.create_subprocess_exec for file content fetching."""
         from llm_council.verification.api import _fetch_file_at_commit_async
 
+        # Mock streaming read behavior
+        read_called = False
+
+        async def mock_read(size: int) -> bytes:
+            nonlocal read_called
+            if read_called:
+                return b""  # EOF
+            read_called = True
+            return b"content"
+
         # Patch async subprocess and git root helper
         with (
             patch("asyncio.create_subprocess_exec") as mock_async,
@@ -277,9 +471,16 @@ class TestEventLoopNotBlocked:
                 return_value=asyncio.Semaphore(10),
             ),
         ):
+            mock_stdout = AsyncMock()
+            mock_stdout.read = mock_read
+            mock_stderr = AsyncMock()
+            mock_stderr.read = AsyncMock(return_value=b"")
+
             mock_proc = AsyncMock()
-            mock_proc.communicate.return_value = (b"content", b"")
+            mock_proc.stdout = mock_stdout
+            mock_proc.stderr = mock_stderr
             mock_proc.returncode = 0
+            mock_proc.wait = AsyncMock()
             mock_async.return_value = mock_proc
 
             await _fetch_file_at_commit_async("HEAD", "file.txt")

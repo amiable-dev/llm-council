@@ -285,6 +285,7 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
 
     Uses asyncio.create_subprocess_exec to avoid blocking the event loop.
     Uses semaphore to limit concurrent git operations (DoS prevention).
+    Uses streaming read to avoid buffering entire large files (DoS prevention).
 
     Args:
         snapshot_id: Git commit SHA
@@ -313,24 +314,62 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
                 cwd=git_root,  # Use git root to avoid CWD dependency
             )
 
+            # Stream read to avoid buffering entire file (DoS prevention)
+            chunks: List[bytes] = []
+            bytes_read = 0
+            truncated = False
+
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
-                )
+                assert proc.stdout is not None  # Type narrowing for mypy
+
+                async def read_with_limit() -> None:
+                    """Read chunks until limit or EOF."""
+                    nonlocal bytes_read, truncated
+                    while bytes_read < MAX_FILE_CHARS:
+                        # Read in chunks of 8KB
+                        chunk = await proc.stdout.read(8192)  # type: ignore[union-attr]
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        bytes_read += len(chunk)
+
+                    # Check if there's more data (truncation needed)
+                    if bytes_read >= MAX_FILE_CHARS:
+                        extra = await proc.stdout.read(1)  # type: ignore[union-attr]
+                        if extra:
+                            truncated = True
+                            # Kill process to avoid wasting resources on remaining data
+                            proc.kill()
+
+                await asyncio.wait_for(read_with_limit(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+
             except asyncio.TimeoutError:
                 proc.kill()
                 await proc.wait()
                 return f"[Error: Timeout reading {file_path}]", False
 
-            if proc.returncode != 0:
+            # Wait for process to complete (already killed if truncated)
+            await proc.wait()
+
+            if proc.returncode != 0 and not truncated:
+                # Only check return code if we didn't kill it for truncation
+                # Try to read stderr for error message
+                stderr_data = b""
+                if proc.stderr:
+                    try:
+                        stderr_data = await asyncio.wait_for(proc.stderr.read(1024), timeout=1)
+                    except Exception:
+                        pass
                 return f"[Error: Could not read {file_path} at {snapshot_id}]", False
 
-            content = stdout.decode("utf-8", errors="replace")
-            truncated = False
+            # Combine chunks and decode
+            content_bytes = b"".join(chunks)
+            content = content_bytes.decode("utf-8", errors="replace")
 
-            if len(content) > MAX_FILE_CHARS:
+            if truncated or len(content) > MAX_FILE_CHARS:
                 content = (
-                    content[:MAX_FILE_CHARS] + f"\n\n... [truncated, {len(stdout)} chars total]"
+                    content[:MAX_FILE_CHARS]
+                    + f"\n\n... [truncated, original file larger than {MAX_FILE_CHARS} chars]"
                 )
                 truncated = True
 
