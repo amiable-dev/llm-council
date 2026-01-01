@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-import subprocess
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -141,44 +140,6 @@ def _verdict_to_exit_code(verdict: str) -> int:
 MAX_FILE_CHARS = 15000
 # Maximum total characters for all files
 MAX_TOTAL_CHARS = 50000
-
-
-def _fetch_file_at_commit(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
-    """
-    Fetch file contents from git at a specific commit.
-
-    Args:
-        snapshot_id: Git commit SHA
-        file_path: Path to file relative to repo root
-
-    Returns:
-        Tuple of (content, was_truncated)
-    """
-    try:
-        result = subprocess.run(
-            ["git", "show", f"{snapshot_id}:{file_path}"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
-            return f"[Error: Could not read {file_path} at {snapshot_id}]", False
-
-        content = result.stdout
-        truncated = False
-
-        if len(content) > MAX_FILE_CHARS:
-            content = (
-                content[:MAX_FILE_CHARS] + f"\n\n... [truncated, {len(result.stdout)} chars total]"
-            )
-            truncated = True
-
-        return content, truncated
-
-    except subprocess.TimeoutExpired:
-        return f"[Error: Timeout reading {file_path}]", False
-    except Exception as e:
-        return f"[Error: {e}]", False
 
 
 # Async timeout for subprocess operations (seconds)
@@ -462,61 +423,6 @@ async def _fetch_files_for_verification_async(
             files_fetched += 1
             section = f"### {file_path}\n```\n{content}\n```"
             sections.append(section)
-
-    return "\n\n".join(sections)
-
-
-def _fetch_files_for_verification(
-    snapshot_id: str,
-    target_paths: Optional[List[str]] = None,
-) -> str:
-    """
-    Fetch file contents for verification prompt.
-
-    If target_paths specified, fetches those files.
-    Otherwise, fetches changed files in the commit.
-
-    Args:
-        snapshot_id: Git commit SHA
-        target_paths: Optional list of specific paths
-
-    Returns:
-        Formatted string with file contents
-    """
-    files_to_fetch = target_paths or []
-
-    # If no target paths, get files changed in this commit
-    if not files_to_fetch:
-        try:
-            result = subprocess.run(
-                ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", snapshot_id],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                files_to_fetch = [f for f in result.stdout.strip().split("\n") if f]
-        except Exception:
-            pass
-
-    if not files_to_fetch:
-        return "[No files specified and could not determine changed files]"
-
-    sections = []
-    total_chars = 0
-
-    for file_path in files_to_fetch:
-        if total_chars >= MAX_TOTAL_CHARS:
-            sections.append(
-                f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
-            )
-            break
-
-        content, truncated = _fetch_file_at_commit(snapshot_id, file_path)
-        total_chars += len(content)
-
-        section = f"### {file_path}\n```\n{content}\n```"
-        sections.append(section)
 
     return "\n\n".join(sections)
 
