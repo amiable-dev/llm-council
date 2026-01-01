@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-01-01
+
+### Added
+
+- **Council Deliberation for Verification (ADR-034 A7)**: Full 3-stage multi-model deliberation
+  - Stage 1: Parallel code reviews from multiple models
+  - Stage 2: Anonymous peer ranking with rubric scoring
+  - Stage 3: Chairman synthesis with structured APPROVED/REJECTED verdict
+  - Confidence calculation based on reviewer agreement (rubric score variance)
+  - Binary verdict extraction with configurable threshold (default 0.7)
+  - Exit codes: 0=PASS, 1=FAIL, 2=UNCLEAR (for CI/CD integration)
+
+- **Verification Prompt Enhancement**: Include actual file contents in verification requests
+  - Fetches changed files from git at specified commit SHA
+  - Truncates large files to prevent token overflow
+  - Supports target_paths filtering for focused verification
+
+- **Blog Post**: "Multi-Model Deliberation: How LLM Council Verifies Code"
+  - Explains 3-stage architecture with code examples
+  - Documents confidence calculation and verdict extraction
+  - Includes GitHub Actions CI/CD integration example
+  - Performance considerations table (quick/balanced/high tiers)
+
+### Changed
+
+- **SkillLoader**: Enhanced robustness per council review
+  - Better error handling for malformed SKILL.md files
+  - Improved metadata caching
+
+### Fixed
+
+- **Async File Operations**: Replaced blocking subprocess calls with async
+  - Uses `asyncio.create_subprocess_exec()` instead of `subprocess.run()`
+  - Streaming file reads with 8KB chunks (DoS protection)
+  - Batched file fetching with early termination
+  - Semaphore-based concurrency limiting (10 concurrent git ops)
+  - Path traversal attack prevention
+
+- **Rubric Extraction**: Fixed format mismatch in Stage 2 rubric scores
+  - Handles both JSON and text-based rubric formats
+  - Graceful fallback when parsing fails
+
+### Security
+
+- **DoS Protection**: Multiple layers of protection in verification API
+  - File size limits with streaming truncation
+  - Batch processing prevents memory exhaustion on large commits
+  - Early termination when character limits reached
+
 ## [0.21.0] - 2025-12-31
 
 ### Added
