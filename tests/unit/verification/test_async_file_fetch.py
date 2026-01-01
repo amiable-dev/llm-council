@@ -165,6 +165,48 @@ class TestAsyncTimeout:
             assert "[Error:" in content or "Timeout" in content
 
 
+class TestPathValidation:
+    """Tests for path validation security."""
+
+    def test_rejects_absolute_paths(self):
+        """Should reject absolute paths."""
+        from llm_council.verification.api import _validate_file_path
+
+        assert _validate_file_path("/etc/passwd") is False
+        assert _validate_file_path("\\Windows\\System32") is False
+
+    def test_rejects_path_traversal(self):
+        """Should reject path traversal attempts."""
+        from llm_council.verification.api import _validate_file_path
+
+        assert _validate_file_path("../secret.txt") is False
+        assert _validate_file_path("foo/../../../etc/passwd") is False
+        assert _validate_file_path("..") is False
+
+    def test_rejects_null_bytes(self):
+        """Should reject null byte injection."""
+        from llm_council.verification.api import _validate_file_path
+
+        assert _validate_file_path("file.txt\x00.jpg") is False
+
+    def test_accepts_valid_paths(self):
+        """Should accept valid relative paths."""
+        from llm_council.verification.api import _validate_file_path
+
+        assert _validate_file_path("src/main.py") is True
+        assert _validate_file_path("tests/test_file.py") is True
+        assert _validate_file_path("README.md") is True
+
+    @pytest.mark.asyncio
+    async def test_fetch_rejects_invalid_paths(self):
+        """Fetch should return error for invalid paths."""
+        from llm_council.verification.api import _fetch_file_at_commit_async
+
+        content, truncated = await _fetch_file_at_commit_async("HEAD", "../secret.txt")
+        assert "[Error:" in content
+        assert "Invalid file path" in content
+
+
 class TestConcurrencyLimiting:
     """Tests for concurrency limiting via semaphore."""
 
@@ -173,7 +215,7 @@ class TestConcurrencyLimiting:
         """Semaphore should limit concurrent git operations to MAX_CONCURRENT_GIT_OPS."""
         from llm_council.verification.api import MAX_CONCURRENT_GIT_OPS, _get_git_semaphore
 
-        sem = _get_git_semaphore()
+        sem = await _get_git_semaphore()
 
         # Semaphore should be created with MAX_CONCURRENT_GIT_OPS
         # We can't directly access _value, but we can verify the semaphore exists
@@ -224,7 +266,16 @@ class TestEventLoopNotBlocked:
         # Patch async subprocess and git root helper
         with (
             patch("asyncio.create_subprocess_exec") as mock_async,
-            patch("llm_council.verification.api._get_git_root", return_value="/mock/root"),
+            patch(
+                "llm_council.verification.api._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.api._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
         ):
             mock_proc = AsyncMock()
             mock_proc.communicate.return_value = (b"content", b"")

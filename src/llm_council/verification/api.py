@@ -187,32 +187,96 @@ ASYNC_SUBPROCESS_TIMEOUT = 10
 # Maximum concurrent git subprocess operations to prevent DoS
 MAX_CONCURRENT_GIT_OPS = 10
 
-# Semaphore to limit concurrent git operations (created lazily per event loop)
+# Cached git root to avoid repeated subprocess calls
+_cached_git_root: Optional[str] = None
+_git_root_lock = asyncio.Lock()
+
+
+async def _get_git_root_async() -> Optional[str]:
+    """
+    Get the git repository root directory (async, cached).
+
+    Uses async subprocess to avoid blocking the event loop.
+    Result is cached to avoid repeated calls.
+
+    Returns:
+        Git repository root path or None if not in a git repo.
+    """
+    global _cached_git_root
+
+    # Return cached value if available
+    if _cached_git_root is not None:
+        return _cached_git_root
+
+    # Use lock to prevent multiple concurrent lookups
+    async with _git_root_lock:
+        # Double-check after acquiring lock
+        if _cached_git_root is not None:
+            return _cached_git_root
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "rev-parse",
+                "--show-toplevel",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            if proc.returncode == 0:
+                _cached_git_root = stdout.decode("utf-8").strip()
+                return _cached_git_root
+        except Exception:
+            pass
+
+    return None
+
+
+def _validate_file_path(file_path: str) -> bool:
+    """
+    Validate file path to prevent path traversal attacks.
+
+    Args:
+        file_path: Path to validate
+
+    Returns:
+        True if path is safe, False otherwise.
+    """
+    # Reject absolute paths
+    if file_path.startswith("/") or file_path.startswith("\\"):
+        return False
+
+    # Reject path traversal attempts
+    if ".." in file_path:
+        return False
+
+    # Reject null bytes (path injection)
+    if "\x00" in file_path:
+        return False
+
+    return True
+
+
+# Thread-safe semaphore creation for async contexts
+_semaphore_lock = asyncio.Lock()
 _git_semaphore: Optional[asyncio.Semaphore] = None
 
 
-def _get_git_semaphore() -> asyncio.Semaphore:
-    """Get or create the git semaphore for limiting concurrency."""
+async def _get_git_semaphore() -> asyncio.Semaphore:
+    """
+    Get or create the git semaphore for limiting concurrency.
+
+    Thread-safe initialization using async lock.
+    """
     global _git_semaphore
-    if _git_semaphore is None:
-        _git_semaphore = asyncio.Semaphore(MAX_CONCURRENT_GIT_OPS)
-    return _git_semaphore
 
+    if _git_semaphore is not None:
+        return _git_semaphore
 
-def _get_git_root() -> Optional[str]:
-    """Get the git repository root directory."""
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        pass
-    return None
+    async with _semaphore_lock:
+        if _git_semaphore is None:
+            _git_semaphore = asyncio.Semaphore(MAX_CONCURRENT_GIT_OPS)
+        return _git_semaphore
 
 
 async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
@@ -229,11 +293,16 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
     Returns:
         Tuple of (content, was_truncated)
     """
+    # Validate file path to prevent path traversal
+    if not _validate_file_path(file_path):
+        return f"[Error: Invalid file path: {file_path}]", False
+
     # Get git root for reliable CWD (avoids CWD dependency)
-    git_root = _get_git_root()
+    git_root = await _get_git_root_async()
 
     # Acquire semaphore to limit concurrent git operations
-    async with _get_git_semaphore():
+    semaphore = await _get_git_semaphore()
+    async with semaphore:
         try:
             proc = await asyncio.create_subprocess_exec(
                 "git",
@@ -289,12 +358,13 @@ async def _fetch_files_for_verification_async(
         Formatted string with file contents
     """
     files_to_fetch = list(target_paths) if target_paths else []
-    git_root = _get_git_root()
+    git_root = await _get_git_root_async()
 
     # If no target paths, get files changed in this commit
     if not files_to_fetch:
         try:
-            async with _get_git_semaphore():
+            semaphore = await _get_git_semaphore()
+            async with semaphore:
                 proc = await asyncio.create_subprocess_exec(
                     "git",
                     "diff-tree",
