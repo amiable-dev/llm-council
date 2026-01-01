@@ -24,6 +24,7 @@ from llm_council.council import (
 from llm_council.verdict import VerdictType
 from llm_council.verification.api import run_verification, VerifyRequest
 from llm_council.verification.context import InvalidSnapshotError
+from llm_council.verification.formatting import format_verification_result
 from llm_council.verification.transcript import (
     create_transcript_store,
     TranscriptNotFoundError,
@@ -390,7 +391,12 @@ async def verify(
             except Exception:
                 pass
 
-        return json.dumps(result, indent=2)
+        # Return formatted output for human readability
+        # JSON is also included at the end for programmatic parsing
+        formatted = format_verification_result(result)
+        json_output = json.dumps(result, indent=2)
+
+        return f"{formatted}\n\n---\n\n<details>\n<summary>Raw JSON</summary>\n\n```json\n{json_output}\n```\n</details>"
 
     except InvalidSnapshotError as e:
         return json.dumps(
