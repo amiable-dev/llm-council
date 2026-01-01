@@ -2,7 +2,7 @@
 
 **Date:** 2026-01-01
 **Author:** Claude Code (Post-Implementation Review)
-**Status:** Critical Gap Identified
+**Status:** ✅ RESOLVED (PR #298)
 
 ---
 
@@ -213,9 +213,42 @@ PR #279 was merged with this TODO still present:
 
 ---
 
+## Resolution (2026-01-01)
+
+**Status**: ✅ RESOLVED in PR #298
+
+All gaps identified in this analysis have been addressed:
+
+| Gap | Resolution |
+|-----|------------|
+| Council deliberation integration | Implemented in `api.py` - calls all 3 stages |
+| Stage 1/2/3 transcript files | Now written to `.council/logs/{id}/` |
+| Dynamic rubric scoring | Extracted from Stage 2 via `verdict_extractor.py` |
+| Dynamic confidence | Calculated from council agreement |
+| Dynamic verdict | Derived from Stage 3 synthesis |
+| Integration tests without mocks | Added 10 tests in `test_council_integration.py` |
+
+### Files Changed
+
+- `src/llm_council/verification/api.py` - Full council integration
+- `src/llm_council/verification/verdict_extractor.py` - New module
+- `tests/integration/verification/test_council_integration.py` - New test file
+- `docs/adr/ADR-034-agent-skills-verification.md` - Updated to v2.4
+
+### Lessons Applied
+
+The implementation followed the lessons learned from this gap analysis:
+1. Tests verify actual behavior, not just schema validation
+2. No mocks on core verification function in integration tests
+3. All code reviewed and tracked via GitHub issues (#297)
+
+---
+
 ## References
 
 - ADR-034: Agent Skills Integration for Work Verification
 - PR #279: Track A Implementation
+- PR #298: Council Deliberation Integration
+- Issue #297: Tracking issue for council integration
 - Issue #262: ADR-034 Epic
 - Issue #273: A4 Verification API

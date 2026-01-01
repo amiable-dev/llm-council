@@ -20,6 +20,13 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from llm_council.council import (
+    calculate_aggregate_rankings,
+    stage1_collect_responses,
+    stage2_collect_rankings,
+    stage3_synthesize_final,
+)
+from llm_council.verdict import VerdictType as CouncilVerdictType
 from llm_council.verification.context import (
     InvalidSnapshotError,
     VerificationContextManager,
@@ -29,7 +36,12 @@ from llm_council.verification.transcript import (
     TranscriptStore,
     create_transcript_store,
 )
-from llm_council.verification.types import VerdictType
+from llm_council.verification.verdict_extractor import (
+    build_verification_result,
+    extract_rubric_scores_from_rankings,
+    extract_verdict_from_synthesis,
+    calculate_confidence_from_agreement,
+)
 
 # Router for verification endpoints
 router = APIRouter(tags=["verification"])
@@ -123,6 +135,53 @@ def _verdict_to_exit_code(verdict: str) -> int:
         return 2
 
 
+def _build_verification_prompt(
+    snapshot_id: str,
+    target_paths: Optional[List[str]] = None,
+    rubric_focus: Optional[str] = None,
+) -> str:
+    """
+    Build verification prompt for council deliberation.
+
+    Creates a structured prompt that asks the council to review
+    code/documentation at the given snapshot.
+
+    Args:
+        snapshot_id: Git commit SHA for the code version
+        target_paths: Optional list of paths to focus on
+        rubric_focus: Optional focus area (Security, Performance, etc.)
+
+    Returns:
+        Formatted verification prompt for council
+    """
+    focus_section = ""
+    if rubric_focus:
+        focus_section = f"\n\n**Focus Area**: {rubric_focus}\nPay particular attention to {rubric_focus.lower()}-related concerns."
+
+    paths_section = ""
+    if target_paths:
+        paths_list = "\n".join(f"- {path}" for path in target_paths)
+        paths_section = f"\n\n**Target Paths**:\n{paths_list}"
+
+    prompt = f"""You are reviewing code changes at commit `{snapshot_id}`.{focus_section}{paths_section}
+
+Please provide a thorough review of the code with the following structure:
+
+1. **Summary**: Brief overview of what the code does
+2. **Quality Assessment**: Evaluate code quality, readability, and maintainability
+3. **Potential Issues**: Identify any bugs, security vulnerabilities, or performance concerns
+4. **Recommendations**: Suggest improvements if any
+
+At the end of your review, provide a clear verdict:
+- **APPROVED** if the code is ready for production
+- **REJECTED** if there are critical issues that must be fixed
+- **NEEDS REVIEW** if you're uncertain and recommend human review
+
+Be specific and cite file paths and line numbers when identifying issues."""
+
+    return prompt
+
+
 async def run_verification(
     request: VerifyRequest,
     store: TranscriptStore,
@@ -167,25 +226,78 @@ async def run_verification(
             },
         )
 
-        # TODO: In full implementation, this would run council deliberation
-        # For now, return a mock result for API structure validation
-        #
-        # The actual implementation will:
-        # 1. Run stage1_collect_responses() with verification prompt
-        # 2. Run stage2_collect_rankings() for peer review
-        # 3. Run stage3_synthesize_final() for verdict
-        # 4. Extract verdict from synthesis
+        # Build verification prompt for council
+        verification_query = _build_verification_prompt(
+            snapshot_id=request.snapshot_id,
+            target_paths=request.target_paths,
+            rubric_focus=request.rubric_focus,
+        )
 
-        # Mock result for API structure (will be replaced with real council)
-        verdict = "pass"
-        confidence = 0.85
+        # Stage 1: Collect individual model responses
+        stage1_results, stage1_usage = await stage1_collect_responses(verification_query)
 
-        # Determine verdict based on confidence threshold
-        if confidence < request.confidence_threshold:
-            verdict = "unclear"
-        elif confidence < 0.5:
-            verdict = "fail"
+        # Persist Stage 1
+        store.write_stage(
+            verification_id,
+            "stage1",
+            {
+                "responses": stage1_results,
+                "usage": stage1_usage,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
 
+        # Stage 2: Peer ranking with rubric evaluation
+        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
+            verification_query, stage1_results
+        )
+
+        # Persist Stage 2
+        store.write_stage(
+            verification_id,
+            "stage2",
+            {
+                "rankings": stage2_results,
+                "label_to_model": label_to_model,
+                "usage": stage2_usage,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+
+        # Calculate aggregate rankings
+        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+
+        # Stage 3: Chairman synthesis with verdict
+        stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
+            verification_query,
+            stage1_results,
+            stage2_results,
+            aggregate_rankings=aggregate_rankings,
+            verdict_type=CouncilVerdictType.BINARY,
+        )
+
+        # Persist Stage 3
+        store.write_stage(
+            verification_id,
+            "stage3",
+            {
+                "synthesis": stage3_result,
+                "aggregate_rankings": aggregate_rankings,
+                "usage": stage3_usage,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+
+        # Extract verdict and scores from council output
+        verification_output = build_verification_result(
+            stage1_results,
+            stage2_results,
+            stage3_result,
+            confidence_threshold=request.confidence_threshold,
+        )
+
+        verdict = verification_output["verdict"]
+        confidence = verification_output["confidence"]
         exit_code = _verdict_to_exit_code(verdict)
 
         result = {
@@ -193,15 +305,9 @@ async def run_verification(
             "verdict": verdict,
             "confidence": confidence,
             "exit_code": exit_code,
-            "rubric_scores": {
-                "accuracy": 8.5,
-                "relevance": 8.0,
-                "completeness": 7.5,
-                "conciseness": 8.0,
-                "clarity": 8.5,
-            },
-            "blocking_issues": [],
-            "rationale": "Verification passed all checks.",
+            "rubric_scores": verification_output["rubric_scores"],
+            "blocking_issues": verification_output["blocking_issues"],
+            "rationale": verification_output["rationale"],
             "transcript_location": str(transcript_dir),
             "partial": False,
         }

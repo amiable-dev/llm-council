@@ -885,43 +885,28 @@ All verification deliberations saved for audit:
 
 **Updated**: 2026-01-01
 
-### Track A: Verification API + MCP Foundation ⚠️ PARTIAL
-
-> **Gap Identified (2026-01-01)**: Track A infrastructure is complete, but council deliberation integration is missing. The `verify` tool returns placeholder values instead of running actual 3-stage deliberation. See [ADR-034-gap-analysis.md](ADR-034-gap-analysis.md) for details.
+### Track A: Verification API + MCP Foundation ✅ Complete
 
 | Component | Status | PR | Notes |
 |-----------|--------|-----|-------|
 | `VerificationRequest` / `VerificationResult` schemas | ✅ Complete | #279 | |
 | Context isolation layer | ✅ Complete | #279 | |
-| Transcript persistence | ⚠️ Partial | #279 | Only writes request.json and result.json; missing stage1/2/3.json |
-| Exit codes (0=PASS, 1=FAIL, 2=UNCLEAR) | ✅ Complete | #279 | Logic exists but always returns 0 |
-| MCP server: `mcp://llm-council/verify` | ⚠️ Partial | #279 | Returns hardcoded values, no council execution |
+| Transcript persistence | ✅ Complete | #298 | Writes request.json, stage1/2/3.json, result.json |
+| Exit codes (0=PASS, 1=FAIL, 2=UNCLEAR) | ✅ Complete | #298 | Dynamic based on council verdict |
+| MCP server: `mcp://llm-council/verify` | ✅ Complete | #298 | Full 3-stage council deliberation |
 | MCP server: `mcp://llm-council/audit` | ✅ Complete | #279 | |
-| **Council deliberation integration** | ❌ Missing | - | See #297 |
+| Council deliberation integration | ✅ Complete | #298 | Resolves #297 |
+| Verdict extractor module | ✅ Complete | #298 | Extracts verdict, confidence, rubric scores |
 
-#### Missing: Council Deliberation Integration
+#### Implementation Details (v2.4)
 
-The `run_verification()` function in `api.py` contains a TODO comment and returns hardcoded values:
+The `run_verification()` function now executes full 3-stage council deliberation:
 
-```python
-# TODO: In full implementation, this would run council deliberation
-# The actual implementation will:
-# 1. Run stage1_collect_responses() with verification prompt
-# 2. Run stage2_collect_rankings() for peer review
-# 3. Run stage3_synthesize_final() for verdict
-# 4. Extract verdict from synthesis
+1. **Stage 1**: `stage1_collect_responses()` - Parallel model reviews
+2. **Stage 2**: `stage2_collect_rankings()` - Peer review with rubric scoring
+3. **Stage 3**: `stage3_synthesize_final()` - Chairman verdict synthesis
 
-# Mock result for API structure (will be replaced with real council)
-verdict = "pass"
-confidence = 0.85
-```
-
-**Required work:**
-- [ ] Implement council call in `run_verification()`
-- [ ] Write stage1.json, stage2.json, stage3.json to transcript
-- [ ] Extract rubric scores from Stage 2 evaluations
-- [ ] Derive verdict from council consensus
-- [ ] Add integration test without mocks
+All stages are persisted to transcript for audit trail. Verdict and confidence are extracted dynamically from council consensus.
 
 ### Track B: Agent Skills ✅
 
@@ -1133,6 +1118,14 @@ The following issues tracked this work (all closed in commit 12ec6b5):
 ---
 
 ## Changelog
+
+### v2.4 (2026-01-01)
+- **Council Integration**: Implemented full 3-stage council deliberation in `run_verification()` (#298)
+- **Verdict Extraction**: Added `verdict_extractor.py` module for extracting verdict, confidence, rubric scores
+- **Transcript Persistence**: Now writes stage1.json, stage2.json, stage3.json to transcript
+- **TDD**: Added 10 integration tests for council integration (all passing)
+- **Status Update**: Changed Track A status from "Partial" to "Complete"
+- **Gap Resolution**: Resolves issues identified in v2.3 gap analysis (#297)
 
 ### v2.3 (2026-01-01)
 - **Gap Analysis**: Identified critical gap - Track A verify tool returns hardcoded values
