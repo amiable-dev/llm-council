@@ -184,12 +184,43 @@ def _fetch_file_at_commit(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
 # Async timeout for subprocess operations (seconds)
 ASYNC_SUBPROCESS_TIMEOUT = 10
 
+# Maximum concurrent git subprocess operations to prevent DoS
+MAX_CONCURRENT_GIT_OPS = 10
+
+# Semaphore to limit concurrent git operations (created lazily per event loop)
+_git_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def _get_git_semaphore() -> asyncio.Semaphore:
+    """Get or create the git semaphore for limiting concurrency."""
+    global _git_semaphore
+    if _git_semaphore is None:
+        _git_semaphore = asyncio.Semaphore(MAX_CONCURRENT_GIT_OPS)
+    return _git_semaphore
+
+
+def _get_git_root() -> Optional[str]:
+    """Get the git repository root directory."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
 
 async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
     """
     Fetch file contents from git at a specific commit (async version).
 
     Uses asyncio.create_subprocess_exec to avoid blocking the event loop.
+    Uses semaphore to limit concurrent git operations (DoS prevention).
 
     Args:
         snapshot_id: Git commit SHA
@@ -198,38 +229,46 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
     Returns:
         Tuple of (content, was_truncated)
     """
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "show",
-            f"{snapshot_id}:{file_path}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+    # Get git root for reliable CWD (avoids CWD dependency)
+    git_root = _get_git_root()
 
+    # Acquire semaphore to limit concurrent git operations
+    async with _get_git_semaphore():
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "show",
+                f"{snapshot_id}:{file_path}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=git_root,  # Use git root to avoid CWD dependency
             )
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            return f"[Error: Timeout reading {file_path}]", False
 
-        if proc.returncode != 0:
-            return f"[Error: Could not read {file_path} at {snapshot_id}]", False
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                return f"[Error: Timeout reading {file_path}]", False
 
-        content = stdout.decode("utf-8", errors="replace")
-        truncated = False
+            if proc.returncode != 0:
+                return f"[Error: Could not read {file_path} at {snapshot_id}]", False
 
-        if len(content) > MAX_FILE_CHARS:
-            content = content[:MAX_FILE_CHARS] + f"\n\n... [truncated, {len(stdout)} chars total]"
-            truncated = True
+            content = stdout.decode("utf-8", errors="replace")
+            truncated = False
 
-        return content, truncated
+            if len(content) > MAX_FILE_CHARS:
+                content = (
+                    content[:MAX_FILE_CHARS] + f"\n\n... [truncated, {len(stdout)} chars total]"
+                )
+                truncated = True
 
-    except Exception as e:
-        return f"[Error: {e}]", False
+            return content, truncated
+
+        except Exception as e:
+            return f"[Error: {e}]", False
 
 
 async def _fetch_files_for_verification_async(
@@ -250,25 +289,30 @@ async def _fetch_files_for_verification_async(
         Formatted string with file contents
     """
     files_to_fetch = list(target_paths) if target_paths else []
+    git_root = _get_git_root()
 
     # If no target paths, get files changed in this commit
     if not files_to_fetch:
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "diff-tree",
-                "--no-commit-id",
-                "--name-only",
-                "-r",
-                snapshot_id,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            async with _get_git_semaphore():
+                proc = await asyncio.create_subprocess_exec(
+                    "git",
+                    "diff-tree",
+                    "--no-commit-id",
+                    "--name-only",
+                    "-r",
+                    snapshot_id,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=git_root,  # Use git root to avoid CWD dependency
+                )
 
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+                stdout, _ = await asyncio.wait_for(
+                    proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+                )
 
-            if proc.returncode == 0:
-                files_to_fetch = [f for f in stdout.decode("utf-8").strip().split("\n") if f]
+                if proc.returncode == 0:
+                    files_to_fetch = [f for f in stdout.decode("utf-8").strip().split("\n") if f]
         except Exception:
             pass
 

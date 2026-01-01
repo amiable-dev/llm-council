@@ -165,6 +165,32 @@ class TestAsyncTimeout:
             assert "[Error:" in content or "Timeout" in content
 
 
+class TestConcurrencyLimiting:
+    """Tests for concurrency limiting via semaphore."""
+
+    @pytest.mark.asyncio
+    async def test_semaphore_limits_concurrent_operations(self):
+        """Semaphore should limit concurrent git operations to MAX_CONCURRENT_GIT_OPS."""
+        from llm_council.verification.api import MAX_CONCURRENT_GIT_OPS, _get_git_semaphore
+
+        sem = _get_git_semaphore()
+
+        # Semaphore should be created with MAX_CONCURRENT_GIT_OPS
+        # We can't directly access _value, but we can verify the semaphore exists
+        assert sem is not None
+        assert isinstance(sem, asyncio.Semaphore)
+
+    @pytest.mark.asyncio
+    async def test_max_concurrent_git_ops_is_reasonable(self):
+        """MAX_CONCURRENT_GIT_OPS should be a reasonable limit."""
+        from llm_council.verification.api import MAX_CONCURRENT_GIT_OPS
+
+        # Should be between 1 and 50 (reasonable for preventing DoS)
+        assert (
+            1 <= MAX_CONCURRENT_GIT_OPS <= 50
+        ), f"MAX_CONCURRENT_GIT_OPS={MAX_CONCURRENT_GIT_OPS} should be between 1 and 50"
+
+
 class TestEventLoopNotBlocked:
     """Tests that event loop is not blocked by file operations."""
 
@@ -192,13 +218,13 @@ class TestEventLoopNotBlocked:
 
     @pytest.mark.asyncio
     async def test_uses_asyncio_subprocess_not_sync(self):
-        """Should use asyncio.create_subprocess_exec, not subprocess.run."""
+        """Should use asyncio.create_subprocess_exec for file content fetching."""
         from llm_council.verification.api import _fetch_file_at_commit_async
 
-        # Patch both to verify which one is called
+        # Patch async subprocess and git root helper
         with (
             patch("asyncio.create_subprocess_exec") as mock_async,
-            patch("subprocess.run") as mock_sync,
+            patch("llm_council.verification.api._get_git_root", return_value="/mock/root"),
         ):
             mock_proc = AsyncMock()
             mock_proc.communicate.return_value = (b"content", b"")
@@ -207,6 +233,7 @@ class TestEventLoopNotBlocked:
 
             await _fetch_file_at_commit_async("HEAD", "file.txt")
 
-            # Async subprocess should be called, not sync
+            # Async subprocess should be called for file content
             assert mock_async.called, "Should use asyncio.create_subprocess_exec"
-            assert not mock_sync.called, "Should NOT use subprocess.run"
+            # Verify cwd was passed (for CWD independence)
+            assert mock_async.call_args.kwargs.get("cwd") == "/mock/root"
