@@ -4,8 +4,44 @@ TDD tests for the verify tool added to the MCP server.
 """
 
 import json
+import re
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
+
+
+def extract_json_from_verify_result(result: str) -> dict:
+    """Extract JSON from verify tool output.
+
+    The verify tool returns formatted markdown with embedded JSON in a details block:
+    ```
+    ...formatted content...
+
+    ---
+
+    <details>
+    <summary>Raw JSON</summary>
+
+    ```json
+    {...}
+    ```
+    </details>
+    ```
+
+    For error cases, it returns pure JSON.
+
+    Args:
+        result: The raw output from the verify tool
+
+    Returns:
+        Parsed JSON dictionary
+    """
+    # Try to extract JSON from the details block first
+    match = re.search(r"```json\s*\n(.*?)\n```", result, re.DOTALL)
+    if match:
+        return json.loads(match.group(1))
+
+    # Fallback: try to parse as pure JSON (error cases)
+    return json.loads(result)
 
 
 class TestMCPVerifyToolRegistration:
@@ -90,8 +126,8 @@ class TestMCPVerifyToolExecution:
 
             result = await verify(snapshot_id="abc1234")
 
-            # Should be valid JSON
-            parsed = json.loads(result)
+            # Should be valid JSON (extracted from formatted output)
+            parsed = extract_json_from_verify_result(result)
             assert isinstance(parsed, dict)
 
     @pytest.mark.asyncio
@@ -106,7 +142,7 @@ class TestMCPVerifyToolExecution:
             mock_run.return_value = mock_verification_result
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "verdict" in parsed
             assert parsed["verdict"] == "pass"
@@ -123,7 +159,7 @@ class TestMCPVerifyToolExecution:
             mock_run.return_value = mock_verification_result
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "exit_code" in parsed
             assert parsed["exit_code"] == 0
@@ -140,7 +176,7 @@ class TestMCPVerifyToolExecution:
             mock_run.return_value = mock_verification_result
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "confidence" in parsed
             assert 0.0 <= parsed["confidence"] <= 1.0
@@ -157,7 +193,7 @@ class TestMCPVerifyToolExecution:
             mock_run.return_value = mock_verification_result
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "rationale" in parsed
             assert len(parsed["rationale"]) > 0
@@ -174,7 +210,7 @@ class TestMCPVerifyToolExecution:
             mock_run.return_value = mock_verification_result
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "transcript_location" in parsed
             assert ".council/logs" in parsed["transcript_location"]
@@ -252,7 +288,7 @@ class TestMCPVerifyToolErrorHandling:
             mock_run.side_effect = InvalidSnapshotError("Invalid snapshot ID")
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "error" in parsed
             assert parsed["exit_code"] == 2  # UNCLEAR for errors
@@ -278,7 +314,7 @@ class TestMCPVerifyToolErrorHandling:
             }
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert parsed["verdict"] == "fail"
             assert parsed["exit_code"] == 1
@@ -297,7 +333,7 @@ class TestMCPVerifyToolErrorHandling:
             mock_run.side_effect = asyncio.TimeoutError("Verification timed out")
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "error" in parsed
             assert parsed["exit_code"] == 2  # UNCLEAR for timeouts
@@ -314,7 +350,7 @@ class TestMCPVerifyToolErrorHandling:
             mock_run.side_effect = RuntimeError("Unexpected internal error")
 
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
 
             assert "error" in parsed
             assert parsed["exit_code"] == 2
@@ -377,5 +413,5 @@ class TestMCPVerifyToolContextIntegration:
 
             # No ctx passed - should work without error
             result = await verify(snapshot_id="abc1234")
-            parsed = json.loads(result)
+            parsed = extract_json_from_verify_result(result)
             assert parsed["verdict"] == "pass"
