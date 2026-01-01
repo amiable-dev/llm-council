@@ -428,24 +428,40 @@ async def _fetch_files_for_verification_async(
     if not files_to_fetch:
         return "[No files specified and could not determine changed files]"
 
-    # Fetch all files concurrently
-    results = await asyncio.gather(
-        *[_fetch_file_at_commit_async(snapshot_id, fp) for fp in files_to_fetch]
-    )
-
-    sections = []
+    # Fetch files with early termination when limit is reached
+    # This avoids wasting resources on files we won't include
+    sections: List[str] = []
     total_chars = 0
 
-    for file_path, (content, truncated) in zip(files_to_fetch, results):
+    # Limit concurrent fetches to avoid DoS on large commits
+    # Fetch in batches of up to 5 files at a time
+    BATCH_SIZE = 5
+    files_fetched = 0
+
+    for i in range(0, len(files_to_fetch), BATCH_SIZE):
+        # Check limit before fetching next batch
         if total_chars >= MAX_TOTAL_CHARS:
             sections.append(
                 f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
             )
             break
 
-        total_chars += len(content)
-        section = f"### {file_path}\n```\n{content}\n```"
-        sections.append(section)
+        batch = files_to_fetch[i : i + BATCH_SIZE]
+        results = await asyncio.gather(
+            *[_fetch_file_at_commit_async(snapshot_id, fp) for fp in batch]
+        )
+
+        for file_path, (content, truncated) in zip(batch, results):
+            if total_chars >= MAX_TOTAL_CHARS:
+                sections.append(
+                    f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+                )
+                break
+
+            total_chars += len(content)
+            files_fetched += 1
+            section = f"### {file_path}\n```\n{content}\n```"
+            sections.append(section)
 
     return "\n\n".join(sections)
 
