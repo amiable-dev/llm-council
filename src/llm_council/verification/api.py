@@ -12,6 +12,7 @@ Exit codes:
 
 from __future__ import annotations
 
+import asyncio
 import re
 import subprocess
 import uuid
@@ -180,6 +181,122 @@ def _fetch_file_at_commit(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
         return f"[Error: {e}]", False
 
 
+# Async timeout for subprocess operations (seconds)
+ASYNC_SUBPROCESS_TIMEOUT = 10
+
+
+async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
+    """
+    Fetch file contents from git at a specific commit (async version).
+
+    Uses asyncio.create_subprocess_exec to avoid blocking the event loop.
+
+    Args:
+        snapshot_id: Git commit SHA
+        file_path: Path to file relative to repo root
+
+    Returns:
+        Tuple of (content, was_truncated)
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "show",
+            f"{snapshot_id}:{file_path}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return f"[Error: Timeout reading {file_path}]", False
+
+        if proc.returncode != 0:
+            return f"[Error: Could not read {file_path} at {snapshot_id}]", False
+
+        content = stdout.decode("utf-8", errors="replace")
+        truncated = False
+
+        if len(content) > MAX_FILE_CHARS:
+            content = content[:MAX_FILE_CHARS] + f"\n\n... [truncated, {len(stdout)} chars total]"
+            truncated = True
+
+        return content, truncated
+
+    except Exception as e:
+        return f"[Error: {e}]", False
+
+
+async def _fetch_files_for_verification_async(
+    snapshot_id: str,
+    target_paths: Optional[List[str]] = None,
+) -> str:
+    """
+    Fetch file contents for verification prompt (async version).
+
+    Uses async subprocess to avoid blocking the event loop.
+    Fetches multiple files concurrently for better performance.
+
+    Args:
+        snapshot_id: Git commit SHA
+        target_paths: Optional list of specific paths
+
+    Returns:
+        Formatted string with file contents
+    """
+    files_to_fetch = list(target_paths) if target_paths else []
+
+    # If no target paths, get files changed in this commit
+    if not files_to_fetch:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "diff-tree",
+                "--no-commit-id",
+                "--name-only",
+                "-r",
+                snapshot_id,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+
+            if proc.returncode == 0:
+                files_to_fetch = [f for f in stdout.decode("utf-8").strip().split("\n") if f]
+        except Exception:
+            pass
+
+    if not files_to_fetch:
+        return "[No files specified and could not determine changed files]"
+
+    # Fetch all files concurrently
+    results = await asyncio.gather(
+        *[_fetch_file_at_commit_async(snapshot_id, fp) for fp in files_to_fetch]
+    )
+
+    sections = []
+    total_chars = 0
+
+    for file_path, (content, truncated) in zip(files_to_fetch, results):
+        if total_chars >= MAX_TOTAL_CHARS:
+            sections.append(
+                f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+            )
+            break
+
+        total_chars += len(content)
+        section = f"### {file_path}\n```\n{content}\n```"
+        sections.append(section)
+
+    return "\n\n".join(sections)
+
+
 def _fetch_files_for_verification(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
@@ -235,7 +352,7 @@ def _fetch_files_for_verification(
     return "\n\n".join(sections)
 
 
-def _build_verification_prompt(
+async def _build_verification_prompt(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
     rubric_focus: Optional[str] = None,
@@ -245,6 +362,8 @@ def _build_verification_prompt(
 
     Creates a structured prompt that asks the council to review
     code/documentation at the given snapshot, including actual file contents.
+
+    Uses async file fetching to avoid blocking the event loop.
 
     Args:
         snapshot_id: Git commit SHA for the code version
@@ -258,8 +377,8 @@ def _build_verification_prompt(
     if rubric_focus:
         focus_section = f"\n\n**Focus Area**: {rubric_focus}\nPay particular attention to {rubric_focus.lower()}-related concerns."
 
-    # Fetch actual file contents
-    file_contents = _fetch_files_for_verification(snapshot_id, target_paths)
+    # Fetch actual file contents (async to avoid blocking event loop)
+    file_contents = await _fetch_files_for_verification_async(snapshot_id, target_paths)
 
     prompt = f"""You are reviewing code at commit `{snapshot_id}`.{focus_section}
 
@@ -330,8 +449,8 @@ async def run_verification(
             },
         )
 
-        # Build verification prompt for council
-        verification_query = _build_verification_prompt(
+        # Build verification prompt for council (async to avoid blocking)
+        verification_query = await _build_verification_prompt(
             snapshot_id=request.snapshot_id,
             target_paths=request.target_paths,
             rubric_focus=request.rubric_focus,
