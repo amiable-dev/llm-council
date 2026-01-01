@@ -87,37 +87,62 @@ def extract_verdict_from_synthesis(
 
 def extract_rubric_scores_from_rankings(
     stage2_results: List[Dict[str, Any]],
-) -> Dict[str, float]:
+) -> Dict[str, Optional[float]]:
     """
     Extract aggregated rubric scores from Stage 2 rankings.
 
-    Averages rubric scores across all reviewers to get a consensus score.
+    Handles multiple formats:
+    1. Dimension-based rubric_scores: {"accuracy": 9.0, "clarity": 8.5, ...}
+    2. Per-response scores: parsed_ranking.scores = {"Response A": 10, ...}
 
     Args:
         stage2_results: List of Stage 2 ranking results
 
     Returns:
-        Dictionary mapping dimension names to averaged scores (0-10)
+        Dictionary mapping dimension names to scores (0-10) or None
     """
     dimension_scores: Dict[str, List[float]] = {dim: [] for dim in RUBRIC_DIMENSIONS}
+    response_scores: List[float] = []
 
     for ranking in stage2_results:
+        # Format 1: Dimension-based rubric_scores (ADR-016 format)
         rubric_scores = ranking.get("rubric_scores", {})
+        if isinstance(rubric_scores, dict):
+            for dimension in RUBRIC_DIMENSIONS:
+                if dimension in rubric_scores:
+                    score = rubric_scores[dimension]
+                    if isinstance(score, (int, float)) and 0 <= score <= 10:
+                        dimension_scores[dimension].append(float(score))
 
-        for dimension in RUBRIC_DIMENSIONS:
-            if dimension in rubric_scores:
-                score = rubric_scores[dimension]
-                if isinstance(score, (int, float)) and 0 <= score <= 10:
-                    dimension_scores[dimension].append(float(score))
+        # Format 2: Per-response scores in parsed_ranking
+        parsed = ranking.get("parsed_ranking", {})
+        if isinstance(parsed, dict):
+            scores = parsed.get("scores", {})
+            if isinstance(scores, dict):
+                for score in scores.values():
+                    if isinstance(score, (int, float)) and 0 <= score <= 10:
+                        response_scores.append(float(score))
 
-    # Calculate averages
-    result: Dict[str, float] = {}
+    # Calculate dimension averages from rubric_scores if available
+    result: Dict[str, Optional[float]] = {}
+    has_dimension_scores = False
+
     for dimension in RUBRIC_DIMENSIONS:
         scores = dimension_scores[dimension]
         if scores:
             result[dimension] = round(statistics.mean(scores), 1)
+            has_dimension_scores = True
         else:
-            result[dimension] = None  # No scores available
+            result[dimension] = None
+
+    # If no dimension scores but we have response scores, derive estimates
+    if not has_dimension_scores and response_scores:
+        overall = round(max(response_scores), 1)
+        mean_score = statistics.mean(response_scores)
+
+        result["accuracy"] = overall
+        result["clarity"] = round(mean_score, 1)
+        result["completeness"] = round(mean_score * 0.9, 1)
 
     return result
 
@@ -130,12 +155,17 @@ def calculate_confidence_from_agreement(
     Calculate confidence score based on council agreement.
 
     Factors in:
-    - Rubric score variance (low variance = high confidence)
+    - Score variance (low variance = high confidence)
+    - Ranking agreement (reviewers ranking similarly = high confidence)
     - Overall score levels (high scores for pass = high confidence)
     - Number of reviewers (more reviewers = higher confidence)
 
+    Handles multiple Stage 2 formats:
+    1. parsed_ranking as list: ["Response A", "Response B", ...]
+    2. parsed_ranking as dict: {"ranking": [...], "scores": {...}}
+
     Args:
-        stage2_results: Stage 2 ranking results with rubric scores
+        stage2_results: Stage 2 ranking results
         stage3_verdict: The extracted verdict ("pass", "fail", "unclear")
 
     Returns:
@@ -144,13 +174,36 @@ def calculate_confidence_from_agreement(
     if not stage2_results:
         return 0.50  # No reviews = unclear
 
-    # Collect all scores
     all_scores: List[float] = []
+    top_responses: List[str] = []
+
     for ranking in stage2_results:
+        # Handle parsed_ranking in multiple formats
+        parsed = ranking.get("parsed_ranking")
+
+        if isinstance(parsed, list):
+            # Format 1: Direct list of rankings
+            if parsed:
+                top_responses.append(parsed[0])
+        elif isinstance(parsed, dict):
+            # Format 2: Dict with ranking and scores
+            ranking_order = parsed.get("ranking", [])
+            scores = parsed.get("scores", {})
+
+            if ranking_order:
+                top_responses.append(ranking_order[0])
+
+            if isinstance(scores, dict):
+                for score in scores.values():
+                    if isinstance(score, (int, float)):
+                        all_scores.append(float(score))
+
+        # Collect scores from rubric_scores (dimension-based)
         rubric_scores = ranking.get("rubric_scores", {})
-        for score in rubric_scores.values():
-            if isinstance(score, (int, float)):
-                all_scores.append(float(score))
+        if isinstance(rubric_scores, dict):
+            for score in rubric_scores.values():
+                if isinstance(score, (int, float)):
+                    all_scores.append(float(score))
 
     if not all_scores:
         return 0.50  # No scores = unclear
@@ -158,6 +211,15 @@ def calculate_confidence_from_agreement(
     # Calculate mean and variance
     mean_score = statistics.mean(all_scores)
     variance = statistics.variance(all_scores) if len(all_scores) > 1 else 0
+
+    # Calculate ranking agreement (what % of reviewers agree on #1)
+    ranking_agreement = 0.0
+    if top_responses:
+        from collections import Counter
+
+        counts = Counter(top_responses)
+        most_common_count = counts.most_common(1)[0][1]
+        ranking_agreement = most_common_count / len(top_responses)
 
     # Base confidence on mean score
     # For "pass": high scores = high confidence
@@ -176,6 +238,11 @@ def calculate_confidence_from_agreement(
     # Max variance reduction is 0.20
     variance_penalty = min(0.20, variance / 10)
     confidence = score_confidence - variance_penalty
+
+    # Adjust for ranking agreement (higher agreement = higher confidence)
+    # Up to 15% boost for unanimous agreement
+    agreement_boost = ranking_agreement * 0.15
+    confidence += agreement_boost
 
     # Adjust for number of reviewers
     # More reviewers = higher confidence (up to 10% boost)

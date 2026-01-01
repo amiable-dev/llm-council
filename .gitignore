@@ -63,3 +63,5 @@ site/
 
 # MCP server configuration (may contain API keys)
 .mcp.json
+.council/
+.council/

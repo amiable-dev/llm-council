@@ -13,9 +13,10 @@ Exit codes:
 from __future__ import annotations
 
 import re
+import subprocess
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -135,6 +136,105 @@ def _verdict_to_exit_code(verdict: str) -> int:
         return 2
 
 
+# Maximum characters per file to include in prompt
+MAX_FILE_CHARS = 15000
+# Maximum total characters for all files
+MAX_TOTAL_CHARS = 50000
+
+
+def _fetch_file_at_commit(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
+    """
+    Fetch file contents from git at a specific commit.
+
+    Args:
+        snapshot_id: Git commit SHA
+        file_path: Path to file relative to repo root
+
+    Returns:
+        Tuple of (content, was_truncated)
+    """
+    try:
+        result = subprocess.run(
+            ["git", "show", f"{snapshot_id}:{file_path}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return f"[Error: Could not read {file_path} at {snapshot_id}]", False
+
+        content = result.stdout
+        truncated = False
+
+        if len(content) > MAX_FILE_CHARS:
+            content = (
+                content[:MAX_FILE_CHARS] + f"\n\n... [truncated, {len(result.stdout)} chars total]"
+            )
+            truncated = True
+
+        return content, truncated
+
+    except subprocess.TimeoutExpired:
+        return f"[Error: Timeout reading {file_path}]", False
+    except Exception as e:
+        return f"[Error: {e}]", False
+
+
+def _fetch_files_for_verification(
+    snapshot_id: str,
+    target_paths: Optional[List[str]] = None,
+) -> str:
+    """
+    Fetch file contents for verification prompt.
+
+    If target_paths specified, fetches those files.
+    Otherwise, fetches changed files in the commit.
+
+    Args:
+        snapshot_id: Git commit SHA
+        target_paths: Optional list of specific paths
+
+    Returns:
+        Formatted string with file contents
+    """
+    files_to_fetch = target_paths or []
+
+    # If no target paths, get files changed in this commit
+    if not files_to_fetch:
+        try:
+            result = subprocess.run(
+                ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", snapshot_id],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                files_to_fetch = [f for f in result.stdout.strip().split("\n") if f]
+        except Exception:
+            pass
+
+    if not files_to_fetch:
+        return "[No files specified and could not determine changed files]"
+
+    sections = []
+    total_chars = 0
+
+    for file_path in files_to_fetch:
+        if total_chars >= MAX_TOTAL_CHARS:
+            sections.append(
+                f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+            )
+            break
+
+        content, truncated = _fetch_file_at_commit(snapshot_id, file_path)
+        total_chars += len(content)
+
+        section = f"### {file_path}\n```\n{content}\n```"
+        sections.append(section)
+
+    return "\n\n".join(sections)
+
+
 def _build_verification_prompt(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
@@ -144,7 +244,7 @@ def _build_verification_prompt(
     Build verification prompt for council deliberation.
 
     Creates a structured prompt that asks the council to review
-    code/documentation at the given snapshot.
+    code/documentation at the given snapshot, including actual file contents.
 
     Args:
         snapshot_id: Git commit SHA for the code version
@@ -158,14 +258,18 @@ def _build_verification_prompt(
     if rubric_focus:
         focus_section = f"\n\n**Focus Area**: {rubric_focus}\nPay particular attention to {rubric_focus.lower()}-related concerns."
 
-    paths_section = ""
-    if target_paths:
-        paths_list = "\n".join(f"- {path}" for path in target_paths)
-        paths_section = f"\n\n**Target Paths**:\n{paths_list}"
+    # Fetch actual file contents
+    file_contents = _fetch_files_for_verification(snapshot_id, target_paths)
 
-    prompt = f"""You are reviewing code changes at commit `{snapshot_id}`.{focus_section}{paths_section}
+    prompt = f"""You are reviewing code at commit `{snapshot_id}`.{focus_section}
 
-Please provide a thorough review of the code with the following structure:
+## Code to Review
+
+{file_contents}
+
+## Instructions
+
+Please provide a thorough review with the following structure:
 
 1. **Summary**: Brief overview of what the code does
 2. **Quality Assessment**: Evaluate code quality, readability, and maintainability

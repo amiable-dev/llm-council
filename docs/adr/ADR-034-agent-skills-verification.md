@@ -1119,6 +1119,12 @@ The following issues tracked this work (all closed in commit 12ec6b5):
 
 ## Changelog
 
+### v2.5 (2026-01-01)
+- **Bug Fix #299**: Verification prompt now includes actual file contents from git
+- **Bug Fix #300**: Rubric scores extraction handles both dimension-based and per-response formats
+- **Cleanup**: Removed gap analysis document, added .council/ to gitignore
+- **Robustness**: Extractors now handle multiple Stage 2 data formats gracefully
+
 ### v2.4 (2026-01-01)
 - **Council Integration**: Implemented full 3-stage council deliberation in `run_verification()` (#298)
 - **Verdict Extraction**: Added `verdict_extractor.py` module for extracting verdict, confidence, rubric scores
@@ -1128,9 +1134,9 @@ The following issues tracked this work (all closed in commit 12ec6b5):
 - **Gap Resolution**: Resolves issues identified in v2.3 gap analysis (#297)
 
 ### v2.3 (2026-01-01)
-- **Gap Analysis**: Identified critical gap - Track A verify tool returns hardcoded values
+- **Gap Analysis**: Identified critical gap - Track A verify tool returned hardcoded values
 - **Status Update**: Changed Track A status from "Complete" to "Partial"
-- **Documentation**: Added [ADR-034-gap-analysis.md](ADR-034-gap-analysis.md) with root cause analysis
+- **Issues Created**: #299 (file contents), #300 (rubric scores), #301 (output formatting)
 
 ### v2.2 (2026-01-01)
 - **Robustness**: Added SkillLoader implementation requirements section per council review
