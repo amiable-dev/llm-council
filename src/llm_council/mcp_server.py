@@ -150,6 +150,13 @@ async def consult_council(
             - "tie_breaker": Chairman resolves deadlocked decisions
         include_dissent: If True, extract minority opinions from Stage 2 evaluations (ADR-025b).
         ctx: MCP context for progress reporting (injected automatically).
+
+    Returns:
+        Formatted string containing the council's synthesis, rankings, and quality metrics (ADR-036).
+        Quality metrics include:
+        - Consensus Strength Score (CSS): Agreement among council members (0.0-1.0)
+        - Deliberation Depth Index (DDI): Thoroughness of deliberation (0.0-1.0)
+        - Synthesis Attribution Score (SAS): How well synthesis is grounded in sources
     """
     # Parse verdict_type string to enum
     try:
@@ -232,6 +239,35 @@ async def consult_council(
         for entry in aggregate[:5]:  # Top 5
             score = entry.get("borda_score", "N/A")
             result += f"- {entry['model']}: {score}\n"
+
+    # ADR-036: Add quality metrics if available
+    quality_metrics = metadata.get("quality_metrics")
+    if quality_metrics:
+        result += "\n### Quality Metrics\n"
+        core = quality_metrics.get("core", {})
+
+        # Consensus Strength Score
+        css = core.get("consensus_strength", 0.0)
+        css_bar = "█" * int(css * 10) + "░" * (10 - int(css * 10))
+        result += f"- **Consensus Strength**: {css:.2f} [{css_bar}]\n"
+
+        # Deliberation Depth Index
+        ddi = core.get("deliberation_depth", 0.0)
+        ddi_bar = "█" * int(ddi * 10) + "░" * (10 - int(ddi * 10))
+        result += f"- **Deliberation Depth**: {ddi:.2f} [{ddi_bar}]\n"
+
+        # Synthesis Attribution Score
+        sas = core.get("synthesis_attribution", {})
+        if sas:
+            grounded = "✓" if sas.get("grounded", False) else "✗"
+            result += f"- **Synthesis Grounded**: {grounded} (alignment: {sas.get('max_source_alignment', 0):.2f})\n"
+            if sas.get("hallucination_risk", 0) > 0.3:
+                result += f"  - ⚠️ Hallucination risk: {sas.get('hallucination_risk', 0):.2f}\n"
+
+        # Quality alerts
+        alerts = quality_metrics.get("quality_alerts", [])
+        if alerts:
+            result += f"\n**Alerts**: {', '.join(alerts)}\n"
 
     if include_details:
         result += "\n\n### Council Details\n"
