@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-01-03
+
+### Fixed
+
+- **Jaccard tokenization**: Changed regex from `\w{3,}` to `\w{2,}` to include 2-letter domain terms (AI, ML, IO, etc.) in similarity calculations for DDI and SAS metrics
+
 ## [0.24.0] - 2026-01-03
 
 ### Added
