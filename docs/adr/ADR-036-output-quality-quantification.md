@@ -4,7 +4,7 @@
 |-------|-------|
 | **Status** | Accepted |
 | **Date** | 2025-12-29 |
-| **Implemented** | 2026-01-03 (Phase 1) |
+| **Implemented** | 2026-01-03 (Phase 1-3 Complete) |
 | **Author** | Chris (amiable-dev) |
 | **Supersedes** | - |
 | **Related ADRs** | ADR-015 (Bias Auditing), ADR-016 (Structured Rubric Scoring), ADR-018 (Cross-Session Bias Aggregation), ADR-025b (Jury Mode), ADR-030 (Scoring Refinements) |
@@ -744,3 +744,112 @@ async def consult_council(
 - `tests/quality/` - 44 TDD tests
 
 **Note:** Phase 1 uses synchronous Jaccard-based calculations. Async embedding support reserved for Tier 2/3.
+
+### Phase 2 (Council Cloud) - 2026-01-03
+
+**Standard Tier Metrics Implemented:**
+
+1. **Temporal Consistency Score (TCS)**
+   - Variance-based scoring (low variance = consistent)
+   - Drift detection via mean comparison and linear regression slope
+   - Trend-aware: improving trends penalized less than declining
+   - Confidence levels: INSUFFICIENT (<10), PRELIMINARY (10-30), MODERATE (30-100), HIGH (100+)
+
+2. **Cross-Model Calibration Report**
+   - Z-score normalization for reviewer harshness
+   - Outlier detection: |Z| > 1.0 AND absolute_diff > 1.0 AND N >= 5
+   - Fisher z-transformation for correlation confidence intervals
+   - Pooled correlation across sessions
+
+3. **Rubric Dimension Breakdown**
+   - Per-dimension aggregation (accuracy, relevance, completeness, conciseness, clarity)
+   - Strongest/weakest dimension identification
+   - Customizable dimension weights
+
+4. **CLI Quality Report**
+   - `generate_quality_report()`: Combines all Standard tier metrics
+   - Text and JSON output formats
+   - Period-based filtering (days)
+
+5. **Tier Licensing Infrastructure**
+   - `@require_license(tier)` decorator
+   - Feature gating by tier level
+   - License validation and expiration checking
+
+**Files (council-cloud):**
+- `packages/quality/src/quality/standard/` - 5 modules
+- `packages/quality/tests/standard/` - 97 TDD tests
+
+**Council Gates:**
+- Gate 2.1: TCS algorithm review - APPROVED
+- Gate 2.2: Calibration statistics review - APPROVED (ICC recommendation noted)
+- Gate 2.3: Blog post review - APPROVED
+
+### Phase 3 (Council Cloud) - 2026-01-03
+
+**Enterprise Tier Features Implemented:**
+
+1. **DeepEval Integration** (CC-010 / #92)
+   - `DeepEvalValidator` implementing `ExternalValidator` protocol
+   - Metrics: faithfulness, answer_relevancy, contextual_precision, contextual_recall, hallucination
+   - Graceful degradation when DeepEval not installed
+   - Async/sync bridge via `run_in_executor`
+   - Configurable threshold and timeout
+
+2. **RAGAS Integration** (CC-011 / #93)
+   - `RAGASValidator` for RAG pipeline evaluation
+   - Metrics: faithfulness, answer_relevancy, context_precision, context_recall, context_relevancy, answer_similarity, answer_correctness
+   - Context-dependent metric validation (fail-fast if context required but missing)
+   - datasets.Dataset integration
+
+3. **Golden Dataset Schema** (CC-012 / #94)
+   - Schema version 1.0.0 with forward compatibility
+   - `GoldenExample`: id, query, expected_response, context, tags, difficulty, metadata
+   - `GoldenDataset`: name, version, examples, description, schema_version
+   - `DatasetLoader`: JSON I/O with schema validation
+   - `merge_datasets()`: Combine datasets with duplicate detection
+
+4. **Regression Test Runner** (CC-013 / #95)
+   - `RegressionRunner` with parallel/sequential execution
+   - `RunResult` and `ExampleResult` tracking
+   - `RunnerConfig`: threshold, timeout, parallel, max_workers
+   - `compare_runs()`: 5% delta threshold for regression detection
+   - JSON persistence for audit trails
+
+5. **Monitoring Webhooks** (CC-014 / #96)
+   - `WebhookManager`: register, unregister, enable, disable
+   - HMAC-SHA256 signature generation and verification
+   - `WebhookPayload`: event_id, timestamp, event_type, data
+   - Retry with exponential backoff
+   - Event types: RUN_STARTED, RUN_COMPLETED, RUN_FAILED, REGRESSION_DETECTED, THRESHOLD_BREACH, VALIDATION_FAILED
+
+6. **Dashboard API** (CC-015 / #97)
+   - `DashboardRouter` with REST endpoints
+   - Endpoints: /health, /runs, /runs/{id}, /metrics/summary, /metrics/trend, /datasets, /webhooks, /compare/{id1}/{id2}
+   - `APIResponse` wrapper with success/data/error/status_code
+   - Pagination support for list endpoints
+
+7. **Enterprise Licensing** (CC-016 / #98)
+   - `LicenseTier` enum: FREE, STANDARD, ENTERPRISE
+   - `License` dataclass with expiration checking
+   - `LicenseValidator` for feature access control
+   - `@require_feature(feature)` decorator
+   - `TIER_FEATURES` mapping for entitlements
+   - Usage tracking per feature
+
+**Files (council-cloud):**
+- `packages/quality/src/quality/enterprise/` - 10 modules
+- `packages/quality/tests/enterprise/` - 163 TDD tests
+
+**Council Gates:**
+- Gate 3.1 (DeepEval): APPROVED - Request object pattern, PII handling, ThreadPoolExecutor recommended
+- Gate 3.2 (RAGAS): APPROVED - Context truncation, cost telemetry, rate limiting recommended
+- Gate 3.3 (Golden Datasets): APPROVED - YAML support, evaluation logic fields, provenance fields recommended
+- Gate 3.4 (Security): APPROVED - `hmac.compare_digest`, SSRF protection, JWT/OAuth2 for auth recommended
+
+**Security Recommendations (from Gate 3.4):**
+- Use `hmac.compare_digest` for timing attack prevention
+- DNS resolution check for SSRF protection (regex insufficient)
+- JWT/OAuth2 middleware for production dashboard auth
+- Rate limiting on expensive API endpoints
+- Secret rotation strategy for webhook signing keys
