@@ -2,8 +2,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | Draft |
+| **Status** | Accepted |
 | **Date** | 2025-12-29 |
+| **Implemented** | 2026-01-03 (Phase 1) |
 | **Author** | Chris (amiable-dev) |
 | **Supersedes** | - |
 | **Related ADRs** | ADR-015 (Bias Auditing), ADR-016 (Structured Rubric Scoring), ADR-018 (Cross-Session Bias Aggregation), ADR-025b (Jury Mode), ADR-030 (Scoring Refinements) |
@@ -708,3 +709,38 @@ async def consult_council(
 | `LLM_COUNCIL_GOLDEN_DATASET_PATH` | Path to golden dataset YAML | - |
 | `LLM_COUNCIL_QUALITY_WEBHOOK_URL` | Monitoring webhook endpoint | - |
 | `LLM_COUNCIL_QUALITY_RETENTION_DAYS` | Historical data retention | `7` (OSS) |
+
+---
+
+## Implementation Changelog
+
+### Phase 1 (v0.24.0) - 2026-01-03
+
+**Core Metrics Implemented:**
+
+1. **Consensus Strength Score (CSS)**
+   - Winner margin (40%): Gap between #1 and #2 positions
+   - Ordering clarity (40%): Uniformity of position distribution
+   - Non-tie factor (20%): Penalty for tied positions
+
+2. **Deliberation Depth Index (DDI)**
+   - Response diversity (35%): Jaccard-based dissimilarity
+   - Review coverage (35%): Fraction of expected reviewers
+   - Critique richness (30%): Token count of justifications
+
+3. **Synthesis Attribution Score (SAS)**
+   - Winner alignment: Jaccard similarity to top responses
+   - Max source alignment: Best match to any response
+   - Hallucination risk: 1 - max_source_alignment
+   - Grounded threshold: 0.6
+
+**Integration Points:**
+- `council.py`: Quality metrics in `run_full_council()` metadata
+- `mcp_server.py`: Visual display in `consult_council` output
+- `unified_config.py`: Configuration support (future)
+
+**Files:**
+- `src/llm_council/quality/` - New module (6 files)
+- `tests/quality/` - 44 TDD tests
+
+**Note:** Phase 1 uses synchronous Jaccard-based calculations. Async embedding support reserved for Tier 2/3.

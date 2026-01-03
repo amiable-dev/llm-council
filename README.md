@@ -719,6 +719,67 @@ llm-council bias-report --sessions 50
 | 20-49 | Moderate | CIs displayed |
 | N >= 50 | High | Full analysis |
 
+### Output Quality Metrics (ADR-036)
+
+Quantify the reliability and quality of council outputs with three core metrics:
+
+| Metric | Range | Description |
+|--------|-------|-------------|
+| **Consensus Strength Score (CSS)** | 0.0-1.0 | Agreement among council members in Stage 2 rankings |
+| **Deliberation Depth Index (DDI)** | 0.0-1.0 | Thoroughness of the deliberation process |
+| **Synthesis Attribution Score (SAS)** | 0.0-1.0 | How well synthesis traces back to source responses |
+
+**CSS Interpretation:**
+
+| Score | Interpretation | Action |
+|-------|---------------|--------|
+| 0.85+ | Strong consensus | High confidence in synthesis |
+| 0.70-0.84 | Moderate consensus | Note minority views |
+| 0.50-0.69 | Weak consensus | Consider `include_dissent=true` |
+| <0.50 | Significant disagreement | Use debate mode |
+
+**SAS Components:**
+- `winner_alignment`: Similarity to top-ranked responses
+- `max_source_alignment`: Best match to any response
+- `hallucination_risk`: 1 - max_source_alignment
+- `grounded`: True if synthesis traces to sources (threshold: 0.6)
+
+**Usage:**
+
+Quality metrics are automatically included in metadata:
+
+```python
+stage1, stage2, stage3, metadata = await run_full_council(query)
+
+quality = metadata.get("quality_metrics", {})
+core = quality.get("core", {})
+
+print(f"Consensus: {core['consensus_strength']:.2f}")
+print(f"Depth: {core['deliberation_depth']:.2f}")
+print(f"Grounded: {core['synthesis_attribution']['grounded']}")
+```
+
+**MCP Tool Output:**
+
+The `consult_council` MCP tool displays quality metrics with visual bars:
+
+```
+### Quality Metrics
+- **Consensus Strength**: 0.82 [████████░░]
+- **Deliberation Depth**: 0.74 [███████░░░]
+- **Synthesis Grounded**: ✓ (alignment: 0.89)
+```
+
+**Environment Variables:**
+
+```bash
+# Enable/disable quality metrics (default: true)
+export LLM_COUNCIL_QUALITY_METRICS=true
+
+# Quality tier: core (OSS), standard, enterprise
+export LLM_COUNCIL_QUALITY_TIER=core
+```
+
 ### Gateway Layer (ADR-023)
 
 The gateway layer provides an abstraction over LLM API requests with multiple gateway options:
