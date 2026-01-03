@@ -533,11 +533,8 @@ jobs:
    gh secret set OPENROUTER_API_KEY
    ```
 
-2. **Copy workflow file**:
-   ```bash
-   curl -o .github/workflows/council-gate.yml \
-     https://raw.githubusercontent.com/amiable-dev/llm-council/master/examples/github-actions/council-gate.yml
-   ```
+2. **Create workflow file**:
+   Copy the [Basic Setup](#basic-setup) YAML above to `.github/workflows/council-gate.yml`
 
 3. **Open a PR and watch**:
    The council will review your changes and post results.
