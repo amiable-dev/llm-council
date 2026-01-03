@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.4] - 2026-01-03
+
+### Added
+
+- **`install-skills` CLI command**: Install bundled skills to any project
+  - `llm-council install-skills --target .github/skills` - Install to project
+  - `llm-council install-skills --list` - List available skills
+  - `llm-council install-skills --force` - Overwrite existing skills
+  - Bundled skills: `council-verify`, `council-review`, `council-gate`
+
+### Changed
+
+- Skills are now bundled in the package for distribution via pip
+
 ## [0.24.3] - 2026-01-03
 
 ### Fixed

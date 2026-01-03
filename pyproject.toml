@@ -76,6 +76,12 @@ version-file = "src/llm_council/_version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/llm_council"]
 
+[tool.hatch.build.targets.wheel.force-include]
+".github/skills" = "llm_council/skills/bundled"
+
+[tool.hatch.build.targets.sdist.force-include]
+".github/skills" = "llm_council/skills/bundled"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"

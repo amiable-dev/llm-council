@@ -6,6 +6,7 @@ Usage:
     llm-council serve --port 9000 --host 127.0.0.1
     llm-council setup-key     # Store API key in system keychain (ADR-013)
     llm-council bias-report   # Cross-session bias analysis (ADR-018)
+    llm-council install-skills --target .github/skills  # Install bundled skills
 """
 
 import argparse
@@ -114,6 +115,29 @@ def main():
         help="Include detailed reviewer profiles",
     )
 
+    # Install skills command
+    install_parser = subparsers.add_parser(
+        "install-skills",
+        help="Install bundled skills to a target directory",
+    )
+    install_parser.add_argument(
+        "--target",
+        type=str,
+        default=".github/skills",
+        help="Target directory for skills (default: .github/skills)",
+    )
+    install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing skills",
+    )
+    install_parser.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_only",
+        help="List available skills without installing",
+    )
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -127,6 +151,12 @@ def main():
             max_days=args.max_days,
             output_format=args.output_format,
             verbose=args.verbose,
+        )
+    elif args.command == "install-skills":
+        install_skills(
+            target=args.target,
+            force=args.force,
+            list_only=args.list_only,
         )
     else:
         # Default: MCP server
@@ -266,6 +296,98 @@ def bias_report(
         )
 
     print(output)
+
+
+def install_skills(
+    target: str = ".github/skills",
+    force: bool = False,
+    list_only: bool = False,
+):
+    """Install bundled skills to a target directory.
+
+    Args:
+        target: Target directory for skills (default: .github/skills)
+        force: Overwrite existing skills
+        list_only: List available skills without installing
+    """
+    import shutil
+    from pathlib import Path
+    from importlib.resources import files, as_file
+
+    # Get bundled skills location
+    try:
+        bundled_ref = files("llm_council.skills") / "bundled"
+    except TypeError:
+        # Python 3.9 fallback
+        from importlib.resources import path as resources_path
+
+        with resources_path("llm_council.skills", "bundled") as bundled_path:
+            bundled_ref = bundled_path
+
+    # Use context manager for traversable resources
+    with as_file(bundled_ref) as bundled_path:
+        if not bundled_path.exists():
+            print("Error: Bundled skills not found in package.", file=sys.stderr)
+            print("This may indicate a packaging issue.", file=sys.stderr)
+            sys.exit(1)
+
+        # Find available skills
+        skills = []
+        for item in bundled_path.iterdir():
+            if item.is_dir() and (item / "SKILL.md").exists():
+                skills.append(item.name)
+
+        if list_only:
+            print("Available bundled skills:")
+            for skill in sorted(skills):
+                print(f"  - {skill}")
+            return
+
+        if not skills:
+            print("No bundled skills found.", file=sys.stderr)
+            sys.exit(1)
+
+        # Create target directory
+        target_path = Path(target)
+        target_path.mkdir(parents=True, exist_ok=True)
+
+        # Copy skills
+        installed = []
+        skipped = []
+        for skill in skills:
+            src = bundled_path / skill
+            dst = target_path / skill
+
+            if dst.exists() and not force:
+                skipped.append(skill)
+                continue
+
+            if dst.exists():
+                shutil.rmtree(dst)
+
+            shutil.copytree(src, dst)
+            installed.append(skill)
+
+        # Copy marketplace.json if it exists
+        marketplace_src = bundled_path / "marketplace.json"
+        marketplace_dst = target_path / "marketplace.json"
+        if marketplace_src.exists():
+            if not marketplace_dst.exists() or force:
+                shutil.copy2(marketplace_src, marketplace_dst)
+
+        # Report results
+        if installed:
+            print(f"Installed {len(installed)} skill(s) to {target}:")
+            for skill in installed:
+                print(f"  + {skill}")
+
+        if skipped:
+            print(f"\nSkipped {len(skipped)} existing skill(s) (use --force to overwrite):")
+            for skill in skipped:
+                print(f"  - {skill}")
+
+        if not installed and not skipped:
+            print("No skills to install.")
 
 
 if __name__ == "__main__":
