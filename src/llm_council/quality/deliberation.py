@@ -21,8 +21,9 @@ class EmbeddingProvider(Protocol):
 
 def _tokenize(text: str) -> set:
     """Simple tokenization for Jaccard similarity fallback."""
-    # Lowercase, split on non-alphanumeric, filter short tokens
-    tokens = re.findall(r"\b\w{3,}\b", text.lower())
+    # Lowercase, split on non-alphanumeric, filter single-char tokens
+    # Min 2 chars to include domain terms like AI, ML, IO, etc.
+    tokens = re.findall(r"\b\w{2,}\b", text.lower())
     return set(tokens)
 
 
