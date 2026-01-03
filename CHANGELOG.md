@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-01-03
+
+### Fixed
+
+- **Documentation**: Corrected logo path from `assets/logo.svg` to `img/logo.svg` on homepage
+
 ## [0.24.2] - 2026-01-03
 
 ### Documentation
