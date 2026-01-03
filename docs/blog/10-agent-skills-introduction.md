@@ -218,14 +218,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pip install llm-council-core
-      - run: |
-          llm-council gate \
-            --snapshot ${{ github.sha }} \
-            --confidence-threshold 0.8
+
+      - uses: amiable-dev/llm-council-action@v1
+        with:
+          snapshot: ${{ github.sha }}
+          confidence-threshold: 0.8
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
+
+The [llm-council-action](https://github.com/amiable-dev/llm-council-action) provides:
+
+- **Fast execution** via pip caching (~3-5s after first run)
+- **Rich outputs** (verdict, confidence, summary)
+- **GitHub Step Summary** with collapsible details
+- **PR comments** with evaluation results
 
 ## What's Next?
 
