@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-01-03
+
+### Added
+
+- **Output Quality Quantification (ADR-036)**: Three metrics for multi-model deliberation quality
+  - **Consensus Strength Score (CSS)**: Measures Stage 2 reviewer agreement
+    - Winner margin (40%), ordering clarity (40%), non-tie factor (20%)
+    - Interpretation thresholds: 0.85+ strong, 0.70-0.84 moderate, 0.50-0.69 weak
+  - **Deliberation Depth Index (DDI)**: Measures thoroughness of deliberation
+    - Response diversity (35%), review coverage (35%), critique richness (30%)
+    - Uses Jaccard dissimilarity for diversity calculation
+  - **Synthesis Attribution Score (SAS)**: Measures grounding of synthesis
+    - `winner_alignment`, `max_source_alignment`, `hallucination_risk`, `grounded`
+    - Threshold: `grounded=True` when `max_source_alignment >= 0.6`
+
+- **Quality Metrics Module**: New `llm_council.quality` package
+  - `types.py`: QualityMetrics, CoreMetrics, SynthesisAttribution dataclasses
+  - `consensus.py`: CSS calculation from aggregate rankings
+  - `deliberation.py`: DDI calculation with Jaccard-based diversity
+  - `attribution.py`: SAS calculation for synthesis grounding
+  - `integration.py`: Council integration with configurable enable/disable
+
+- **MCP Tool Enhancement**: Visual quality metrics display
+  - Progress bars for CSS and DDI in council responses
+  - Grounded status with hallucination risk percentage
+  - Warnings display for quality threshold violations
+
+- **Quality Metrics Configuration**
+  - `LLM_COUNCIL_QUALITY_METRICS`: Enable/disable (default: true)
+  - `LLM_COUNCIL_QUALITY_TIER`: Tier selection (core|standard|enterprise)
+  - YAML config support via `quality.enabled` and `quality.tier`
+
+- **Quality Metrics Tests**: 44 TDD tests covering all components
+  - Edge cases: empty inputs, single responses, all tied rankings
+  - Boundary conditions: threshold values, interpretation ranges
+  - Integration tests with council pipeline
+
+- **Documentation Updates**
+  - README: Added "Output Quality Metrics (ADR-036)" section
+  - ADR-036: Updated status from Draft to Accepted with implementation notes
+  - Blog Post 15: "Quantifying Council Quality: CSS, DDI, and SAS"
+  - Community announcements for Twitter, Reddit, HN
+
+### Technical Notes
+
+- **Jaccard Similarity Fallback**: Phase 1 uses synchronous Jaccard-based calculations
+  - Offline-compatible, no external dependencies
+  - Async embedding functions preserved for Tier 2/3 (future phases)
+- **Performance**: <30ms total overhead (CSS <5ms, DDI <10ms, SAS <15ms)
+- **Tier System**: Core (OSS) tier implemented; Standard/Enterprise reserved for future
+
 ## [0.23.1] - 2026-01-03
 
 ### Fixed
