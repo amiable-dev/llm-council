@@ -1,0 +1,106 @@
+# LLM Council Quality Gate - Dogfooding our own action
+# Runs council verification on PRs to validate AI-generated changes
+
+name: Council Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+  workflow_dispatch:
+    inputs:
+      confidence-threshold:
+        description: 'Minimum confidence threshold'
+        required: false
+        default: '0.75'
+
+# Only run one gate per PR at a time
+concurrency:
+  group: council-gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    # Only run if OPENROUTER_API_KEY secret is available
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false }}
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for diff
+
+      - name: Check for API key
+        id: check-key
+        run: |
+          if [ -n "${{ secrets.OPENROUTER_API_KEY }}" ]; then
+            echo "has_key=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_key=false" >> $GITHUB_OUTPUT
+            echo "::warning::OPENROUTER_API_KEY not configured - skipping council gate"
+          fi
+
+      - name: LLM Council Quality Gate
+        if: steps.check-key.outputs.has_key == 'true'
+        id: council
+        uses: amiable-dev/llm-council-action@v1
+        with:
+          snapshot: ${{ github.sha }}
+          confidence-threshold: ${{ github.event.inputs.confidence-threshold || '0.75' }}
+          rubric-focus: General
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.check-key.outputs.has_key == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const verdict = '${{ steps.council.outputs.verdict }}';
+            const confidence = '${{ steps.council.outputs.confidence }}';
+
+            const emoji = verdict === 'PASS' ? '✅' : verdict === 'FAIL' ? '❌' : '⚠️';
+            const status = verdict || 'UNKNOWN';
+
+            const body = `## ${emoji} LLM Council Quality Gate: ${status}
+
+            **Confidence Score:** ${confidence}
+            **Threshold:** ${{ github.event.inputs.confidence-threshold || '0.75' }}
+            **Snapshot:** \`${{ github.sha }}\`
+
+            ---
+            *Evaluated by [LLM Council](https://github.com/amiable-dev/llm-council) using [llm-council-action](https://github.com/amiable-dev/llm-council-action)*`;
+
+            // Find existing comment to update
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('LLM Council Quality Gate')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
