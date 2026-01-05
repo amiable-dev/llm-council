@@ -34,7 +34,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Awaitable, Callable, Dict, Optional, Union
 from uuid import uuid4
 
 from llm_council.layer_contracts import LayerEvent, LayerEventType
@@ -64,6 +64,10 @@ class DispatchMode(Enum):
 
 # Type for mapping functions that handle stage-specific events
 StageMapper = Callable[[LayerEvent], Optional[WebhookEventType]]
+
+# Type for event callback function (for SSE streaming)
+# Callback receives the WebhookPayload and can be sync or async
+EventCallback = Callable[[WebhookPayload], Union[None, Awaitable[None]]]
 
 
 def _map_stage_complete(event: LayerEvent) -> Optional[WebhookEventType]:
@@ -140,11 +144,14 @@ class EventBridge:
         webhook_config: Configuration for webhook delivery. If None, operates in no-op mode.
         mode: Dispatch mode (ASYNC or SYNC).
         request_id: Unique identifier for this council session.
+        on_event: Optional callback for local event capture (e.g., SSE streaming).
+                  Called for each event BEFORE webhook dispatch. Can be sync or async.
     """
 
     webhook_config: Optional[WebhookConfig] = None
     mode: DispatchMode = DispatchMode.ASYNC
     request_id: Optional[str] = None
+    on_event: Optional[EventCallback] = None
 
     # Private state
     _dispatcher: WebhookDispatcher = field(default_factory=WebhookDispatcher)
@@ -220,7 +227,7 @@ class EventBridge:
         logger.debug("EventBridge shutdown complete")
 
     async def emit(self, event: LayerEvent) -> None:
-        """Emit a LayerEvent for webhook dispatch.
+        """Emit a LayerEvent for webhook dispatch and/or local callback.
 
         Args:
             event: The LayerEvent to emit.
@@ -231,8 +238,8 @@ class EventBridge:
         if not self._running:
             raise RuntimeError("EventBridge not started. Call start() first.")
 
-        # No-op if no webhook config
-        if self.webhook_config is None:
+        # No-op if no webhook config AND no callback
+        if self.webhook_config is None and self.on_event is None:
             return
 
         # Transform to webhook payload
@@ -252,6 +259,24 @@ class EventBridge:
                 "Event %s not in subscription list, skipping",
                 payload.event,
             )
+            return
+
+        # Call local callback first (for SSE streaming)
+        if self.on_event is not None:
+            try:
+                result = self.on_event(payload)
+                # Handle both sync and async callbacks
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                logger.error("Event callback error: %s", e)
+
+        # Skip webhook dispatch if no config (callback-only mode)
+        if self.webhook_config is None:
+            return
+
+        # Skip webhook dispatch for internal URLs (SSE capture mode)
+        if self.webhook_config.url.startswith("internal://"):
             return
 
         # Dispatch based on mode
@@ -327,6 +352,7 @@ class EventBridge:
 __all__ = [
     "EventBridge",
     "DispatchMode",
+    "EventCallback",
     "transform_layer_event_to_webhook",
     "LAYER_TO_WEBHOOK_MAPPING",
 ]
