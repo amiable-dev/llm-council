@@ -10,7 +10,7 @@ Design principles (per ADR-009):
 - Ephemeral: Logs go to stdout
 
 Usage:
-    pip install "llm-council[http]"
+    pip install "llm-council-core[http]"
     llm-council serve
 
 Or programmatically:

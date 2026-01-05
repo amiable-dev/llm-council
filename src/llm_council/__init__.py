@@ -10,7 +10,7 @@ Usage:
     print(stage3["response"])
 
 For MCP server usage:
-    pip install "llm-council[mcp]"
+    pip install "llm-council-core[mcp]"
     llm-council
 """
 

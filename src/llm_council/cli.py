@@ -215,7 +215,7 @@ def main():
 def serve_http(host: str = "0.0.0.0", port: int = 8000):
     """Start the HTTP server.
 
-    Requires the [http] extra: pip install 'llm-council[http]'
+    Requires the [http] extra: pip install 'llm-council-core[http]'
     """
     try:
         from llm_council.http_server import app
@@ -224,7 +224,7 @@ def serve_http(host: str = "0.0.0.0", port: int = 8000):
     except ImportError:
         print("Error: HTTP dependencies not installed.", file=sys.stderr)
         print("\nTo use the HTTP server, install with:", file=sys.stderr)
-        print("    pip install 'llm-council[http]'", file=sys.stderr)
+        print("    pip install 'llm-council-core[http]'", file=sys.stderr)
         sys.exit(1)
 
     uvicorn.run(app, host=host, port=port)
@@ -233,14 +233,14 @@ def serve_http(host: str = "0.0.0.0", port: int = 8000):
 def serve_mcp():
     """Start the MCP server.
 
-    Requires the [mcp] extra: pip install 'llm-council[mcp]'
+    Requires the [mcp] extra: pip install 'llm-council-core[mcp]'
     """
     try:
         from llm_council.mcp_server import mcp
     except ImportError:
         print("Error: MCP dependencies not installed.", file=sys.stderr)
         print("\nTo use the MCP server, install with:", file=sys.stderr)
-        print("    pip install 'llm-council[mcp]'", file=sys.stderr)
+        print("    pip install 'llm-council-core[mcp]'", file=sys.stderr)
         print("\nFor library-only usage, import directly:", file=sys.stderr)
         print("    from llm_council import run_full_council", file=sys.stderr)
         sys.exit(1)
@@ -363,15 +363,11 @@ def install_skills(
     from pathlib import Path
     from importlib.resources import files, as_file
 
-    # Get bundled skills location
-    try:
-        bundled_ref = files("llm_council.skills") / "bundled"
-    except TypeError:
-        # Python 3.9 fallback
-        from importlib.resources import path as resources_path
+    # Expand user home directory in target path
+    target = str(Path(target).expanduser())
 
-        with resources_path("llm_council.skills", "bundled") as bundled_path:
-            bundled_ref = bundled_path
+    # Get bundled skills location (Python 3.10+ required)
+    bundled_ref = files("llm_council.skills") / "bundled"
 
     # Use context manager for traversable resources
     with as_file(bundled_ref) as bundled_path:

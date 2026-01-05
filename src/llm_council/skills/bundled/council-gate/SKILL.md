@@ -67,7 +67,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install LLM Council
-        run: pip install llm-council-core
+        run: pip install 'llm-council-core[http]'
 
       - name: Run Council Gate
         env:
