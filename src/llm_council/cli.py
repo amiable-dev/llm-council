@@ -7,6 +7,7 @@ Usage:
     llm-council setup-key     # Store API key in system keychain (ADR-013)
     llm-council bias-report   # Cross-session bias analysis (ADR-018)
     llm-council install-skills --target .github/skills  # Install bundled skills
+    llm-council gate --snapshot abc123  # Quality gate for CI/CD
 """
 
 import argparse
@@ -138,6 +139,45 @@ def main():
         help="List available skills without installing",
     )
 
+    # Gate command (CI/CD quality gate)
+    gate_parser = subparsers.add_parser(
+        "gate",
+        help="Run quality gate verification (for CI/CD)",
+    )
+    gate_parser.add_argument(
+        "--snapshot",
+        type=str,
+        required=True,
+        help="Git commit SHA to verify",
+    )
+    gate_parser.add_argument(
+        "--file-paths",
+        type=str,
+        nargs="*",
+        dest="file_paths",
+        help="Specific file paths to verify (space-separated)",
+    )
+    gate_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.7,
+        dest="confidence_threshold",
+        help="Minimum confidence to pass (0.0-1.0, default: 0.7)",
+    )
+    gate_parser.add_argument(
+        "--rubric-focus",
+        type=str,
+        dest="rubric_focus",
+        help="Focus area: Security, Performance, Testing, General",
+    )
+    gate_parser.add_argument(
+        "--output-format",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format",
+        help="Output format (default: text)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -158,6 +198,15 @@ def main():
             force=args.force,
             list_only=args.list_only,
         )
+    elif args.command == "gate":
+        exit_code = run_gate(
+            snapshot=args.snapshot,
+            file_paths=args.file_paths,
+            confidence_threshold=args.confidence_threshold,
+            rubric_focus=args.rubric_focus,
+            output_format=args.output_format,
+        )
+        sys.exit(exit_code)
     else:
         # Default: MCP server
         serve_mcp()
@@ -388,6 +437,65 @@ def install_skills(
 
         if not installed and not skipped:
             print("No skills to install.")
+
+
+def run_gate(
+    snapshot: str,
+    file_paths: list = None,
+    confidence_threshold: float = 0.7,
+    rubric_focus: str = None,
+    output_format: str = "text",
+) -> int:
+    """Run quality gate verification for CI/CD.
+
+    Args:
+        snapshot: Git commit SHA to verify.
+        file_paths: Optional list of specific file paths to verify.
+        confidence_threshold: Minimum confidence to pass (0.0-1.0).
+        rubric_focus: Optional focus area (Security, Performance, etc.).
+        output_format: Output format ('text' or 'json').
+
+    Returns:
+        Exit code: 0=PASS, 1=FAIL, 2=UNCLEAR
+    """
+    import asyncio
+    import json
+
+    try:
+        from llm_council.verification.api import run_verification, VerifyRequest
+        from llm_council.verification.transcript import create_transcript_store
+        from llm_council.verification.formatting import format_verification_result
+    except ImportError:
+        print("Error: Verification dependencies not available.", file=sys.stderr)
+        print("\nEnsure llm-council-core is properly installed.", file=sys.stderr)
+        return 2  # UNCLEAR
+
+    async def _run():
+        request = VerifyRequest(
+            snapshot_id=snapshot,
+            target_paths=file_paths,
+            rubric_focus=rubric_focus,
+            confidence_threshold=confidence_threshold,
+        )
+        store = create_transcript_store()
+        return await run_verification(request, store)
+
+    try:
+        result = asyncio.run(_run())
+
+        if output_format == "json":
+            print(json.dumps(result, indent=2))
+        else:
+            formatted = format_verification_result(result)
+            print(formatted)
+
+        # Return appropriate exit code
+        exit_code = result.get("exit_code", 2)
+        return exit_code
+
+    except Exception as e:
+        print(f"Error during verification: {e}", file=sys.stderr)
+        return 2  # UNCLEAR
 
 
 if __name__ == "__main__":
