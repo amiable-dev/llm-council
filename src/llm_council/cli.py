@@ -461,13 +461,21 @@ def run_gate(
     import asyncio
     import json
 
+    # Check for FastAPI dependency (required for verification module)
+    try:
+        import fastapi  # noqa: F401
+    except ImportError:
+        print("Error: FastAPI is required for the gate command.", file=sys.stderr)
+        print("\nInstall with: pip install 'llm-council-core[http]'", file=sys.stderr)
+        return 2  # UNCLEAR
+
     try:
         from llm_council.verification.api import run_verification, VerifyRequest
         from llm_council.verification.transcript import create_transcript_store
         from llm_council.verification.formatting import format_verification_result
-    except ImportError:
-        print("Error: Verification dependencies not available.", file=sys.stderr)
-        print("\nEnsure llm-council-core is properly installed.", file=sys.stderr)
+    except ImportError as e:
+        print(f"Error: Verification dependencies not available: {e}", file=sys.stderr)
+        print("\nInstall with: pip install 'llm-council-core[http]'", file=sys.stderr)
         return 2  # UNCLEAR
 
     async def _run():
