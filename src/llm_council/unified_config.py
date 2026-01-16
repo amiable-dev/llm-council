@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 import yaml
-from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from .tier_contract import TierContract, create_tier_contract
 
@@ -323,6 +323,9 @@ class FallbackConfig(BaseModel):
 
 class GatewayConfig(BaseModel):
     """Configuration for gateway routing (ADR-023, Layer 4)."""
+
+    # Allow fields starting with "model_" (Pydantic v2 reserves this prefix by default)
+    model_config = ConfigDict(protected_namespaces=())
 
     default: str = Field(default="openrouter")
     providers: Dict[str, Union[GatewayProviderConfig, OllamaProviderConfig]] = Field(
@@ -945,6 +948,9 @@ class UnifiedConfig(BaseModel):
     This consolidates settings from ADR-020, ADR-022, ADR-023, and ADR-026 into
     a single configuration object with YAML file support.
     """
+
+    # Allow fields starting with "model_" (Pydantic v2 reserves this prefix by default)
+    model_config = ConfigDict(protected_namespaces=())
 
     tiers: TierConfig = Field(default_factory=TierConfig)
     triage: TriageConfig = Field(default_factory=TriageConfig)
