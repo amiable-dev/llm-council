@@ -117,7 +117,7 @@ HIGH_CONFIDENCE_KEYWORDS = {
     "confident",
 }
 
-# Low confidence keywords
+# Low confidence keywords (all lowercase for case-insensitive matching)
 LOW_CONFIDENCE_KEYWORDS = {
     "maybe",
     "perhaps",
@@ -127,8 +127,8 @@ LOW_CONFIDENCE_KEYWORDS = {
     "not sure",
     "uncertain",
     "unclear",
-    "I think",
-    "I believe",
+    "i think",  # lowercase for matching against lowercased text
+    "i believe",  # lowercase for matching against lowercased text
     "seems like",
     "probably",
     "likely",

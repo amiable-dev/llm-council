@@ -54,21 +54,25 @@ async def run_council(
     event_queue: asyncio.Queue = asyncio.Queue()
 
     # Track which events we've seen (for synthetic event generation)
+    # NOTE: This is only modified from the main event loop via call_soon_threadsafe
     events_seen: set = set()
 
     # Sentinel to signal end of events
     _DONE = object()
 
-    def _put_event(event_data: Dict[str, Any]) -> None:
-        """Thread-safe helper to put event to queue."""
+    def _put_event_and_track(event_data: Dict[str, Any]) -> None:
+        """Thread-safe helper to put event to queue and track seen events.
+
+        This runs on the event loop thread, so modifying events_seen is safe.
+        """
+        events_seen.add(event_data["event"])
         event_queue.put_nowait(event_data)
 
     def on_event_callback(payload) -> None:
         """Callback to capture events from EventBridge.
 
-        Thread-safe: Uses call_soon_threadsafe if called from background thread.
+        Thread-safe: Uses call_soon_threadsafe to schedule work on the event loop.
         """
-        events_seen.add(payload.event)
         event_data = {
             "event": payload.event,
             "data": {
@@ -76,10 +80,10 @@ async def run_council(
                 **payload.data,
             },
         }
-        # Use call_soon_threadsafe for thread safety (handles both same-thread
-        # and cross-thread calls safely)
+        # Use call_soon_threadsafe for thread safety - this schedules the
+        # actual event processing on the event loop thread
         try:
-            loop.call_soon_threadsafe(_put_event, event_data)
+            loop.call_soon_threadsafe(_put_event_and_track, event_data)
         except RuntimeError:
             # Loop is closed - we're shutting down, ignore
             pass

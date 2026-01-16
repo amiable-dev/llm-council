@@ -319,15 +319,27 @@ class RollbackMonitor:
         return events
 
     def _get_threshold(self, metric_type: MetricType) -> float:
-        """Get threshold for a metric type."""
+        """Get threshold for a metric type.
+
+        Returns:
+            Threshold value that triggers rollback when exceeded.
+        """
         if metric_type == MetricType.SHADOW_DISAGREEMENT:
             return self.config.disagreement_threshold
         elif metric_type == MetricType.USER_ESCALATION:
             return self.config.escalation_threshold
         elif metric_type == MetricType.WILDCARD_TIMEOUT:
             return self.config.wildcard_timeout_threshold
+        elif metric_type == MetricType.ERROR_RATE:
+            # Per ADR-020: error_rate > baseline * error_multiplier triggers rollback
+            # Using a fixed baseline of 0.05 (5% expected error rate)
+            # With default multiplier of 1.5, this gives threshold of 0.075 (7.5%)
+            baseline_error_rate = 0.05
+            return baseline_error_rate * self.config.error_multiplier
+        elif metric_type == MetricType.WILDCARD_DISAGREEMENT:
+            return 0.1  # 10% wildcard disagreement threshold
         else:
-            return 0.1  # Default threshold
+            return 0.1  # Default threshold for unknown metrics
 
 
 # Global monitor instance

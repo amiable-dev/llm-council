@@ -700,7 +700,9 @@ async def run_council_with_fallback(
         # ADR-018: Persist bias data for cross-session analysis
         # Only if enabled in config (checked inside function)
         # Use the session_id generated at start of outer scope (now nonlocal)
-        persist_session_bias_data(
+        # Run in thread to avoid blocking the event loop with file I/O
+        await asyncio.to_thread(
+            persist_session_bias_data,
             session_id=session_id,
             stage1_results=stage1_results,
             stage2_results=stage2_results,
