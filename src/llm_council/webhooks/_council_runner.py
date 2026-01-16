@@ -89,13 +89,12 @@ async def run_council(
             pass
 
     # Create webhook config for event subscription
+    # Note: DELIBERATION_START and COMPLETE are emitted manually to avoid duplicates
     webhook_config = WebhookConfig(
         url="internal://sse-capture",  # Special marker URL (not dispatched)
         events=[
-            WebhookEventType.DELIBERATION_START.value,
             WebhookEventType.STAGE1_COMPLETE.value,
             WebhookEventType.STAGE2_COMPLETE.value,
-            WebhookEventType.COMPLETE.value,
             WebhookEventType.ERROR.value,
         ],
     )

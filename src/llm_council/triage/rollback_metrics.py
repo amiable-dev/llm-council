@@ -211,33 +211,52 @@ class RollbackMetricStore:
             pass  # Best effort persistence
 
     def _truncate_file(self) -> None:
-        """Truncate file to keep only recent records (bounded storage)."""
+        """Truncate file to keep only recent records (bounded storage).
+
+        Uses atomic file replacement to prevent race conditions:
+        1. Acquire exclusive lock on main file
+        2. Read all records while holding lock
+        3. Write to temp file
+        4. Atomic rename to replace main file
+        5. Release lock
+        """
+        import tempfile
+
         try:
-            # Read all records
-            records = []
-            with open(self.store_path, "r") as f:
-                if _HAS_FCNTL:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_SH)
-                try:
-                    for line in f:
-                        if line.strip():
-                            records.append(line)
-                finally:
-                    if _HAS_FCNTL:
-                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-
-            # Keep only last window_size * 5 records (reasonable history)
-            max_records = self.config.window_size * 5
-            if len(records) > max_records:
-                records = records[-max_records:]
-
-            # Rewrite file with truncated records
-            with open(self.store_path, "w") as f:
+            # Open main file and acquire exclusive lock for entire operation
+            with open(self.store_path, "r+") as f:
                 if _HAS_FCNTL:
                     fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
-                    f.writelines(records)
-                    f.flush()
+                    # Read all records while holding lock
+                    records = []
+                    for line in f:
+                        if line.strip():
+                            records.append(line)
+
+                    # Keep only last window_size * 5 records (reasonable history)
+                    max_records = self.config.window_size * 5
+                    if len(records) > max_records:
+                        records = records[-max_records:]
+
+                    # Write to temp file in same directory (for atomic rename)
+                    dir_path = os.path.dirname(self.store_path) or "."
+                    fd, temp_path = tempfile.mkstemp(dir=dir_path, suffix=".tmp")
+                    try:
+                        with os.fdopen(fd, "w") as temp_f:
+                            temp_f.writelines(records)
+                            temp_f.flush()
+                            os.fsync(temp_f.fileno())  # Ensure data is on disk
+
+                        # Atomic rename (POSIX guarantees this is atomic)
+                        os.replace(temp_path, self.store_path)
+                    except Exception:
+                        # Clean up temp file on error
+                        try:
+                            os.unlink(temp_path)
+                        except OSError:
+                            pass
+                        raise
                 finally:
                     if _HAS_FCNTL:
                         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
