@@ -58,6 +58,7 @@ class RollbackConfig:
 
     enabled: bool = True
     window_size: int = 100
+    min_samples: int = 10  # Minimum samples before rate calculation (cold start protection)
     disagreement_threshold: float = 0.08
     escalation_threshold: float = 0.15
     error_multiplier: float = 1.5
@@ -72,6 +73,7 @@ class RollbackConfig:
         return cls(
             enabled=enabled,
             window_size=int(os.environ.get("LLM_COUNCIL_ROLLBACK_WINDOW", "100")),
+            min_samples=int(os.environ.get("LLM_COUNCIL_ROLLBACK_MIN_SAMPLES", "10")),
             disagreement_threshold=float(
                 os.environ.get("LLM_COUNCIL_ROLLBACK_DISAGREEMENT_THRESHOLD", "0.08")
             ),
@@ -324,10 +326,15 @@ class RollbackMetricStore:
             metric_type: Type of metric
 
         Returns:
-            Rate (0-1) of positive values
+            Rate (0-1) of positive values, or 0.0 if below minimum samples (cold start protection)
         """
         metrics = self._metrics[metric_type]
         if not metrics:
+            return 0.0
+
+        # Cold start protection: require minimum samples before calculating rate
+        # This prevents 1/1 = 100% rate from triggering immediate rollback
+        if len(metrics) < self.config.min_samples:
             return 0.0
 
         positive_count = sum(1 for m in metrics if m.value > 0.5)
