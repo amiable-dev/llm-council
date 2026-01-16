@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.19] - 2026-01-16
+
+### Fixed
+
+- **Cold Start Protection**: Added `min_samples` config (default: 10) for rollback metrics
+  - Prevents false 100% rate from first failure (1/1 = 100% triggering immediate rollback)
+  - Rate calculation returns 0.0 until minimum sample threshold is met
+  - New env var: `LLM_COUNCIL_ROLLBACK_MIN_SAMPLES`
+
+## [0.24.18] - 2026-01-16
+
+### Fixed
+
+- **Metrics Load Error Handling**: Added logging for corrupted metrics file recovery
+  - Logs warning with file path and error details via `logging.warning()`
+  - Documents "fail-safe" design: empty metrics = no thresholds breached = fast path stays enabled
+  - Graceful degradation when historical data is unavailable
+
+## [0.24.17] - 2026-01-16
+
+### Fixed
+
+- **Rollback Monitoring Enabled Flag**: Added proper `enabled` checks
+  - `record()` now skips recording when monitoring is disabled
+  - `check_thresholds()` returns False immediately when disabled
+- **RollbackConfig.from_env()**: Now loads all parameters from environment
+  - Added: `error_multiplier`, `wildcard_timeout_threshold`
+  - Previously only loaded `enabled` and `window_size`
+- **File Locking Documentation**: Clarified atomic replacement design
+  - `_truncate_file()` uses atomic `os.replace()` (no lock needed)
+  - File locking applies to `_load()` and `_save_record()` only
+
+## [0.24.16] - 2026-01-16
+
+### Fixed
+
+- **Duplicate SSE Events**: Removed `DELIBERATION_START` and `COMPLETE` from webhook subscription
+  - These events are emitted manually by `_council_runner.py`
+  - Subscribing to them via webhook caused duplicate events in SSE stream
+- **Truncation Race Condition**: Changed from open-then-lock to atomic file replacement
+  - Uses `tempfile.mkstemp()` + `os.replace()` for POSIX atomic rename
+  - Prevents data loss from concurrent truncation operations
+
+## [0.24.15] - 2026-01-16
+
+### Fixed
+
+- **ERROR_RATE Rollback Trigger**: Added missing check in `check_thresholds()`
+  - Now checks `error_rate > baseline * error_multiplier` per ADR-020
+  - Uses 5% baseline with 1.5x multiplier (7.5% threshold)
+- **request_id Security**: Prevented payload overwrite in SSE events
+  - Moved `request_id` after `**payload.data` spread in dictionary construction
+  - Prevents malicious payload from injecting false request IDs
+
+### Security
+
+- **File Locking**: Added `fcntl` file locking for metrics persistence
+  - Shared lock (`LOCK_SH`) for reading
+  - Exclusive lock (`LOCK_EX`) for writing
+  - Graceful fallback to no-op on Windows (no fcntl)
+
+## [0.24.14] - 2026-01-16
+
+### Fixed
+
+- **Thread Safety**: Fixed race conditions in SSE event handling
+  - Uses `asyncio.call_soon_threadsafe()` for event queue operations
+  - Prevents concurrent modification of `events_seen` set
+- **Fast Path Case Sensitivity**: Fixed keyword matching in complexity classifier
+  - Keywords now matched case-insensitively
+- **Blocking I/O**: Moved file operations off event loop
+  - Metrics persistence uses non-blocking writes
+
+### Changed
+
+- **Council Runner Cleanup**: Added task cancellation on client disconnect
+  - Prevents zombie LLM API calls when SSE client disconnects
+  - Uses `asyncio.wait_for()` with timeout for graceful cleanup
+
 ## [0.24.5] - 2026-01-03
 
 ### Fixed
