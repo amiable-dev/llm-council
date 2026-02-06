@@ -305,7 +305,15 @@ async def council_health_check() -> str:
     Returns status of API connectivity, configured models, and estimated response time.
     Use this to verify the council is working before calling consult_council.
     """
+    from importlib.metadata import version as pkg_version
+
+    try:
+        council_version = pkg_version("llm-council-core")
+    except Exception:
+        council_version = "unknown"
+
     checks = {
+        "version": council_version,
         "api_key_configured": bool(OPENROUTER_API_KEY),
         "key_source": get_key_source(),  # ADR-013: Show where key came from (not the key itself)
         "council_size": len(COUNCIL_MODELS),
