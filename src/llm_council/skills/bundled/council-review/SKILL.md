@@ -35,6 +35,24 @@ Get multiple AI perspectives on code changes with structured, actionable feedbac
 3. **Process Feedback**: Receive structured scores and issue list
 4. **Address Issues**: Fix blocking issues before proceeding
 
+## Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `snapshot_id` | string | required | Git commit SHA for reproducibility |
+| `file_paths` | list | null | List of files to review (full file analysis) |
+| `git_diff` | string | null | Unified diff format for change-focused review |
+| `rubric_focus` | string | null | Focus area: "Security", "Performance", etc. |
+| `tier` | string | "high" | Confidence tier: "quick", "balanced", "high", "reasoning" |
+
+### Tier Selection Guide
+
+| Tier | Use When | Timeout |
+|------|----------|---------|
+| `balanced` | Routine code reviews | ~90s |
+| `high` | Quality-critical reviews (default) | ~180s |
+| `reasoning` | Complex architectural or security reviews | ~600s |
+
 ## Input Formats
 
 Supports both:
@@ -89,6 +107,9 @@ council-review --git-diff "$(git diff HEAD~1)" --snapshot $(git rev-parse HEAD)
 
 # Review with custom focus
 council-review --rubric-focus Security --file-paths "src/auth.py"
+
+# Deep reasoning review for complex changes
+council-review --snapshot $(git rev-parse HEAD) --tier reasoning --rubric-focus Security
 ```
 
 ## Progressive Disclosure

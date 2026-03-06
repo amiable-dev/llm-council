@@ -139,7 +139,8 @@ class TestCouncilDeliberationIntegration:
         """run_verification() should call stage1_collect_responses()."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -149,7 +150,7 @@ class TestCouncilDeliberationIntegration:
             ) as mock_stage3,
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
-            mock_stage1.return_value = (mock_stage1_result, {"total_tokens": 1000})
+            mock_stage1.return_value = (mock_stage1_result, {"total_tokens": 1000}, {})
             mock_stage2.return_value = mock_stage2_result
             mock_stage3.return_value = mock_stage3_result
             mock_agg.return_value = mock_aggregate_rankings
@@ -177,7 +178,8 @@ class TestCouncilDeliberationIntegration:
         """run_verification() should call stage2_collect_rankings()."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -187,7 +189,7 @@ class TestCouncilDeliberationIntegration:
             ) as mock_stage3,
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
-            mock_stage1.return_value = (mock_stage1_result, {"total_tokens": 1000})
+            mock_stage1.return_value = (mock_stage1_result, {"total_tokens": 1000}, {})
             mock_stage2.return_value = mock_stage2_result
             mock_stage3.return_value = mock_stage3_result
             mock_agg.return_value = mock_aggregate_rankings
@@ -217,7 +219,8 @@ class TestCouncilDeliberationIntegration:
         """run_verification() should call stage3_synthesize_final()."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -227,7 +230,7 @@ class TestCouncilDeliberationIntegration:
             ) as mock_stage3,
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
-            mock_stage1.return_value = (mock_stage1_result, {"total_tokens": 1000})
+            mock_stage1.return_value = (mock_stage1_result, {"total_tokens": 1000}, {})
             mock_stage2.return_value = mock_stage2_result
             mock_stage3.return_value = mock_stage3_result
             mock_agg.return_value = mock_aggregate_rankings
@@ -291,7 +294,7 @@ class TestTranscriptPersistence:
             {"model": "anthropic/claude-3.5-sonnet", "borda_score": 0.6, "rank": 2},
         ]
         return {
-            "stage1": (stage1, {"total_tokens": 500}),
+            "stage1": (stage1, {"total_tokens": 500}, {}),
             "stage2": (stage2_rankings, stage2_label_map, {"total_tokens": 800}),
             "stage3": (stage3, {"total_tokens": 300}, None),
             "aggregate": aggregate,
@@ -308,7 +311,8 @@ class TestTranscriptPersistence:
         """run_verification() should write stage1.json to transcript."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -343,7 +347,8 @@ class TestTranscriptPersistence:
         """run_verification() should write stage2.json to transcript."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -378,7 +383,8 @@ class TestTranscriptPersistence:
         """run_verification() should write stage3.json to transcript."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -453,7 +459,8 @@ class TestDynamicScoreExtraction:
 
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -466,6 +473,7 @@ class TestDynamicScoreExtraction:
             mock_stage1.return_value = (
                 [{"model": "openai/gpt-4o", "response": "Looks good."}],
                 {"total_tokens": 100},
+                {},
             )
             mock_stage2.return_value = (
                 stage2_rankings,
@@ -501,7 +509,8 @@ class TestDynamicScoreExtraction:
         """Confidence should be calculated from council agreement, not hardcoded."""
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -514,6 +523,7 @@ class TestDynamicScoreExtraction:
             mock_stage1.return_value = (
                 [{"model": "openai/gpt-4o", "response": "Review complete."}],
                 {"total_tokens": 100},
+                {},
             )
             mock_stage2.return_value = (
                 [{"reviewer": "openai/gpt-4o", "rubric_scores": {"accuracy": 6.0}}],
@@ -566,7 +576,8 @@ class TestVerdictExtraction:
 
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -579,6 +590,7 @@ class TestVerdictExtraction:
             mock_stage1.return_value = (
                 [{"model": "openai/gpt-4o", "response": "OK"}],
                 {"total_tokens": 100},
+                {},
             )
             mock_stage2.return_value = (
                 [{"reviewer": "openai/gpt-4o", "rubric_scores": {"accuracy": 9.0}}],
@@ -613,7 +625,8 @@ class TestVerdictExtraction:
 
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses", new_callable=AsyncMock
+                "llm_council.verification.api.stage1_collect_responses_with_status",
+                new_callable=AsyncMock,
             ) as mock_stage1,
             patch(
                 "llm_council.verification.api.stage2_collect_rankings", new_callable=AsyncMock
@@ -626,6 +639,7 @@ class TestVerdictExtraction:
             mock_stage1.return_value = (
                 [{"model": "openai/gpt-4o", "response": "Security issues found."}],
                 {"total_tokens": 100},
+                {},
             )
             mock_stage2.return_value = (
                 [{"reviewer": "openai/gpt-4o", "rubric_scores": {"accuracy": 3.0}}],

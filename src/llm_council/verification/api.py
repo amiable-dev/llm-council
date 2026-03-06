@@ -25,9 +25,11 @@ from pydantic import BaseModel, Field, field_validator
 from llm_council.council import (
     calculate_aggregate_rankings,
     stage1_collect_responses,
+    stage1_collect_responses_with_status,
     stage2_collect_rankings,
     stage3_synthesize_final,
 )
+from llm_council.tier_contract import create_tier_contract, get_tier_timeout
 from llm_council.verdict import VerdictType as CouncilVerdictType
 from llm_council.verification.context import (
     InvalidSnapshotError,
@@ -75,6 +77,11 @@ class VerifyRequest(BaseModel):
         ge=0.0,
         le=1.0,
         description="Minimum confidence for PASS verdict",
+    )
+    tier: str = Field(
+        default="high",
+        description="Confidence tier for model selection: quick, balanced, high, reasoning",
+        pattern="^(quick|balanced|high|reasoning)$",
     )
 
     @field_validator("snapshot_id")
@@ -1004,8 +1011,16 @@ async def run_verification(
             rubric_focus=request.rubric_focus,
         )
 
-        # Stage 1: Collect individual model responses
-        stage1_results, stage1_usage = await stage1_collect_responses(verification_query)
+        # Get tier-appropriate models and timeouts (Issue #325)
+        tier_contract = create_tier_contract(request.tier)
+        tier_timeout = get_tier_timeout(request.tier)
+
+        # Stage 1: Collect individual model responses with tier-appropriate models
+        stage1_results, stage1_usage, _model_statuses = await stage1_collect_responses_with_status(
+            verification_query,
+            timeout=tier_timeout["per_model"],
+            models=tier_contract.allowed_models,
+        )
 
         # Persist Stage 1
         store.write_stage(

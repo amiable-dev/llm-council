@@ -39,9 +39,19 @@ Use LLM Council's multi-model deliberation to verify work with structured, machi
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
+| `snapshot_id` | string | required | Git commit SHA for reproducibility |
 | `rubric_focus` | string | null | Focus area: "Security", "Performance", "Accessibility" |
 | `confidence_threshold` | float | 0.7 | Minimum confidence for PASS verdict |
-| `snapshot_id` | string | required | Git commit SHA for reproducibility |
+| `tier` | string | "high" | Confidence tier: "quick", "balanced", "high", "reasoning" |
+
+### Tier Selection Guide
+
+| Tier | Use When | Models | Timeout |
+|------|----------|--------|---------|
+| `quick` | Fast sanity checks, simple validations | Economy models | ~30s |
+| `balanced` | Routine code reviews, standard checks | Mid-tier models | ~90s |
+| `high` | Quality-critical verification (default) | Frontier models | ~180s |
+| `reasoning` | Complex architectural reviews, security audits | Reasoning models | ~600s |
 
 ## Output Schema
 
@@ -75,6 +85,12 @@ council-verify --snapshot $(git rev-parse HEAD) --rubric-focus Security
 
 # Verify specific files
 council-verify --target-paths "src/auth.py,src/api.py" --snapshot abc123
+
+# Quick sanity check (faster, cheaper)
+council-verify --snapshot $(git rev-parse HEAD) --tier balanced
+
+# Deep reasoning review for complex changes
+council-verify --snapshot $(git rev-parse HEAD) --tier reasoning --rubric-focus Security
 ```
 
 ## Progressive Disclosure

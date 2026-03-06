@@ -372,6 +372,7 @@ async def verify(
     target_paths: Optional[List[str]] = None,
     rubric_focus: Optional[str] = None,
     confidence_threshold: float = 0.7,
+    tier: str = "high",
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -386,6 +387,7 @@ async def verify(
         target_paths: Optional list of specific file paths to verify.
         rubric_focus: Optional rubric focus area (e.g., "security", "performance").
         confidence_threshold: Minimum confidence for pass verdict (0.0-1.0, default 0.7).
+        tier: Confidence tier for model selection - "quick", "balanced", "high" (default), or "reasoning".
         ctx: MCP context for progress reporting (injected automatically).
 
     Returns:
@@ -414,6 +416,7 @@ async def verify(
             target_paths=target_paths,
             rubric_focus=rubric_focus,
             confidence_threshold=confidence_threshold,
+            tier=tier,
         )
         store = create_transcript_store()
 
