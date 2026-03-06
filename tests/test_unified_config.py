@@ -1435,12 +1435,12 @@ class TestCouncilConfig:
         config = CouncilConfig()
 
         # Defaults from config.py
-        assert "openai/gpt-5.2" in config.models
-        assert config.chairman == "google/gemini-3-pro-preview"
+        assert "openai/gpt-5.4" in config.models
+        assert config.chairman == "google/gemini-3.1-pro-preview"
         assert config.synthesis_mode == "consensus"
         assert config.exclude_self_votes is True
         assert config.style_normalization is False
-        assert config.normalizer_model == "google/gemini-2.0-flash-001"
+        assert config.normalizer_model == "google/gemini-3.1-flash-lite-preview"
         assert config.max_reviewers is None
 
     def test_council_config_model_list_from_comma(self):
