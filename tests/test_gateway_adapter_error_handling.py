@@ -199,9 +199,12 @@ class TestHTTPServerErrorBoundary:
         from llm_council.http_server import app
         from fastapi.testclient import TestClient
 
-        with patch(
-            "llm_council.http_server.run_full_council", new_callable=AsyncMock
-        ) as mock_council:
+        with (
+            patch(
+                "llm_council.http_server.run_full_council", new_callable=AsyncMock
+            ) as mock_council,
+            patch("llm_council.http_server.get_api_key", return_value="test-key"),
+        ):
             mock_council.side_effect = Exception("All models failed")
 
             client = TestClient(app)
