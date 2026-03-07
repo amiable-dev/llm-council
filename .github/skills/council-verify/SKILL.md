@@ -67,15 +67,22 @@ Use LLM Council's multi-model deliberation to verify work with structured, machi
   },
   "blocking_issues": [...],
   "rationale": "Chairman synthesis...",
-  "transcript_location": ".council/logs/..."
+  "transcript_location": ".council/logs/...",
+  "partial": false,
+  "timeout_fired": false,
+  "completed_stages": ["stage1", "stage2", "stage3"]
 }
 ```
+
+### Timeout & Partial Results (ADR-040)
+
+If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stages` for progress. Oversized inputs are rejected with a helpful `rationale`. Max input: quick=15K, balanced=30K, high/reasoning=50K chars.
 
 ## Exit Codes (for CI/CD)
 
 - `0`: PASS - Approved with confidence >= threshold
 - `1`: FAIL - Rejected
-- `2`: UNCLEAR - Confidence below threshold, requires human review
+- `2`: UNCLEAR - Confidence below threshold, timeout, or oversized input
 
 ## Example Usage
 

@@ -104,9 +104,16 @@ jobs:
   "blocking_issues": [],
   "rationale": "All models agreed...",
   "exit_code": 0,
-  "transcript_path": ".council/logs/2025-12-31T..."
+  "transcript_path": ".council/logs/2025-12-31T...",
+  "partial": false,
+  "timeout_fired": false,
+  "completed_stages": ["stage1", "stage2", "stage3"]
 }
 ```
+
+### Timeout Handling (ADR-040)
+
+If `timeout_fired: true`, the gate timed out before completing all stages. This returns exit code `2` (UNCLEAR), pausing the pipeline for human review. Check `completed_stages` to see how far it got. Consider using `--tier quick` for faster gate checks.
 
 ## Example Usage
 

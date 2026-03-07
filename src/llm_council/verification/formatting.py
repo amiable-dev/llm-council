@@ -92,6 +92,19 @@ def format_verification_result(result: Dict[str, Any]) -> str:
 
     lines.append("")
 
+    # ADR-040: Timeout and partial result indicators
+    timeout_fired = result.get("timeout_fired", False)
+    partial = result.get("partial", False)
+    completed_stages = result.get("completed_stages")
+
+    if timeout_fired:
+        lines.append(f"**Timeout**: Global deadline exceeded")
+    if partial and completed_stages is not None:
+        stages_str = ", ".join(completed_stages) if completed_stages else "none"
+        lines.append(f"**Completed Stages**: {stages_str}")
+    if timeout_fired or partial:
+        lines.append("")
+
     # Transcript location
     transcript = result.get("transcript_location", "")
     lines.append(f"**Transcript**: {transcript}")
@@ -130,4 +143,12 @@ def format_verification_result_compact(result: Dict[str, Any]) -> str:
     exit_code = result.get("exit_code", 2)
     verification_id = result.get("verification_id", "unknown")
 
-    return f"{emoji} {verdict} (confidence={confidence:.2f}, exit={exit_code}) [{verification_id}]"
+    # ADR-040: Append timeout/partial indicators for observability
+    suffix = ""
+    if result.get("timeout_fired"):
+        suffix += " TIMEOUT"
+    if result.get("partial"):
+        stages = result.get("completed_stages", [])
+        suffix += f" partial=[{','.join(stages)}]" if stages else " partial"
+
+    return f"{emoji} {verdict} (confidence={confidence:.2f}, exit={exit_code}) [{verification_id}]{suffix}"

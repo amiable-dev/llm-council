@@ -91,10 +91,16 @@ Supports both:
       "message": "Missing input validation"
     }
   ],
-  "suggestions": [...],
-  "rationale": "Overall, the code is well-structured..."
+  "rationale": "Overall, the code is well-structured...",
+  "partial": false,
+  "timeout_fired": false,
+  "completed_stages": ["stage1", "stage2", "stage3"]
 }
 ```
+
+### Timeout Behavior (ADR-040)
+
+If `timeout_fired: true`, the review timed out. Check `completed_stages` to see progress. Consider using a faster `tier` or reducing the number of files.
 
 ## Example Usage
 

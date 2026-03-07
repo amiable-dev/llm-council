@@ -779,6 +779,34 @@ pip index versions llm-council-core
 To prevent accidental direct pushes (even by admins), enable in GitHub:
 **Settings → Branches → Branch protection rules → master → "Do not allow bypassing the above settings"**
 
+## Verification API (ADR-034/ADR-040)
+
+**`verification/api.py`** - Verification endpoint and pipeline
+- `run_verification()`: Core verification logic with global timeout guardrail
+- `_run_verification_pipeline()`: Inner pipeline (stages 1-3) wrapped by `asyncio.wait_for()`
+- `_build_preflight_info()`: Pre-flight complexity estimation for progress reporting
+- **ADR-040 Constants**:
+  - `VERIFICATION_TIMEOUT_MULTIPLIER = 1.5`: Global deadline = `tier_contract.deadline_ms/1000 * 1.5`
+  - `TIER_MAX_CHARS`: Per-tier input size limits (quick: 15K, balanced: 30K, high/reasoning: 50K)
+- **VerifyResponse Fields (ADR-040)**:
+  - `timeout_fired: bool`: True if global deadline was exceeded
+  - `completed_stages: List[str]`: Stages completed before timeout (e.g. `["stage1", "stage2"]`)
+- **Waterfall Time Budgeting (ADR-040 Option A)**:
+  - Stage 1: 50% of remaining global deadline
+  - Stage 2: 70% of remaining after Stage 1
+  - Stage 3: all remaining time
+  - Each capped by `tier_timeout["per_model"]` to prevent single-stage overrun
+- **Durable Partial State (ADR-040 Option A)**:
+  - `partial_state` dict passed to pipeline, updated after each stage completes
+  - Survives `asyncio.CancelledError` from `wait_for` timeout
+  - Timeout handler reads `partial_state["completed_stages"]` for partial result
+- **stage2/stage3 Timeout Params (ADR-040)**:
+  - `stage2_collect_rankings()` now accepts `timeout`, `models`, `on_progress` params
+  - When `on_progress` provided: uses `asyncio.as_completed` + `query_model` for per-model progress
+  - When `on_progress` is None: uses `query_models_parallel` (backward compat)
+  - `stage3_synthesize_final()` now accepts `timeout` param
+  - Both default to 120.0s for backward compatibility at other call sites
+
 ## Data Flow Summary
 
 ```

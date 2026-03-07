@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -131,6 +132,15 @@ class VerifyResponse(BaseModel):
     partial: bool = Field(
         default=False,
         description="True if result is partial (timeout/error)",
+    )
+    # ADR-040: Timeout guardrail fields
+    timeout_fired: bool = Field(
+        default=False,
+        description="True if global deadline was exceeded",
+    )
+    completed_stages: Optional[List[str]] = Field(
+        default=None,
+        description="Stages completed before timeout (e.g. ['stage1', 'stage2'])",
     )
     # ADR-034 v2.6: Directory expansion metadata (Issue #311)
     expanded_paths: Optional[List[str]] = Field(
@@ -350,6 +360,25 @@ GARBAGE_FILENAMES: Set[str] = frozenset(
 # End ADR-034 v2.6 Constants
 # =============================================================================
 
+
+# =============================================================================
+# ADR-040: Timeout Guardrail Constants
+# =============================================================================
+
+# Multiplier for global deadline: tier_contract.deadline_ms * MULTIPLIER
+VERIFICATION_TIMEOUT_MULTIPLIER = 1.5
+
+# Per-tier maximum input characters (prompt size guardrails)
+TIER_MAX_CHARS: Dict[str, int] = {
+    "quick": 15000,
+    "balanced": 30000,
+    "high": 50000,
+    "reasoning": 50000,
+}
+
+# =============================================================================
+# End ADR-040 Constants
+# =============================================================================
 
 # Async timeout for subprocess operations (seconds)
 ASYNC_SUBPROCESS_TIMEOUT = 10
@@ -963,6 +992,242 @@ Be specific and cite file paths and line numbers when identifying issues."""
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
+def _build_preflight_info(content_chars: int, tier_contract: Any, tier: str) -> str:
+    """Build pre-flight info message with complexity estimation.
+
+    Args:
+        content_chars: Number of characters in verification prompt
+        tier_contract: TierContract for this verification
+        tier: Tier name string
+
+    Returns:
+        Preflight info message string
+    """
+    max_chars = TIER_MAX_CHARS.get(tier, 50000)
+    num_models = len(tier_contract.allowed_models)
+    deadline_s = tier_contract.deadline_ms / 1000
+    pct_used = (content_chars / max_chars) * 100 if max_chars > 0 else 0
+
+    msg = (
+        f"Preflight: tier={tier}, {content_chars} chars "
+        f"({pct_used:.0f}% of {max_chars} limit), "
+        f"{num_models} models, deadline={deadline_s:.0f}s"
+    )
+
+    if pct_used > 80:
+        msg += " | WARNING: near tier input size limit, consider reducing scope"
+
+    return msg
+
+
+async def _run_verification_pipeline(
+    request: VerifyRequest,
+    store: TranscriptStore,
+    on_progress: Optional[ProgressCallback],
+    verification_id: str,
+    transcript_dir: str,
+    verification_query: str,
+    tier_contract: Any,
+    tier_timeout: Dict[str, int],
+    ctx: Any,
+    partial_state: Dict[str, Any],
+    deadline_at: float,
+) -> Dict[str, Any]:
+    """Inner pipeline that runs the 3-stage council deliberation.
+
+    Extracted from run_verification to allow wrapping with asyncio.wait_for()
+    for global timeout enforcement (ADR-040).
+
+    Uses waterfall time budgeting: each stage receives a proportional share of
+    the remaining time budget rather than a static per-model timeout.
+
+    Args:
+        request: Verification request
+        store: Transcript store
+        on_progress: Progress callback
+        verification_id: Unique verification ID
+        transcript_dir: Path to transcript directory
+        verification_query: Built verification prompt
+        tier_contract: TierContract for this tier
+        tier_timeout: Timeout config dict
+        ctx: Verification context
+        partial_state: Shared mutable dict for partial results (survives cancellation)
+        deadline_at: Monotonic clock deadline for waterfall budgeting
+
+    Returns:
+        Verification result dictionary
+    """
+    num_models = len(tier_contract.allowed_models)
+
+    # Progress: num_models (stage1) + num_models (stage2) + 2 (stage3 + finalize)
+    total_steps = num_models + num_models + 2
+    current_step = 0
+
+    async def report_progress(message: str):
+        nonlocal current_step
+        current_step += 1
+        if on_progress:
+            try:
+                await on_progress(current_step, total_steps, message)
+            except Exception:
+                pass  # Progress reporting is best-effort
+
+    # Bridge stage1 per-model progress to our callback
+    async def stage1_progress(completed: int, total: int, message: str):
+        nonlocal current_step
+        current_step = max(current_step, completed)  # Monotonic (models finish out-of-order)
+        if on_progress:
+            try:
+                await on_progress(completed, total_steps, f"Stage 1: {message}")
+            except Exception:
+                pass
+
+    # ADR-040: Waterfall time budgeting - Stage 1 gets 50% of remaining time
+    remaining = max(deadline_at - time.monotonic(), 1.0)
+    stage1_budget = remaining * 0.50
+    stage1_per_model = min(stage1_budget, tier_timeout["per_model"])
+
+    # Stage 1: Collect individual model responses with tier-appropriate models
+    stage1_results, stage1_usage, _model_statuses = await stage1_collect_responses_with_status(
+        verification_query,
+        timeout=stage1_per_model,
+        models=tier_contract.allowed_models,
+        on_progress=stage1_progress,
+    )
+    current_step = num_models
+
+    # ADR-040: Persist stage1 results to partial_state (survives cancellation)
+    partial_state["completed_stages"].append("stage1")
+    partial_state["stage1_results"] = stage1_results
+
+    # Persist Stage 1
+    store.write_stage(
+        verification_id,
+        "stage1",
+        {
+            "responses": stage1_results,
+            "usage": stage1_usage,
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+    )
+
+    # Stage 2: Peer ranking with rubric evaluation
+    # ADR-040: Pass tier timeout and models to stage2
+    if on_progress:
+        try:
+            await on_progress(num_models, total_steps, "Stage 2: Peer review starting...")
+        except Exception:
+            pass
+
+    # Bridge stage2 per-model progress
+    async def stage2_progress(completed: int, total: int, message: str):
+        nonlocal current_step
+        step = num_models + completed  # Offset by stage1 steps
+        current_step = max(current_step, step)
+        if on_progress:
+            try:
+                await on_progress(step, total_steps, f"Stage 2: {message}")
+            except Exception:
+                pass
+
+    # ADR-040: Waterfall - Stage 2 gets 70% of remaining time after Stage 1
+    remaining = max(deadline_at - time.monotonic(), 1.0)
+    stage2_budget = remaining * 0.70
+    stage2_per_model = min(stage2_budget, tier_timeout["per_model"])
+
+    stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
+        verification_query,
+        stage1_results,
+        timeout=stage2_per_model,
+        models=tier_contract.allowed_models,
+        on_progress=stage2_progress,
+    )
+    current_step = num_models + num_models
+
+    # ADR-040: Persist stage2 results to partial_state
+    partial_state["completed_stages"].append("stage2")
+    partial_state["stage2_results"] = stage2_results
+    partial_state["label_to_model"] = label_to_model
+
+    # Persist Stage 2
+    store.write_stage(
+        verification_id,
+        "stage2",
+        {
+            "rankings": stage2_results,
+            "label_to_model": label_to_model,
+            "usage": stage2_usage,
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+    )
+
+    # Calculate aggregate rankings
+    aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
+
+    # Stage 3: Chairman synthesis with verdict
+    # ADR-040: Waterfall - Stage 3 gets all remaining time
+    remaining = max(deadline_at - time.monotonic(), 1.0)
+    stage3_budget = min(remaining, tier_timeout["per_model"])
+
+    await report_progress("Stage 3: Synthesizing verdict...")
+    stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
+        verification_query,
+        stage1_results,
+        stage2_results,
+        aggregate_rankings=aggregate_rankings,
+        verdict_type=CouncilVerdictType.BINARY,
+        timeout=stage3_budget,
+    )
+
+    # ADR-040: Persist stage3 results to partial_state
+    partial_state["completed_stages"].append("stage3")
+
+    # Persist Stage 3
+    store.write_stage(
+        verification_id,
+        "stage3",
+        {
+            "synthesis": stage3_result,
+            "aggregate_rankings": aggregate_rankings,
+            "usage": stage3_usage,
+            "timestamp": datetime.utcnow().isoformat(),
+        },
+    )
+
+    await report_progress("Finalizing verification result...")
+
+    # Extract verdict and scores from council output
+    verification_output = build_verification_result(
+        stage1_results,
+        stage2_results,
+        stage3_result,
+        confidence_threshold=request.confidence_threshold,
+    )
+
+    verdict = verification_output["verdict"]
+    confidence = verification_output["confidence"]
+    exit_code = _verdict_to_exit_code(verdict)
+
+    result = {
+        "verification_id": verification_id,
+        "verdict": verdict,
+        "confidence": confidence,
+        "exit_code": exit_code,
+        "rubric_scores": verification_output["rubric_scores"],
+        "blocking_issues": verification_output["blocking_issues"],
+        "rationale": verification_output["rationale"],
+        "transcript_location": str(transcript_dir),
+        "partial": False,
+        "timeout_fired": False,
+        "completed_stages": ["stage1", "stage2", "stage3"],
+    }
+
+    # Persist result
+    store.write_stage(verification_id, "result", result)
+
+    return result
+
+
 async def run_verification(
     request: VerifyRequest,
     store: TranscriptStore,
@@ -973,9 +1238,12 @@ async def run_verification(
 
     This is the core verification logic that:
     1. Creates isolated context
-    2. Runs council deliberation
+    2. Runs council deliberation (with global timeout guardrail)
     3. Persists transcript
-    4. Returns structured result
+    4. Returns structured result (partial if timeout fires)
+
+    ADR-040: Wraps pipeline in asyncio.wait_for() with global deadline
+    derived from tier_contract.deadline_ms * VERIFICATION_TIMEOUT_MULTIPLIER.
 
     Args:
         request: Verification request
@@ -1019,124 +1287,91 @@ async def run_verification(
         # Get tier-appropriate models and timeouts (Issue #325)
         tier_contract = create_tier_contract(request.tier)
         tier_timeout = get_tier_timeout(request.tier)
-        num_models = len(tier_contract.allowed_models)
 
-        # Progress: num_models (stage1 per-model) + 3 (stage2 + stage3 + finalize)
-        total_steps = num_models + 3
-        current_step = 0
+        # ADR-040 Step 5: Tiered input size limit check
+        max_chars = TIER_MAX_CHARS.get(request.tier, 50000)
+        if len(verification_query) > max_chars:
+            return {
+                "verification_id": verification_id,
+                "verdict": "unclear",
+                "confidence": 0.0,
+                "exit_code": 2,
+                "rubric_scores": {},
+                "blocking_issues": [],
+                "rationale": (
+                    f"Input size ({len(verification_query)} chars) exceeds "
+                    f"{request.tier} tier limit ({max_chars} chars). "
+                    f"Consider reducing scope or using a higher tier."
+                ),
+                "transcript_location": str(transcript_dir),
+                "partial": True,
+                "timeout_fired": False,
+                "completed_stages": [],
+            }
 
-        async def report_progress(message: str):
-            nonlocal current_step
-            current_step += 1
-            if on_progress:
-                try:
-                    await on_progress(current_step, total_steps, message)
-                except Exception:
-                    pass  # Progress reporting is best-effort
+        # ADR-040 Step 6: Pre-flight info as first progress callback
+        if on_progress:
+            preflight_msg = _build_preflight_info(
+                len(verification_query), tier_contract, request.tier
+            )
+            try:
+                await on_progress(0, len(tier_contract.allowed_models) * 2 + 2, preflight_msg)
+            except Exception:
+                pass
 
-        # Bridge stage1 per-model progress to our callback
-        async def stage1_progress(completed: int, total: int, message: str):
-            nonlocal current_step
-            current_step = max(current_step, completed)  # Monotonic (models finish out-of-order)
-            if on_progress:
-                try:
-                    await on_progress(completed, total_steps, f"Stage 1: {message}")
-                except Exception:
-                    pass
+        # ADR-040 Step 4: Global timeout wrapper with waterfall budgeting
+        global_deadline = (tier_contract.deadline_ms / 1000) * VERIFICATION_TIMEOUT_MULTIPLIER
+        deadline_at = time.monotonic() + global_deadline
 
-        # Stage 1: Collect individual model responses with tier-appropriate models
-        stage1_results, stage1_usage, _model_statuses = await stage1_collect_responses_with_status(
-            verification_query,
-            timeout=tier_timeout["per_model"],
-            models=tier_contract.allowed_models,
-            on_progress=stage1_progress,
-        )
-        current_step = num_models
-
-        # Persist Stage 1
-        store.write_stage(
-            verification_id,
-            "stage1",
-            {
-                "responses": stage1_results,
-                "usage": stage1_usage,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        )
-
-        # Stage 2: Peer ranking with rubric evaluation
-        await report_progress("Stage 2: Peer review in progress...")
-        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            verification_query, stage1_results
-        )
-
-        # Persist Stage 2
-        store.write_stage(
-            verification_id,
-            "stage2",
-            {
-                "rankings": stage2_results,
-                "label_to_model": label_to_model,
-                "usage": stage2_usage,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        )
-
-        # Calculate aggregate rankings
-        aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-
-        # Stage 3: Chairman synthesis with verdict
-        await report_progress("Stage 3: Synthesizing verdict...")
-        stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
-            verification_query,
-            stage1_results,
-            stage2_results,
-            aggregate_rankings=aggregate_rankings,
-            verdict_type=CouncilVerdictType.BINARY,
-        )
-
-        # Persist Stage 3
-        store.write_stage(
-            verification_id,
-            "stage3",
-            {
-                "synthesis": stage3_result,
-                "aggregate_rankings": aggregate_rankings,
-                "usage": stage3_usage,
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        )
-
-        await report_progress("Finalizing verification result...")
-
-        # Extract verdict and scores from council output
-        verification_output = build_verification_result(
-            stage1_results,
-            stage2_results,
-            stage3_result,
-            confidence_threshold=request.confidence_threshold,
-        )
-
-        verdict = verification_output["verdict"]
-        confidence = verification_output["confidence"]
-        exit_code = _verdict_to_exit_code(verdict)
-
-        result = {
-            "verification_id": verification_id,
-            "verdict": verdict,
-            "confidence": confidence,
-            "exit_code": exit_code,
-            "rubric_scores": verification_output["rubric_scores"],
-            "blocking_issues": verification_output["blocking_issues"],
-            "rationale": verification_output["rationale"],
-            "transcript_location": str(transcript_dir),
-            "partial": False,
+        # Shared mutable state that survives asyncio.CancelledError on timeout
+        partial_state: Dict[str, Any] = {
+            "completed_stages": [],
+            "stage1_results": None,
+            "stage2_results": None,
+            "label_to_model": None,
         }
 
-        # Persist result
-        store.write_stage(verification_id, "result", result)
+        try:
+            result = await asyncio.wait_for(
+                _run_verification_pipeline(
+                    request=request,
+                    store=store,
+                    on_progress=on_progress,
+                    verification_id=verification_id,
+                    transcript_dir=str(transcript_dir),
+                    verification_query=verification_query,
+                    tier_contract=tier_contract,
+                    tier_timeout=tier_timeout,
+                    ctx=ctx,
+                    partial_state=partial_state,
+                    deadline_at=deadline_at,
+                ),
+                timeout=global_deadline,
+            )
+            return result
 
-        return result
+        except asyncio.TimeoutError:
+            # Global deadline exceeded - return partial result with completed stages
+            completed = partial_state["completed_stages"]
+            return {
+                "verification_id": verification_id,
+                "verdict": "unclear",
+                "confidence": 0.0,
+                "exit_code": 2,
+                "rubric_scores": {},
+                "blocking_issues": [],
+                "rationale": (
+                    f"Verification timed out after {global_deadline:.0f}s "
+                    f"(tier={request.tier}, deadline={tier_contract.deadline_ms}ms "
+                    f"x {VERIFICATION_TIMEOUT_MULTIPLIER} multiplier). "
+                    f"Completed stages: {completed}. "
+                    f"Consider using a faster tier or reducing input scope."
+                ),
+                "transcript_location": str(transcript_dir),
+                "partial": True,
+                "timeout_fired": True,
+                "completed_stages": completed,
+            }
 
 
 @router.post("/verify", response_model=VerifyResponse)

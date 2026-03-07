@@ -436,17 +436,6 @@ async def verify(
             indent=2,
         )
 
-    except asyncio.TimeoutError as e:
-        return json.dumps(
-            {
-                "error": f"Verification timed out: {e}",
-                "exit_code": 2,  # UNCLEAR for timeouts
-                "verdict": "unclear",
-                "confidence": 0.0,
-            },
-            indent=2,
-        )
-
     except Exception as e:
         return json.dumps(
             {

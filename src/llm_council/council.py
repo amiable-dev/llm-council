@@ -1088,7 +1088,11 @@ Rewritten text:"""
 
 
 async def stage2_collect_rankings(
-    user_query: str, stage1_results: List[Dict[str, Any]]
+    user_query: str,
+    stage1_results: List[Dict[str, Any]],
+    timeout: float = 120.0,
+    models: Optional[List[str]] = None,
+    on_progress: Optional[Callable[[int, int, str], Awaitable[None]]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str], Dict[str, int]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -1250,14 +1254,53 @@ Now provide your evaluation and ranking:"""
     messages = [{"role": "user", "content": ranking_prompt}]
 
     # Determine which models will review (stratified sampling for large councils)
-    reviewers = list(_get_council_models())  # Copy the list
-    if _get_max_reviewers() is not None and len(_get_council_models()) > _get_max_reviewers():
+    # ADR-040: Use provided models list if given, otherwise fall back to global config
+    reviewers = list(models) if models is not None else list(_get_council_models())
+    if _get_max_reviewers() is not None and len(reviewers) > _get_max_reviewers():
         # For large councils, randomly sample k reviewers
-        reviewers = random.sample(list(_get_council_models()), _get_max_reviewers())
+        reviewers = random.sample(reviewers, _get_max_reviewers())
 
     # Get rankings from reviewer models in parallel
     # Disable tools to prevent prompt injection via tool invocation
-    responses = await query_models_parallel(reviewers, messages, disable_tools=True)
+    # ADR-040: Pass timeout parameter instead of relying on default 120s
+    if on_progress is not None:
+        # ADR-040 Option D: Use asyncio.as_completed for per-model progress reporting
+        # This ensures one slow reviewer doesn't block progress for completed ones
+        tasks = {
+            asyncio.create_task(
+                query_model(model, messages, disable_tools=True, timeout=timeout)
+            ): model
+            for model in reviewers
+        }
+        responses: Dict[str, Any] = {}
+        completed_count = 0
+        for coro in asyncio.as_completed(list(tasks.keys())):
+            result = await coro
+            # Find which model this task belonged to
+            for task, model in tasks.items():
+                if task.done() and model not in responses:
+                    try:
+                        task_result = task.result()
+                        if task_result is result:
+                            responses[model] = result
+                            completed_count += 1
+                            model_short = model.split("/")[-1] if "/" in model else model
+                            try:
+                                await on_progress(
+                                    completed_count,
+                                    len(reviewers),
+                                    f"{model_short} reviewed ({completed_count}/{len(reviewers)})",
+                                )
+                            except Exception:
+                                pass
+                            break
+                    except Exception:
+                        pass
+    else:
+        # Backward-compatible path: use query_models_parallel when no progress needed
+        responses = await query_models_parallel(
+            reviewers, messages, disable_tools=True, timeout=timeout
+        )
 
     # Format results and aggregate usage - include reviewer model for self-vote exclusion
     stage2_results = []
@@ -1326,6 +1369,7 @@ async def stage3_synthesize_final(
     stage2_results: List[Dict[str, Any]],
     aggregate_rankings: Optional[List[Dict[str, Any]]] = None,
     verdict_type: VerdictType = VerdictType.SYNTHESIS,
+    timeout: float = 120.0,
 ) -> Tuple[Dict[str, Any], Dict[str, int], Optional[VerdictResult]]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -1442,7 +1486,10 @@ STAGE 2 - Peer Rankings:
 
     # Query the chairman model
     # Disable tools to prevent prompt injection via tool invocation
-    response = await query_model(_get_chairman_model(), messages, disable_tools=True)
+    # ADR-040: Pass timeout parameter instead of relying on default 120s
+    response = await query_model(
+        _get_chairman_model(), messages, disable_tools=True, timeout=timeout
+    )
 
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 

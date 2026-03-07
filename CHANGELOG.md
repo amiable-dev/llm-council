@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.29] - 2026-03-07
+
+### Fixed
+
+- **ADR-040: Verification timeout guardrails** - Fix verify/review tools hanging for 10-57 minutes
+  - **Bug fix**: `stage2_collect_rankings()` now accepts `timeout` and `models` params, honoring tier contract instead of defaulting to 120s and global config models
+  - **Bug fix**: `stage3_synthesize_final()` now accepts `timeout` param, passed through to `query_model()`
+  - **Global timeout**: `run_verification()` wraps pipeline in `asyncio.wait_for()` with deadline derived from `tier_contract.deadline_ms * 1.5`
+  - **Partial results**: On timeout, returns `partial=True, timeout_fired=True` with `verdict=unclear` instead of hanging indefinitely
+  - **Input size guardrails**: Per-tier character limits (quick: 15K, balanced: 30K, high/reasoning: 50K) reject oversized inputs with helpful error
+  - **Pre-flight info**: First progress callback includes tier, content size, model count, and deadline estimate
+  - **Enhanced Stage 2 progress**: Per-model progress reporting during peer review (total_steps now includes stage2 models)
+  - **Formatting**: Both full and compact verification formatters now surface timeout/partial indicators
+
 ## [0.24.22] - 2026-02-06
 
 ### Changed
