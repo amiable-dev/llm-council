@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.30] - 2026-03-08
+
 ### Added
 
 - **ADR-041: Verification telemetry wiring** - Wire existing performance tracking infrastructure into verification pipeline
   - Per-stage timing (`stage1_elapsed_ms`, `stage2_elapsed_ms`, `stage3_elapsed_ms`) captured in verification results and transcripts
   - Total elapsed time, global deadline, and `budget_utilization` ratio for timeout tuning
-  - `input_metrics` (query_chars, num_models, tier) for input size correlation analysis
+  - `input_metrics` (`content_chars`, `tier_max_chars`, `num_models`, `num_reviewers`, `tier`) for input size correlation analysis
   - Timing data preserved on timeout via `partial_state` and `finally` blocks
   - `persist_session_performance_data()` wired to verification pipeline (ADR-026 Phase 3 no longer dead code)
   - Performance tracker failures isolated from verification results (telemetry never fails verification)
