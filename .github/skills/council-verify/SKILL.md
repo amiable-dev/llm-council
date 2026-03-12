@@ -95,13 +95,15 @@ Use LLM Council's multi-model deliberation to verify work with structured, machi
 
 If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stages` for progress. Max input: quick=15K, balanced=30K, high/reasoning=50K chars. `timing.budget_utilization` shows time used vs deadline (1.0 on timeout). On timeout, only completed stages appear in `timing`.
 
-## Handling Verdicts
+## Rules
 
-- **PASS** (`exit_code: 0`): Proceed. No action needed.
-- **FAIL** (`exit_code: 1`): Read `blocking_issues` and `rationale`. **Fix the code first**, then commit a new snapshot and re-verify. Never retry the same snapshot.
-- **UNCLEAR** (`exit_code: 2`): Insufficient consensus. Accept and move on — do not retry. If `timeout_fired: true`, reduce scope or use a faster tier.
-
-**Never retry verification more than once for the same commit.** If the council rejects code, the correct action is to fix the issues it identified, not to re-submit unchanged code.
+1. **One call at a time.** Never fire multiple verify calls concurrently or in rapid succession. Wait for each to complete before deciding next steps.
+2. **One call per commit.** Never retry the same snapshot_id. If it fails, fix the code first.
+3. **Act on verdicts, don't retry them:**
+   - **PASS** (exit_code 0): Proceed.
+   - **FAIL** (exit_code 1): Read `blocking_issues`. Fix the code, commit, then re-verify the *new* snapshot.
+   - **UNCLEAR** (exit_code 2): Accept and move on. Do not retry.
+4. **Do not reduce scope and retry.** Sending the same code with fewer files is still a retry.
 
 ## Related Skills
 

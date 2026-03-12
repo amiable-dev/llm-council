@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.34] - 2026-03-12
+
+### Fixed
+
+- **Concurrent verify shotgunning** ([#327](https://github.com/amiable-dev/llm-council/issues/327)) — agents fired 4 verify calls within 15 seconds with progressively fewer files, overwhelming the MCP server. Replaced "Handling Verdicts" with stricter "Rules" section: one call at a time, one call per commit, no scope-reduction retries.
+
 ## [0.24.33] - 2026-03-12
 
 ### Fixed
