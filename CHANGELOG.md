@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.33] - 2026-03-12
+
+### Added
+
+- **Verdict handling guidance in council-verify skill** — explicit instructions for PASS/FAIL/UNCLEAR actions, preventing retry loops on rejected code
+
 ## [0.24.32] - 2026-03-11
 
 ### Changed

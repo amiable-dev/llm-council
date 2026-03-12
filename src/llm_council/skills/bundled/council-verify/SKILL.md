@@ -95,24 +95,13 @@ Use LLM Council's multi-model deliberation to verify work with structured, machi
 
 If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stages` for progress. Max input: quick=15K, balanced=30K, high/reasoning=50K chars. `timing.budget_utilization` shows time used vs deadline (1.0 on timeout). On timeout, only completed stages appear in `timing`.
 
-## Exit Codes (for CI/CD)
+## Handling Verdicts
 
-- `0`: PASS - Approved with confidence >= threshold
-- `1`: FAIL - Rejected
-- `2`: UNCLEAR - Confidence below threshold, timeout, or oversized input
+- **PASS** (`exit_code: 0`): Proceed. No action needed.
+- **FAIL** (`exit_code: 1`): Read `blocking_issues` and `rationale`. **Fix the code first**, then commit a new snapshot and re-verify. Never retry the same snapshot.
+- **UNCLEAR** (`exit_code: 2`): Insufficient consensus. Accept and move on — do not retry. If `timeout_fired: true`, reduce scope or use a faster tier.
 
-## Example Usage
-
-```bash
-council-verify --snapshot $(git rev-parse HEAD) --rubric-focus Security
-council-verify --snapshot $(git rev-parse HEAD) --tier reasoning
-```
-
-## Progressive Disclosure
-
-- **Level 1**: Metadata (~200 tokens)
-- **Level 2**: Full instructions (~800 tokens)
-- **Level 3**: See `references/rubrics.md`
+**Never retry verification more than once for the same commit.** If the council rejects code, the correct action is to fix the issues it identified, not to re-submit unchanged code.
 
 ## Related Skills
 
