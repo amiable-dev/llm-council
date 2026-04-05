@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **OpenRouter Gateway Observability** ([#2](https://github.com/mgammarino/llm-council/issues/2)) — Enhanced identification for outbound requests via `X-Title`, `HTTP-Referer`, and `X-Council-ID` headers. Synchronized model identifiers for OpenRouter gateway.
+- **Claude Desktop Integration Guide** ([#4](https://github.com/mgammarino/llm-council/issues/4)) — Documented the Windows-specific MCP bridge (`run_mcp.bat`) for stable operation with the Claude Desktop UI.
 
 ### Fixed
 
+- **Model Selection Stability** ([#8](https://github.com/mgammarino/llm-council/issues/8)) — Fixed "phantom" model defaults in `query.py` by strictly enforcing the user's YAML configuration over global fallback defaults.
 - **Windows stability fix for skill callbacks** ([#1](https://github.com/mgammarino/llm-council/issues/1)) — Resolved an infinite retry loop that occurred when model skill outputs failed to produce a valid "verdict" string on Windows. Enforced terminal verdicts for malformed responses.
 
 ## [0.24.34] - 2026-03-12
