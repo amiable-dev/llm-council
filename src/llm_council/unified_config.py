@@ -198,48 +198,48 @@ class TierConfig(BaseModel):
         default_pools = {
             "quick": TierPoolConfig(
                 models=[
-                    "openai/gpt-5-mini",
-                    "anthropic/claude-haiku-4.5",
-                    "google/gemini-3.1-flash-lite-preview",
-                    "deepseek/deepseek-v3.2",
+                    "openai/gpt-4o-mini",
+                    "anthropic/claude-3-haiku",
+                    "google/gemini-2.0-flash-lite-001",
+                    "meta-llama/llama-3.1-8b-instruct",
                 ],
                 timeout_seconds=30,
                 peer_review="lightweight",
             ),
             "balanced": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.3-chat",
-                    "anthropic/claude-sonnet-4.6",
-                    "google/gemini-3.1-flash-lite-preview",
-                    "deepseek/deepseek-v3.2",
+                    "openai/gpt-4o-mini",
+                    "anthropic/claude-3.5-haiku",
+                    "google/gemini-2.0-flash-001",
+                    "meta-llama/llama-3.1-70b-instruct",
                 ],
                 timeout_seconds=90,
             ),
             "high": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4",
-                    "anthropic/claude-opus-4.6",
-                    "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v3.2-speciale",
+                    "openai/gpt-4o",
+                    "anthropic/claude-3.7-sonnet",
+                    "google/gemini-2.5-pro",
+                    "meta-llama/llama-3.1-70b-instruct",
                 ],
                 timeout_seconds=180,
             ),
             "reasoning": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.6",
-                    "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v3.2-speciale",
+                    "openai/gpt-4o",
+                    "anthropic/claude-3.7-sonnet",
+                    "google/gemini-2.5-pro",
+                    "meta-llama/llama-3.1-70b-instruct",
                 ],
                 timeout_seconds=600,
             ),
             # ADR-027: Frontier tier for cutting-edge/preview models
             "frontier": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.6",
-                    "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v3.2-speciale",
+                    "openai/gpt-4o",
+                    "anthropic/claude-3.7-sonnet",
+                    "google/gemini-2.5-pro",
+                    "meta-llama/llama-3.1-70b-instruct",
                 ],
                 timeout_seconds=600,
             ),
