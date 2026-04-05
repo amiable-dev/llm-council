@@ -46,3 +46,27 @@ C:\Users\carte\.local\bin\uv.exe --directory "c:\git_projects\llm-council" run p
 ### Advanced Flags:
 * **`--details`**: Displays the raw, unedited Stage 1 responses from every model in the council.
 * **`--confidence [quick|balanced|high]`**: Determines which tier of models are called (e.g., `--confidence quick` for cheaper/faster results).
+
+---
+
+## 6. Configuring Your Council (`llm_council.yaml`)
+You have full control over which models participate in the deliberation by editing the `llm_council.yaml` file in the project root.
+
+### How to use the YAML:
+*   **Tiers**: The file is divided into `quick`, `balanced`, and `high` tiers. 
+*   **Model Pools**: Add or remove model IDs (from [OpenRouter](https://openrouter.ai/models)) in the `models:` list for each tier.
+*   **Timeouts**: You can adjust `timeout_seconds` if you find certain models are consistently timing out.
+*   **Stick to Your List**: The `model_intelligence: enabled: false` setting ensures the council stays strictly within the models you've listed (to avoid getting charged for expensive "futuristic" models).
+
+---
+
+## 7. Transparency & Detail Levels
+Depending on whether you use the Terminal or Claude Desktop, you have different options for seeing "under the hood" of the council:
+
+| Feature | Terminal (`--details`) | Claude (`include_details`) |
+| :--- | :---: | :---: |
+| **Raw Stage 1 Texts** | ✅ | ✅ |
+| **Borda Ranking Scores** | ✅ | ✅ |
+| **Model Latency/Status** | ❌ | ✅ |
+| **Advanced Quality Metrics** | ❌ | ✅ |
+| **Dissenting Opinions** | ❌ | ✅ |
