@@ -44,8 +44,7 @@ class ShadowSamplingConfig:
             raise ValueError(f"Sampling rate must be between 0 and 1, got {self.sampling_rate}")
         if not 0 <= self.disagreement_threshold <= 1:
             raise ValueError(
-                f"Disagreement threshold must be between 0 and 1, "
-                f"got {self.disagreement_threshold}"
+                f"Disagreement threshold must be between 0 and 1, got {self.disagreement_threshold}"
             )
 
     @classmethod

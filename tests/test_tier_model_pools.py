@@ -54,9 +54,9 @@ class TestDefaultTierModelPools:
         quick_models = _DEFAULT_TIER_MODEL_POOLS["quick"]
         # Quick tier should include mini/flash variants
         model_names = " ".join(quick_models).lower()
-        assert any(
-            fast in model_names for fast in ["mini", "flash", "haiku"]
-        ), "Quick tier should have fast model variants"
+        assert any(fast in model_names for fast in ["mini", "flash", "haiku"]), (
+            "Quick tier should have fast model variants"
+        )
 
     def test_reasoning_tier_has_reasoning_models(self):
         """Reasoning tier should have deep reasoning models."""
@@ -65,9 +65,9 @@ class TestDefaultTierModelPools:
         reasoning_models = _DEFAULT_TIER_MODEL_POOLS["reasoning"]
         model_names = " ".join(reasoning_models).lower()
         # Should include o1, deepseek-r1, or similar reasoning models
-        assert any(
-            r in model_names for r in ["o1", "r1", "gpt-5"]
-        ), "Reasoning tier should have reasoning model variants"
+        assert any(r in model_names for r in ["o1", "r1", "gpt-5"]), (
+            "Reasoning tier should have reasoning model variants"
+        )
 
     def test_high_tier_is_default_equivalent(self):
         """High tier should be similar to current default COUNCIL_MODELS."""

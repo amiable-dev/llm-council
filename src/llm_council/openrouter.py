@@ -271,7 +271,7 @@ async def query_models_with_progress(
             if pending and completed < total:
                 pending_str = f" | waiting: {', '.join(pending[:3])}"
                 if len(pending) > 3:
-                    pending_str += f" +{len(pending)-3}"
+                    pending_str += f" +{len(pending) - 3}"
             else:
                 pending_str = ""
             await on_progress(

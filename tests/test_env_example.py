@@ -76,9 +76,9 @@ def test_env_example_has_comments(env_example_content: str):
     assert "OPTIONAL" in env_example_content, "Missing OPTIONAL section header"
 
     # Should have instructions
-    assert (
-        "Copy this file" in env_example_content or "copy" in env_example_content.lower()
-    ), "Missing copy instructions"
+    assert "Copy this file" in env_example_content or "copy" in env_example_content.lower(), (
+        "Missing copy instructions"
+    )
 
 
 def test_env_example_warns_about_committing(env_example_content: str):

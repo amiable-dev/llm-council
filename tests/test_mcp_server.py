@@ -363,9 +363,9 @@ async def test_timeout_preserves_diagnostic_info():
         model_responses = result["model_responses"]
 
         # Should have entries for all 3 models
-        assert (
-            len(model_responses) >= 1
-        ), f"Expected at least 1 model status, got: {model_responses}"
+        assert len(model_responses) >= 1, (
+            f"Expected at least 1 model status, got: {model_responses}"
+        )
 
         # The fast model should show as ok or have response
         # Other models should show as timeout (not missing!)

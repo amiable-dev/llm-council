@@ -84,9 +84,9 @@ class TestN8nWorkflowExamples:
             if n.get("type") in ("n8n-nodes-base.httpRequest", "n8n-nodes-base.httpRequestV2")
         ]
 
-        assert (
-            len(http_nodes) > 0
-        ), f"Workflow should have at least one HTTP Request node: {workflow_file}"
+        assert len(http_nodes) > 0, (
+            f"Workflow should have at least one HTTP Request node: {workflow_file}"
+        )
 
     @pytest.mark.parametrize("workflow_file", EXPECTED_WORKFLOWS)
     def test_workflow_targets_council_endpoint(self, workflow_file: str):
@@ -138,9 +138,9 @@ class TestN8nWorkflowExamples:
         ]
 
         for pattern in bad_patterns:
-            assert (
-                pattern not in content
-            ), f"Workflow contains hardcoded API key pattern '{pattern}': {workflow_file}"
+            assert pattern not in content, (
+                f"Workflow contains hardcoded API key pattern '{pattern}': {workflow_file}"
+            )
 
 
 class TestIntegrationDocs:

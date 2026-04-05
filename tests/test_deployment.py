@@ -223,9 +223,9 @@ class TestRailwayTemplate:
         assert "USER" in content, "Dockerfile should run as non-root user"
 
         # Must have HEALTHCHECK
-        assert (
-            "HEALTHCHECK" in content or "healthcheck" in content.lower()
-        ), "Dockerfile should include healthcheck"
+        assert "HEALTHCHECK" in content or "healthcheck" in content.lower(), (
+            "Dockerfile should include healthcheck"
+        )
 
 
 class TestRenderBlueprint:
@@ -272,9 +272,9 @@ class TestRenderBlueprint:
 
         for service in services:
             if service.get("type") == "web":
-                assert (
-                    service.get("autoDeploy") is False
-                ), "Web service should have autoDeploy: false"
+                assert service.get("autoDeploy") is False, (
+                    "Web service should have autoDeploy: false"
+                )
 
     def test_render_yaml_has_health_check(self):
         """render.yaml should define health check."""
@@ -321,9 +321,9 @@ class TestDockerCompose:
         data = yaml.safe_load(compose_file.read_text())
 
         assert "services" in data, "docker-compose.yml missing 'services'"
-        assert (
-            "llm-council" in data["services"]
-        ), "docker-compose.yml should have 'llm-council' service"
+        assert "llm-council" in data["services"], (
+            "docker-compose.yml should have 'llm-council' service"
+        )
 
     def test_docker_compose_has_healthcheck(self):
         """docker-compose.yml llm-council service should have healthcheck."""
@@ -402,9 +402,9 @@ class TestReadmeDeployButtons:
         content = readme.read_text(encoding="utf-8")
 
         # Check for Railway button SVG or link
-        assert (
-            "railway.com" in content.lower() or "railway.app" in content.lower()
-        ), "README.md should include Railway deploy button"
+        assert "railway.com" in content.lower() or "railway.app" in content.lower(), (
+            "README.md should include Railway deploy button"
+        )
 
     def test_readme_has_render_button(self):
         """README.md should have Render deploy button."""
@@ -517,6 +517,6 @@ class TestMkdocsNavigation:
         assert mkdocs_file.exists(), "mkdocs.yml should exist"
 
         content = mkdocs_file.read_text(encoding="utf-8")
-        assert (
-            "09-one-click-deployment" in content
-        ), "mkdocs.yml should reference one-click deployment blog post"
+        assert "09-one-click-deployment" in content, (
+            "mkdocs.yml should reference one-click deployment blog post"
+        )

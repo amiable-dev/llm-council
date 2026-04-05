@@ -331,9 +331,6 @@ class WebhookConfig(BaseModel):
     default_events: List[str] = Field(default_factory=lambda: ["council.complete", "council.error"])
 
 
-
-
-
 class FallbackConfig(BaseModel):
     """Configuration for gateway fallback behavior."""
 
@@ -845,7 +842,9 @@ class CacheConfig(BaseModel):
         ge=0,
         alias="LLM_COUNCIL_CACHE_TTL",
     )
-    directory: Path = Field(default_factory=lambda: _get_safe_home_directory() / ".cache" / "llm-council")
+    directory: Path = Field(
+        default_factory=lambda: _get_safe_home_directory() / ".cache" / "llm-council"
+    )
 
 
 class TelemetryConfig(BaseModel):

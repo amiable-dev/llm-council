@@ -150,9 +150,9 @@ class TestFrontmatterParsing:
         skill_name, content = skill_content
         frontmatter = parse_skill_frontmatter(content)
 
-        assert (
-            frontmatter["name"] == skill_name
-        ), f"{skill_name}: Name mismatch (got {frontmatter['name']})"
+        assert frontmatter["name"] == skill_name, (
+            f"{skill_name}: Name mismatch (got {frontmatter['name']})"
+        )
 
     def test_description_not_empty(self, skill_content):
         """Description should not be empty."""
@@ -225,9 +225,9 @@ class TestContentSections:
         """Content should have a 'When to Use' section."""
         skill_name, body = skill_body
 
-        assert (
-            "when to use" in body.lower() or "## when" in body.lower()
-        ), f"{skill_name}: Missing 'When to Use' section"
+        assert "when to use" in body.lower() or "## when" in body.lower(), (
+            f"{skill_name}: Missing 'When to Use' section"
+        )
 
     def test_has_workflow_or_usage_section(self, skill_body):
         """Content should have workflow or usage instructions."""
@@ -238,9 +238,9 @@ class TestContentSections:
         has_usage = "usage" in body_lower
         has_example = "example" in body_lower
 
-        assert (
-            has_workflow or has_usage or has_example
-        ), f"{skill_name}: Missing workflow/usage section"
+        assert has_workflow or has_usage or has_example, (
+            f"{skill_name}: Missing workflow/usage section"
+        )
 
 
 class TestAllowedTools:
@@ -276,9 +276,9 @@ class TestAllowedTools:
         has_grep = "Grep" in tools
         has_glob = "Glob" in tools
 
-        assert (
-            has_read or has_grep or has_glob
-        ), f"{skill_name}: Missing basic file tools (Read/Grep/Glob)"
+        assert has_read or has_grep or has_glob, (
+            f"{skill_name}: Missing basic file tools (Read/Grep/Glob)"
+        )
 
 
 class TestMarketplaceJson:

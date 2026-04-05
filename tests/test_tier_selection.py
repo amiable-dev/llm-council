@@ -94,9 +94,9 @@ class TestTierWeights:
         frontier = TIER_WEIGHTS["frontier"]
 
         # Frontier should have higher quality weight than high
-        assert (
-            frontier["quality"] > high["quality"]
-        ), "Frontier should weight quality more than high"
+        assert frontier["quality"] > high["quality"], (
+            "Frontier should weight quality more than high"
+        )
         # Frontier should care less about cost
         assert frontier["cost"] <= high["cost"], "Frontier should not care about cost"
 

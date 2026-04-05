@@ -27,9 +27,9 @@ class TestSynthesisAttributionScore:
             all_responses=all_responses,
         )
 
-        assert (
-            sas.winner_alignment >= 0.5
-        ), f"Expected high winner alignment, got {sas.winner_alignment}"
+        assert sas.winner_alignment >= 0.5, (
+            f"Expected high winner alignment, got {sas.winner_alignment}"
+        )
 
     def test_sas_synthesis_novel(self):
         """Synthesis diverges from all responses → high hallucination_risk."""
@@ -46,12 +46,12 @@ class TestSynthesisAttributionScore:
             all_responses=all_responses,
         )
 
-        assert (
-            sas.hallucination_risk >= 0.5
-        ), f"Expected high hallucination risk, got {sas.hallucination_risk}"
-        assert (
-            sas.max_source_alignment <= 0.5
-        ), f"Expected low source alignment, got {sas.max_source_alignment}"
+        assert sas.hallucination_risk >= 0.5, (
+            f"Expected high hallucination risk, got {sas.hallucination_risk}"
+        )
+        assert sas.max_source_alignment <= 0.5, (
+            f"Expected low source alignment, got {sas.max_source_alignment}"
+        )
 
     def test_sas_grounded(self):
         """max_source_alignment > 0.6 → grounded=True."""

@@ -156,8 +156,7 @@ async def execute_with_fallback(
     except (asyncio.TimeoutError, RateLimitError, APIError) as e:
         error_msg = str(e)
         logger.warning(
-            f"Frontier model {frontier_model} failed: {error_msg}. "
-            f"Falling back to {fallback_tier}"
+            f"Frontier model {frontier_model} failed: {error_msg}. Falling back to {fallback_tier}"
         )
 
         # Get fallback models from tier
@@ -213,8 +212,7 @@ async def execute_with_fallback_detailed(
             reason = "api_error"
 
         logger.warning(
-            f"Frontier model {frontier_model} failed: {error_msg}. "
-            f"Falling back to {fallback_tier}"
+            f"Frontier model {frontier_model} failed: {error_msg}. Falling back to {fallback_tier}"
         )
 
         # Get fallback models from tier

@@ -221,7 +221,7 @@ class VerificationContextManager:
         """Common enter logic for sync and async."""
         if self._is_active:
             raise ContextIsolationError(
-                "Context manager reentry not allowed - " "verification contexts must be isolated"
+                "Context manager reentry not allowed - verification contexts must be isolated"
             )
 
         self._context = create_isolated_context(

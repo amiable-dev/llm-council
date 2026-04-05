@@ -293,9 +293,9 @@ class TestConcurrencyLimiting:
         from llm_council.verification.api import MAX_CONCURRENT_GIT_OPS
 
         # Should be between 1 and 50 (reasonable for preventing DoS)
-        assert (
-            1 <= MAX_CONCURRENT_GIT_OPS <= 50
-        ), f"MAX_CONCURRENT_GIT_OPS={MAX_CONCURRENT_GIT_OPS} should be between 1 and 50"
+        assert 1 <= MAX_CONCURRENT_GIT_OPS <= 50, (
+            f"MAX_CONCURRENT_GIT_OPS={MAX_CONCURRENT_GIT_OPS} should be between 1 and 50"
+        )
 
 
 class TestStreamingMemoryBounded:
@@ -358,9 +358,9 @@ class TestStreamingMemoryBounded:
             assert len(bytes_read_tracker) > 1, "Should read in multiple chunks"
             # Total bytes read should be approximately MAX_FILE_CHARS + 1 (for truncation check)
             total_read = sum(bytes_read_tracker)
-            assert (
-                total_read <= MAX_FILE_CHARS + 8192 + 1
-            ), f"Should not buffer entire file: read {total_read} bytes"
+            assert total_read <= MAX_FILE_CHARS + 8192 + 1, (
+                f"Should not buffer entire file: read {total_read} bytes"
+            )
             assert truncated is True
 
     @pytest.mark.asyncio

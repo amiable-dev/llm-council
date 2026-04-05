@@ -213,7 +213,7 @@ class TestGitLsTreeZNameOnly:
             # Simulate git ls-tree output
             mock_proc = AsyncMock()
             mock_proc.communicate.return_value = (
-                b"100644 blob abc123\tfile1.py\x00" b"100644 blob def456\tfile2.py\x00",
+                b"100644 blob abc123\tfile1.py\x00100644 blob def456\tfile2.py\x00",
                 b"",
             )
             mock_proc.returncode = 0

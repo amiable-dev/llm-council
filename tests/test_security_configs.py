@@ -289,9 +289,9 @@ class TestSemgrepRules:
         with open(llm_rules_path) as f:
             config = yaml.safe_load(f)
         rule_ids = [r.get("id", "") for r in config.get("rules", [])]
-        assert any(
-            "pickle" in rid for rid in rule_ids
-        ), "Should have a rule for unsafe pickle deserialization"
+        assert any("pickle" in rid for rid in rule_ids), (
+            "Should have a rule for unsafe pickle deserialization"
+        )
 
     def test_semgrep_has_exec_rule(self, llm_rules_path: Path):
         """Verify Semgrep has rule for unsafe exec/eval of LLM output."""
@@ -300,9 +300,9 @@ class TestSemgrepRules:
         with open(llm_rules_path) as f:
             config = yaml.safe_load(f)
         rule_ids = [r.get("id", "") for r in config.get("rules", [])]
-        assert any(
-            "exec" in rid or "eval" in rid for rid in rule_ids
-        ), "Should have a rule for unsafe exec/eval"
+        assert any("exec" in rid or "eval" in rid for rid in rule_ids), (
+            "Should have a rule for unsafe exec/eval"
+        )
 
 
 # =============================================================================

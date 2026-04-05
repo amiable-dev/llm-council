@@ -25,9 +25,9 @@ class TestDeliberationDepthIndex:
         ddi, components = deliberation_depth_index_sync(responses, rankings)
 
         # Should have high diversity
-        assert (
-            components["diversity"] >= 0.5
-        ), f"Expected diversity >= 0.5, got {components['diversity']}"
+        assert components["diversity"] >= 0.5, (
+            f"Expected diversity >= 0.5, got {components['diversity']}"
+        )
 
     def test_ddi_similar_responses(self):
         """Nearly identical responses → low diversity score."""
@@ -43,9 +43,9 @@ class TestDeliberationDepthIndex:
         ddi, components = deliberation_depth_index_sync(responses, rankings)
 
         # Should have low diversity
-        assert (
-            components["diversity"] <= 0.5
-        ), f"Expected diversity <= 0.5, got {components['diversity']}"
+        assert components["diversity"] <= 0.5, (
+            f"Expected diversity <= 0.5, got {components['diversity']}"
+        )
 
     def test_ddi_full_participation(self):
         """All models reviewed → coverage = 1.0."""
@@ -59,9 +59,9 @@ class TestDeliberationDepthIndex:
 
         ddi, components = deliberation_depth_index_sync(responses, rankings)
 
-        assert (
-            components["coverage"] == 1.0
-        ), f"Expected coverage = 1.0, got {components['coverage']}"
+        assert components["coverage"] == 1.0, (
+            f"Expected coverage = 1.0, got {components['coverage']}"
+        )
 
     def test_ddi_partial_participation(self):
         """Some models failed → coverage < 1.0."""
@@ -74,9 +74,9 @@ class TestDeliberationDepthIndex:
 
         ddi, components = deliberation_depth_index_sync(responses, rankings)
 
-        assert (
-            components["coverage"] == 0.5
-        ), f"Expected coverage = 0.5, got {components['coverage']}"
+        assert components["coverage"] == 0.5, (
+            f"Expected coverage = 0.5, got {components['coverage']}"
+        )
 
     def test_ddi_rich_justifications(self):
         """Long, detailed justifications → high richness."""
@@ -87,9 +87,9 @@ class TestDeliberationDepthIndex:
 
         ddi, components = deliberation_depth_index_sync(responses, rankings)
 
-        assert (
-            components["richness"] >= 0.9
-        ), f"Expected richness >= 0.9, got {components['richness']}"
+        assert components["richness"] >= 0.9, (
+            f"Expected richness >= 0.9, got {components['richness']}"
+        )
 
     def test_ddi_minimal_justifications(self):
         """Terse justifications → low richness."""
@@ -99,9 +99,9 @@ class TestDeliberationDepthIndex:
 
         ddi, components = deliberation_depth_index_sync(responses, rankings)
 
-        assert (
-            components["richness"] <= 0.3
-        ), f"Expected richness <= 0.3, got {components['richness']}"
+        assert components["richness"] <= 0.3, (
+            f"Expected richness <= 0.3, got {components['richness']}"
+        )
 
     def test_ddi_empty_responses(self):
         """No responses → DDI = 0.0."""

@@ -199,7 +199,7 @@ async def run_benchmark(
 
     for i, question in enumerate(questions):
         if verbose:
-            print(f"[{i+1}/{len(questions)}] Benchmarking: {question.id}")
+            print(f"[{i + 1}/{len(questions)}] Benchmarking: {question.id}")
 
         single_model_scores = {}
         single_model_responses = {}
@@ -321,7 +321,7 @@ def print_benchmark_report(results: List[BenchmarkResult]) -> str:
         short_name = model.split("/")[-1][:28]
         lines.append(
             f"{short_name:<30} {model_stat['avg_coverage']:<15.3f} "
-            f"{model_stat['win_rate_vs_council']*100:.1f}%"
+            f"{model_stat['win_rate_vs_council'] * 100:.1f}%"
         )
 
     lines.extend(

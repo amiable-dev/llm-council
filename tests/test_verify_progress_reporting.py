@@ -128,12 +128,12 @@ class TestRunVerificationProgressCallback:
 
             # Stage 1 per-model progress is tested separately (via on_progress to stage1)
             # Here we verify inter-stage transitions are reported
-            assert any(
-                "Stage 2" in m or "Peer" in m for m in messages
-            ), f"No Stage 2 message in: {messages}"
-            assert any(
-                "Stage 3" in m or "Synth" in m for m in messages
-            ), f"No Stage 3 message in: {messages}"
+            assert any("Stage 2" in m or "Peer" in m for m in messages), (
+                f"No Stage 2 message in: {messages}"
+            )
+            assert any("Stage 3" in m or "Synth" in m for m in messages), (
+                f"No Stage 3 message in: {messages}"
+            )
             assert any("Finaliz" in m for m in messages), f"No finalization message in: {messages}"
 
     @pytest.mark.asyncio
@@ -191,9 +191,9 @@ class TestRunVerificationProgressCallback:
             mock_stage1.assert_called_once()
             call_kwargs = mock_stage1.call_args
             on_progress_arg = call_kwargs.kwargs.get("on_progress")
-            assert (
-                on_progress_arg is not None
-            ), "stage1_collect_responses_with_status should receive on_progress"
+            assert on_progress_arg is not None, (
+                "stage1_collect_responses_with_status should receive on_progress"
+            )
 
     @pytest.mark.asyncio
     async def test_run_verification_works_without_on_progress(self):
@@ -300,15 +300,15 @@ class TestRunVerificationProgressCallback:
 
             # Total should NOT be 3 (the old hardcoded value)
             totals = [call[1] for call in progress_calls]
-            assert all(
-                t != 3 for t in totals
-            ), f"Total steps should not be hardcoded to 3, got: {totals}"
+            assert all(t != 3 for t in totals), (
+                f"Total steps should not be hardcoded to 3, got: {totals}"
+            )
 
             # Total should reflect model count + stage overhead
             # high tier = 4 models, so total should be > 4
-            assert all(
-                t > 3 for t in totals
-            ), f"Total should reflect model count + stages, got: {totals}"
+            assert all(t > 3 for t in totals), (
+                f"Total should reflect model count + stages, got: {totals}"
+            )
 
 
 class TestMCPVerifyProgressReporting:
