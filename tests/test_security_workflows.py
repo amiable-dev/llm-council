@@ -68,7 +68,7 @@ class TestSecurityWorkflow:
         """Load security workflow configuration."""
         if not workflow_path.exists():
             pytest.skip("security.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
@@ -80,7 +80,7 @@ class TestSecurityWorkflow:
         """Verify security.yml is valid YAML."""
         if not workflow_path.exists():
             pytest.skip("security.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             try:
                 yaml.safe_load(f)
             except yaml.YAMLError as e:
@@ -185,7 +185,7 @@ class TestSecurityWorkflowMasterJobs:
         """Load security workflow configuration."""
         if not workflow_path.exists():
             pytest.skip("security.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
@@ -246,7 +246,7 @@ class TestReleaseSecurityWorkflow:
         """Load release security workflow configuration."""
         if not workflow_path.exists():
             pytest.skip("release-security.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
@@ -343,7 +343,7 @@ class TestCIWorkflowVersionPinning:
         """Load CI workflow configuration."""
         if not workflow_path.exists():
             pytest.skip("ci.yml not found")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
@@ -382,7 +382,7 @@ class TestDependencyReviewConfig:
         """Load dependency review configuration."""
         if not config_path.exists():
             pytest.skip("dependency-review-config.yml not yet created")
-        with open(config_path) as f:
+        with open(config_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
     @pytest.fixture
@@ -395,7 +395,7 @@ class TestDependencyReviewConfig:
         """Load security workflow configuration."""
         if not workflow_path.exists():
             pytest.skip("security.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
@@ -467,7 +467,7 @@ class TestScorecardWorkflow:
         """Load scorecard workflow configuration."""
         if not workflow_path.exists():
             pytest.skip("scorecard.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
         return normalize_yaml_on_key(config)
 
@@ -479,7 +479,7 @@ class TestScorecardWorkflow:
         """Verify scorecard.yml is valid YAML."""
         if not workflow_path.exists():
             pytest.skip("scorecard.yml not yet created")
-        with open(workflow_path) as f:
+        with open(workflow_path, encoding="utf-8") as f:
             try:
                 yaml.safe_load(f)
             except yaml.YAMLError as e:
