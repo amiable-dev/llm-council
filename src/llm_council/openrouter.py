@@ -90,6 +90,8 @@ async def query_model_with_status(
     headers = {
         "Authorization": f"Bearer {_get_openrouter_api_key()}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/amiable-dev/llm-council",
+        "X-Title": "LLM Council",
     }
 
     # Build payload using gateway function for reasoning injection (ADR-026)
