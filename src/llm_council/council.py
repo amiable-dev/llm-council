@@ -2047,6 +2047,7 @@ async def run_full_council(
     }
 
     # Stage 1: Collect individual responses
+    target_models = models or _get_council_models()
     stage1_results, stage1_usage = await stage1_collect_responses(user_query)
     total_usage["stage1"] = stage1_usage
     num_responses = len(stage1_results)
