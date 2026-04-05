@@ -197,6 +197,8 @@ class OpenRouterGateway(BaseRouter):
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/amiable-dev/llm-council",
+            "X-Title": "LLM Council",
         }
 
         payload: Dict[str, Any] = {
