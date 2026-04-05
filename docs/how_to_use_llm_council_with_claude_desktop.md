@@ -70,3 +70,11 @@ Depending on whether you use the Terminal or Claude Desktop, you have different 
 | **Model Latency/Status** | ❌ | ✅ |
 | **Advanced Quality Metrics** | ❌ | ✅ |
 | **Dissenting Opinions** | ❌ | ✅ |
+
+---
+
+## ✅ Final Verification Checklist
+Before you close your own documentation mission:
+1. [ ] **Launch Test**: Open Claude Desktop and confirm the "Council" tool is listed.
+2. [ ] **Execution Test**: Ask the Council a simple question in the UI.
+3. [ ] **Log Test**: Check the terminal to confirm the `run_mcp.bat` bridge is active.
