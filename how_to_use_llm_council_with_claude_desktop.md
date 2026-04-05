@@ -33,3 +33,16 @@ Now you can simply talk to Claude and ask him to use the council.
 
 ---
 *Note: If the Council doesn't appear after a code change, remember to **fully quit** Claude Desktop from the System Tray and relaunch it.*
+
+---
+
+## 5. Alternative: Run a Terminal Query
+If you don't want to use Claude Desktop, you can get a synthesized answer directly from your PowerShell terminal:
+
+```powershell
+C:\Users\carte\.local\bin\uv.exe --directory "c:\git_projects\llm-council" run python query.py "What is the consensus on [Problem]?"
+```
+
+### Advanced Flags:
+* **`--details`**: Displays the raw, unedited Stage 1 responses from every model in the council.
+* **`--confidence [quick|balanced|high]`**: Determines which tier of models are called (e.g., `--confidence quick` for cheaper/faster results).
