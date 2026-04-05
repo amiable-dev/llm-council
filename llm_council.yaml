@@ -1,162 +1,47 @@
-# LLM Council Configuration for llm-council project
-# Generated: 2025-12-24 for v0.15.0
-#
-# This configuration enables the Model Intelligence Layer (ADR-026)
-# with appropriate settings for development and self-improvement use cases.
-#
-# NOTE: These static pools are FALLBACKS for when dynamic selection is unavailable.
-# With model_intelligence.enabled=true, the system should dynamically select
-# the latest models. See GitHub Issue #109 for dynamic candidate discovery.
+# LLM Council Configuration - Budget Friendly Mode
+# Uses current, highly available, and low-cost models.
 
 council:
-  # =========================================================================
-  # LAYER 1: Tier Selection (ADR-022)
-  # =========================================================================
   tiers:
-    # Default to 'high' for quality council deliberations
-    # Use 'frontier' for cutting-edge/preview models
-    default: high
+    default: balanced
 
     pools:
-      # QUICK: Fast models for simple queries (<5s latency)
+      # QUICK: Fastest/Cheapest models
       quick:
         models:
-          - openai/gpt-5-mini
-          - anthropic/claude-haiku-4.5
-          - google/gemini-3.1-flash-lite-preview
-          - deepseek/deepseek-v3.2
+          - openai/gpt-4o-mini
+          - anthropic/claude-3-haiku
+          - google/gemini-flash-1.5
+          - meta-llama/llama-3.1-8b-instruct
         timeout_seconds: 30
 
-      # BALANCED: Good quality with reasonable latency
+      # BALANCED: Best value for money
       balanced:
         models:
-          - openai/gpt-5.3-chat
-          - anthropic/claude-sonnet-4.6
-          - google/gemini-3.1-flash-lite-preview
-          - deepseek/deepseek-v3.2
-        timeout_seconds: 90
+          - openai/gpt-4o-mini
+          - anthropic/claude-3.5-haiku
+          - google/gemini-flash-1.5
+          - meta-llama/llama-3.1-70b-instruct
+        timeout_seconds: 60
 
-      # HIGH: Full council deliberation with frontier models
+      # HIGH: High quality, slightly more expensive but still affordable
       high:
         models:
-          - openai/gpt-5.4
-          - anthropic/claude-opus-4.6
-          - google/gemini-3.1-pro-preview
-          - deepseek/deepseek-v3.2-speciale
-        timeout_seconds: 180
+          - openai/gpt-4o
+          - anthropic/claude-3.5-sonnet
+          - google/gemini-pro-1.5
+          - meta-llama/llama-3.1-405b-instruct
+        timeout_seconds: 120
 
-      # REASONING: Deep reasoning with extended thinking
-      reasoning:
-        models:
-          - openai/gpt-5.4-pro
-          - anthropic/claude-opus-4.6
-          - google/gemini-3.1-pro-preview
-          - deepseek/deepseek-v3.2-speciale
-        timeout_seconds: 600
-
-      # FRONTIER: Cutting-edge/preview models (may be unstable)
-      # Use for testing latest capabilities before promoting to 'high'
-      frontier:
-        models:
-          - openai/gpt-5.4-pro
-          - anthropic/claude-opus-4.6
-          - google/gemini-3.1-pro-preview
-          - deepseek/deepseek-v3.2-speciale
-        timeout_seconds: 600
-        # Frontier-specific: accept higher latency/cost for newest models
-        allow_preview: true
-        allow_beta: true
-
-    escalation:
-      enabled: true
-      notify_user: true
-      max_escalations: 2
-
-  # =========================================================================
-  # LAYER 4: Gateway Routing (ADR-023)
-  # =========================================================================
   gateways:
     default: openrouter
-
     providers:
       openrouter:
         enabled: true
         api_key: ${OPENROUTER_API_KEY}
 
-    fallback:
-      enabled: true
-      chain: [openrouter]
-
-  # =========================================================================
-  # Model Intelligence Layer (ADR-026) - ENABLED
-  # =========================================================================
   model_intelligence:
-    enabled: true
+    enabled: false # Disable dynamic selection to stick to our cheap list
 
-    sources:
-      openrouter_api: true
-      internal_performance: true
-
-    refresh:
-      registry_ttl: 3600           # 1 hour
-      availability_ttl: 300        # 5 minutes
-
-    selection:
-      min_providers: 2
-      default_count: 4
-
-      anti_herding:
-        enabled: true
-        traffic_threshold: 0.3     # 30%
-        max_penalty: 0.35          # 35%
-
-    parameters:
-      auto_reasoning: true
-      reasoning_effort_by_tier:
-        quick: minimal
-        balanced: low
-        high: medium
-        reasoning: high
-
-    # Internal Performance Tracking (Phase 3)
-    performance_tracker:
-      enabled: true
-      store_path: "${HOME}/.llm-council/performance_metrics.jsonl"
-      decay_days: 30
-      min_samples_preliminary: 10
-      min_samples_moderate: 30
-      min_samples_high: 100
-
-  # =========================================================================
-  # Bias Auditing (ADR-015, ADR-018) - ENABLED for self-improvement
-  # =========================================================================
-  bias_audit:
-    enabled: true
-    length_correlation_threshold: 0.7
-    position_variance_threshold: 0.5
-
-  bias_persistence:
-    enabled: true
-    store_path: "${HOME}/.llm-council/bias_data.jsonl"
-    consent_level: LOCAL_ONLY
-
-  # =========================================================================
-  # Scoring Configuration (ADR-016)
-  # =========================================================================
-  scoring:
-    rubric_enabled: false          # Enable for detailed scoring
-    safety_gate_enabled: false     # Enable if safety filtering needed
-
-  # =========================================================================
-  # Council Behavior
-  # =========================================================================
-  council:
-    mode: consensus                # 'consensus' or 'debate'
-    exclude_self_votes: true       # Prevent self-preference bias
-    style_normalization: false     # Optional anonymization enhancement
-
-  # =========================================================================
-  # Credentials (referenced from environment)
-  # =========================================================================
   credentials:
     openrouter: ${OPENROUTER_API_KEY}
