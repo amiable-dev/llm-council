@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **OpenRouter Gateway Observability** ([#2](https://github.com/mgammarino/llm-council/issues/2)) — Enhanced identification for outbound requests via `X-Title`, `HTTP-Referer`, and `X-Council-ID` headers. Synchronized model identifiers for OpenRouter gateway.
+- **OpenRouter Traceability & Session ID propagation** ([#10](https://github.com/mgammarino/llm-council/issues/10)) — Implemented end-to-end request tracing via `X-Council-ID` header. Generated unique `session_id` at the orchestrator level (both modern and legacy versions) and propagated it through all internal stages and gateway layers.
 - **Claude Desktop Integration Guide** ([#4](https://github.com/mgammarino/llm-council/issues/4)) — Documented the Windows-specific MCP bridge (`run_mcp.bat`) for stable operation with the Claude Desktop UI.
 
 ### Fixed

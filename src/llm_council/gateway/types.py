@@ -102,6 +102,8 @@ class GatewayRequest:
     extra_params: Dict[str, Any] = field(default_factory=dict)
     # Reasoning parameters for reasoning models (ADR-026 Phase 2)
     reasoning_params: Optional[ReasoningParams] = None
+    # Tracing ID for council deliberation session (BUG-002)
+    council_id: Optional[str] = None
 
 
 @dataclass

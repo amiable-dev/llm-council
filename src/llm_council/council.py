@@ -262,7 +262,9 @@ MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
-async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+async def stage1_collect_responses(
+    user_query: str, council_id: Optional[str] = None
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Stage 1: Collect individual responses from all council models.
 
@@ -275,7 +277,9 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
     messages = [{"role": "user", "content": user_query}]
 
     # Query all models in parallel
-    responses = await query_models_parallel(_get_council_models(), messages)
+    responses = await query_models_parallel(
+        _get_council_models(), messages, council_id=council_id
+    )
 
     # Format results and aggregate usage
     stage1_results = []
@@ -299,6 +303,7 @@ async def stage1_collect_responses_with_status(
     on_progress: Optional[ProgressCallback] = None,
     shared_raw_responses: Optional[Dict[str, Dict[str, Any]]] = None,
     models: Optional[List[str]] = None,
+    session_id: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, Dict[str, Any]]]:
     """
     Stage 1: Collect individual responses with per-model status tracking (ADR-012).
@@ -334,6 +339,7 @@ async def stage1_collect_responses_with_status(
         on_progress=on_progress,
         timeout=timeout,
         shared_results=shared_raw_responses,
+        council_id=session_id,
     )
 
     # Format results and aggregate usage
@@ -405,6 +411,7 @@ def generate_partial_warning(
 async def quick_synthesis(
     user_query: str,
     model_responses: Dict[str, Dict[str, Any]],
+    council_id: Optional[str] = None,
 ) -> Tuple[str, Dict[str, int]]:
     """
     Generate a quick synthesis from partial responses (ADR-012 fallback).
@@ -448,7 +455,13 @@ and highlight any important insights. Be clear that this is based on partial dat
     messages = [{"role": "user", "content": synthesis_prompt}]
 
     # Use chairman model for synthesis
-    response = await query_model(_get_chairman_model(), messages, timeout=15.0, disable_tools=True)
+    response = await query_model(
+        _get_chairman_model(),
+        messages,
+        timeout=15.0,
+        disable_tools=True,
+        council_id=council_id,
+    )
 
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
@@ -646,6 +659,7 @@ async def run_council_with_fallback(
             on_progress=stage1_progress,
             shared_raw_responses=shared_raw_responses,  # Preserve state on timeout
             models=council_models,  # ADR-022: Use tier-appropriate models
+            session_id=session_id,  # Traceable ID (BUG-002)
         )
 
         result["model_responses"] = model_statuses
@@ -677,12 +691,14 @@ async def run_council_with_fallback(
             pass  # Webhook failure shouldn't block council execution
 
         # Stage 1.5: Style normalization (if enabled)
-        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
+        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(
+            stage1_results, session_id=session_id
+        )
 
         # Stage 2: Peer review
         await report_progress(requested_models + 1, total_steps, "Stage 2: Peer review...")
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            user_query, responses_for_review
+            user_query, responses_for_review, session_id=session_id
         )
 
         # ADR-027: Track shadow votes for frontier tier
@@ -747,6 +763,7 @@ async def run_council_with_fallback(
             stage2_results,
             aggregate_rankings,
             verdict_type=effective_verdict_type,
+            session_id=session_id,
         )
 
         # If we escalated due to deadlock, update the verdict result
@@ -879,7 +896,7 @@ async def run_council_with_fallback(
             # We have some responses - do quick synthesis
             await report_progress(total_steps - 1, total_steps, "Timeout - quick synthesis...")
 
-            synthesis, usage = await quick_synthesis(user_query, result["model_responses"])
+            synthesis, usage = await quick_synthesis(user_query, result["model_responses"], council_id=session_id)
             result["synthesis"] = synthesis
             result["metadata"]["synthesis_type"] = (
                 "partial" if len(successful_responses) > 1 else "stage1_only"
@@ -1008,7 +1025,7 @@ def should_normalize_styles(responses: List[str]) -> bool:
 
 
 async def stage1_5_normalize_styles(
-    stage1_results: List[Dict[str, Any]],
+    stage1_results: List[Dict[str, Any]], session_id: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Stage 1.5: Normalize response styles to reduce stylistic fingerprinting.
@@ -1059,7 +1076,9 @@ Original text:
 Rewritten text:"""
 
         messages = [{"role": "user", "content": normalize_prompt}]
-        response = await query_model(_get_normalizer_model(), messages, timeout=60.0)
+        response = await query_model(
+            _get_normalizer_model(), messages, timeout=60.0, council_id=session_id
+        )
 
         if response is not None:
             normalized_results.append(
@@ -1093,6 +1112,7 @@ async def stage2_collect_rankings(
     timeout: float = 120.0,
     models: Optional[List[str]] = None,
     on_progress: Optional[Callable[[int, int, str], Awaitable[None]]] = None,
+    session_id: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str], Dict[str, int]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -1268,7 +1288,9 @@ Now provide your evaluation and ranking:"""
         # This ensures one slow reviewer doesn't block progress for completed ones
         tasks = {
             asyncio.create_task(
-                query_model(model, messages, disable_tools=True, timeout=timeout)
+                query_model(
+                    model, messages, disable_tools=True, timeout=timeout, council_id=session_id
+                )
             ): model
             for model in reviewers
         }
@@ -1299,7 +1321,7 @@ Now provide your evaluation and ranking:"""
     else:
         # Backward-compatible path: use query_models_parallel when no progress needed
         responses = await query_models_parallel(
-            reviewers, messages, disable_tools=True, timeout=timeout
+            reviewers, messages, disable_tools=True, timeout=timeout, council_id=session_id
         )
 
     # Format results and aggregate usage - include reviewer model for self-vote exclusion
@@ -1370,6 +1392,7 @@ async def stage3_synthesize_final(
     aggregate_rankings: Optional[List[Dict[str, Any]]] = None,
     verdict_type: VerdictType = VerdictType.SYNTHESIS,
     timeout: float = 120.0,
+    session_id: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, int], Optional[VerdictResult]]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -1488,7 +1511,11 @@ STAGE 2 - Peer Rankings:
     # Disable tools to prevent prompt injection via tool invocation
     # ADR-040: Pass timeout parameter instead of relying on default 120s
     response = await query_model(
-        _get_chairman_model(), messages, disable_tools=True, timeout=timeout
+        _get_chairman_model(),
+        messages,
+        disable_tools=True,
+        timeout=timeout,
+        council_id=session_id,
     )
 
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -1932,7 +1959,9 @@ def emit_shadow_vote_events(
         )
 
 
-async def generate_conversation_title(user_query: str) -> str:
+async def generate_conversation_title(
+    user_query: str, council_id: Optional[str] = None
+) -> str:
     """
     Generate a short title for a conversation based on the first user message.
 
@@ -1952,7 +1981,9 @@ Title:"""
     messages = [{"role": "user", "content": title_prompt}]
 
     # Use gemini-2.5-flash for title generation (fast and cheap)
-    response = await query_model("google/gemini-2.5-flash", messages, timeout=30.0)
+    response = await query_model(
+        "google/gemini-2.5-flash", messages, timeout=30.0, council_id=council_id
+    )
 
     if response is None:
         # Fallback to a generic title
@@ -2046,9 +2077,12 @@ async def run_full_council(
         "stage3": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
     }
 
+    # Generate session_id here to propagate through old pipeline
+    session_id = str(uuid.uuid4())
+
     # Stage 1: Collect individual responses
     target_models = models or _get_council_models()
-    stage1_results, stage1_usage = await stage1_collect_responses(user_query)
+    stage1_results, stage1_usage = await stage1_collect_responses(user_query, council_id=session_id)
     total_usage["stage1"] = stage1_usage
     num_responses = len(stage1_results)
 
@@ -2103,9 +2137,9 @@ async def run_full_council(
         # Two models: peer review gives only 1 vote each (unstable)
         # Proceed but mark as degraded
         degraded_mode = "two_models"
-        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
+        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results, session_id=session_id)
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            user_query, responses_for_review
+            user_query, responses_for_review, session_id=session_id
         )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
         # Add warning to each ranking
@@ -2113,9 +2147,9 @@ async def run_full_council(
             r["note"] = "Two-model council - rankings based on single vote"
     else:
         # Normal flow (N ≥ 3)
-        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results)
+        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(stage1_results, session_id=session_id)
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            user_query, responses_for_review
+            user_query, responses_for_review, session_id=session_id
         )
         aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
 
@@ -2157,6 +2191,7 @@ async def run_full_council(
         stage2_results,
         aggregate_rankings,
         verdict_type=effective_verdict_type,  # May be escalated to TIE_BREAKER
+        session_id=session_id,
     )
     total_usage["stage3"] = stage3_usage
 

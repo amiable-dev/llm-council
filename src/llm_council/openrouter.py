@@ -41,6 +41,7 @@ async def query_model(
     timeout: float = 120.0,
     disable_tools: bool = False,
     reasoning_params: Optional["ReasoningParams"] = None,
+    council_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -56,7 +57,7 @@ async def query_model(
         Response dict with 'content', optional 'reasoning_details', and 'usage', or None if failed
     """
     result = await query_model_with_status(
-        model, messages, timeout, disable_tools, reasoning_params
+        model, messages, timeout, disable_tools, reasoning_params, council_id=council_id
     )
     if result["status"] == STATUS_OK:
         return {
@@ -73,6 +74,7 @@ async def query_model_with_status(
     timeout: float = 120.0,
     disable_tools: bool = False,
     reasoning_params: Optional["ReasoningParams"] = None,
+    council_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Query a single model via OpenRouter API with structured status (ADR-012).
@@ -90,9 +92,11 @@ async def query_model_with_status(
     headers = {
         "Authorization": f"Bearer {_get_openrouter_api_key()}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/amiable-dev/llm-council",
+        "HTTP-Referer": "https://github.com/mgammarino/llm-council",
         "X-Title": "LLM Council",
     }
+    if council_id:
+        headers["X-Council-ID"] = council_id
 
     # Build payload using gateway function for reasoning injection (ADR-026)
     from llm_council.gateway.openrouter import build_openrouter_payload
@@ -177,6 +181,7 @@ async def query_models_parallel(
     disable_tools: bool = False,
     timeout: float = 120.0,
     reasoning_params: Optional["ReasoningParams"] = None,
+    council_id: Optional[str] = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -199,6 +204,7 @@ async def query_models_parallel(
             timeout=timeout,
             disable_tools=disable_tools,
             reasoning_params=reasoning_params,
+            council_id=council_id,
         )
         for model in models
     ]
@@ -221,6 +227,7 @@ async def query_models_with_progress(
     timeout: float = 25.0,
     disable_tools: bool = False,
     shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
+    council_id: Optional[str] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Query multiple models with progress callbacks and structured status (ADR-012).
@@ -251,7 +258,7 @@ async def query_models_with_progress(
     # Create tasks with model tracking
     async def query_with_tracking(model: str) -> tuple[str, Dict[str, Any]]:
         result = await query_model_with_status(
-            model, messages, timeout=timeout, disable_tools=disable_tools
+            model, messages, timeout=timeout, disable_tools=disable_tools, council_id=council_id
         )
         return model, result
 
