@@ -178,6 +178,7 @@ class OpenRouterGateway(BaseRouter):
         disable_tools: bool = False,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
+        council_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Send a query to OpenRouter API.
 
@@ -197,9 +198,11 @@ class OpenRouterGateway(BaseRouter):
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/amiable-dev/llm-council",
+            "HTTP-Referer": "https://github.com/mgammarino/llm-council",
             "X-Title": "LLM Council",
         }
+        if council_id:
+            headers["X-Council-ID"] = council_id
 
         payload: Dict[str, Any] = {
             "model": model,
@@ -303,6 +306,7 @@ class OpenRouterGateway(BaseRouter):
             timeout=timeout,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
+            council_id=request.council_id,  # Propagate tracing ID (BUG-002)
         )
 
         # Convert to GatewayResponse

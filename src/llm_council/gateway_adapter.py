@@ -93,7 +93,11 @@ def _gateway_response_to_dict(response) -> Dict[str, Any]:
 
 
 async def query_model(
-    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False
+    model: str,
+    messages: List[Dict[str, str]],
+    timeout: float = 120.0,
+    disable_tools: bool = False,
+    council_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -126,6 +130,7 @@ async def query_model(
             model=model,
             messages=canonical_messages,
             timeout=timeout,
+            council_id=council_id,
         )
 
         router = _get_gateway_router()
@@ -143,11 +148,17 @@ async def query_model(
             }
         return None
     else:
-        return await _direct_query_model(model, messages, timeout, disable_tools)
+        return await _direct_query_model(
+            model, messages, timeout, disable_tools, council_id=council_id
+        )
 
 
 async def query_model_with_status(
-    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False
+    model: str,
+    messages: List[Dict[str, str]],
+    timeout: float = 120.0,
+    disable_tools: bool = False,
+    council_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Query a single model with structured status (ADR-012).
@@ -183,7 +194,9 @@ async def query_model_with_status(
         response = await router.complete(request)
         return _gateway_response_to_dict(response)
     else:
-        return await _direct_query_model_with_status(model, messages, timeout, disable_tools)
+        return await _direct_query_model_with_status(
+            model, messages, timeout, disable_tools, council_id=council_id
+        )
 
 
 async def query_models_parallel(
@@ -191,6 +204,7 @@ async def query_models_parallel(
     messages: List[Dict[str, str]],
     disable_tools: bool = False,
     timeout: float = 120.0,
+    council_id: Optional[str] = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -221,6 +235,7 @@ async def query_models_parallel(
                 model=model,
                 messages=canonical_messages,
                 timeout=timeout,
+                council_id=council_id,
             )
             for model in models
         ]
@@ -247,7 +262,9 @@ async def query_models_parallel(
 
         return result
     else:
-        return await _direct_query_models_parallel(models, messages, disable_tools, timeout)
+        return await _direct_query_models_parallel(
+            models, messages, disable_tools, timeout, council_id=council_id
+        )
 
 
 # Progress callback type
@@ -261,6 +278,7 @@ async def query_models_with_progress(
     timeout: float = 25.0,
     disable_tools: bool = False,
     shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
+    council_id: Optional[str] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Query multiple models with progress callbacks and structured status (ADR-012).
@@ -303,6 +321,7 @@ async def query_models_with_progress(
                     model=model,
                     messages=canonical_messages,
                     timeout=timeout,
+                    council_id=council_id,
                 )
 
                 router = _get_gateway_router()
@@ -334,5 +353,11 @@ async def query_models_with_progress(
         return results
     else:
         return await _direct_query_models_with_progress(
-            models, messages, on_progress, timeout, disable_tools, shared_results
+            models,
+            messages,
+            on_progress=on_progress,
+            timeout=timeout,
+            disable_tools=disable_tools,
+            shared_results=shared_results,
+            council_id=council_id,
         )

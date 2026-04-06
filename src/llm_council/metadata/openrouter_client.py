@@ -89,9 +89,11 @@ class OpenRouterClient:
             return []
 
     def _build_headers(self) -> Dict[str, str]:
-        """Build request headers including API key if available."""
+        """Build request headers including API key, identity, and observability headers."""
         headers = {
             "Content-Type": "application/json",
+            "X-Title": "LLM Council",
+            "HTTP-Referer": "https://github.com/mgammarino/llm-council",
         }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
