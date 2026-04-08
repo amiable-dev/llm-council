@@ -236,9 +236,18 @@ async def consult_council(
     aggregate = metadata.get("aggregate_rankings", [])
     if aggregate:
         result += "\n### Council Rankings\n"
-        for entry in aggregate[:5]:  # Top 5
-            score = entry.get("borda_score", "N/A")
-            result += f"- {entry['model']}: {score}\n"
+        for entry in aggregate[:10]:  # Top 10
+            model = entry.get("model", "Unknown")
+            rank = entry.get("rank")
+            borda = entry.get("borda_score", 0.0)
+            avg_score = entry.get("average_score")
+            
+            score_parts = [f"Borda: {borda:.3f}"]
+            if avg_score is not None:
+                score_parts.append(f"Avg Score: {avg_score:.2f}")
+                
+            rank_prefix = f"{rank}. " if rank else "- "
+            result += f"{rank_prefix}**{model}** ({', '.join(score_parts)})\n"
 
     # ADR-036: Add quality metrics if available
     quality_metrics = metadata.get("quality_metrics")
