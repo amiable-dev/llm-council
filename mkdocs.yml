@@ -80,8 +80,11 @@ nav:
     - MCP Server: guides/mcp.md
     - HTTP API: guides/http-api.md
     - Python Library: guides/python.md
+    - Confidence Tiers: guides/how_the_confidence_tiers_work.md
+    - How it Works: guides/how-the-llm-council-works.md
     - Agent Skills: guides/skills.md
     - Creating Skills: guides/creating-skills.md
+    - Claude Desktop: guides/how-to-use-llm-council-with-claude-desktop.md
   - Integrations:
     - Overview: integrations/index.md
     - n8n: integrations/n8n.md

@@ -498,7 +498,7 @@ def _estimate_latency_score(model_id: str) -> float:
         return 0.75
 
     # Slower models (larger, reasoning)
-    if any(x in model_lower for x in ["opus", "o1", "o3", "deepseek-r1"]):
+    if any(x in model_lower for x in ["opus", "o1", "o3", "qwq-32b-preview"]):
         return 0.45
 
     return 0.70  # Default
@@ -532,7 +532,7 @@ def _estimate_quality_score(model_id: str, tier: str) -> float:
         return 0.95
 
     # Good quality models
-    if any(x in model_lower for x in ["sonnet", "pro", "deepseek"]):
+    if any(x in model_lower for x in ["sonnet", "pro", "qwen"]):
         return 0.85
 
     # Reasonable quality
@@ -724,7 +724,7 @@ def _create_synthetic_model_info(model_id: str) -> "ModelInfo":
     is_preview = any(x in model_lower for x in ["preview", "beta", "exp", "experimental"])
 
     # Detect reasoning support
-    supports_reasoning = any(x in model_lower for x in ["o1", "o3", "deepseek-r1", "r1"])
+    supports_reasoning = any(x in model_lower for x in ["o1", "o3", "qwq", "r1"])
 
     return ModelInfo(
         id=model_id,

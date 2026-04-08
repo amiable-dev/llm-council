@@ -990,6 +990,14 @@ async def run_council_with_fallback(
                 model_statuses[model]["response"] = response.get("content", "")
                 successful_responses[model] = response.get("content", "")
 
+            # ADR-012/022: Reconstruct Stage 1 usage from partial responses
+            # This ensures cost tracking is accurate even if the pipeline times out
+            u: dict[str, Any] = response.get("usage", {})
+            usage_info["stage1"]["prompt_tokens"] += u.get("prompt_tokens", 0)
+            usage_info["stage1"]["completion_tokens"] += u.get("completion_tokens", 0)
+            usage_info["stage1"]["total_tokens"] += u.get("total_tokens", 0)
+            usage_info["stage1"]["total_cost"] += u.get("total_cost", 0.0)
+
         # Mark models that didn't respond as timeout
         for model in council_models:
             if model not in model_statuses:

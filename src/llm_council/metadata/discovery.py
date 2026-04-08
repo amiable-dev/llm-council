@@ -71,8 +71,8 @@ KNOWN_REASONING_FAMILIES: Set[str] = {
     "o3",
     "o1-mini",
     "o3-mini",
-    "deepseek-r1",
-    "deepseek-reasoner",
+    "qwq",
+    "qwen-reasoner",
     "claude-3-opus",
 }
 
@@ -87,7 +87,7 @@ def _get_model_family(model_id: str) -> str:
     Examples:
         openai/o1-preview -> o1
         anthropic/claude-3-opus -> claude-3-opus
-        deepseek/deepseek-r1 -> deepseek-r1
+        qwen/qwq-32b-preview -> qwq
 
     Args:
         model_id: Full model identifier

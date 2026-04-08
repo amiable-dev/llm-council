@@ -79,31 +79,31 @@ _DEFAULT_TIER_MODEL_POOLS = {
         "openai/gpt-5-mini",
         "anthropic/claude-haiku-4.5",
         "google/gemini-3.1-flash-lite-preview",
-        "deepseek/deepseek-v3.2",
+        "qwen/qwen-turbo",
     ],
     "balanced": [
         "openai/gpt-5.3-chat",
         "anthropic/claude-sonnet-4.6",
         "google/gemini-3.1-flash-lite-preview",
-        "deepseek/deepseek-v3.2",
+        "qwen/qwen-turbo",
     ],
     "high": [
         "openai/gpt-5.4",
         "anthropic/claude-opus-4.6",
         "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-v3.2-speciale",
+        "qwen/qwen-plus",
     ],
     "reasoning": [
         "openai/gpt-5.4-pro",
         "anthropic/claude-opus-4.6",
         "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-v3.2-speciale",
+        "qwen/qwen-plus",
     ],
     "frontier": [
         "openai/gpt-5.4-pro",
         "anthropic/claude-opus-4.6",
         "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-v3.2-speciale",
+        "qwen/qwen-plus",
     ],
 }
 

@@ -286,43 +286,34 @@ models:
     quality_tier: "economy"
 
   # ============================================================================
-  # DeepSeek Models (4)
+  # Qwen Models (3)
   # ============================================================================
-  - id: "deepseek/deepseek-v3.2-speciale"
-    context_window: 163000
+  - id: "qwen/qwen-plus"
+    context_window: 131072
     pricing:
       prompt: 0.0004
       completion: 0.0012
-    supported_parameters: ["temperature", "top_p", "reasoning"]
+    supported_parameters: ["temperature", "top_p", "json_mode"]
     modalities: ["text"]
     quality_tier: "standard"
 
-  - id: "deepseek/deepseek-v3.2"
-    context_window: 163000
+  - id: "qwen/qwen-turbo"
+    context_window: 131072
     pricing:
-      prompt: 0.00025
-      completion: 0.0004
-    supported_parameters: ["temperature", "top_p"]
+      prompt: 0.0002
+      completion: 0.0006
+    supported_parameters: ["temperature", "top_p", "json_mode"]
     modalities: ["text"]
     quality_tier: "economy"
 
-  - id: "deepseek/deepseek-r1"
-    context_window: 128000
+  - id: "qwen/qwq-32b-preview"
+    context_window: 32768
     pricing:
-      prompt: 0.00055
-      completion: 0.00219
+      prompt: 0.0005
+      completion: 0.002
     supported_parameters: ["temperature", "top_p", "reasoning"]
     modalities: ["text"]
     quality_tier: "frontier"
-
-  - id: "deepseek/deepseek-chat"
-    context_window: 128000
-    pricing:
-      prompt: 0.00014
-      completion: 0.00028
-    supported_parameters: ["temperature", "top_p"]
-    modalities: ["text"]
-    quality_tier: "economy"
 
   # ============================================================================
   # Meta/Llama Models (2)

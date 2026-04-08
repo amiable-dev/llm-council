@@ -27,12 +27,12 @@ class DomainCategory(Enum):
 # Default specialist pools per ADR-020 council recommendation
 DEFAULT_SPECIALIST_POOLS: Dict[DomainCategory, List[str]] = {
     DomainCategory.CODE: [
-        "deepseek/deepseek-chat",
+        "qwen/qwen-2.5-coder-32b-instruct",
         "mistralai/codestral-latest",
     ],
     DomainCategory.REASONING: [
         "openai/o1-preview",
-        "deepseek/deepseek-r1",
+        "qwen/qwq-32b-preview",
     ],
     DomainCategory.CREATIVE: [
         "anthropic/claude-3-opus-20240229",

@@ -22,7 +22,7 @@ def get_model_provider(model_id: str) -> str:
         "meta-llama",
         "mistralai",
         "cohere",
-        "deepseek",
+        "qwen",
         "x-ai",
     }
 

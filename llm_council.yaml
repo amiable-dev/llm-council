@@ -24,7 +24,7 @@ council:
           - openai/gpt-5-mini
           - anthropic/claude-haiku-4.5
           - google/gemini-3.1-flash-lite-preview
-          - deepseek/deepseek-v3.2
+          - qwen/qwen-turbo
         timeout_seconds: 30
 
       # BALANCED: Good quality with reasonable latency
@@ -33,7 +33,7 @@ council:
           - openai/gpt-5.3-chat
           - anthropic/claude-sonnet-4.6
           - google/gemini-3.1-flash-lite-preview
-          - deepseek/deepseek-v3.2
+          - qwen/qwen-turbo
         timeout_seconds: 90
 
       # HIGH: Full council deliberation with frontier models
@@ -42,7 +42,7 @@ council:
           - openai/gpt-5.4
           - anthropic/claude-opus-4.6
           - google/gemini-3.1-pro-preview
-          - deepseek/deepseek-v3.2-speciale
+          - qwen/qwen-plus
         timeout_seconds: 180
 
       # REASONING: Deep reasoning with extended thinking
@@ -51,7 +51,7 @@ council:
           - openai/gpt-5.4-pro
           - anthropic/claude-opus-4.6
           - google/gemini-3.1-pro-preview
-          - deepseek/deepseek-v3.2-speciale
+          - qwen/qwen-plus
         timeout_seconds: 600
 
       # FRONTIER: Cutting-edge/preview models (may be unstable)
@@ -61,7 +61,7 @@ council:
           - openai/gpt-5.4-pro
           - anthropic/claude-opus-4.6
           - google/gemini-3.1-pro-preview
-          - deepseek/deepseek-v3.2-speciale
+          - qwen/qwen-plus
         timeout_seconds: 600
         # Frontier-specific: accept higher latency/cost for newest models
         allow_preview: true
