@@ -274,6 +274,8 @@ async def consult_council(
     if usage:
         # Handle both success path (nested) and timeout path (flat)
         total_data = usage.get("total", usage)
+        by_stage = usage.get("by_stage", usage.get("stages", {}))
+        
         total_cost = total_data.get("total_cost", 0.0)
         total_tokens = int(total_data.get("total_tokens", 0))
         
@@ -281,6 +283,25 @@ async def consult_council(
             result += f"\n### Usage & Cost\n"
             result += f"- **Total Tokens**: {total_tokens:,}\n"
             result += f"- **Total Cost**: ${total_cost:.6f} USD\n"
+            
+            if by_stage:
+                result += "\n#### Breakdown by Stage\n"
+                # Sort stages to ensure consistent order (1, 1.5, 2, 3)
+                stage_order = ["stage1", "stage1_5", "stage2", "stage3"]
+                for s_key in stage_order:
+                    if s_key in by_stage:
+                        s_data = by_stage[s_key]
+                        display_name = {
+                            "stage1": "Stage 1 (Individual Opinions)",
+                            "stage1_5": "Stage 1.5 (Style Normalization)",
+                            "stage2": "Stage 2 (Peer Review / Ranking)",
+                            "stage3": "Stage 3 (Final Synthesis)",
+                        }.get(s_key, s_key.capitalize())
+                        
+                        s_cost = s_data.get("total_cost", 0.0)
+                        s_tokens = int(s_data.get("total_tokens", 0))
+                        if s_tokens > 0 or s_cost > 0:
+                            result += f"- **{display_name}**: {s_tokens:,} tokens (${s_cost:.6f})\n"
 
     if include_details:
         result += "\n\n### Council Details\n"
