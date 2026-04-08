@@ -182,8 +182,8 @@ class TestDefaultWildcardPools:
 
         code_pool = DEFAULT_SPECIALIST_POOLS[DomainCategory.CODE]
         assert len(code_pool) >= 1
-        # Should include deepseek for code per ADR-020
-        assert any("deepseek" in model.lower() for model in code_pool)
+        # Should include qwen for code per our reliability refactor
+        assert any("qwen" in model.lower() for model in code_pool)
 
     def test_default_reasoning_pool_has_specialists(self):
         """Reasoning pool should have reasoning-specialized models."""
@@ -191,8 +191,8 @@ class TestDefaultWildcardPools:
 
         reasoning_pool = DEFAULT_SPECIALIST_POOLS[DomainCategory.REASONING]
         assert len(reasoning_pool) >= 1
-        # Should include o1-preview or deepseek-r1 per ADR-020
-        assert any("o1" in model.lower() or "r1" in model.lower() for model in reasoning_pool)
+        # Should include o1-preview or qwq per our reliability refactor
+        assert any("o1" in model.lower() or "qwq" in model.lower() for model in reasoning_pool)
 
 
 class TestTriageRequest:

@@ -265,6 +265,7 @@ council:
         work_dir = tmp_path / "some" / "other" / "dir"
         work_dir.mkdir(parents=True)
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         monkeypatch.chdir(work_dir)
         config = get_effective_config()
         assert config.tiers.default == "balanced"
@@ -342,6 +343,7 @@ class TestBackwardsCompatibility:
         config_file = config_dir / "config.json"
         config_file.write_text('{"council_models": ["legacy/model-1"]}')
         monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
         config = get_effective_config()
         # Legacy config should be respected if no YAML exists
         # (exact behavior TBD based on implementation)
@@ -1834,7 +1836,7 @@ council:
 
         assert config.cache.enabled is True
         assert config.cache.ttl_seconds == 1800
-        assert str(config.cache.directory) == "/tmp/llm-cache"
+        assert config.cache.directory == Path("/tmp/llm-cache")
 
     def test_telemetry_config_from_yaml(self, tmp_path):
         """TelemetryConfig should load from YAML."""

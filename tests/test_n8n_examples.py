@@ -46,7 +46,7 @@ class TestN8nWorkflowExamples:
         if not filepath.exists():
             pytest.skip(f"Workflow file not yet created: {workflow_file}")
 
-        content = filepath.read_text()
+        content = filepath.read_text(encoding="utf-8")
         try:
             data = json.loads(content)
             assert isinstance(data, dict), "Workflow should be a JSON object"
@@ -60,7 +60,7 @@ class TestN8nWorkflowExamples:
         if not filepath.exists():
             pytest.skip(f"Workflow file not yet created: {workflow_file}")
 
-        data = json.loads(filepath.read_text())
+        data = json.loads(filepath.read_text(encoding="utf-8"))
 
         # n8n workflow structure requires 'nodes' array
         assert "nodes" in data, f"Workflow missing 'nodes' key: {workflow_file}"
@@ -74,7 +74,7 @@ class TestN8nWorkflowExamples:
         if not filepath.exists():
             pytest.skip(f"Workflow file not yet created: {workflow_file}")
 
-        data = json.loads(filepath.read_text())
+        data = json.loads(filepath.read_text(encoding="utf-8"))
         nodes = data.get("nodes", [])
 
         # Look for HTTP Request node
@@ -95,7 +95,7 @@ class TestN8nWorkflowExamples:
         if not filepath.exists():
             pytest.skip(f"Workflow file not yet created: {workflow_file}")
 
-        data = json.loads(filepath.read_text())
+        data = json.loads(filepath.read_text(encoding="utf-8"))
         nodes = data.get("nodes", [])
 
         # Find HTTP Request nodes
@@ -128,7 +128,7 @@ class TestN8nWorkflowExamples:
         if not filepath.exists():
             pytest.skip(f"Workflow file not yet created: {workflow_file}")
 
-        content = filepath.read_text()
+        content = filepath.read_text(encoding="utf-8")
 
         # Check for common API key patterns that shouldn't be hardcoded
         bad_patterns = [
@@ -167,7 +167,7 @@ class TestIntegrationDocs:
         if not n8n_doc.exists():
             pytest.skip("n8n.md not yet created")
 
-        content = n8n_doc.read_text().lower()
+        content = n8n_doc.read_text(encoding="utf-8").lower()
 
         required_sections = [
             "overview",
@@ -186,7 +186,7 @@ class TestIntegrationDocs:
         if not n8n_doc.exists():
             pytest.skip("n8n.md not yet created")
 
-        content = n8n_doc.read_text()
+        content = n8n_doc.read_text(encoding="utf-8")
 
         # Should have code blocks
         assert "```" in content, "n8n.md should contain code examples"
@@ -206,7 +206,7 @@ class TestBlogPost:
         if not blog_post.exists():
             pytest.skip("Blog post not yet created")
 
-        content = blog_post.read_text().lower()
+        content = blog_post.read_text(encoding="utf-8").lower()
 
         # Should mention key concepts
         required_terms = [
@@ -225,7 +225,7 @@ class TestBlogPost:
         if not blog_post.exists():
             pytest.skip("Blog post not yet created")
 
-        content = blog_post.read_text()
+        content = blog_post.read_text(encoding="utf-8")
         assert "```" in content, "Blog post should contain code examples"
 
     def test_blog_post_has_repo_link(self):
@@ -234,5 +234,5 @@ class TestBlogPost:
         if not blog_post.exists():
             pytest.skip("Blog post not yet created")
 
-        content = blog_post.read_text()
+        content = blog_post.read_text(encoding="utf-8")
         assert "github.com/amiable-dev/llm-council" in content, "Blog post should include repo link"

@@ -299,7 +299,7 @@ class TestAppendPerformanceRecords:
             ]
             append_performance_records(records, path)
 
-            lines = path.read_text().strip().split("\n")
+            lines = path.read_text(encoding="utf-8").strip().split("\n")
             assert len(lines) == 2
 
     def test_append_preserves_existing_data(self):
@@ -318,7 +318,7 @@ class TestAppendPerformanceRecords:
             records2 = [ModelSessionMetric(session_id="s2", model_id="m2")]
             append_performance_records(records2, path)
 
-            lines = path.read_text().strip().split("\n")
+            lines = path.read_text(encoding="utf-8").strip().split("\n")
             assert len(lines) == 2
 
             # Verify first record preserved

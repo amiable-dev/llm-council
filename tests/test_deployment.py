@@ -390,7 +390,7 @@ class TestReadmeDeployButtons:
         readme = PROJECT_ROOT / "README.md"
         assert readme.exists(), "README.md should exist"
 
-        content = readme.read_text().lower()
+        content = readme.read_text(encoding="utf-8").lower()
         assert "deploy" in content, "README.md should mention deployment"
 
     def test_readme_has_railway_button(self):
@@ -399,7 +399,7 @@ class TestReadmeDeployButtons:
         if not readme.exists():
             pytest.skip("README.md not found")
 
-        content = readme.read_text()
+        content = readme.read_text(encoding="utf-8")
 
         # Check for Railway button SVG or link
         assert "railway.com" in content.lower() or "railway.app" in content.lower(), (
@@ -412,7 +412,7 @@ class TestReadmeDeployButtons:
         if not readme.exists():
             pytest.skip("README.md not found")
 
-        content = readme.read_text()
+        content = readme.read_text(encoding="utf-8")
 
         # Check for Render button SVG or link
         assert "render.com" in content.lower(), "README.md should include Render deploy button"

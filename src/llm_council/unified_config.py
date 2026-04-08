@@ -59,6 +59,14 @@ from .tier_contract import TierContract, create_tier_contract
 _request_api_key: ContextVar[Dict[str, str]] = ContextVar("request_api_key", default={})
 
 
+def _get_home_directory() -> Optional[Path]:
+    """Safely get home directory without crashing in restricted environments."""
+    try:
+        return Path.home()
+    except (RuntimeError, KeyError):
+        return None
+
+
 def set_request_api_key(provider: str, key: str) -> None:
     """Set a request-scoped API key for the current async context.
 
@@ -822,7 +830,11 @@ class CacheConfig(BaseModel):
         ge=0,
         alias="LLM_COUNCIL_CACHE_TTL",
     )
-    directory: Path = Field(default_factory=lambda: Path.home() / ".cache" / "llm-council")
+    directory: Path = Field(
+        default_factory=lambda: (_get_home_directory() or Path("."))
+        / ".cache"
+        / "llm-council"
+    )
 
 
 class TelemetryConfig(BaseModel):
@@ -1127,10 +1139,12 @@ def _find_config_file() -> Optional[Path]:
     if cwd_path.exists():
         return cwd_path
 
-    # Check home directory
-    home_path = Path.home() / ".config" / "llm-council" / "llm_council.yaml"
-    if home_path.exists():
-        return home_path
+    # Check home directory safely (may fail in restricted environments/tests)
+    home = _get_home_directory()
+    if home:
+        home_path = home / ".config" / "llm-council" / "llm_council.yaml"
+        if home_path.exists():
+            return home_path
 
     return None
 

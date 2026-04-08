@@ -139,7 +139,7 @@ class TestGitleaksConfig:
         """Load gitleaks configuration as text."""
         if not gitleaks_path.exists():
             pytest.skip(".gitleaks.toml not yet created")
-        return gitleaks_path.read_text()
+        return gitleaks_path.read_text(encoding="utf-8")
 
     def test_gitleaks_config_exists(self, gitleaks_path: Path):
         """Verify .gitleaks.toml exists."""
@@ -324,7 +324,7 @@ class TestSonarConfig:
         """Load SonarCloud configuration as text."""
         if not sonar_path.exists():
             pytest.skip("sonar-project.properties not yet created")
-        return sonar_path.read_text()
+        return sonar_path.read_text(encoding="utf-8")
 
     def test_sonar_project_properties_exists(self, sonar_path: Path):
         """Verify sonar-project.properties exists."""
@@ -365,13 +365,13 @@ class TestSecurityVisibility:
     def readme_content(self, project_root: Path) -> str:
         """Load README.md content."""
         readme_path = project_root / "README.md"
-        return readme_path.read_text()
+        return readme_path.read_text(encoding="utf-8")
 
     @pytest.fixture
     def security_md_content(self, project_root: Path) -> str:
         """Load SECURITY.md content."""
         security_path = project_root / "SECURITY.md"
-        return security_path.read_text()
+        return security_path.read_text(encoding="utf-8")
 
     def test_readme_has_security_badges(self, readme_content: str):
         """Verify README has security badges."""

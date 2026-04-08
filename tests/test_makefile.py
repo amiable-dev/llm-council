@@ -6,10 +6,15 @@ These tests ensure the Makefile:
 3. Has expected development targets
 """
 
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("make") is None, reason="make command not found"
+)
 
 
 @pytest.fixture
@@ -17,7 +22,7 @@ def makefile_content() -> str:
     """Read the Makefile content."""
     makefile_path = Path(__file__).parent.parent / "Makefile"
     assert makefile_path.exists(), "Makefile must exist"
-    return makefile_path.read_text()
+    return makefile_path.read_text(encoding="utf-8")
 
 
 def test_makefile_exists():

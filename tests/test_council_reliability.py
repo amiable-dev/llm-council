@@ -177,7 +177,7 @@ async def test_run_council_with_fallback_partial_on_timeout():
 
     # Mock stage1 that also populates shared_raw_responses for timeout handling
     async def mock_stage1_fn(
-        user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None
+        user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None, **kwargs
     ):
         # Simulate the shared dict being populated (for timeout diagnostic preservation)
         if shared_raw_responses is not None:
@@ -347,7 +347,7 @@ async def test_full_council_fallback_stage1_only():
 
     # Mock stage1 that also populates shared_raw_responses for timeout handling
     async def mock_stage1_fn(
-        user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None
+        user_query, timeout=None, on_progress=None, shared_raw_responses=None, models=None, **kwargs
     ):
         # Simulate the shared dict being populated (for timeout diagnostic preservation)
         if shared_raw_responses is not None:
