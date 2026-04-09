@@ -50,7 +50,7 @@ Here is the step-by-step lifecycle of a Council query.
 
 ### Stage 1: Parallel Ideation (The Brainstorm)
 When you submit a query, the Council simultaneously broadcasts your question to a pool of diverse LLMs (the "Council Members").
-*   **Diverse Perspectives**: Depending on your tier (`quick`, `balanced`, or `high`), the system calls models from different providers (OpenAI, Anthropic, Google, Meta).
+*   **Diverse Perspectives**: Depending on your tier (`quick`, `balanced`, `high` or `reasoning`), the system calls models from different providers (OpenAI, Anthropic, Google, Meta).
 *   **Independent Thinking**: Each model generates its own answer in isolation, with no knowledge of what the other models are saying. This prevents "groupthink" at the earliest stage.
 
 ### Stage 1.5: Style Normalization (Optional)

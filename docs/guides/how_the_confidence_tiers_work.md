@@ -22,15 +22,21 @@ Per the orchestration logic in `tier_contract.py`, the council changes its entir
 *   **Triple-Check**: It has `max_attempts: 3`, meaning if the models disagree too wildly or the verifier fails, the council can actually retry or escalate the deliberation.
 *   **Ideal for**: High-stakes decisions, complex architectural reviews, or anything where an error would be costly.
 
+### 🧠 `reasoning` Tier (The "Think Tank")
+*   **Deep Deliberation**: Specifically designed for models with internal "Chain of Thought" (CoT) capabilities (e.g., o1, o3, DeepSeek-R1).
+*   **The Workflow**: Since these models are slower and generate much more text, the council provides a massive **10-minute time budget**. It also increases the token limit to **8,192** to prevent truncation of long reasoning paths.
+*   **Expert Synthesis**: Uses **Claude Opus 4.6** as the Chairman, which is tuned to weigh the logical consistency of reasoning outputs more heavily than the other tiers.
+*   **Ideal for**: Solving complex math/logic puzzles, deep architectural debugging, or multi-step strategic planning.
+
 ## Comparison Table
 
-| Feature | `quick` | `balanced` | `high` |
-| :--- | :--- | :--- | :--- |
-| **Stage 2 (Voting)** | **No** | **Yes** | **Yes** |
-| **Peer Ranking** | None | Borda Count | Borda Count + Detail |
-| **Model Class** | Economy (Turbo/Flash) | Standard (Pro) | Frontier (Opus/GPT-5) |
-| **Global Deadline** | 30 seconds | 90 seconds | 270 seconds |
-| **Chairman Role** | Summarizer | Mediator | Lead Synthesizer |
+| Feature | `quick` | `balanced` | `high` | `reasoning` |
+| :--- | :--- | :--- | :--- | :--- |
+| **Stage 2 (Voting)** | **No** | **Yes** | **Yes** | **Yes** |
+| **Peer Ranking** | None | Borda Count | Borda Count + Detail | Comprehensive |
+| **Model Class** | Economy (Turbo/Flash) | Standard (Pro) | Frontier (Opus/GPT-5) | Reasoning (o1/R1) |
+| **Global Deadline** | 30 seconds | 90 seconds | 180 seconds | 600 seconds |
+| **Chairman Role** | Summarizer | Mediator | Lead Synthesizer | Logical Auditor |
 
 !!! tip "Pro-tip"
     You can see this in action by asking the council for something complex (like "Explain Quantum Physics") using `tier="quick"` and then again with `tier="high"`. In the latter, you'll see a `### Council Rankings` section appear because the voting stage was activated!
