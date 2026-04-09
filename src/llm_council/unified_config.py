@@ -1080,7 +1080,7 @@ def _substitute_env_vars(value: Any) -> Any:
     return value
 
 
-def _merge_dicts(base: Dict, override: Dict) -> Dict:
+def _merge_dicts(base: dict, override: dict) -> dict:
     """Deep merge two dictionaries, with override taking precedence."""
     result = base.copy()
     for key, value in override.items():
