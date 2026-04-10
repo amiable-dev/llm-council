@@ -143,7 +143,7 @@ async def consult_council(
 
     Args:
         query: The question to ask the council.
-        confidence: Response quality level - "quick" (~10s), "balanced" (4 models, ~25s), or "high" (full council, ~45s).
+        confidence: Response quality level - "quick" (~10s), "balanced" (4 models, ~25s), "high" (full council, ~45s), or "reasoning" (deep deliberation, ~10m).
         include_details: If True, includes individual model responses and rankings.
         verdict_type: Type of verdict to render (ADR-025b Jury Mode):
             - "synthesis": Default behavior, unstructured natural language synthesis
