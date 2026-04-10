@@ -24,7 +24,8 @@ Now you can simply talk to Claude and ask him to use the council.
 ### Example Queries:
 * **Classic Query**: *"Ask the LLM Council about [Your Question]."*
 * **Deep Details**: *"Consult the Council about [Your Question] and **show me the Stage 1 details and thinking**."*
-* **Dissenting Opinions**: *"Ask the Council about [Hard Problem] and **include any dissenting opinions** from the peer review stage."*
+* **Devil's Advocate**: *"Ask the Council to **audit** its consensus on [Problem] using the **Devil's Advocate**."* (This triggers `adversarial_mode`).
+* **Statistical Dissent**: *"Ask the Council about [Hard Problem] and **include any dissenting opinions** from the peer review stage."* (This triggers `include_dissent`).
 
 ## 4. Key Configuration
 * **Project Location**: `c:\git_projects\llm-council`
@@ -45,7 +46,10 @@ C:\Users\carte\.local\bin\uv.exe --directory "c:\git_projects\llm-council" run p
 
 ### Advanced Flags:
 * **`--details`**: Displays the raw, unedited Stage 1 responses from every model in the council.
-* **`--confidence [quick|balanced|high]`**: Determines which tier of models are called (e.g., `--confidence quick` for cheaper/faster results).
+* **`--confidence [quick|balanced|high|reasoning]`**: Determines which tier of models are called.
+* **`--no-cache`**: Bypasses the cache and forces a fresh deliberation.
+* **`--adversary`**: Enables the **Forensic Auditor** (Devil's Advocate) who proactively finds flaws in the group's logic before the final synthesis.
+* **`--dissent`**: Enables **Constructive Dissent** extraction, which mathematically identifies minority opinions from the voting phase.
 
 ---
 
@@ -63,13 +67,14 @@ You have full control over which models participate in the deliberation by editi
 ## 7. Transparency & Detail Levels
 Depending on whether you use the Terminal or Claude Desktop, you have different options for seeing "under the hood" of the council:
 
-| Feature | Terminal (`--details`) | Claude (`include_details`) |
+| Feature | Terminal | Claude |
 | :--- | :---: | :---: |
 | **Raw Stage 1 Texts** | ✅ | ✅ |
 | **Borda Ranking Scores** | ✅ | ✅ |
+| **Statistical Dissent** | ✅ | ✅ |
+| **Forensic Auditor (DA)** | ✅ | ✅ |
 | **Model Latency/Status** | ❌ | ✅ |
 | **Advanced Quality Metrics** | ❌ | ✅ |
-| **Dissenting Opinions** | ❌ | ✅ |
 
 ---
 

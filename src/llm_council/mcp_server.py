@@ -135,6 +135,7 @@ async def consult_council(
     include_details: bool = False,
     verdict_type: str = "synthesis",
     include_dissent: bool = False,
+    adversarial_mode: Optional[bool] = None,
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -149,6 +150,7 @@ async def consult_council(
             - "binary": Go/no-go decision (approved/rejected) with confidence score
             - "tie_breaker": Chairman resolves deadlocked decisions
         include_dissent: If True, extract minority opinions from Stage 2 evaluations (ADR-025b).
+        adversarial_mode: Optional[bool] = None, manually toggle Reactive Devil's Advocate (Stage 1B).
         ctx: MCP context for progress reporting (injected automatically).
 
     Returns:
@@ -195,6 +197,7 @@ async def consult_council(
         tier_contract=tier_contract,
         verdict_type=verdict_type_enum,
         include_dissent=include_dissent,
+        adversarial_mode=adversarial_mode,
     )
 
     # Extract results from ADR-012 structured response
