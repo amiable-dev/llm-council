@@ -34,7 +34,7 @@ async def test_adversarial_mode_logic_split():
     with patch("llm_council.council._get_adversarial_mode", return_value=True), \
          patch("llm_council.council._get_adversarial_model", return_value="model4"), \
          patch("llm_council.council.stage1_collect_responses_with_status", new_callable=AsyncMock) as mock_stage1, \
-         patch("llm_council.council.query_model", new_callable=AsyncMock) as mock_query, \
+         patch("llm_council.council.query_model_with_status", new_callable=AsyncMock) as mock_query, \
          patch("llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock) as mock_norm, \
          patch("llm_council.council.stage2_collect_rankings", new_callable=AsyncMock) as mock_stage2, \
          patch("llm_council.council.stage3_synthesize_final", new_callable=AsyncMock) as mock_stage3:

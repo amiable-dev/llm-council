@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Optional, Callable, Aw
 from llm_council.gateway_adapter import (
     query_models_parallel,
     query_model,
+    query_model_with_status,
     query_models_with_progress,
     STATUS_OK,
     STATUS_TIMEOUT,
@@ -2389,8 +2390,6 @@ async def run_full_council(
         )
 
         da_prompt = get_adversary_report_prompt(user_query, responses_text)
-        from llm_council.gateway_adapter import query_model_with_status
-
         da_response = await query_model_with_status(
             adversary_model,
             [{"role": "user", "content": da_prompt}],
