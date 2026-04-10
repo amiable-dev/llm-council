@@ -2,6 +2,7 @@
 # Uses current, highly available, and low-cost models.
 
 council:
+  adversarial_mode: true
   tiers:
     default: balanced
 
