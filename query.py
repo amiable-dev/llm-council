@@ -61,6 +61,7 @@ async def main():
         stage1, stage2, stage3, metadata = await run_full_council(
             args.query,
             bypass_cache=args.no_cache,
+            models=target_models,
             adversarial_mode=args.adversary,
             include_dissent=args.dissent,
         )

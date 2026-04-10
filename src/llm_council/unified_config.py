@@ -1129,11 +1129,39 @@ def load_config(
         # Substitute environment variables
         raw_config = _substitute_env_vars(raw_config)
 
-        # Extract council section
-        council_config = raw_config.get("council", {})
+        # ADR-032: Robust configuration loading.
+        # Handles both direct UnifiedConfig mapping and wrapped "council" YAMLs.
+        if (
+            len(raw_config) == 1 
+            and "council" in raw_config 
+            and isinstance(raw_config["council"], dict)
+        ):
+            # Check if this looks like a wrapped UnifiedConfig (matches schema sections)
+            sections = {
+                "tiers", "triage", "gateways", "credentials", "observability", 
+                "webhooks", "model_intelligence", "frontier", "evaluation", 
+                "secrets", "council", "timeouts", "cache", "telemetry"
+            }
+            inner = raw_config["council"]
+            if any(k in inner for k in sections):
+                # Standard UnifiedConfig mapping, but check for flat-wrapping:
+                # If some fields like 'adversarial_mode' are siblings to 'tiers', 
+                # they must be packed into a 'council' dict for Pydantic to see them.
+                if "council" not in inner:
+                    new_inner = {}
+                    council_data = {}
+                    for k, v in inner.items():
+                        if k in sections:
+                            new_inner[k] = v
+                        else:
+                            council_data[k] = v
+                    if council_data:
+                        new_inner["council"] = council_data
+                    return UnifiedConfig(**new_inner)
+                return UnifiedConfig(**inner)
 
-        # Build config from YAML
-        return UnifiedConfig(**council_config)
+        # Build config directly from YAML root
+        return UnifiedConfig(**raw_config)
 
     except yaml.YAMLError as e:
         if strict:

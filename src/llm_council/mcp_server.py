@@ -131,11 +131,11 @@ CONFIDENCE_CONFIGS = _build_confidence_configs()
 @mcp.tool()
 async def consult_council(
     query: str,
-    confidence: str = "high",
+    confidence: str = "balanced",
     include_details: bool = False,
     verdict_type: str = "synthesis",
     include_dissent: bool = False,
-    adversarial_mode: Optional[bool] = None,
+    adversarial_mode: Optional[bool] = False,
     ctx: Optional[Context] = None,
 ) -> str:
     """

@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model Selection Stability** ([#8](https://github.com/mgammarino/llm-council/issues/8)) — Fixed "phantom" model defaults in `query.py` by strictly enforcing the user's YAML configuration over global fallback defaults.
 - **Windows stability fix for skill callbacks** ([#1](https://github.com/mgammarino/llm-council/issues/1)) — Resolved an infinite retry loop that occurred when model skill outputs failed to produce a valid "verdict" string on Windows. Enforced terminal verdicts for malformed responses.
 - **Unified config type hints** ([#15](https://github.com/mgammarino/llm-council/issues/15)) — Resolved IDE "Red" status by adding missing type arguments to the `_merge_dicts` utility function and migrating to native `dict` for Python 3.9+ compatibility.
+- **Flat-wrapped config fix (BUG-022)** ([#24](https://github.com/mgammarino/llm-council/issues/24)) — Fixed a bug where `load_config` would lose nested council settings (like `adversarial_mode`) when other sections (like `tiers`) were present at the same root level.
 
 ## [0.24.34] - 2026-03-12
 
