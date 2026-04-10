@@ -18,8 +18,8 @@ async def main():
     parser.add_argument(
         "--confidence",
         choices=["quick", "balanced", "high", "reasoning"],
-        default="high",
-        help="Confidence level (default: high)",
+        default="balanced",
+        help="Confidence level (default: balanced)",
     )
     parser.add_argument("--no-cache", action="store_true", help="Bypass cache")
     parser.add_argument(
