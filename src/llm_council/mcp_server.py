@@ -242,11 +242,11 @@ async def consult_council(
             rank = entry_dict.get("rank")
             borda = float(entry_dict.get("borda_score", 0.0))
             avg_score = entry_dict.get("average_score")
-            
+
             score_parts = [f"Borda: {borda:.3f}"]
             if avg_score is not None:
                 score_parts.append(f"Avg Score: {avg_score:.2f}")
-                
+
             rank_prefix = f"{rank}. " if rank else "- "
             result += f"{rank_prefix}**{model}** ({', '.join(score_parts)})\n"
 
@@ -285,15 +285,15 @@ async def consult_council(
         # Handle both success path (nested) and timeout path (flat)
         total_data: dict[str, Any] = usage.get("total", usage)
         by_stage: dict[str, Any] = usage.get("by_stage", usage.get("stages", {}))
-        
+
         total_cost = float(total_data.get("total_cost", 0.0))
         total_tokens = int(total_data.get("total_tokens", 0))
-        
+
         if total_tokens > 0 or total_cost > 0:
             result += f"\n### Usage & Cost\n"
             result += f"- **Total Tokens**: {total_tokens:,}\n"
             result += f"- **Total Cost**: ${total_cost:.6f} USD\n"
-            
+
             if by_stage:
                 result += "\n#### Breakdown by Stage\n"
                 # Sort stages to ensure consistent order (1, 1.5, 2, 3)
@@ -307,7 +307,7 @@ async def consult_council(
                             "stage2": "Stage 2 (Peer Review / Ranking)",
                             "stage3": "Stage 3 (Final Synthesis)",
                         }.get(s_key, s_key.capitalize())
-                        
+
                         s_cost = float(s_data.get("total_cost", 0.0))
                         s_tokens = int(s_data.get("total_tokens", 0))
                         if s_tokens > 0 or s_cost > 0:

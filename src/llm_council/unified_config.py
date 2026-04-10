@@ -779,6 +779,14 @@ class CouncilConfig(BaseModel):
         default=None,
         alias="LLM_COUNCIL_MAX_REVIEWERS",
     )
+    adversarial_mode: bool = Field(
+        default=False,
+        alias="LLM_COUNCIL_ADVERSARIAL_MODE",
+    )
+    adversarial_model: Optional[str] = Field(
+        default=None,
+        alias="LLM_COUNCIL_ADVERSARIAL_MODEL",
+    )
 
 
 class TierTimeoutConfig(BaseModel):
@@ -1429,6 +1437,16 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     council_max_reviewers = os.getenv("LLM_COUNCIL_MAX_REVIEWERS")
     if council_max_reviewers:
         config_dict.setdefault("council", {})["max_reviewers"] = int(council_max_reviewers)
+
+    council_adversarial_mode = os.getenv("LLM_COUNCIL_ADVERSARIAL_MODE")
+    if council_adversarial_mode:
+        config_dict.setdefault("council", {})["adversarial_mode"] = (
+            council_adversarial_mode.lower() in ("true", "1", "yes")
+        )
+
+    council_adversarial_model = os.getenv("LLM_COUNCIL_ADVERSARIAL_MODEL")
+    if council_adversarial_model:
+        config_dict.setdefault("council", {})["adversarial_model"] = council_adversarial_model
 
     # ADR-032: Timeout configuration overrides
     timeout_multiplier = os.getenv("LLM_COUNCIL_TIMEOUT_MULTIPLIER")

@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **API Cost Tracking**: Integrated end-to-end API cost tracking and reporting (`total_cost`) from gateway to final council execution metadata.
+- **Reactive Devil's Advocate (Forensic Auditor)** ([#18](https://github.com/mgammarino/llm-council/issues/18)) — Implemented a sequential deliberation stage where a reserved council member audits initial responses to identify blind spots and logical flaws.
+  - **Sequential Logic**: Adversary runs AFTER Stage 1 ideation, receiving all peer responses as context.
+  - **Contextual Synthesis**: Dissenting reports are injected into Stage 2 (Review) and Stage 3 (Synthesis) to improve final output rigor.
+  - **CLI Support**: New `--adversary` and `--no-adversary` flags in `query.py` for per-query control.
+  - **Legacy Compatibility**: Full support for both modern and legacy orchestration pipelines.
 - **Cost Analytics**: Added precise token and float-based cost aggregation via `_aggregate_stage_usage` across Phase 1, 1.5, 2, and 3 orchestration steps.
 - **MCP Cost Transparency**: Enhanced the `consult_council` tool output to include a per-stage cost breakdown and detailed model rankings (including rank, Borda, and average scores).
 - **OpenRouter Gateway Observability** ([#2](https://github.com/mgammarino/llm-council/issues/2)) — Enhanced identification for outbound requests via `X-Title`, `HTTP-Referer`, and `X-Council-ID` headers. Synchronized model identifiers for OpenRouter gateway.
