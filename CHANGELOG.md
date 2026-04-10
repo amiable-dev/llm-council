@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Enhanced MCP/CLI Status Messaging**: Standardized stage status updates with descriptive strings (e.g., `[*] Stage 1: Collecting opinions...`) and persona-driven context (e.g., naming the Devil's Advocate model). Includes standardized `[*] ` prefix for all stage transitions to improve observability in terminal and MCP environments.
+
 - **API Cost Tracking**: Integrated end-to-end API cost tracking and reporting (`total_cost`) from gateway to final council execution metadata.
 - **Reactive Devil's Advocate (Forensic Auditor)** ([#18](https://github.com/mgammarino/llm-council/issues/18)) — Implemented a sequential deliberation stage where a reserved council member audits initial responses to identify blind spots and logical flaws.
   - **Sequential Logic**: Adversary runs AFTER Stage 1 ideation, receiving all peer responses as context.

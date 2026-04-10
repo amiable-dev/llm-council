@@ -889,7 +889,9 @@ async def run_council_with_fallback(
 
         # Stage 2: Peer review
         await report_progress(
-            requested_models + 1, total_steps, "[*] Stage 2: Peer reviewing and ranking responses..."
+            requested_models + 1,
+            total_steps,
+            "[*] Stage 2: Peer reviewing and ranking responses...",
         )
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
             user_query, responses_for_review, session_id=session_id, dissent_report=dissent_report
@@ -922,7 +924,9 @@ async def run_council_with_fallback(
         )
 
         await report_progress(
-            requested_models * 2, total_steps, "[*] Stage 2 complete, synthesizing final consensus..."
+            requested_models * 2,
+            total_steps,
+            "[*] Stage 2 complete, synthesizing final consensus...",
         )
 
         # ADR-025a: Emit Stage 2 complete webhook event
