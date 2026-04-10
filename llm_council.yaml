@@ -1,6 +1,9 @@
 # LLM Council Configuration - Budget Friendly Mode
 # Uses current, highly available, and low-cost models.
 
+timeouts:
+  multiplier: 1.2
+
 council:
   adversarial_mode: false
   tiers:

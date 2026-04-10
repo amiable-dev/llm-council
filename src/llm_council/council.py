@@ -549,7 +549,314 @@ async def run_council_with_fallback(
     webhook_config: Optional[WebhookConfig] = None,
     on_event: Optional[Callable] = None,
     request_id: Optional[str] = None,
-    verdict_type: VerdictType = VerdictType.SYNTHESIS,
+    adversarial_mode: Optional[bool] = None,
+) -> Dict[str, Any]:
+    # Forward declaration for type hinting
+    pass
+
+
+async def run_stage1(
+    user_query: str,
+    on_progress: Optional[Callable] = None,
+    total_steps: Optional[int] = None,
+    per_model_timeout: int = 30,
+    tier_contract: Optional["TierContract"] = None,
+    adversarial_mode: Optional[bool] = None,
+    shared_raw_responses: Optional[Dict[str, Any]] = None,
+    session_id: Optional[str] = None,
+    council_models: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Phase 1: Collect individual model responses and run adversarial audit."""
+    if council_models is None:
+        if tier_contract:
+            council_models = tier_contract.allowed_models
+        else:
+            council_models = _get_council_models()
+
+    requested_models = len(council_models)
+    if total_steps is None:
+        total_steps = requested_models * 2 + 3
+
+    if session_id is None:
+        session_id = str(uuid.uuid4())
+
+    if shared_raw_responses is None:
+        shared_raw_responses = {}
+
+    async def report_progress(step: int, total: int, message: str):
+        if on_progress:
+            try:
+                await on_progress(step, total, message)
+            except Exception:
+                pass
+
+    async def stage1_progress(completed, total, msg):
+        await report_progress(completed, total_steps, f"[*] Stage 1: {msg}")
+
+    # ADR-DA: Reactive Devil's Advocate Logic
+    adversary_model = None
+    current_council_models = council_models
+
+    da_enabled = (
+        adversarial_mode if adversarial_mode is not None else _get_adversarial_mode()
+    )
+    is_adversarial = da_enabled and len(council_models) >= 3
+
+    if is_adversarial:
+        adversary_model = _get_adversarial_model()
+        if adversary_model and adversary_model in council_models:
+            current_council_models = [m for m in council_models if m != adversary_model]
+        else:
+            current_council_models = list(council_models)
+            adversary_model = random.choice(current_council_models)
+            current_council_models.remove(adversary_model)
+
+    stage1_results, stage1_usage, model_statuses = await stage1_collect_responses_with_status(
+        user_query,
+        timeout=per_model_timeout,
+        on_progress=stage1_progress,
+        shared_raw_responses=shared_raw_responses,
+        models=current_council_models,
+        session_id=session_id,
+    )
+
+    dissent_report = None
+    if is_adversarial and stage1_results:
+        await report_progress(
+            len(stage1_results),
+            total_steps,
+            f"[*] Stage 1B: Devil's Advocate ({adversary_model}) is auditing {len(stage1_results)} responses...",
+        )
+        responses_text = "\n\n".join(
+            [f"Model: {r['model']}\nResponse: {r['response']}" for r in stage1_results]
+        )
+        from llm_council.adversary_prompt import get_adversary_report_prompt
+        da_prompt = get_adversary_report_prompt(user_query, responses_text)
+        da_response = await query_model_with_status(
+            adversary_model,
+            [{"role": "user", "content": da_prompt}],
+            timeout=per_model_timeout,
+            council_id=session_id,
+            disable_tools=True,
+        )
+
+        if da_response and da_response.get("status") == STATUS_OK:
+            dissent_report = da_response.get("content")
+            model_statuses[adversary_model] = {
+                "status": STATUS_OK,
+                "latency_ms": da_response.get("latency_ms", 0),
+                "response": dissent_report,
+            }
+            da_usage = da_response.get("usage", {})
+            stage1_usage["prompt_tokens"] += da_usage.get("prompt_tokens", 0)
+            stage1_usage["completion_tokens"] += da_usage.get("completion_tokens", 0)
+            stage1_usage["total_tokens"] += da_usage.get("total_tokens", 0)
+            stage1_usage["total_cost"] += da_usage.get("total_cost", 0.0)
+        else:
+            model_statuses[adversary_model] = {
+                "status": da_response.get("status", STATUS_ERROR)
+                if da_response
+                else STATUS_ERROR,
+                "latency_ms": da_response.get("latency_ms", 0) if da_response else 0,
+                "error": da_response.get("error", "Devil's Advocate failed to respond")
+                if da_response
+                else "No response",
+            }
+
+    await report_progress(
+        requested_models, total_steps, "[*] Stage 1 complete, starting peer review..."
+    )
+
+    return {
+        "stage1_results": stage1_results,
+        "model_statuses": model_statuses,
+        "usage": stage1_usage,
+        "dissent_report": dissent_report,
+        "session_id": session_id,
+        "requested_models": requested_models,
+        "total_steps": total_steps,
+    }
+
+
+async def run_stage2(
+    user_query: str,
+    stage1_data: Dict[str, Any],
+    on_progress: Optional[Callable] = None,
+    tier_contract: Optional["TierContract"] = None,
+) -> Dict[str, Any]:
+    """Phase 2: style normalization, peer review, and rankings aggregation."""
+    stage1_results = stage1_data["stage1_results"]
+    session_id = stage1_data["session_id"]
+    dissent_report = stage1_data["dissent_report"]
+    requested_models = stage1_data["requested_models"]
+    total_steps = stage1_data["total_steps"]
+
+    async def report_progress(step: int, total: int, message: str):
+        if on_progress:
+            try:
+                await on_progress(step, total, message)
+            except Exception:
+                pass
+
+    from llm_council.council import stage1_5_normalize_styles, stage2_collect_rankings, calculate_aggregate_rankings
+    
+    # Stage 1.5: Style normalization
+    responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(
+        stage1_results, session_id=session_id
+    )
+
+    # Stage 2: Peer review
+    await report_progress(
+        requested_models + 1,
+        total_steps,
+        "[*] Stage 2: Peer reviewing and ranking responses...",
+    )
+    stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
+        user_query, responses_for_review, session_id=session_id, dissent_report=dissent_report
+    )
+
+    track_shadows = False
+    if tier_contract:
+        from llm_council.council import should_track_shadow_votes
+        track_shadows = should_track_shadow_votes(tier_contract)
+        
+    aggregate_rankings = calculate_aggregate_rankings(
+        stage2_results, label_to_model, return_shadow_votes=track_shadows
+    )
+
+    await report_progress(
+        requested_models * 2,
+        total_steps,
+        "[*] Stage 2 complete, synthesizing final consensus...",
+    )
+
+    # Note: bias persistence and shadow vote events skipped in split mode for simplicity
+    # but could be added if needed.
+
+    return {
+        "stage2_results": stage2_results,
+        "label_to_model": label_to_model,
+        "aggregate_rankings": aggregate_rankings,
+        "usage": {
+            "stage1_5": stage1_5_usage,
+            "stage2": stage2_usage,
+        },
+    }
+
+
+async def run_stage3(
+    user_query: str,
+    stage1_data: Dict[str, Any],
+    stage2_data: Dict[str, Any],
+    on_progress: Optional[Callable] = None,
+    verdict_type: "VerdictType" = None,
+    include_dissent: bool = False,
+) -> Dict[str, Any]:
+    """Phase 3: Final synthesis and verdict generation."""
+    if verdict_type is None:
+        from llm_council.verdict import VerdictType as VT
+        verdict_type = VT.SYNTHESIS
+
+    stage1_results = stage1_data["stage1_results"]
+    dissent_report = stage1_data["dissent_report"]
+    session_id = stage1_data["session_id"]
+    model_statuses = stage1_data["model_statuses"]
+    requested_models = stage1_data["requested_models"]
+    total_steps = stage1_data["total_steps"]
+
+    stage2_results = stage2_data["stage2_results"]
+    aggregate_rankings = stage2_data["aggregate_rankings"]
+    label_to_model = stage2_data["label_to_model"]
+
+    async def report_progress(step: int, total: int, message: str):
+        if on_progress:
+            try:
+                await on_progress(step, total, message)
+            except Exception:
+                pass
+
+    # ADR-025b: Deadlock detection
+    effective_verdict_type = verdict_type
+    deadlock_detected = False
+    from llm_council.verdict import VerdictType
+    if verdict_type == VerdictType.BINARY and aggregate_rankings:
+        borda_scores = [r.get("borda_score", 0.0) for r in aggregate_rankings if "borda_score" in r]
+        from llm_council.voting import detect_deadlock
+        if detect_deadlock(borda_scores, threshold=0.1):
+            deadlock_detected = True
+            effective_verdict_type = VerdictType.TIE_BREAKER
+
+    from llm_council.council import stage3_synthesize_final, generate_partial_warning, _aggregate_stage_usage
+    
+    stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
+        user_query,
+        stage1_results,
+        stage2_results,
+        aggregate_rankings,
+        verdict_type=effective_verdict_type,
+        session_id=session_id,
+        dissent_report=dissent_report,
+    )
+
+    result = {
+        "synthesis": stage3_result.get("response", ""),
+        "model_responses": model_statuses,
+        "metadata": {
+            "status": "complete",
+            "completed_models": len(stage1_results),
+            "requested_models": requested_models,
+            "synthesis_type": "full",
+            "aggregate_rankings": aggregate_rankings,
+            "label_to_model": label_to_model,
+            "verdict_type": verdict_type.value if verdict_type else "synthesis",
+            "effective_verdict_type": effective_verdict_type.value if effective_verdict_type else "synthesis",
+            "deadlock_detected": deadlock_detected,
+        }
+    }
+
+    if verdict_result:
+        result["metadata"]["verdict"] = verdict_result.to_dict()
+
+    if include_dissent and stage2_results:
+        from llm_council.dissent import extract_dissent_from_stage2
+        dissent_text = extract_dissent_from_stage2(stage2_results)
+        if dissent_text:
+            if verdict_result:
+                result["metadata"]["verdict"]["dissent"] = dissent_text
+            else:
+                result["metadata"]["dissent"] = dissent_text
+
+    warning = generate_partial_warning(model_statuses, requested_models)
+    if warning:
+        result["metadata"]["warning"] = warning
+        result["metadata"]["status"] = "partial"
+
+    # Merge usages into consistent nested format (ADR-022 / BUG-FIX)
+    all_usage = {
+        "stage1": stage1_data["usage"],
+        **stage2_data["usage"],
+        "stage3": stage3_usage,
+    }
+    result["metadata"]["usage"] = _aggregate_stage_usage(all_usage)
+
+    await report_progress(total_steps, total_steps, "Complete")
+    return result
+
+
+async def run_council_with_fallback(
+    user_query: str,
+    bypass_cache: bool = False,
+    on_progress: Optional[Callable] = None,
+    synthesis_deadline: int = TIMEOUT_SYNTHESIS_TRIGGER,
+    per_model_timeout: int = 25,
+    models: Optional[List[str]] = None,
+    tier_contract: Optional["TierContract"] = None,
+    use_wildcard: bool = False,
+    optimize_prompts: bool = False,
+    webhook_config: Optional["WebhookConfig"] = None,
+    on_event: Optional[Callable] = None,
+    request_id: Optional[str] = None,
+    verdict_type: "VerdictType" = None,
     include_dissent: bool = False,
     adversarial_mode: Optional[bool] = None,
 ) -> Dict[str, Any]:
@@ -773,88 +1080,21 @@ async def run_council_with_fallback(
         nonlocal result
         nonlocal usage_info
 
-        # Stage 1 with status tracking
-        async def stage1_progress(completed, total, msg):
-            await report_progress(completed, total_steps, f"[*] Stage 1: {msg}")
-
-        # ADR-DA: Reactive Devil's Advocate Logic
-        adversary_model = None
-        current_council_models = council_models
-
-        # Override config if explicitly passed
-        da_enabled = adversarial_mode if adversarial_mode is not None else _get_adversarial_mode()
-        is_adversarial = da_enabled and len(council_models) >= 3
-
-        if is_adversarial:
-            adversary_model = _get_adversarial_model()
-            if adversary_model and adversary_model in council_models:
-                # Use specified model as DA
-                current_council_models = [m for m in council_models if m != adversary_model]
-            else:
-                # Randomly pick any model as DA
-                current_council_models = list(council_models)
-                adversary_model = random.choice(current_council_models)
-                current_council_models.remove(adversary_model)
-
-        stage1_results, stage1_usage, model_statuses = await stage1_collect_responses_with_status(
+        # Run stages using discrete functions
+        stage1_data = await run_stage1(
             user_query,
-            timeout=per_model_timeout,  # ADR-012 Section 5: Tier-sovereign timeout
-            on_progress=stage1_progress,
-            shared_raw_responses=shared_raw_responses,  # Preserve state on timeout
-            models=current_council_models,  # ADR-DA: Only regular models in Stage 1A
-            session_id=session_id,  # Traceable ID (BUG-002)
+            on_progress=on_progress,
+            total_steps=total_steps,
+            per_model_timeout=per_model_timeout,
+            tier_contract=tier_contract,
+            adversarial_mode=adversarial_mode,
+            shared_raw_responses=shared_raw_responses,
+            session_id=session_id,
+            council_models=council_models,
         )
-        usage_info["stage1"] = stage1_usage
-
-        # ADR-DA: Stage 1B Critique
-        dissent_report = None
-        if is_adversarial and stage1_results:
-            await report_progress(
-                len(stage1_results),
-                total_steps,
-                f"[*] Stage 1B: Devil's Advocate ({adversary_model}) is auditing {len(stage1_results)} responses...",
-            )
-            responses_text = "\n\n".join(
-                [f"Model: {r['model']}\nResponse: {r['response']}" for r in stage1_results]
-            )
-            da_prompt = get_adversary_report_prompt(user_query, responses_text)
-
-            da_messages = [{"role": "user", "content": da_prompt}]
-            da_response = await query_model_with_status(
-                adversary_model,
-                da_messages,
-                timeout=per_model_timeout,
-                council_id=session_id,
-                disable_tools=True,
-            )
-
-            if da_response and da_response.get("status") == STATUS_OK:
-                dissent_report = da_response.get("content")
-                model_statuses[adversary_model] = {
-                    "status": MODEL_STATUS_OK,
-                    "latency_ms": da_response.get("latency_ms", 0),
-                    "response": dissent_report,
-                }
-                # Aggregate DA usage
-                da_usage = da_response.get("usage", {})
-                usage_info["stage1"]["prompt_tokens"] += da_usage.get("prompt_tokens", 0)
-                usage_info["stage1"]["completion_tokens"] += da_usage.get("completion_tokens", 0)
-                usage_info["stage1"]["total_tokens"] += da_usage.get("total_tokens", 0)
-                usage_info["stage1"]["total_cost"] += da_usage.get("total_cost", 0.0)
-            else:
-                # DA failed or timed out
-                model_statuses[adversary_model] = {
-                    "status": da_response.get("status", MODEL_STATUS_ERROR)
-                    if da_response
-                    else MODEL_STATUS_ERROR,
-                    "latency_ms": da_response.get("latency_ms", 0) if da_response else 0,
-                    "error": da_response.get("error", "Devil's Advocate failed to respond")
-                    if da_response
-                    else "No response",
-                }
-
-        result["model_responses"] = model_statuses
-        result["metadata"]["completed_models"] = len(stage1_results)
+        usage_info["stage1"] = stage1_data["usage"]
+        model_statuses = stage1_data["model_statuses"]
+        stage1_results = stage1_data["stage1_results"]
 
         # Check if we have any responses
         if not stage1_results:
@@ -867,10 +1107,6 @@ async def run_council_with_fallback(
             await report_progress(total_steps, total_steps, "Failed - no responses")
             return result
 
-        await report_progress(
-            requested_models, total_steps, "[*] Stage 1 complete, starting peer review..."
-        )
-
         # ADR-025a: Emit Stage 1 complete webhook event
         try:
             stage1_event = LayerEvent(
@@ -879,41 +1115,25 @@ async def run_council_with_fallback(
             )
             await event_bridge.emit(stage1_event)
         except Exception:
-            pass  # Webhook failure shouldn't block council execution
+            pass
 
-        # Stage 1.5: Style normalization (if enabled)
-        responses_for_review, stage1_5_usage = await stage1_5_normalize_styles(
-            stage1_results, session_id=session_id
+        stage2_data = await run_stage2(
+            user_query,
+            stage1_data,
+            on_progress=on_progress,
+            tier_contract=tier_contract,
         )
-        usage_info["stage1_5"] = stage1_5_usage
+        usage_info.update(stage2_data["usage"])
+        stage2_results = stage2_data["stage2_results"]
+        aggregate_rankings = stage2_data["aggregate_rankings"]
+        label_to_model = stage2_data["label_to_model"]
 
-        # Stage 2: Peer review
-        await report_progress(
-            requested_models + 1,
-            total_steps,
-            "[*] Stage 2: Peer reviewing and ranking responses...",
-        )
-        stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            user_query, responses_for_review, session_id=session_id, dissent_report=dissent_report
-        )
-        usage_info["stage2"] = stage2_usage
-
-        # ADR-027: Track shadow votes for frontier tier
-        track_shadows = should_track_shadow_votes(tier_contract)
-        aggregate_rankings = calculate_aggregate_rankings(
-            stage2_results, label_to_model, return_shadow_votes=track_shadows
-        )
-
-        # ADR-027: Emit shadow vote events for observability
-        if track_shadows and aggregate_rankings:
+        # ADR-027: Shadow votes / Bias persistence (inline for full pipeline)
+        if track_shadow_votes_enabled := should_track_shadow_votes(tier_contract):
             shadow_votes = aggregate_rankings[0].get("shadow_votes", [])
             consensus_winner = aggregate_rankings[0].get("model") if aggregate_rankings else None
             emit_shadow_vote_events(shadow_votes, consensus_winner)
 
-        # ADR-018: Persist bias data for cross-session analysis
-        # Only if enabled in config (checked inside function)
-        # Use the session_id generated at start of outer scope (now nonlocal)
-        # Run in thread to avoid blocking the event loop with file I/O
         await asyncio.to_thread(
             persist_session_bias_data,
             session_id=session_id,
@@ -921,12 +1141,6 @@ async def run_council_with_fallback(
             stage2_results=stage2_results,
             label_to_model=label_to_model,
             query=user_query,
-        )
-
-        await report_progress(
-            requested_models * 2,
-            total_steps,
-            "[*] Stage 2 complete, synthesizing final consensus...",
         )
 
         # ADR-025a: Emit Stage 2 complete webhook event
@@ -937,71 +1151,21 @@ async def run_council_with_fallback(
             )
             await event_bridge.emit(stage2_event)
         except Exception:
-            pass  # Webhook failure shouldn't block council execution
+            pass
 
-        # ADR-025b: Detect deadlock and escalate to TIE_BREAKER if needed
-        effective_verdict_type = verdict_type
-        deadlock_detected = False
-        if verdict_type == VerdictType.BINARY and aggregate_rankings:
-            borda_scores = [
-                r.get("borda_score", 0.0) for r in aggregate_rankings if "borda_score" in r
-            ]
-            if detect_deadlock(borda_scores, threshold=0.1):
-                deadlock_detected = True
-                effective_verdict_type = VerdictType.TIE_BREAKER
-                import logging
-
-                logging.getLogger(__name__).info(
-                    "Deadlock detected. Escalating from BINARY to TIE_BREAKER."
-                )
-
-        # Stage 3: Full synthesis (with verdict type support)
-        stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(
+        # Stage 3
+        result = await run_stage3(
             user_query,
-            stage1_results,
-            stage2_results,
-            aggregate_rankings,
-            verdict_type=effective_verdict_type,
-            session_id=session_id,
-            dissent_report=dissent_report,
+            stage1_data,
+            stage2_data,
+            on_progress=on_progress,
+            verdict_type=verdict_type,
+            include_dissent=include_dissent,
         )
-        usage_info["stage3"] = stage3_usage
-
-        # If we escalated due to deadlock, update the verdict result
-        if deadlock_detected and verdict_result is not None:
-            verdict_result.deadlocked = True
-
-        result["synthesis"] = stage3_result.get("response", "")
-        result["metadata"]["status"] = "complete"
-        result["metadata"]["synthesis_type"] = "full"
-        result["metadata"]["aggregate_rankings"] = aggregate_rankings
-        result["metadata"]["label_to_model"] = label_to_model
-        result["metadata"]["verdict_type"] = verdict_type.value
-        result["metadata"]["effective_verdict_type"] = effective_verdict_type.value
-        result["metadata"]["deadlock_detected"] = deadlock_detected
-
-        # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
-        if verdict_result is not None:
-            result["metadata"]["verdict"] = verdict_result.to_dict()
-
-        # ADR-025b: Extract constructive dissent from Stage 2 if requested
-        if include_dissent and stage2_results:
-            dissent_text = extract_dissent_from_stage2(stage2_results)
-            if dissent_text:
-                if verdict_result is not None:
-                    verdict_result.dissent = dissent_text
-                    # Update the verdict dict with dissent
-                    result["metadata"]["verdict"] = verdict_result.to_dict()
-                else:
-                    # Add dissent to metadata directly for SYNTHESIS mode
-                    result["metadata"]["dissent"] = dissent_text
-
-        # Add warning if some models failed
-        warning = generate_partial_warning(model_statuses, requested_models)
-        if warning:
-            result["metadata"]["warning"] = warning
-            result["metadata"]["status"] = "partial"
-
+        
+        # Merge telemetry/usage back to master result
+        # usage_info is already updated via .update() above
+        # result is already fully formed by run_stage3
         result["metadata"]["usage"] = _aggregate_stage_usage(usage_info)
 
         # Emit telemetry event (fire-and-forget)
