@@ -34,6 +34,11 @@ async def main():
         dest="adversary",
         help="Disable Reactive Devil's Advocate mode",
     )
+    parser.add_argument(
+        "--dissent",
+        action="store_true",
+        help="Enable Constructive Dissent (detects minority opinions during voting)",
+    )
 
     args = parser.parse_args()
 
@@ -54,7 +59,10 @@ async def main():
         print(f"[*] Stage 1: Collecting initial opinions (Confidence: {args.confidence})...")
 
         stage1, stage2, stage3, metadata = await run_full_council(
-            args.query, bypass_cache=args.no_cache, adversarial_mode=args.adversary
+            args.query,
+            bypass_cache=args.no_cache,
+            adversarial_mode=args.adversary,
+            include_dissent=args.dissent,
         )
 
         print("[*] Stage 2: Peer reviewing and ranking...")
@@ -86,6 +94,15 @@ async def main():
             print("-" * 50)
             print(dissent_report)
             print("!" * 50)
+
+        # ADR-CD: Display Constructive Dissent if available
+        dissent_text = metadata.get("dissent")
+        if dissent_text:
+            print("\n" + "." * 50)
+            print("### CONSTRUCTIVE DISSENT (Minority Opinion)")
+            print("-" * 50)
+            print(dissent_text)
+            print("." * 50)
 
         if args.details:
             print("\n" + "=" * 50)
