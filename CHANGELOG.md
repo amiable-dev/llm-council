@@ -13,7 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **RuntimeError**: Ensured background workers (`EventBridge`) are explicitly started in the orchestration facade.
   - **AttributeError**: Added missing `L3_COUNCIL_ERROR` event type to the council contract.
   - **Webhook Connectivity**: Restored error event propagation to external webhook consumers.
-  - **ADR-040 Test Regressions**: Updated integration tests to correctly patch configuration constants in the modular namespace.
+- **Python 3.10 Compatibility (BUG-040)**: Restored MCP server functionality on Python 3.10 platforms by replacing `datetime.UTC` with `timezone.utc` (Refs #42).
+- **MCP Health Check Robustness (BUG-039)**: Resolved 403 Forbidden errors in `council_health_check` (Refs #39).
+  - **Dynamic Connectivity**: Replaced hardcoded test model with the configured `CHAIRMAN_MODEL`.
+  - **Auth Fallback**: Implemented an automated fallback to `openai/gpt-4o-mini` when the primary model is restricted, allowing the tool to remain functional if the API key itself is valid.
+  - **Diagnostic Context**: Added `ready_warning` to the health check response to distinguish between restricted models and invalid API keys.
+- **ADR-040 Test Regressions**: Updated integration tests to correctly patch configuration constants in the modular namespace.
 
 ## [0.25.0] - 2026-04-10
 

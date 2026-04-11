@@ -369,22 +369,42 @@ async def council_health_check() -> str:
     if checks["api_key_configured"]:
         try:
             start = time.time()
+            test_model = CHAIRMAN_MODEL
             response = await query_model_with_status(
-                "google/gemini-2.0-flash-001",
+                test_model,
                 [{"role": "user", "content": "ping"}],
                 timeout=10.0,
             )
+
+            # ADR-039: Fallback for 403 (Forbidden) on specific models
+            if response["status"] == "auth_error" and "403" in str(response.get("error", "")):
+                # Try a widely-available "lite" model to verify API key validity
+                fallback_model = "openai/gpt-4o-mini"
+                fallback_response = await query_model_with_status(
+                    fallback_model,
+                    [{"role": "user", "content": "ping"}],
+                    timeout=10.0,
+                )
+                if fallback_response["status"] == STATUS_OK:
+                    # Key is valid, but Chairman model is restricted
+                    response = fallback_response
+                    test_model = fallback_model
+                    checks["ready_warning"] = f"Chairman model ({CHAIRMAN_MODEL}) is restricted (403). Using {fallback_model} for verification."
+
             latency_ms = int((time.time() - start) * 1000)
 
             checks["api_connectivity"] = {
                 "status": response["status"],
                 "latency_ms": latency_ms,
-                "test_model": "google/gemini-2.0-flash-001",
+                "test_model": test_model,
             }
 
             if response["status"] == STATUS_OK:
                 checks["ready"] = True
-                checks["message"] = "Council is ready. Use start_council to ask questions."
+                ready_msg = "Council is ready. Use start_council to ask questions."
+                if "ready_warning" in checks:
+                    ready_msg = f"API Key Valid. Note: {checks['ready_warning']}"
+                checks["message"] = ready_msg
             else:
                 checks["ready"] = False
                 checks["message"] = (

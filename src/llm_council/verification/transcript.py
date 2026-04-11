@@ -22,7 +22,7 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -98,7 +98,7 @@ class TranscriptStore:
             raise TranscriptError("Cannot create directory in readonly mode")
 
         # Format: 2025-12-31T10-30-00-abc123
-        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
         dir_name = f"{timestamp}-{verification_id}"
 
         path = self.base_path / dir_name
