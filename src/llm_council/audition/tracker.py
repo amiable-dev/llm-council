@@ -16,7 +16,7 @@ Example:
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, List, Optional, Tuple
 
 from .store import append_audition_record, read_audition_records
@@ -137,7 +137,7 @@ class AuditionTracker:
 
         if current is None:
             # New model - create initial SHADOW status
-            now = datetime.now(datetime.UTC)
+            now = datetime.now(UTC)
             current = AuditionStatus(
                 model_id=model_id,
                 state=AuditionState.SHADOW,

@@ -7,7 +7,7 @@ These tests implement the RED phase of TDD.
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -47,7 +47,7 @@ class TestRegistryEntry:
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         entry = RegistryEntry(info=info, fetched_at=now)
 
         assert entry.info == info
@@ -65,7 +65,7 @@ class TestRegistryEntry:
         )
         entry = RegistryEntry(
             info=info,
-            fetched_at=datetime.now(datetime.UTC),
+            fetched_at=datetime.now(UTC),
             is_deprecated=True,
         )
 
@@ -122,7 +122,7 @@ class TestModelRegistry:
 
         registry = ModelRegistry()
         # Manually set last_refresh to 31 minutes ago (threshold is 30)
-        registry._last_refresh = datetime.utcnow() - timedelta(minutes=31)
+        registry._last_refresh = datetime.now(UTC) - timedelta(minutes=31)
 
         assert registry.is_stale is True
 
@@ -131,7 +131,7 @@ class TestModelRegistry:
         from llm_council.metadata.registry import ModelRegistry
 
         registry = ModelRegistry()
-        registry._last_refresh = datetime.utcnow()
+        registry._last_refresh = datetime.now(UTC)
 
         assert registry.is_stale is False
 
@@ -147,7 +147,7 @@ class TestModelRegistry:
         )
         registry._cache["openai/gpt-4o"] = RegistryEntry(
             info=info,
-            fetched_at=datetime.utcnow(),
+            fetched_at=datetime.now(UTC),
         )
 
         result = registry.get_model("openai/gpt-4o")
@@ -169,9 +169,9 @@ class TestModelRegistry:
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(info=info1, fetched_at=datetime.utcnow())
+        registry._cache["openai/gpt-4o"] = RegistryEntry(info=info1, fetched_at=datetime.now(UTC))
         registry._cache["anthropic/claude-3-opus"] = RegistryEntry(
-            info=info2, fetched_at=datetime.utcnow()
+            info=info2, fetched_at=datetime.now(UTC)
         )
 
         candidates = registry.get_candidates()
@@ -294,9 +294,9 @@ class TestRegistryRefresh:
         )
         registry._cache["openai/gpt-4o-stale"] = RegistryEntry(
             info=stale_info,
-            fetched_at=datetime.utcnow() - timedelta(hours=1),
+            fetched_at=datetime.now(UTC) - timedelta(hours=1),
         )
-        registry._last_refresh = datetime.utcnow() - timedelta(hours=1)
+        registry._last_refresh = datetime.now(UTC) - timedelta(hours=1)
 
         # Mock provider that always fails
         mock_provider = MagicMock()

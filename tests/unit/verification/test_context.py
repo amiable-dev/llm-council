@@ -11,7 +11,7 @@ Context isolation ensures:
 
 import asyncio
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -101,9 +101,9 @@ class TestCreateIsolatedContext:
 
     def test_create_isolated_context_captures_timestamp(self):
         """Context should capture creation timestamp."""
-        before = datetime.now(datetime.UTC)
+        before = datetime.now(UTC)
         ctx = create_isolated_context(snapshot_id="abc1234")
-        after = datetime.now(datetime.UTC)
+        after = datetime.now(UTC)
 
         assert before <= ctx.created_at <= after
 

@@ -5,7 +5,7 @@ TDD Red Phase: These tests should fail until types.py is implemented.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List
 
 import pytest
@@ -93,7 +93,7 @@ class TestVerificationResult:
             verification_id="test-123",
             verdict=VerdictType.PASS,
             confidence=0.95,
-            timestamp=datetime.now(datetime.UTC),
+            timestamp=datetime.now(UTC),
             original_response_hash="abc123",
             verifier_responses=[],
             consensus_result=ConsensusResult(
@@ -114,7 +114,7 @@ class TestVerificationResult:
                 verification_id="test-123",
                 verdict=VerdictType.PASS,
                 confidence=1.5,  # Invalid: > 1
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
                 original_response_hash="abc123",
                 verifier_responses=[],
                 consensus_result=ConsensusResult(
@@ -133,7 +133,7 @@ class TestVerificationResult:
             verification_id="test-123",
             verdict=VerdictType.PASS,
             confidence=0.85,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             original_response_hash="abc123def456",
             verifier_responses=[
                 VerifierResponse(
@@ -178,7 +178,7 @@ class TestVerificationResult:
             verification_id="test-123",
             verdict=VerdictType.FAIL,
             confidence=0.95,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             original_response_hash="abc123",
             verifier_responses=[],
             consensus_result=ConsensusResult(
@@ -219,7 +219,7 @@ class TestCrossAgentConsistency:
             verification_id="test-123",
             verdict=VerdictType.PASS,
             confidence=0.85,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             original_response_hash="abc123",
             verifier_responses=[],
             consensus_result=ConsensusResult(
@@ -248,7 +248,7 @@ class TestCrossAgentConsistency:
             verification_id="test-123",
             verdict=VerdictType.PASS,
             confidence=0.85,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             verifier_responses=[],
             consensus_result=ConsensusResult(
                 decision=VerdictType.PASS,
@@ -277,7 +277,7 @@ class TestCrossAgentConsistency:
         base_kwargs = dict(
             verification_id="test-123",
             confidence=0.85,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             original_response_hash="abc123",
             verifier_responses=[],
             skill_version="1.0.0",
@@ -311,7 +311,7 @@ class TestCrossAgentConsistency:
         base_kwargs = dict(
             verification_id="test-123",
             verdict=VerdictType.PASS,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             original_response_hash="abc123",
             verifier_responses=[],
             consensus_result=ConsensusResult(

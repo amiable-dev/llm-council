@@ -4,7 +4,7 @@ Tests are written FIRST (RED phase) per TDD methodology.
 Issue: https://github.com/amiable-dev/llm-council/issues/129
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -21,7 +21,7 @@ class TestShadowToProbation:
             evaluate_state_transition,
         )
 
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -43,7 +43,7 @@ class TestShadowToProbation:
             evaluate_state_transition,
         )
 
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -65,7 +65,7 @@ class TestShadowToProbation:
             evaluate_state_transition,
         )
 
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -91,7 +91,7 @@ class TestProbationToEvaluation:
             evaluate_state_transition,
         )
 
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.PROBATION,
@@ -113,7 +113,7 @@ class TestProbationToEvaluation:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.PROBATION,
@@ -135,7 +135,7 @@ class TestProbationToEvaluation:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.PROBATION,
@@ -161,7 +161,7 @@ class TestEvaluationToFull:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.EVALUATION,
@@ -184,7 +184,7 @@ class TestEvaluationToFull:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.EVALUATION,
@@ -207,7 +207,7 @@ class TestEvaluationToFull:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.EVALUATION,
@@ -230,7 +230,7 @@ class TestEvaluationToFull:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.EVALUATION,
@@ -257,7 +257,7 @@ class TestQuarantineTransitions:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -280,7 +280,7 @@ class TestQuarantineTransitions:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.PROBATION,
@@ -303,7 +303,7 @@ class TestQuarantineTransitions:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.QUARANTINE,
@@ -326,14 +326,13 @@ class TestQuarantineTransitions:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id="openai/gpt-5",
             state=AuditionState.QUARANTINE,
             session_count=5,
-            first_seen=now - timedelta(days=10),
-            last_seen=now,
-            quarantine_until=now + timedelta(hours=12),  # Not expired
+            first_seen=datetime.now(UTC) - timedelta(days=10),
+            last_seen=datetime.now(UTC),
+            quarantine_until=datetime.now(UTC) + timedelta(hours=12),  # Not expired
         )
         criteria = AuditionCriteria()
 
@@ -352,7 +351,7 @@ class TestRecordSessionResult:
             record_session_result,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -372,7 +371,7 @@ class TestRecordSessionResult:
             record_session_result,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -393,7 +392,7 @@ class TestRecordSessionResult:
             record_session_result,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -414,7 +413,7 @@ class TestRecordSessionResult:
             record_session_result,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -434,7 +433,7 @@ class TestRecordSessionResult:
             record_session_result,
         )
 
-        old_last_seen = datetime.utcnow() - timedelta(hours=1)
+        old_last_seen = datetime.now(UTC) - timedelta(hours=1)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.SHADOW,
@@ -478,7 +477,7 @@ class TestFullStateNoTransition:
             evaluate_state_transition,
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
             state=AuditionState.FULL,

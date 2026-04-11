@@ -17,7 +17,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Set, Tuple
 
@@ -1132,7 +1132,7 @@ async def _run_verification_pipeline(
         {
             "responses": stage1_results,
             "usage": stage1_usage,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -1188,7 +1188,7 @@ async def _run_verification_pipeline(
             "rankings": stage2_results,
             "label_to_model": label_to_model,
             "usage": stage2_usage,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -1229,7 +1229,7 @@ async def _run_verification_pipeline(
             "synthesis": stage3_result,
             "aggregate_rankings": aggregate_rankings,
             "usage": stage3_usage,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         },
     )
 
@@ -1333,7 +1333,7 @@ async def run_verification(
                 "rubric_focus": request.rubric_focus,
                 "confidence_threshold": request.confidence_threshold,
                 "context_id": ctx.context_id,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             },
         )
 

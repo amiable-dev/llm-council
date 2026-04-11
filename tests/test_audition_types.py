@@ -4,7 +4,7 @@ Tests are written FIRST (RED phase) per TDD methodology.
 Issue: https://github.com/amiable-dev/llm-council/issues/128
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 import pytest
 
@@ -136,7 +136,7 @@ class TestAuditionStatus:
         """days_tracked property calculates correctly."""
         from llm_council.audition.types import AuditionState, AuditionStatus
 
-        now = datetime.now(datetime.UTC)
+        now = datetime.now(UTC)
         five_days_ago = now - timedelta(days=5)
         status = AuditionStatus(
             model_id="openai/gpt-5-mini",
