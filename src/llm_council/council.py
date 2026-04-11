@@ -142,10 +142,10 @@ async def run_full_council(
     verdict_type: Optional[VerdictType] = None,
     include_dissent: bool = True,
     adversarial_mode: Optional[bool] = None,
-    council_models: Optional[List[str]] = None,
+    models: Optional[List[str]] = None,
     session_id: Optional[str] = None,
     shared_raw_responses: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
     """
     Unified entry point for the 3-stage LLM Council pipeline.
     """
@@ -162,7 +162,7 @@ async def run_full_council(
         tier_contract=tier_contract,
         adversarial_mode=adversarial_mode,
         session_id=session_id,
-        council_models=council_models,
+        council_models=models,
         shared_raw_responses=shared_raw_responses,
     )
 
@@ -172,7 +172,7 @@ async def run_full_council(
         stage1_data,
         on_progress=on_progress,
         tier_contract=tier_contract,
-        council_models=council_models,
+        council_models=models,
     )
 
     # --- PHASE 3: SYNTHESIS ---
@@ -223,13 +223,16 @@ async def run_full_council(
         "model_statuses": stage1_data.get("model_statuses"),
         "requested_models": stage1_data.get("requested_models", 0),
         "completed_models": len(stage1_data.get("stage1_results", [])),
+        "label_to_model": stage2_data["label_to_model"],
     }
 
+    # Restore legacy 4-tuple return signature for backward compatibility
+    # Format: (stage1_results, stage2_results, stage3_result, metadata)
     return (
-        stage3_data["chairman_result"]["response"],
+        stage1_data["stage1_results"],
+        stage2_data["stage2_results"],
+        stage3_data["chairman_result"],
         metadata,
-        stage2_data["label_to_model"],
-        stage2_data["aggregate_rankings"],
     )
 
 
@@ -256,16 +259,20 @@ async def run_council_with_fallback(
                 bypass_cache=bypass_cache,
                 on_progress=on_progress,
                 tier_contract=tier_contract,
-                council_models=models,
+                models=models,
                 adversarial_mode=kwargs.get("adversarial_mode"),
                 session_id=session_id,
                 shared_raw_responses=shared_raw_responses,
             )
         )
 
-        response, metadata, label_mapping, rankings = await asyncio.wait_for(
+        stage1, stage2, stage3, metadata = await asyncio.wait_for(
             pipeline_task, timeout=synthesis_deadline
         )
+
+        response = stage3["response"]
+        label_mapping = metadata.get("label_to_model", {})
+        rankings = metadata.get("rankings", [])
 
         return {
             "response": response,
@@ -280,6 +287,7 @@ async def run_council_with_fallback(
             "synthesis_type": "full",
             "constructive_dissent": metadata.get("constructive_dissent"),
         }
+
 
     except (asyncio.TimeoutError, asyncio.CancelledError):
         if on_progress:
