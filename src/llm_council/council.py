@@ -163,16 +163,13 @@ async def run_full_council(
     models: Optional[List[str]] = None,
     session_id: Optional[str] = None,
     shared_raw_responses: Optional[Dict[str, Any]] = None,
-<<<<<<< HEAD
     webhook_config: Optional[WebhookConfig] = None,
     triage_result: Optional[TriageResult] = None,
-) -> Tuple[str, Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
-=======
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any], Dict[str, Any]]:
->>>>>>> origin/master
     """
     Unified entry point for the 3-stage LLM Council pipeline.
     """
+    clear_layer_events()
     print("DEBUG: Entered run_full_council")
     if verdict_type is None:
         verdict_type = VerdictType.SYNTHESIS
@@ -180,7 +177,6 @@ async def run_full_council(
     if session_id is None:
         session_id = str(uuid.uuid4())
 
-<<<<<<< HEAD
     # Initialize Webhook EventBridge if config provided
     event_bridge = None
     if webhook_config:
@@ -189,27 +185,6 @@ async def run_full_council(
         await event_bridge.start()
 
     council_models = models
-=======
-    # --- PHASE 1: IDEATION ---
-    stage1_data = await run_stage1(
-        user_query,
-        on_progress=on_progress,
-        tier_contract=tier_contract,
-        adversarial_mode=adversarial_mode,
-        session_id=session_id,
-        council_models=models,
-        shared_raw_responses=shared_raw_responses,
-    )
-
-    # --- PHASE 2: PEER REVIEW ---
-    stage2_data = await run_stage2(
-        user_query,
-        stage1_data,
-        on_progress=on_progress,
-        tier_contract=tier_contract,
-        council_models=models,
-    )
->>>>>>> origin/master
 
     try:
         # --- NAVIGATION: LAYER BOUNDARIES (ADR-024) ---
@@ -306,7 +281,6 @@ async def run_full_council(
             }
         )
 
-<<<<<<< HEAD
         quality_metrics = None
         if should_include_quality_metrics():
             stage1_responses_dict = {
@@ -318,7 +292,7 @@ async def run_full_council(
             quality_metrics = calculate_quality_metrics(
                 stage1_responses=stage1_responses_dict,
                 stage2_rankings=stage2_data["stage2_results"],
-                stage3_synthesis={"content": stage3_data["chairman_result"]["response"]},
+                stage3_synthesis={"content": stage3_data.get("chairman_result", {}).get("response", "")},
                 aggregate_rankings=agg_rank_tuples,
                 label_to_model=stage2_data["label_to_model"],
             )
@@ -394,10 +368,10 @@ async def run_full_council(
             })
 
         return (
-            stage3_data["chairman_result"]["response"],
+            stage1_data.get("stage1_results", []),
+            stage2_data.get("stage2_results", []),
+            stage3_data.get("chairman_result", {}),
             metadata,
-            stage2_data["label_to_model"],
-            stage2_data["aggregate_rankings"],
         )
 
     except Exception as e:
@@ -413,12 +387,11 @@ async def run_full_council(
                     "error": str(e)
                 }
             ))
-        raise
     finally:
         if event_bridge:
             from llm_council.webhooks.event_bridge import EventBridge
             await event_bridge.shutdown()
-=======
+
     metadata = {
         "session_id": session_id,
         "status": "complete" if stage1_data["stage1_results"] else "failed",
@@ -443,7 +416,6 @@ async def run_full_council(
         stage3_data["chairman_result"],
         metadata,
     )
->>>>>>> origin/master
 
 
 async def run_council_with_fallback(
@@ -468,10 +440,6 @@ async def run_council_with_fallback(
         # --- LAYER 2: TRIAGE ---
         triage_result = None
         if kwargs.get("use_wildcard") or kwargs.get("optimize_prompt"):
-            # L1 -> L2 Boundary
-            if tier_contract:
-                cross_l1_to_l2(tier_contract, user_query)
-
             triage_result = run_triage(
                 user_query,
                 tier_contract=tier_contract,
