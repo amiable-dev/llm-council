@@ -12,9 +12,12 @@ from llm_council.config_helpers import (
     _check_patched_attr,
 )
 
+
 async def query_model(*args, **kwargs):
     func = _check_patched_attr("llm_council.council", "query_model", _orig_query_model)
     return await func(*args, **kwargs)
+
+
 from llm_council.verdict import (
     VerdictType,
     VerdictResult,
@@ -23,6 +26,7 @@ from llm_council.verdict import (
     parse_tie_breaker_verdict,
     calculate_borda_spread,
 )
+
 
 async def quick_synthesis(
     user_query: str,
@@ -85,6 +89,7 @@ and highlight any important insights. Be clear that this is based on partial dat
     usage["total_tokens"] = response_usage.get("total_tokens", 0.0)
     usage["total_cost"] = response_usage.get("total_cost", 0.0)
     return response.get("content", ""), usage
+
 
 async def stage3_synthesize_final(
     user_query: str,
@@ -173,7 +178,14 @@ STAGE 2 - Peer Rankings:
     }
 
     if response is None:
-        return ({"model": _get_chairman_model(), "response": "Error: Unable to generate final synthesis."}, total_usage, None)
+        return (
+            {
+                "model": _get_chairman_model(),
+                "response": "Error: Unable to generate final synthesis.",
+            },
+            total_usage,
+            None,
+        )
 
     usage = response.get("usage", {})
     total_usage["prompt_tokens"] = usage.get("prompt_tokens", 0.0)
@@ -187,7 +199,11 @@ STAGE 2 - Peer Rankings:
         try:
             verdict_result = parse_binary_verdict(response_content)
             if aggregate_rankings:
-                borda_scores = {r["model"]: r.get("borda_score", 0.0) for r in aggregate_rankings if "borda_score" in r}
+                borda_scores = {
+                    r["model"]: r.get("borda_score", 0.0)
+                    for r in aggregate_rankings
+                    if "borda_score" in r
+                }
                 verdict_result.borda_spread = calculate_borda_spread(borda_scores)
         except ValueError:
             pass
@@ -195,12 +211,21 @@ STAGE 2 - Peer Rankings:
         try:
             verdict_result = parse_tie_breaker_verdict(response_content)
             if aggregate_rankings:
-                borda_scores = {r["model"]: r.get("borda_score", 0.0) for r in aggregate_rankings if "borda_score" in r}
+                borda_scores = {
+                    r["model"]: r.get("borda_score", 0.0)
+                    for r in aggregate_rankings
+                    if "borda_score" in r
+                }
                 verdict_result.borda_spread = calculate_borda_spread(borda_scores)
         except ValueError:
             pass
 
-    return ({"model": _get_chairman_model(), "response": response_content}, total_usage, verdict_result)
+    return (
+        {"model": _get_chairman_model(), "response": response_content},
+        total_usage,
+        verdict_result,
+    )
+
 
 async def run_stage3(
     user_query: str,
@@ -227,7 +252,9 @@ async def run_stage3(
             except Exception:
                 pass
 
-    await report_progress(total_steps - 1, total_steps, "[*] Stage 3: Chairman is synthesizing final verdict...")
+    await report_progress(
+        total_steps - 1, total_steps, "[*] Stage 3: Chairman is synthesizing final verdict..."
+    )
 
     chairman_result, stage3_usage, verdict_result = await stage3_synthesize_final(
         user_query,

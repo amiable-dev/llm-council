@@ -12,9 +12,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("make") is None, reason="make command not found"
-)
+pytestmark = pytest.mark.skipif(shutil.which("make") is None, reason="make command not found")
 
 
 @pytest.fixture

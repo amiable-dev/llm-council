@@ -3,6 +3,7 @@
 from typing import Dict, Any, Optional
 from llm_council.gateway_adapter import STATUS_OK
 
+
 def generate_partial_warning(
     model_statuses: Dict[str, Dict[str, Any]], requested: int
 ) -> Optional[str]:
@@ -27,6 +28,7 @@ def generate_partial_warning(
         f"Did not respond: {', '.join(failed_reasons)}."
     )
 
+
 async def generate_conversation_title(user_query: str, council_id: Optional[str] = None) -> str:
     """
     Generate a short title for a conversation based on the first user message.
@@ -39,6 +41,7 @@ async def generate_conversation_title(user_query: str, council_id: Optional[str]
         A short title (3-5 words)
     """
     from llm_council.gateway_adapter import query_model
+
     title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
 The title should be concise and descriptive. Do not use quotes or punctuation in the title.
 

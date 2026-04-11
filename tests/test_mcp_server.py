@@ -86,10 +86,10 @@ async def test_consult_council_with_details():
         "synthesis": "Synthesized response",
         "model_responses": {
             "test-model": {
-                "status": "ok", 
-                "latency_ms": 1000, 
+                "status": "ok",
+                "latency_ms": 1000,
                 "response": "Test response",
-                "rankings": "1. Model A > Model B"
+                "rankings": "1. Model A > Model B",
             }
         },
         "metadata": {

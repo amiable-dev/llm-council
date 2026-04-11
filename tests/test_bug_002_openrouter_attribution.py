@@ -7,12 +7,10 @@ from llm_council.openrouter import query_model_with_status
 from llm_council.council import run_full_council
 
 
-
 @pytest.mark.asyncio
 async def test_metadata_headers_sent():
     """Verify that identity headers are sent during metadata discovery."""
     client = OpenRouterClient(api_key="test-key")
-    
 
     with patch("httpx.AsyncClient.get") as mock_get:
         mock_response = MagicMock()
@@ -31,13 +29,13 @@ async def test_metadata_headers_sent():
             "Missing Correct Referer in metadata call"
         )
 
+
 @pytest.mark.asyncio
 async def test_completion_headers_sent():
     """Verify that identity and tracing headers are sent during completion queries."""
     model = "openai/gpt-4o"
     messages = [{"role": "user", "content": "Hello"}]
     test_council_id = str(uuid.uuid4())
-    
 
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_response = MagicMock()
@@ -60,6 +58,8 @@ async def test_completion_headers_sent():
 
         # Tracing Header
         assert headers.get("X-Council-ID") == test_council_id
+
+
 @pytest.mark.asyncio
 async def test_council_trace_propagation():
     """Verify that session_id from council.py propagates to X-Council-ID header."""

@@ -1,6 +1,6 @@
 """Unified LLM Council Orchestrator (Facade).
 
-This module act as the primary entry point for the Council system. 
+This module act as the primary entry point for the Council system.
 Implementation details are delegated to specialized sub-modules (stages, utils, config).
 Backward compatibility is maintained for all legacy attributes and patching shims.
 """
@@ -10,7 +10,7 @@ import uuid
 from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Optional, Callable, Awaitable
 
 # 1. Core Constants & Config (Centralized)
-from llm_council.constants import *
+from llm_council.constants import TIMEOUT_PER_MODEL_HARD, TIMEOUT_SYNTHESIS_TRIGGER
 from llm_council.config_helpers import (
     _get_council_models,
     _get_chairman_model,
@@ -117,6 +117,7 @@ _DEPRECATED_CONFIG_ATTRS = {
     "ADVERSARIAL_MODEL": _get_adversarial_model,
 }
 
+
 def __getattr__(name: str):
     """Provide lazy access to deprecated config constants for backward compatibility."""
     if name in _DEPRECATED_CONFIG_ATTRS:
@@ -127,6 +128,7 @@ def __getattr__(name: str):
 # =============================================================================
 # Main Orchestration Entry Points
 # =============================================================================
+
 
 async def run_full_council(
     user_query: str,
@@ -148,7 +150,7 @@ async def run_full_council(
 
     if session_id is None:
         session_id = str(uuid.uuid4())
-    
+
     # --- PHASE 1: IDEATION ---
     stage1_data = await run_stage1(
         user_query,
@@ -157,7 +159,7 @@ async def run_full_council(
         adversarial_mode=adversarial_mode,
         session_id=session_id,
         council_models=council_models,
-        shared_raw_responses=shared_raw_responses
+        shared_raw_responses=shared_raw_responses,
     )
 
     # --- PHASE 2: PEER REVIEW ---
@@ -166,7 +168,7 @@ async def run_full_council(
         stage1_data,
         on_progress=on_progress,
         tier_contract=tier_contract,
-        council_models=council_models
+        council_models=council_models,
     )
 
     # --- PHASE 3: SYNTHESIS ---
@@ -176,15 +178,17 @@ async def run_full_council(
         stage2_data,
         on_progress=on_progress,
         verdict_type=verdict_type,
-        include_dissent=include_dissent
+        include_dissent=include_dissent,
     )
 
     # --- ENRICHMENT: Metadata & Telemetry ---
-    overall_usage = _aggregate_stage_usage({
-        "stage1": stage1_data["usage"],
-        "stage2": stage2_data["usage"],
-        "stage3": stage3_data["usage"]
-    })
+    overall_usage = _aggregate_stage_usage(
+        {
+            "stage1": stage1_data["usage"],
+            "stage2": stage2_data["usage"],
+            "stage3": stage3_data["usage"],
+        }
+    )
 
     quality_metrics = None
     if should_include_quality_metrics():
@@ -192,34 +196,36 @@ async def run_full_council(
             r["model"]: {"content": r["response"]} for r in stage1_data["stage1_results"]
         }
         agg_rank_tuples = [
-            (r["model"], r["borda_score"] or 0.0) 
-            for r in stage2_data["aggregate_rankings"]
+            (r["model"], r["borda_score"] or 0.0) for r in stage2_data["aggregate_rankings"]
         ]
         quality_metrics = calculate_quality_metrics(
             stage1_responses=stage1_responses_dict,
             stage2_rankings=stage2_data["stage2_results"],
             stage3_synthesis={"content": stage3_data["chairman_result"]["response"]},
             aggregate_rankings=agg_rank_tuples,
-            label_to_model=stage2_data["label_to_model"]
+            label_to_model=stage2_data["label_to_model"],
         )
 
     metadata = {
         "session_id": session_id,
-        "status": "complete",  # Required by legacy integration tests
+        "status": "complete" if stage1_data["stage1_results"] else "failed",
         "models": [r["model"] for r in stage1_data["stage1_results"]],
         "usage": overall_usage,
         "quality": quality_metrics,
         "dissent": stage1_data.get("dissent_report"),
+        "constructive_dissent": stage2_data.get("constructive_dissent"),
         "verdict": stage3_data.get("verdict_result"),
         "rankings": stage2_data["aggregate_rankings"],
-        "model_statuses": stage1_data.get("model_statuses")
+        "model_statuses": stage1_data.get("model_statuses"),
+        "requested_models": stage1_data.get("requested_models", 0),
+        "completed_models": len(stage1_data.get("stage1_results", [])),
     }
 
     return (
         stage3_data["chairman_result"]["response"],
         metadata,
         stage2_data["label_to_model"],
-        stage2_data["aggregate_rankings"]
+        stage2_data["aggregate_rankings"],
     )
 
 
@@ -231,14 +237,14 @@ async def run_council_with_fallback(
     per_model_timeout: float = TIMEOUT_PER_MODEL_HARD,
     models: Optional[List[str]] = None,
     tier_contract: Optional["TierContract"] = None,
-    **kwargs
+    **kwargs,
 ) -> Dict[str, Any]:
     """
     Legacy entry point with robust timeout fallback (ADR-012).
     """
     session_id = str(uuid.uuid4())
     shared_raw_responses = {}
-    
+
     try:
         pipeline_task = asyncio.create_task(
             run_full_council(
@@ -249,45 +255,63 @@ async def run_council_with_fallback(
                 council_models=models,
                 adversarial_mode=kwargs.get("adversarial_mode"),
                 session_id=session_id,
-                shared_raw_responses=shared_raw_responses
+                shared_raw_responses=shared_raw_responses,
             )
         )
-        
+
         response, metadata, label_mapping, rankings = await asyncio.wait_for(
             pipeline_task, timeout=synthesis_deadline
         )
-        
+
         return {
             "response": response,
+            "synthesis": response,
             "metadata": metadata,
             "label_mapping": label_mapping,
             "rankings": rankings,
             "model_responses": metadata.get("model_statuses", {}),
-            "model_statuses": metadata.get("model_statuses", {})
+            "model_statuses": metadata.get("model_statuses", {}),
+            "requested_models": metadata.get("requested_models", 0),
+            "completed_models": metadata.get("completed_models", 0),
+            "synthesis_type": "full",
+            "constructive_dissent": metadata.get("constructive_dissent"),
         }
-        
+
     except (asyncio.TimeoutError, asyncio.CancelledError):
         if on_progress:
-            try: await on_progress(99, 100, "[!] Pipeline reached deadline, generating partial synthesis...")
-            except Exception: pass
-            
+            try:
+                await on_progress(
+                    99, 100, "[!] Pipeline reached deadline, generating partial synthesis..."
+                )
+            except Exception:
+                pass
+
         fallback_text, fallback_usage = await quick_synthesis(
             user_query, shared_raw_responses, council_id=session_id
         )
-        
+
         fallback_metadata = {
             "session_id": session_id,
             "status": "partial",
             "is_partial": True,
             "usage": _aggregate_stage_usage({"fallback": fallback_usage}),
-            "model_statuses": shared_raw_responses
+            "model_statuses": shared_raw_responses,
+            "requested_models": len(models) if models else 0,
+            "completed_models": len(
+                [r for r in shared_raw_responses.values() if r.get("status") == STATUS_OK]
+            ),
         }
-        
+
         return {
             "response": fallback_text,
+            "synthesis": fallback_text,
             "metadata": fallback_metadata,
             "label_mapping": {},
             "rankings": [],
             "model_responses": shared_raw_responses,
-            "model_statuses": shared_raw_responses
+            "model_statuses": shared_raw_responses,
+            "requested_models": fallback_metadata["requested_models"],
+            "completed_models": fallback_metadata["completed_models"],
+            "synthesis_type": "partial",
+            "constructive_dissent": None,
         }

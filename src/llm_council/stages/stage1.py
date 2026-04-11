@@ -27,15 +27,23 @@ from llm_council.config_helpers import (
     _check_patched_attr,
 )
 
+
 async def query_models_with_progress(*args, **kwargs):
-    func = _check_patched_attr("llm_council.council", "query_models_with_progress", _orig_query_models_with_progress)
+    func = _check_patched_attr(
+        "llm_council.council", "query_models_with_progress", _orig_query_models_with_progress
+    )
     return await func(*args, **kwargs)
+
 
 async def query_model_with_status(*args, **kwargs):
-    func = _check_patched_attr("llm_council.council", "query_model_with_status", _orig_query_model_with_status)
+    func = _check_patched_attr(
+        "llm_council.council", "query_model_with_status", _orig_query_model_with_status
+    )
     return await func(*args, **kwargs)
 
+
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
+
 
 async def stage1_collect_responses(
     user_query: str, council_id: Optional[str] = None, models: Optional[List[str]] = None
@@ -63,6 +71,7 @@ async def stage1_collect_responses(
             total_usage["total_cost"] += usage.get("total_cost", 0.0)
 
     return stage1_results, total_usage
+
 
 async def stage1_collect_responses_with_status(
     user_query: str,
@@ -118,6 +127,7 @@ async def stage1_collect_responses_with_status(
 
     return stage1_results, total_usage, model_statuses
 
+
 def should_normalize_styles(responses: List[str]) -> bool:
     """Detect if responses are stylistically diverse enough to warrant normalization."""
     import re
@@ -151,11 +161,17 @@ def should_normalize_styles(responses: List[str]) -> bool:
 
     return False
 
+
 async def stage1_5_normalize_styles(
     stage1_results: List[Dict[str, Any]], session_id: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, float]]:
     """Stage 1.5: Normalize response styles to reduce stylistic fingerprinting."""
-    total_usage = {"prompt_tokens": 0.0, "completion_tokens": 0.0, "total_tokens": 0.0, "total_cost": 0.0}
+    total_usage = {
+        "prompt_tokens": 0.0,
+        "completion_tokens": 0.0,
+        "total_tokens": 0.0,
+        "total_cost": 0.0,
+    }
 
     mode = _get_style_normalization()
     if mode == "auto":
@@ -178,24 +194,29 @@ Rewritten text:"""
         )
 
         if response is not None:
-            normalized_results.append({
-                "model": result["model"],
-                "response": response.get("content", result["response"]),
-                "original_response": result["response"],
-            })
+            normalized_results.append(
+                {
+                    "model": result["model"],
+                    "response": response.get("content", result["response"]),
+                    "original_response": result["response"],
+                }
+            )
             usage = response.get("usage", {})
             total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0.0)
             total_usage["completion_tokens"] += usage.get("completion_tokens", 0.0)
             total_usage["total_tokens"] += usage.get("total_tokens", 0.0)
             total_usage["total_cost"] += usage.get("total_cost", 0.0)
         else:
-            normalized_results.append({
-                "model": result["model"],
-                "response": result["response"],
-                "original_response": result["response"],
-            })
+            normalized_results.append(
+                {
+                    "model": result["model"],
+                    "response": result["response"],
+                    "original_response": result["response"],
+                }
+            )
 
     return normalized_results, total_usage
+
 
 async def run_stage1(
     user_query: str,
@@ -235,10 +256,8 @@ async def run_stage1(
     async def stage1_progress(completed, total, msg):
         await report_progress(completed, total_steps, f"[*] Stage 1: {msg}")
 
-    # ADR-DA: Reactive Devil's Advocate Logic
-    da_enabled = (
-        adversarial_mode if adversarial_mode is not None else _get_adversarial_mode()
-    )
+    # ADR-DA: Reactive Adversarial Critique Logic
+    da_enabled = adversarial_mode if adversarial_mode is not None else _get_adversarial_mode()
     is_adversarial = da_enabled and len(council_models) >= 3
 
     adversary_model = None
@@ -252,6 +271,7 @@ async def run_stage1(
             adversary_model = random.choice(current_council_models)
             current_council_models.remove(adversary_model)
 
+    # 1. Collect initial responses
     stage1_results, stage1_usage, model_statuses = await stage1_collect_responses_with_status(
         user_query,
         timeout=per_model_timeout,
@@ -261,17 +281,30 @@ async def run_stage1(
         session_id=session_id,
     )
 
+    # 1.5. Style Normalization (ADR-032 stabilization)
+    if stage1_results:
+        await stage1_progress(len(stage1_results), requested_models, "Normalizing styles...")
+        normalized_results, norm_usage = await stage1_5_normalize_styles(
+            stage1_results, session_id=session_id
+        )
+        stage1_results = normalized_results
+        # Consolidate usage
+        for k in stage1_usage:
+            stage1_usage[k] += norm_usage.get(k, 0.0)
+
+    # 1B. Adversarial Critique
     dissent_report = None
     if is_adversarial and stage1_results:
         await report_progress(
             len(stage1_results),
             total_steps,
-            f"[*] Stage 1B: Devil's Advocate ({adversary_model}) is auditing {len(stage1_results)} responses...",
+            f"[*] Stage 1B: ADVERSARIAL CRITIQUE ({adversary_model}) is auditing {len(stage1_results)} responses...",
         )
         responses_text = "\n\n".join(
             [f"Model: {r['model']}\nResponse: {r['response']}" for r in stage1_results]
         )
         from llm_council.adversary_prompt import get_adversary_report_prompt
+
         da_prompt = get_adversary_report_prompt(user_query, responses_text)
         da_response = await query_model_with_status(
             adversary_model,
@@ -289,17 +322,13 @@ async def run_stage1(
                 "response": dissent_report,
             }
             da_usage = da_response.get("usage", {})
-            stage1_usage["prompt_tokens"] += da_usage.get("prompt_tokens", 0)
-            stage1_usage["completion_tokens"] += da_usage.get("completion_tokens", 0)
-            stage1_usage["total_tokens"] += da_usage.get("total_tokens", 0)
-            stage1_usage["total_cost"] += da_usage.get("total_cost", 0.0)
+            for k in stage1_usage:
+                stage1_usage[k] += da_usage.get(k, 0.0)
         else:
             model_statuses[adversary_model] = {
-                "status": da_response.get("status", STATUS_ERROR)
-                if da_response
-                else STATUS_ERROR,
+                "status": da_response.get("status", STATUS_ERROR) if da_response else STATUS_ERROR,
                 "latency_ms": da_response.get("latency_ms", 0) if da_response else 0,
-                "error": da_response.get("error", "Devil's Advocate failed to respond")
+                "error": da_response.get("error", "Adversary failed to respond")
                 if da_response
                 else "No response",
             }

@@ -1132,20 +1132,31 @@ def load_config(
         # ADR-032: Robust configuration loading.
         # Handles both direct UnifiedConfig mapping and wrapped "council" YAMLs.
         if (
-            len(raw_config) == 1 
-            and "council" in raw_config 
+            len(raw_config) == 1
+            and "council" in raw_config
             and isinstance(raw_config["council"], dict)
         ):
             # Check if this looks like a wrapped UnifiedConfig (matches schema sections)
             sections = {
-                "tiers", "triage", "gateways", "credentials", "observability", 
-                "webhooks", "model_intelligence", "frontier", "evaluation", 
-                "secrets", "council", "timeouts", "cache", "telemetry"
+                "tiers",
+                "triage",
+                "gateways",
+                "credentials",
+                "observability",
+                "webhooks",
+                "model_intelligence",
+                "frontier",
+                "evaluation",
+                "secrets",
+                "council",
+                "timeouts",
+                "cache",
+                "telemetry",
             }
             inner = raw_config["council"]
             if any(k in inner for k in sections):
                 # Standard UnifiedConfig mapping, but check for flat-wrapping:
-                # If some fields like 'adversarial_mode' are siblings to 'tiers', 
+                # If some fields like 'adversarial_mode' are siblings to 'tiers',
                 # they must be packed into a 'council' dict for Pydantic to see them.
                 if "council" not in inner:
                     new_inner = {}

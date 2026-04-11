@@ -19,23 +19,23 @@ if src_path not in sys.path:
 
 # Local imports
 from llm_council.council import (
-    run_stage1, 
-    run_stage2, 
-    run_stage3, 
+    run_stage1,
+    run_stage2,
+    run_stage3,
     run_council_with_fallback,
     COUNCIL_MODELS,
-    CHAIRMAN_MODEL
+    CHAIRMAN_MODEL,
 )
 from llm_council.tier_contract import create_tier_contract
 from llm_council.openrouter import STATUS_OK, STATUS_ERROR
 from llm_council.gateway_adapter import query_model_with_status
 from llm_council.unified_config import get_config, get_key_source, get_api_key
 from llm_council.session_store import (
-    create_session, 
-    load_session, 
-    save_session, 
-    close_session, 
-    purge_expired_sessions
+    create_session,
+    load_session,
+    save_session,
+    close_session,
+    purge_expired_sessions,
 )
 from llm_council.verification.api import run_verification, VerifyRequest
 from llm_council.verification.formatting import format_verification_result
@@ -59,10 +59,12 @@ def _get_openrouter_api_key() -> Optional[str]:
     """Lazy helper to resolve API key via standard priority chain."""
     return get_api_key("openrouter")
 
+
 def _get_tier_model_pools() -> Dict[str, List[str]]:
     """Lazy helper to get tier model pools from config."""
     config = get_config()
     return {name: pool.models for name, pool in config.tiers.pools.items()}
+
 
 def _get_tier_timeout(tier: str) -> Dict[str, int]:
     """Lazy helper to get tier timeouts from config."""
@@ -72,9 +74,10 @@ def _get_tier_timeout(tier: str) -> Dict[str, int]:
         return {"per_model": pool.timeout_seconds, "total": pool.timeout_seconds * 2}
     return {"per_model": 90, "total": 180}
 
+
 def _get_progress_callback(ctx: Context) -> Optional[Callable]:
     """Create a progress callback that bridges to MCP context.
-    
+
     Supports both modern `ctx.info()` and legacy `ctx.report_progress()` for compatibility.
     """
     if ctx is None:
@@ -96,7 +99,7 @@ def _get_progress_callback(ctx: Context) -> Optional[Callable]:
             if hasattr(ctx, "report_progress"):
                 # Following standard MCP Context.report_progress(completed, total)
                 res = ctx.report_progress(step, total)
-                
+
                 if inspect.isawaitable(res):
                     await res
         except Exception:
@@ -193,6 +196,7 @@ def _format_council_result(council_result: Dict[str, Any], include_details: bool
     dissent_report = metadata.get("dissent_report")
     if dissent_report:
         import re
+
         # Strip redundant model prefixes or "Dissenting Report:" if present
         cleaned_report = re.sub(r"^\*\*.*?\*\*:\s*", "", dissent_report)
         cleaned_report = re.sub(r"^Dissenting Report:\s*", "", cleaned_report, flags=re.IGNORECASE)
@@ -308,6 +312,7 @@ def _format_council_result(council_result: Dict[str, Any], include_details: bool
 
 # --- MCP Tools ---
 
+
 @mcp.tool()
 async def council_health_check() -> str:
     """
@@ -358,7 +363,9 @@ async def council_health_check() -> str:
                 checks["message"] = "Council is ready. Use start_council to ask questions."
             else:
                 checks["ready"] = False
-                checks["message"] = f"API connectivity issue: {response.get('error', 'Unknown error')}"
+                checks["message"] = (
+                    f"API connectivity issue: {response.get('error', 'Unknown error')}"
+                )
         except Exception as e:
             checks["api_connectivity"] = {"status": "error", "error": str(e)}
             checks["ready"] = False
@@ -379,9 +386,9 @@ async def start_council(
 ) -> str:
     """
     Phase 1: Begin a council deliberation. Runs Stage 1 (individual opinions)
-    and optionally Stage 1B (Devil's Advocate). 
-    
-    CRITICAL: This returns a session_id. You MUST call council_review(session_id=...) 
+    and optionally Stage 1B (Devil's Advocate).
+
+    CRITICAL: This returns a session_id. You MUST call council_review(session_id=...)
     immediately after this tool to continue. DO NOT skip to council_synthesize.
     """
     purge_expired_sessions()
@@ -410,13 +417,16 @@ async def start_council(
     model_count = stage1_data.get("requested_models", 0)
     ok_count = len(stage1_data.get("stage1_results", []))
 
-    return json.dumps({
-        "session_id": session_id,
-        "status": "stage1_complete",
-        "models_total": model_count,
-        "models_ok": ok_count,
-        "next_step": f"Call council_review(session_id='{session_id}') to run peer review.",
-    }, indent=2)
+    return json.dumps(
+        {
+            "session_id": session_id,
+            "status": "stage1_complete",
+            "models_total": model_count,
+            "models_ok": ok_count,
+            "next_step": f"Call council_review(session_id='{session_id}') to run peer review.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
@@ -431,7 +441,9 @@ async def council_review(session_id: str, ctx: Context = None) -> str:
         return json.dumps({"error": str(e)})
 
     if session["stage"] != "stage1_complete":
-        return json.dumps({"error": f"Session is in stage '{session['stage']}', expected 'stage1_complete'."})
+        return json.dumps(
+            {"error": f"Session is in stage '{session['stage']}', expected 'stage1_complete'."}
+        )
 
     stage2_data = await run_stage2(
         user_query=session["query"],
@@ -449,16 +461,19 @@ async def council_review(session_id: str, ctx: Context = None) -> str:
 
     aggregate = stage2_data.get("aggregate_rankings", [])
     rankings_text = "\n".join(
-        f"{i+1}. {e.get('model','?').split('/')[-1]} (Borda: {float(e.get('borda_score',0)):.3f})"
+        f"{i + 1}. {e.get('model', '?').split('/')[-1]} (Borda: {float(e.get('borda_score', 0)):.3f})"
         for i, e in enumerate(aggregate[:8])
     )
 
-    return json.dumps({
-        "session_id": session_id,
-        "status": "stage2_complete",
-        "rankings_preview": rankings_text,
-        "next_step": f"Call council_synthesize(session_id='{session_id}') for the Chairman's verdict.",
-    }, indent=2)
+    return json.dumps(
+        {
+            "session_id": session_id,
+            "status": "stage2_complete",
+            "rankings_preview": rankings_text,
+            "next_step": f"Call council_synthesize(session_id='{session_id}') for the Chairman's verdict.",
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
@@ -469,7 +484,7 @@ async def council_synthesize(
 ) -> str:
     """
     Phase 3: Final step — Runs Stage 3 Chairman synthesis on a reviewed council session.
-    
+
     CRITICAL: This tool ONLY works after council_review() has successfully completed.
     Returns the final synthesized verdict and cleans up the session.
     """
@@ -479,7 +494,9 @@ async def council_synthesize(
         return json.dumps({"error": str(e)})
 
     if session["stage"] != "stage2_complete":
-        return json.dumps({"error": f"Session is in stage '{session['stage']}', expected 'stage2_complete'."})
+        return json.dumps(
+            {"error": f"Session is in stage '{session['stage']}', expected 'stage2_complete'."}
+        )
 
     council_result = await run_stage3(
         user_query=session["query"],
@@ -518,11 +535,7 @@ async def verify(
         )
         store = create_transcript_store()
 
-        result = await run_verification(
-            request, 
-            store, 
-            on_progress=_get_progress_callback(ctx)
-        )
+        result = await run_verification(request, store, on_progress=_get_progress_callback(ctx))
 
         formatted = format_verification_result(result)
         json_output = json.dumps(result, indent=2)
@@ -530,20 +543,19 @@ async def verify(
         return f"{formatted}\n\n---\n\n<details>\n<summary>Raw JSON</summary>\n\n```json\n{json_output}\n```\n</details>"
 
     except InvalidSnapshotError as e:
-        return json.dumps({
-            "error": str(e), 
-            "verdict": "unclear", 
-            "confidence": 0.0,
-            "exit_code": 2
-        }, indent=2)
+        return json.dumps(
+            {"error": str(e), "verdict": "unclear", "confidence": 0.0, "exit_code": 2}, indent=2
+        )
     except Exception as e:
-        return json.dumps({
-            "error": f"Unexpected error: {e}", 
-            "verdict": "unclear", 
-            "confidence": 0.0,
-            "exit_code": 2
-        }, indent=2)
-
+        return json.dumps(
+            {
+                "error": f"Unexpected error: {e}",
+                "verdict": "unclear",
+                "confidence": 0.0,
+                "exit_code": 2,
+            },
+            indent=2,
+        )
 
 
 @mcp.tool()
@@ -555,20 +567,22 @@ async def consult_council(
 ) -> str:
     """
     [DEPRECATED] Run a complete monolithic council deliberation.
-    
+
     This tool is maintained for backward compatibility with legacy clients.
     For modern granular control and real-time visibility, use the sequence:
     start_council -> council_review -> council_synthesize.
-    
+
     Args:
         query: Your question for the council
         confidence: quick, balanced, or high (default: balanced)
         include_details: If true, includes individual model responses and rankings
     """
     # Check if we are in a test environment (ADR-012 fix)
-    import os, sys
+    import os
+    import sys
+
     in_test = os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules
-    
+
     if ctx is not None and not in_test:
         return (
             "ERROR: consult_council is disabled for real-time use to prevent timeouts. "
@@ -584,7 +598,7 @@ async def consult_council(
         tier_contract=create_tier_contract(confidence),
         include_dissent=True,
     )
-    
+
     return _format_council_result(result, include_details=include_details)
 
 
@@ -604,7 +618,9 @@ async def audit(
 
         if verification_id is None:
             verifications = store.list_verifications()
-            return json.dumps({"verifications": verifications, "total_count": len(verifications)}, indent=2)
+            return json.dumps(
+                {"verifications": verifications, "total_count": len(verifications)}, indent=2
+            )
 
         try:
             store = create_transcript_store(verification_id)
@@ -628,7 +644,7 @@ async def audit(
                 "transcript": transcript,
                 "stages": transcript,  # Backward compatibility for tests
                 "integrity_hash": actual_hash,  # Backward compatibility
-                "integrity_validation": {"valid": True, "hash": actual_hash}
+                "integrity_validation": {"valid": True, "hash": actual_hash},
             }
 
             if validate_integrity:
@@ -643,20 +659,25 @@ async def audit(
 
             return json.dumps(result, indent=2)
         except Exception as e:
-            return json.dumps({
-                "error": str(e),
-                "exit_code": 2,  # UNCLEAR
-                "verdict": "error"
-            }, indent=2)
+            return json.dumps(
+                {
+                    "error": str(e),
+                    "exit_code": 2,  # UNCLEAR
+                    "verdict": "error",
+                },
+                indent=2,
+            )
     except Exception as e:
         return json.dumps({"error": str(e)}, indent=2)
 
 
 # --- Entry Point ---
 
+
 def main():
     """Entry point for the llm-council command."""
     mcp.run()
+
 
 if __name__ == "__main__":
     main()

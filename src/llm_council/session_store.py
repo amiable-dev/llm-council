@@ -7,9 +7,11 @@ from typing import Any, Dict
 SESSIONS_DIR = Path.home() / ".llm-council" / "sessions"
 SESSION_TTL_HOURS = 24
 
+
 def _session_path(session_id: str) -> Path:
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     return SESSIONS_DIR / f"{session_id}.json"
+
 
 def create_session(query: str, tier: str, **kwargs) -> str:
     """Create a new council session and persist it to disk."""
@@ -25,6 +27,7 @@ def create_session(query: str, tier: str, **kwargs) -> str:
     _session_path(session_id).write_text(json.dumps(data, indent=2))
     return session_id
 
+
 def load_session(session_id: str) -> Dict[str, Any]:
     """Load an existing council session from disk."""
     path = _session_path(session_id)
@@ -32,11 +35,13 @@ def load_session(session_id: str) -> Dict[str, Any]:
         raise FileNotFoundError(f"Session {session_id} not found. It may have expired.")
     return json.loads(path.read_text())
 
+
 def save_session(session_id: str, updates: Dict[str, Any]) -> None:
     """Update and save an existing council session."""
     data = load_session(session_id)
     data.update(updates)
     _session_path(session_id).write_text(json.dumps(data, indent=2))
+
 
 def close_session(session_id: str) -> None:
     """Delete a council session from disk."""
@@ -44,13 +49,14 @@ def close_session(session_id: str) -> None:
     if path.exists():
         path.unlink()
 
+
 def purge_expired_sessions() -> int:
     """Clean up sessions older than TTL (24 hours)."""
     cutoff = time.time() - (SESSION_TTL_HOURS * 3600)
     count = 0
     if not SESSIONS_DIR.exists():
         return 0
-        
+
     for f in SESSIONS_DIR.glob("*.json"):
         try:
             data = json.loads(f.read_text())

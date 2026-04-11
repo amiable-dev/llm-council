@@ -384,7 +384,7 @@ class TestMCPVerifyProgressReporting:
 
             # ctx.report_progress should have been called with numeric values
             mock_ctx.report_progress.assert_called_with(1, 7)
-            
+
             # ctx.info should have been called with the message
             # Note: ctx.info is called via the _get_progress_callback helper
             if hasattr(mock_ctx, "info"):

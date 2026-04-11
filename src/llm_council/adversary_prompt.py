@@ -1,4 +1,4 @@
-"""Prompts for the Reactive Devil's Advocate (ADR-DA).
+"""Prompts for the Reactive Adversarial Critique (ADR-DA).
 
 Provides high-rigor 'Red Team' auditing prompts designed to identify
 consensus bias and logical flaws in council responses.
@@ -6,7 +6,7 @@ consensus bias and logical flaws in council responses.
 
 
 def get_adversary_report_prompt(query: str, responses_text: str) -> str:
-    """Generate the prompt for the Devil's Advocate to critique Stage 1 responses.
+    """Generate the prompt for the ADVERSARIAL CRITIQUE model to audit Stage 1 responses.
 
     Args:
         query: The original user query.
@@ -15,7 +15,7 @@ def get_adversary_report_prompt(query: str, responses_text: str) -> str:
     Returns:
         Formatted prompt string.
     """
-    return f"""You are the Council's Devil's Advocate. Your role is NOT to be helpful, but to be a rigorous Forensic Auditor. 
+    return f"""You are the Council's ADVERSARIAL CRITIQUE model. Your role is NOT to be helpful, but to be a rigorous Red Team auditor. 
 
 The council has proposed multiple responses to the user query below. Most models likely moved toward a consensus or followed common training data patterns.
 
@@ -35,6 +35,6 @@ CRITIQUE CATEGORIES:
 4. **Style vs. Substance**: Is a response "winning" simply because it is well-formatted or polite, even if its technical substance is shallow?
 
 GOAL:
-Provide a concise "Dissenting Report" (3-5 bullet points). Do NOT provide a new solution. Only provide the critique.
+Provide a concise "ADVERSARIAL CRITIQUE" report (3-5 bullet points). Do NOT provide a new solution. Only provide the critique.
 
-Your Dissenting Report:"""
+Your ADVERSARIAL CRITIQUE:"""

@@ -8,10 +8,7 @@ async def test_dissent_metadata_integration():
     """Verify that include_dissent correctly populates metadata['dissent']."""
 
     user_query = "Test query"
-    mock_stage1 = [
-        {"model": "m1", "response": "resp1"},
-        {"model": "m2", "response": "resp2"}
-    ]
+    mock_stage1 = [{"model": "m1", "response": "resp1"}, {"model": "m2", "response": "resp2"}]
     mock_stage2 = [{"model": "m2", "response": "resp2"}]
     mock_stage3 = {"response": "synthesis"}
 
@@ -22,9 +19,7 @@ async def test_dissent_metadata_integration():
     mock_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "total_cost": 0.0}
 
     with (
-        patch(
-            "llm_council.council.stage1_collect_responses", new_callable=AsyncMock
-        ) as m1,
+        patch("llm_council.council.stage1_collect_responses", new_callable=AsyncMock) as m1,
         patch("llm_council.council.stage2_collect_rankings", new_callable=AsyncMock) as m2,
         patch("llm_council.council.stage3_synthesize_final", new_callable=AsyncMock) as m3,
         patch(

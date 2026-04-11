@@ -2,6 +2,7 @@
 
 from typing import Dict, Any
 
+
 def _aggregate_stage_usage(
     usage_info: Dict[str, Dict[str, float]],
 ) -> Dict[str, Any]:
