@@ -756,7 +756,7 @@ class CouncilConfig(BaseModel):
         alias="LLM_COUNCIL_MODELS",
     )
     chairman: str = Field(
-        default="openai/gpt-4o",
+        default="google/gemini-3.1-pro-preview",
         alias="LLM_COUNCIL_CHAIRMAN",
     )
     synthesis_mode: Literal["consensus", "debate"] = Field(

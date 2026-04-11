@@ -364,7 +364,26 @@ async def council_health_check() -> str:
             "balanced": "~45-60 seconds (most models)",
             "high": f"~60-90 seconds (all {len(COUNCIL_MODELS)} models)",
         },
+        "account_credits": "unknown",
     }
+
+    # Fetch credits if possible (ADR-013 diagnostics)
+    if checks["api_key_configured"]:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                api_key = _get_openrouter_api_key()
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "HTTP-Referer": "https://github.com/mgammarino/llm-council",
+                }
+                credit_resp = await client.get("https://openrouter.ai/api/v1/credits", headers=headers)
+                if credit_resp.status_code == 200:
+                    data = credit_resp.json().get("data", {})
+                    checks["account_credits"] = f"${data.get('total_credits', 0):.2f}"
+                else:
+                    checks["account_credits"] = f"Error: {credit_resp.status_code}"
+        except Exception as e:
+            checks["account_credits"] = f"Error: {str(e)}"
 
     if checks["api_key_configured"]:
         try:
