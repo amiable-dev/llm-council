@@ -94,16 +94,16 @@ _DEFAULT_TIER_MODEL_POOLS = {
         "qwen/qwen-plus",
     ],
     "reasoning": [
-        "openai/gpt-4o",
+        "openai/o1",
         "anthropic/claude-3.7-sonnet",
-        "google/gemini-2.5-pro",
-        "qwen/qwen-plus",
+        "google/gemini-2.5-flash-thinking-exp",
+        "deepseek/deepseek-r1",
     ],
     "frontier": [
-        "openai/gpt-4o",
+        "openai/o1",
         "anthropic/claude-3.7-sonnet",
         "google/gemini-2.5-pro",
-        "qwen/qwen-plus",
+        "deepseek/deepseek-r1",
     ],
 }
 
