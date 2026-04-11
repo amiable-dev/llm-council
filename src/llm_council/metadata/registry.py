@@ -19,7 +19,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 from .types import ModelInfo, ModelStatus
@@ -105,7 +105,7 @@ class ModelRegistry:
         if self._last_refresh is None:
             return True
         threshold = timedelta(minutes=self._stale_threshold_minutes)
-        return datetime.now(UTC) - self._last_refresh > threshold
+        return datetime.now(timezone.utc) - self._last_refresh > threshold
 
     def get_candidates(self) -> List[ModelInfo]:
         """Get all cached model info for discovery filtering.
@@ -157,7 +157,7 @@ class ModelRegistry:
             try:
                 # Fetch model list from provider
                 model_ids = provider.list_available_models()
-                now = datetime.now(UTC)
+                now = datetime.now(timezone.utc)
 
                 # Build new cache
                 new_cache: Dict[str, RegistryEntry] = {}

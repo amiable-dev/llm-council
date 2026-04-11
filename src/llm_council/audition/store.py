@@ -12,7 +12,7 @@ Example:
 import json
 import logging
 import os
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -38,7 +38,7 @@ def _status_to_dict(status: AuditionStatus) -> Dict:
         "quarantine_until": (
             status.quarantine_until.isoformat() if status.quarantine_until else None
         ),
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

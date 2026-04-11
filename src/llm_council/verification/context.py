@@ -20,7 +20,7 @@ import time
 import uuid
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
@@ -176,7 +176,7 @@ def create_isolated_context(
     return IsolatedVerificationContext(
         context_id=context_id,
         snapshot_id=snapshot_id,
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
         rubric_focus=rubric_focus,
         inherited_from_session=False,
     )

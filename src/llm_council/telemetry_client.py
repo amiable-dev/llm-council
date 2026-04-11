@@ -21,7 +21,7 @@ Usage:
 
 import asyncio
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ class HttpTelemetry:
         self.flush_interval = flush_interval
 
         self._buffer: List[Dict[str, Any]] = []
-        self._last_flush = datetime.now(UTC)
+        self._last_flush = datetime.now(timezone.utc)
         self._lock = asyncio.Lock()
 
     def is_enabled(self) -> bool:
@@ -146,7 +146,7 @@ class HttpTelemetry:
             # Check if we should flush
             should_flush = (
                 len(self._buffer) >= self.batch_size
-                or (datetime.now(UTC) - self._last_flush).total_seconds() >= self.flush_interval
+                or (datetime.now(timezone.utc) - self._last_flush).total_seconds() >= self.flush_interval
             )
 
             if should_flush:
@@ -161,7 +161,7 @@ class HttpTelemetry:
 
             events = self._buffer.copy()
             self._buffer.clear()
-            self._last_flush = datetime.now(UTC)
+            self._last_flush = datetime.now(timezone.utc)
 
         await self._send_batch(events)
 

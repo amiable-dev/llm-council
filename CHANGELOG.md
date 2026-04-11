@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **RuntimeError**: Ensured background workers (`EventBridge`) are explicitly started in the orchestration facade.
   - **AttributeError**: Added missing `L3_COUNCIL_ERROR` event type to the council contract.
   - **Webhook Connectivity**: Restored error event propagation to external webhook consumers.
-  - **ADR-040 Test Regressions**: Updated integration tests to correctly patch configuration constants in the modular namespace.
+  - **Python 3.10 Compatibility (BUG-040)**: Restored MCP server functionality on Python 3.10 platforms by replacing `datetime.UTC` with `timezone.utc` (Refs #42).
+- **ADR-040 Test Regressions**: Updated integration tests to correctly patch configuration constants in the modular namespace.
 
 ## [0.25.0] - 2026-04-10
 
