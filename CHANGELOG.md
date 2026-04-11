@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Dynamic Connectivity**: Replaced hardcoded test model with the configured `CHAIRMAN_MODEL`.
   - **Auth Fallback**: Implemented an automated fallback to `openai/gpt-4o-mini` when the primary model is restricted, allowing the tool to remain functional if the API key itself is valid.
   - **Diagnostic Context**: Added `ready_warning` to the health check response to distinguish between restricted models and invalid API keys.
+- **Health Check Observability & Calibration (BUG-044)**: Enhanced diagnostic reporting and calibrated default models (Refs #44).
+  - **Credit Diagnostics**: Integrated OpenRouter `/credits` API into the health check to identify monthly usage limits.
+  - **Model Calibration**: Updated the global default `CHAIRMAN_MODEL` to `google/gemini-3.1-pro-preview` for high-tier synthesis.
+  - **Resilience**: Improved dual-403 failure messaging to differentiate between model restrictions and account-level credit blocks.
 - **ADR-040 Test Regressions**: Updated integration tests to correctly patch configuration constants in the modular namespace.
 
 ## [0.25.0] - 2026-04-10

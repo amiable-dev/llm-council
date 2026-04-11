@@ -6,6 +6,7 @@ timeouts:
 
 council:
   adversarial_mode: false
+  chairman: "google/gemini-3.1-pro-preview"
 
 tiers:
   default: balanced
