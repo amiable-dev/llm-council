@@ -86,6 +86,7 @@ def _map_stage_complete(event: LayerEvent) -> Optional[WebhookEventType]:
 LAYER_TO_WEBHOOK_MAPPING: Dict[LayerEventType, Union[WebhookEventType, StageMapper]] = {
     LayerEventType.L3_COUNCIL_START: WebhookEventType.DELIBERATION_START,
     LayerEventType.L3_COUNCIL_COMPLETE: WebhookEventType.COMPLETE,
+    LayerEventType.L3_COUNCIL_ERROR: WebhookEventType.ERROR,
     LayerEventType.L3_STAGE_COMPLETE: _map_stage_complete,
     LayerEventType.L3_MODEL_TIMEOUT: WebhookEventType.ERROR,
     # L4 gateway errors also map to council.error

@@ -98,9 +98,8 @@ class TestStage2TierContractFix:
 
         with (
             patch("llm_council.council.query_models_parallel", new_callable=AsyncMock) as mock_qmp,
-            patch("llm_council.council._get_council_models") as mock_gcm,
+            patch("llm_council.council.COUNCIL_MODELS", ["default/model-1", "default/model-2"]),
         ):
-            mock_gcm.return_value = ["default/model-1", "default/model-2"]
             mock_qmp.return_value = {}
 
             await stage2_collect_rankings("test query", stage1_results)

@@ -96,6 +96,7 @@ class LayerEventType(Enum):
     # L3 Events (Council Execution)
     L3_COUNCIL_START = "l3_council_start"
     L3_COUNCIL_COMPLETE = "l3_council_complete"
+    L3_COUNCIL_ERROR = "l3_council_error"
     L3_STAGE_COMPLETE = "l3_stage_complete"
     L3_MODEL_TIMEOUT = "l3_model_timeout"
 
