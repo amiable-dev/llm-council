@@ -113,6 +113,8 @@ class BaseRouter(ABC):
         Raises:
             Same exceptions as complete().
         """
+        if False:
+            yield ""
         pass
 
     @abstractmethod

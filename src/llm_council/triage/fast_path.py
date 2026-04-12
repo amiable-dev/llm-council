@@ -26,6 +26,8 @@ from llm_council.triage.complexity import (
     classify_complexity_detailed,
 )
 
+from llm_council import model_constants as mc
+
 # Type-only imports to avoid circular dependency
 if TYPE_CHECKING:
     from llm_council.tier_contract import TierContract
@@ -285,7 +287,7 @@ class FastPathRouter:
             return tier_contract.allowed_models[0]
 
         # Default fast path models (fast/cheap)
-        return "openai/gpt-4o-mini"
+        return mc.OPENAI_QUICK
 
     def get_timeout(self, tier_contract: Optional["TierContract"] = None) -> float:
         """Get timeout for fast path query.

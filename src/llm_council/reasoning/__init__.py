@@ -17,7 +17,7 @@ Usage:
     # Track reasoning usage
     from llm_council.reasoning import extract_reasoning_usage, aggregate_reasoning_usage
 
-    usage = extract_reasoning_usage(response, "openai/o1", budget=32000)
+    usage = extract_reasoning_usage(response, "<provider>/<model>", budget=32000)
     aggregated = aggregate_reasoning_usage([usage1, usage2, usage3])
 """
 

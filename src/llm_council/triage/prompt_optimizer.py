@@ -8,7 +8,7 @@ from typing import Dict, List
 
 
 def get_model_provider(model_id: str) -> str:
-    """Extract provider from model ID (e.g., 'anthropic/claude' -> 'anthropic')."""
+    """Extract provider from model ID (e.g., '<provider>/<model>' -> '<provider>')."""
     if "/" not in model_id:
         return "unknown"
 

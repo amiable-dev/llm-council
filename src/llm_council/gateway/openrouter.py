@@ -13,6 +13,8 @@ from typing import AsyncIterator, Dict, Any, List, Optional
 
 import httpx
 
+from llm_council import model_constants as mc
+
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_api_key
 
@@ -150,7 +152,7 @@ class OpenRouterGateway(BaseRouter):
 
         if has_images:
             # Multi-part content for vision models
-            content_parts = []
+            content_parts: List[Dict[str, Any]] = []
             for block in msg.content:
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
@@ -358,7 +360,7 @@ class OpenRouterGateway(BaseRouter):
         """
         # Use a fast, cheap model for health check
         result = await self._query_openrouter(
-            model="google/gemini-2.0-flash-001",
+            model=mc.HEALTH_CHECK_MODEL,
             messages=[{"role": "user", "content": "ping"}],
             timeout=10.0,
         )

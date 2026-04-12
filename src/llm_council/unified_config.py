@@ -11,15 +11,15 @@ Example YAML configuration (llm_council.yaml):
 
     council:
       tiers:
-        default: high
+        default: balanced
         pools:
           quick:
-            models: [openai/gpt-4o-mini, anthropic/claude-3-5-haiku-20241022]
             timeout_seconds: 30
+            # models: [...]  # Optional: defaults to centralized baseline if omitted
+          high:
+            timeout_seconds: 60
       triage:
-        enabled: false
-        wildcard:
-          enabled: true
+        enabled: true
       gateways:
         default: openrouter
         fallback:
@@ -39,6 +39,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 import yaml
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
+from . import model_constants
 from .tier_contract import TierContract, create_tier_contract
 
 
@@ -206,48 +207,48 @@ class TierConfig(BaseModel):
         default_pools = {
             "quick": TierPoolConfig(
                 models=[
-                    "openai/gpt-4o-mini",
-                    "anthropic/claude-3-haiku",
-                    "google/gemini-2.0-flash-lite-001",
-                    "qwen/qwen-turbo",
+                    model_constants.OPENAI_QUICK,
+                    model_constants.ANTHROPIC_QUICK,
+                    model_constants.GOOGLE_QUICK,
+                    model_constants.QWEN_QUICK,
                 ],
                 timeout_seconds=30,
                 peer_review="lightweight",
             ),
             "balanced": TierPoolConfig(
                 models=[
-                    "openai/gpt-4o-mini",
-                    "anthropic/claude-3.5-haiku",
-                    "google/gemini-2.0-flash-001",
-                    "qwen/qwen-turbo",
+                    model_constants.OPENAI_BALANCED,
+                    model_constants.ANTHROPIC_BALANCED,
+                    model_constants.GOOGLE_BALANCED,
+                    model_constants.QWEN_BALANCED,
                 ],
                 timeout_seconds=90,
             ),
             "high": TierPoolConfig(
                 models=[
-                    "openai/gpt-4o",
-                    "anthropic/claude-3.7-sonnet",
-                    "google/gemini-2.5-pro",
-                    "qwen/qwen-plus",
+                    model_constants.OPENAI_HIGH,
+                    model_constants.ANTHROPIC_HIGH,
+                    model_constants.GOOGLE_HIGH,
+                    model_constants.QWEN_HIGH,
                 ],
                 timeout_seconds=180,
             ),
             "reasoning": TierPoolConfig(
                 models=[
-                    "openai/gpt-4o",
-                    "anthropic/claude-3.7-sonnet",
-                    "google/gemini-2.5-pro",
-                    "qwen/qwen-plus",
+                    model_constants.OPENAI_REASONING,
+                    model_constants.ANTHROPIC_REASONING,
+                    model_constants.GOOGLE_REASONING,
+                    model_constants.QWEN_REASONING,
                 ],
                 timeout_seconds=600,
             ),
             # ADR-027: Frontier tier for cutting-edge/preview models
             "frontier": TierPoolConfig(
                 models=[
-                    "openai/gpt-4o",
-                    "anthropic/claude-3.7-sonnet",
-                    "google/gemini-2.5-pro",
-                    "qwen/qwen-plus",
+                    model_constants.OPENAI_REASONING,
+                    model_constants.ANTHROPIC_REASONING,
+                    model_constants.GOOGLE_REASONING,
+                    model_constants.QWEN_REASONING,
                 ],
                 timeout_seconds=600,
             ),
@@ -255,6 +256,10 @@ class TierConfig(BaseModel):
         for tier, pool in default_pools.items():
             if tier not in self.pools:
                 self.pools[tier] = pool
+            elif not self.pools[tier].models:
+                # If tier exists but has no models (e.g. from purged YAML),
+                # populate with default models but keep other YAML settings
+                self.pools[tier].models = pool.models
         return self
 
 
@@ -748,15 +753,15 @@ class CouncilConfig(BaseModel):
 
     models: ModelList = Field(
         default_factory=lambda: [
-            "openai/gpt-4o",
-            "google/gemini-2.5-pro",
-            "anthropic/claude-3.7-sonnet",
-            "qwen/qwen-plus",
+            model_constants.OPENAI_HIGH,
+            model_constants.GOOGLE_HIGH,
+            model_constants.ANTHROPIC_HIGH,
+            model_constants.QWEN_HIGH,
         ],
         alias="LLM_COUNCIL_MODELS",
     )
     chairman: str = Field(
-        default="google/gemini-3.1-pro-preview",
+        default=model_constants.CHAIRMAN_MODEL,
         alias="LLM_COUNCIL_CHAIRMAN",
     )
     synthesis_mode: Literal["consensus", "debate"] = Field(
@@ -772,7 +777,7 @@ class CouncilConfig(BaseModel):
         alias="LLM_COUNCIL_STYLE_NORMALIZATION",
     )
     normalizer_model: str = Field(
-        default="google/gemini-3.1-flash-lite-preview",
+        default=model_constants.UTILITY_NORMALIZER_MODEL,
         alias="LLM_COUNCIL_NORMALIZER_MODEL",
     )
     max_reviewers: Optional[int] = Field(

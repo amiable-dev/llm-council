@@ -27,6 +27,8 @@ from llm_council.triage.complexity import (
     classify_complexity,
 )
 
+from llm_council import model_constants as mc
+
 logger = logging.getLogger(__name__)
 
 
@@ -175,7 +177,7 @@ class NotDiamondClient:
         if "modelSelect" in endpoint:
             candidates = data.get("candidates", [])
             return {
-                "model": candidates[0] if candidates else "openai/gpt-4o",
+                "model": candidates[0] if candidates else mc.OPENAI_HIGH,
                 "confidence": 0.85,
             }
         elif "complexity" in endpoint:
@@ -202,7 +204,7 @@ class NotDiamondClient:
             Dict with 'model' and 'confidence'
         """
         if fallback is None:
-            fallback = candidates[0] if candidates else "openai/gpt-4o"
+            fallback = candidates[0] if candidates else mc.OPENAI_HIGH
 
         try:
             return await self._call_api(
@@ -315,7 +317,7 @@ class NotDiamondRouter:
             RouteResult with selected model
         """
         if fallback is None:
-            fallback = candidates[0] if candidates else "openai/gpt-4o"
+            fallback = candidates[0] if candidates else mc.OPENAI_HIGH
 
         if not self.config.enabled:
             return RouteResult(

@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
+from llm_council import model_constants as mc
+
 # Will be created
 from llm_council.unified_config import (
     UnifiedConfig,
@@ -1436,13 +1438,13 @@ class TestCouncilConfig:
 
         config = CouncilConfig()
 
-        # Defaults from config.py
-        assert "openai/gpt-5.4" in config.models
-        assert config.chairman == "google/gemini-3.1-pro-preview"
+        # Defaults from config.py and model_constants.py
+        assert mc.OPENAI_HIGH in config.models
+        assert config.chairman == mc.CHAIRMAN_MODEL
         assert config.synthesis_mode == "consensus"
         assert config.exclude_self_votes is True
         assert config.style_normalization is False
-        assert config.normalizer_model == "google/gemini-3.1-flash-lite-preview"
+        assert config.normalizer_model == mc.UTILITY_NORMALIZER_MODEL
         assert config.max_reviewers is None
 
     def test_council_config_model_list_from_comma(self):

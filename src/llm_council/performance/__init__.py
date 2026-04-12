@@ -7,10 +7,10 @@ Usage:
     from llm_council.performance import ModelSessionMetric, ModelPerformanceIndex
     from llm_council.performance import append_performance_records, read_performance_records
 
-    # Create a metric record
+    # Create a metric record (model_id is typically from model_constants)
     metric = ModelSessionMetric(
         session_id="sess-123",
-        model_id="openai/gpt-4o",
+        model_id="<provider>/<model>",
         timestamp="2025-12-24T00:00:00Z",
         latency_ms=1500,
         borda_score=0.75,

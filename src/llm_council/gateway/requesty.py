@@ -14,6 +14,8 @@ from typing import AsyncIterator, Dict, Any, List, Optional
 
 import httpx
 
+from llm_council import model_constants as mc
+
 from .base import (
     BaseRouter,
     HealthStatus,
@@ -143,7 +145,7 @@ class RequestyGateway(BaseRouter):
 
         if has_images:
             # Multi-part content for vision models
-            content_parts = []
+            content_parts: List[Dict[str, Any]] = []
             for block in msg.content:
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
@@ -339,7 +341,7 @@ class RequestyGateway(BaseRouter):
         """
         # Use a fast, cheap model for health check
         result = await self._query_requesty(
-            model="google/gemini-2.0-flash-001",
+            model=mc.HEALTH_CHECK_MODEL,
             messages=[{"role": "user", "content": "ping"}],
             timeout=10.0,
         )

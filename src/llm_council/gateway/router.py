@@ -18,6 +18,8 @@ from .errors import CircuitOpenError
 from .openrouter import OpenRouterGateway
 from .types import GatewayRequest, GatewayResponse
 
+from llm_council import model_constants as mc
+
 
 class GatewayRouter:
     """Orchestrates requests across multiple gateway backends.
@@ -28,7 +30,7 @@ class GatewayRouter:
     Example:
         router = GatewayRouter()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])]
         )
         response = await router.complete(request)
@@ -75,7 +77,7 @@ class GatewayRouter:
         """Get the appropriate gateway for a model.
 
         Args:
-            model: Model identifier (e.g., "openai/gpt-4o").
+            model: Model identifier (e.g., mc.OPENAI_HIGH).
 
         Returns:
             The gateway to use for this model.
@@ -139,7 +141,7 @@ class GatewayRouter:
         if initial_gateway_id in self._fallback_chains:
             chain_ids.extend(self._fallback_chains[initial_gateway_id])
 
-        last_exception = None
+        last_exception: Optional[BaseException] = None
 
         for i, gateway_id in enumerate(chain_ids):
             if gateway_id not in self.gateways:
@@ -256,7 +258,7 @@ class GatewayRouter:
                         error=str(result),
                     )
                 )
-            else:
+            elif isinstance(result, GatewayResponse):
                 responses.append(result)
 
         return responses
@@ -301,7 +303,7 @@ class GatewayRouter:
         Returns:
             Dict with gateway stats.
         """
-        stats = {"gateways": {}}
+        stats: Dict[str, Any] = {"gateways": {}}
 
         for gateway_id in self.gateways:
             cb = self._get_circuit_breaker(gateway_id)

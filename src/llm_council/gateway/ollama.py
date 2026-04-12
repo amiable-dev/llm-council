@@ -221,7 +221,7 @@ class OllamaGateway(BaseRouter):
 
         if has_images:
             # Multi-part content for vision models
-            content_parts = []
+            content_parts: List[Dict[str, Any]] = []
             for block in msg.content:
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})

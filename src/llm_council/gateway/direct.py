@@ -166,7 +166,7 @@ class DirectGateway(BaseRouter):
         has_images = any(block.type == "image" for block in msg.content)
 
         if has_images:
-            content_parts = []
+            content_parts: List[Dict[str, Any]] = []
             for block in msg.content:
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
@@ -186,7 +186,7 @@ class DirectGateway(BaseRouter):
         has_images = any(block.type == "image" for block in msg.content)
 
         if has_images:
-            content_parts = []
+            content_parts: List[Dict[str, Any]] = []
             for block in msg.content:
                 if block.type == "text" and block.text:
                     content_parts.append({"type": "text", "text": block.text})
@@ -203,15 +203,14 @@ class DirectGateway(BaseRouter):
 
     def _convert_to_google(self, msg: CanonicalMessage) -> Dict[str, Any]:
         """Convert to Google Gemini message format."""
-        parts = []
+        # Google uses 'user' and 'model' roles
+        role = "model" if msg.role == "assistant" else msg.role
+        parts: List[Dict[str, Any]] = []
         for block in msg.content:
             if block.type == "text" and block.text:
                 parts.append({"text": block.text})
             elif block.type == "image" and block.image_url:
                 parts.append({"inlineData": {"mimeType": "image/png", "data": block.image_url}})
-
-        # Google uses 'user' and 'model' roles
-        role = "model" if msg.role == "assistant" else msg.role
         return {"role": role, "parts": parts}
 
     def _convert_messages_for_provider(
@@ -455,7 +454,7 @@ class DirectGateway(BaseRouter):
         }
 
         if max_tokens is not None or temperature is not None:
-            generation_config = {}
+            generation_config: Dict[str, Any] = {}
             if max_tokens is not None:
                 generation_config["maxOutputTokens"] = max_tokens
             if temperature is not None:

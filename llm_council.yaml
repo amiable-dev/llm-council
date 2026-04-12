@@ -1,50 +1,30 @@
 # LLM Council Configuration - Budget Friendly Mode
-# Uses current, highly available, and low-cost models.
+# Uses current, highly available, and low-cost models via centralized defaults.
 
 timeouts:
   multiplier: 1.2
 
 council:
   adversarial_mode: false
-  chairman: "google/gemini-3.1-pro-preview"
+  # chairman: uses centralized default (GOOGLE_REASONING)
 
 tiers:
   default: balanced
   pools:
-    # QUICK: Fastest/Cheapest models
+    # QUICK: Fastest/Cheapest models (uses centralized defaults)
     quick:
-      models:
-        - openai/gpt-4o-mini
-        - anthropic/claude-3-haiku
-        - google/gemini-2.0-flash-lite-001
-        - qwen/qwen-turbo
       timeout_seconds: 30
 
-    # BALANCED: Best value for money
+    # BALANCED: Best value for money (uses centralized defaults)
     balanced:
-      models:
-        - openai/gpt-4o-mini
-        - anthropic/claude-3.5-haiku
-        - google/gemini-2.0-flash-001
-        - qwen/qwen-turbo
       timeout_seconds: 90
 
-    # HIGH: High quality, slightly more expensive but still affordable
+    # HIGH: High quality (uses centralized defaults)
     high:
-      models:
-        - openai/gpt-4o
-        - anthropic/claude-3.7-sonnet
-        - google/gemini-2.5-pro
-        - qwen/qwen-plus
       timeout_seconds: 180
 
-    # REASONING: Frontier models with high reasoning capabilities
+    # REASONING: Reasoning capabilities (uses centralized defaults)
     reasoning:
-      models:
-        - openai/gpt-5.4
-        - google/gemini-3.1-pro-preview
-        - anthropic/claude-opus-4.6
-        - qwen/qwen-plus
       timeout_seconds: 600
 
 gateways:
@@ -55,7 +35,7 @@ gateways:
       api_key: ${OPENROUTER_API_KEY}
 
 model_intelligence:
-  enabled: false # Disable dynamic selection to stick to our cheap list
+  enabled: false # Stick to centralized baseline defaults
 
 credentials:
   openrouter: ${OPENROUTER_API_KEY}

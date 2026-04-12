@@ -11,6 +11,9 @@ from typing import Any, Dict, List, Optional
 from llm_council.tier_contract import TierContract
 
 
+from llm_council import model_constants as mc
+
+
 class DomainCategory(Enum):
     """Domain categories for specialist model selection.
 
@@ -27,23 +30,23 @@ class DomainCategory(Enum):
 # Default specialist pools per ADR-020 council recommendation
 DEFAULT_SPECIALIST_POOLS: Dict[DomainCategory, List[str]] = {
     DomainCategory.CODE: [
-        "qwen/qwen-2.5-coder-32b-instruct",
-        "mistralai/codestral-latest",
+        mc.WILDCARD_CODE_QWEN,
+        mc.WILDCARD_CODE_MISTRAL,
     ],
     DomainCategory.REASONING: [
-        "openai/o1-preview",
-        "qwen/qwq-32b-preview",
+        mc.WILDCARD_REASONING_O1,
+        mc.WILDCARD_REASONING_QWQ,
     ],
     DomainCategory.CREATIVE: [
-        "anthropic/claude-3-opus-20240229",
-        "cohere/command-r-plus",
+        mc.WILDCARD_CREATIVE_OPUS,
+        mc.WILDCARD_CREATIVE_COHERE,
     ],
     DomainCategory.MULTILINGUAL: [
-        "openai/gpt-4o",
-        "cohere/command-r-plus",
+        mc.OPENAI_HIGH,
+        mc.WILDCARD_CREATIVE_COHERE,
     ],
     DomainCategory.GENERAL: [
-        "meta-llama/llama-3.1-70b-instruct",
+        mc.WILDCARD_FALLBACK_MODEL,
     ],
 }
 
@@ -59,7 +62,7 @@ class WildcardConfig:
     specialist_pools: Dict[DomainCategory, List[str]] = field(
         default_factory=lambda: DEFAULT_SPECIALIST_POOLS.copy()
     )
-    fallback_model: str = "meta-llama/llama-3.1-70b-instruct"
+    fallback_model: str = mc.WILDCARD_FALLBACK_MODEL
     max_selection_latency_ms: int = 200  # ADR-020: max 200ms selection latency
     diversity_constraints: List[str] = field(
         default_factory=lambda: ["family", "training", "architecture"]

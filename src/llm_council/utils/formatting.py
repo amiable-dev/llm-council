@@ -3,6 +3,8 @@
 from typing import Dict, Any, Optional
 from llm_council.gateway_adapter import STATUS_OK
 
+from llm_council import model_constants as mc
+
 
 def generate_partial_warning(
     model_statuses: Dict[str, Dict[str, Any]], requested: int
@@ -53,7 +55,7 @@ Title:"""
 
     # Use gemini-2.5-flash for title generation (fast and cheap)
     response = await query_model(
-        "google/gemini-2.5-flash", messages, timeout=30.0, council_id=council_id
+        mc.UTILITY_TITLE_GENERATOR, messages, timeout=30.0, council_id=council_id
     )
 
     if response is None:
