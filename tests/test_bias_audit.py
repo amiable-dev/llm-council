@@ -16,6 +16,8 @@ from llm_council.bias_audit import (
     derive_position_mapping,
 )
 from llm_council.unified_config import get_config
+from llm_council import model_constants as mc
+
 
 # Get thresholds from config
 _config = get_config()
@@ -482,16 +484,16 @@ class TestDerivePositionMapping:
     def test_basic_mapping_three_responses(self):
         """Derive positions for 3 responses."""
         label_to_model = {
-            "Response A": "openai/gpt-4",
-            "Response B": "anthropic/claude-3",
-            "Response C": "google/gemini-pro",
+            "Response A": mc.OPENAI_HIGH,
+            "Response B": mc.ANTHROPIC_HIGH,
+            "Response C": mc.GOOGLE_HIGH,
         }
         position_mapping = derive_position_mapping(label_to_model)
 
         assert position_mapping == {
-            "openai/gpt-4": 0,
-            "anthropic/claude-3": 1,
-            "google/gemini-pro": 2,
+            mc.OPENAI_HIGH: 0,
+            mc.ANTHROPIC_HIGH: 1,
+            mc.GOOGLE_HIGH: 2,
         }
 
     def test_four_responses(self):
@@ -569,16 +571,16 @@ class TestDerivePositionMapping:
     def test_enhanced_format_with_display_index(self):
         """Use display_index from enhanced format (council-recommended hardening)."""
         label_to_model = {
-            "Response A": {"model": "openai/gpt-4", "display_index": 0},
-            "Response B": {"model": "anthropic/claude-3", "display_index": 1},
-            "Response C": {"model": "google/gemini-pro", "display_index": 2},
+            "Response A": {"model": mc.OPENAI_HIGH, "display_index": 0},
+            "Response B": {"model": mc.ANTHROPIC_HIGH, "display_index": 1},
+            "Response C": {"model": mc.GOOGLE_HIGH, "display_index": 2},
         }
         position_mapping = derive_position_mapping(label_to_model)
 
         assert position_mapping == {
-            "openai/gpt-4": 0,
-            "anthropic/claude-3": 1,
-            "google/gemini-pro": 2,
+            mc.OPENAI_HIGH: 0,
+            mc.ANTHROPIC_HIGH: 1,
+            mc.GOOGLE_HIGH: 2,
         }
 
     def test_enhanced_format_with_shuffled_indices(self):

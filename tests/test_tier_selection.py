@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from dataclasses import dataclass
 from typing import List, Optional
 import os
+from llm_council import model_constants as mc
 
 
 class TestTierWeights:
@@ -176,10 +177,10 @@ class TestDiversityEnforcement:
         from llm_council.metadata.selection import select_with_diversity
 
         scored = [
-            ("openai/gpt-4o", 0.95),
-            ("openai/gpt-4o-mini", 0.90),
-            ("anthropic/claude-opus", 0.85),
-            ("anthropic/claude-sonnet", 0.80),
+            (mc.OPENAI_HIGH, 0.95),
+            (mc.OPENAI_LOW, 0.90),
+            (mc.ANTHROPIC_OPUS_LATEST, 0.85),
+            (mc.ANTHROPIC_HIGH, 0.80),
         ]
 
         selected = select_with_diversity(scored, count=3, min_providers=2)
@@ -232,8 +233,8 @@ class TestDiversityEnforcement:
         from llm_council.metadata.selection import select_with_diversity
 
         scored = [
-            ("openai/gpt-4o", 0.95),
-            ("openai/gpt-4o-mini", 0.90),
+            (mc.OPENAI_HIGH, 0.95),
+            (mc.OPENAI_LOW, 0.90),
         ]
 
         selected = select_with_diversity(scored, count=2, min_providers=2)

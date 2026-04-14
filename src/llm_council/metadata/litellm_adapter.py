@@ -9,6 +9,7 @@ The adapter uses lazy importing to keep LiteLLM as an optional dependency.
 
 import logging
 from typing import Any, Dict, Optional
+from .. import model_constants as mc
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class LiteLLMAdapter:
 
     Example:
         >>> adapter = LiteLLMAdapter()
-        >>> window = adapter.get_context_window("openai/gpt-4o")
+        >>> window = adapter.get_context_window(mc.OPENAI_HIGH)
         >>> print(window)  # 128000
     """
 
@@ -58,12 +59,12 @@ class LiteLLMAdapter:
         """Normalize model ID to LiteLLM format.
 
         LiteLLM uses different formats:
-        - OpenAI: "gpt-4o" (no prefix)
-        - Anthropic: "claude-3-5-sonnet-20241022" (no prefix)
-        - Ollama: "ollama/llama3.2" (keep prefix)
+        - OpenAI: OPENAI_NORMALIZED (e.g., "gpt-4o")
+        - Anthropic: ANTHROPIC_NORMALIZED (e.g., "claude-3-5-sonnet")
+        - Ollama: OLLAMA_ANY (keep prefix)
 
         Args:
-            model_id: Full model ID (e.g., "openai/gpt-4o")
+            model_id: Full model ID
 
         Returns:
             Normalized model ID for LiteLLM lookup

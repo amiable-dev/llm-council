@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from llm_council.gateway.openrouter import OpenRouterGateway
 from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
+from llm_council import model_constants as mc
 
 
 @pytest.mark.anyio
@@ -25,7 +26,7 @@ async def test_openrouter_gateway_extracts_cost():
     ):
         gateway = OpenRouterGateway(api_key="fake")
         msg = CanonicalMessage(role="user", content=[ContentBlock(type="text", text="test prompt")])
-        request = GatewayRequest(messages=[msg], model="openai/gpt-3.5-turbo")
+        request = GatewayRequest(messages=[msg], model=mc.OPENAI_LOW)
 
         response = await gateway.complete(request)
 

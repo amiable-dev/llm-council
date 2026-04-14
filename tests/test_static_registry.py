@@ -8,6 +8,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import tempfile
+from llm_council import model_constants as mc
 
 
 class TestStaticRegistryProviderBasic:
@@ -55,11 +56,11 @@ class TestStaticRegistryGetModelInfo:
         from llm_council.metadata.types import ModelInfo
 
         provider = StaticRegistryProvider()
-        info = provider.get_model_info("openai/gpt-4o")
+        info = provider.get_model_info(mc.OPENAI_HIGH)
 
         assert info is not None
         assert isinstance(info, ModelInfo)
-        assert info.id == "openai/gpt-4o"
+        assert info.id == mc.OPENAI_HIGH
         assert info.context_window == 128000
 
     def test_get_model_info_unknown_returns_none(self):
@@ -76,7 +77,7 @@ class TestStaticRegistryGetModelInfo:
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
         provider = StaticRegistryProvider()
-        info = provider.get_model_info("anthropic/claude-opus-4.6")
+        info = provider.get_model_info(mc.ANTHROPIC_OPUS_LATEST)
 
         assert info is not None
         assert info.pricing is not None
@@ -92,7 +93,7 @@ class TestStaticRegistryContextWindow:
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
         provider = StaticRegistryProvider()
-        window = provider.get_context_window("openai/gpt-4o")
+        window = provider.get_context_window(mc.OPENAI_HIGH)
 
         assert window == 128000
 
@@ -111,7 +112,7 @@ class TestStaticRegistryContextWindow:
         provider = StaticRegistryProvider()
 
         # Model in local registry should use local value
-        window = provider.get_context_window("openai/gpt-4o")
+        window = provider.get_context_window(mc.OPENAI_HIGH)
         # Should use local registry value (128000)
         assert window == 128000
 
@@ -124,21 +125,21 @@ class TestStaticRegistrySupportsReasoning:
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
         provider = StaticRegistryProvider()
-        assert provider.supports_reasoning("openai/o1") is True
+        assert provider.supports_reasoning(mc.OPENAI_REASONING_PREVIEW) is True
 
     def test_supports_reasoning_true_for_o1_preview(self):
         """Should detect o1-preview as reasoning-capable."""
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
         provider = StaticRegistryProvider()
-        assert provider.supports_reasoning("openai/o1-preview") is True
+        assert provider.supports_reasoning(mc.OPENAI_REASONING_LATEST) is True
 
     def test_supports_reasoning_false_for_gpt4o_mini(self):
         """Should return False for non-reasoning models."""
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
         provider = StaticRegistryProvider()
-        assert provider.supports_reasoning("openai/gpt-4o-mini") is False
+        assert provider.supports_reasoning(mc.OPENAI_LOW) is False
 
     def test_supports_reasoning_unknown_model(self):
         """Should return False for unknown models."""
@@ -156,7 +157,7 @@ class TestStaticRegistryGetPricing:
         from llm_council.metadata.static_registry import StaticRegistryProvider
 
         provider = StaticRegistryProvider()
-        pricing = provider.get_pricing("openai/gpt-4o")
+        pricing = provider.get_pricing(mc.OPENAI_HIGH)
 
         assert isinstance(pricing, dict)
         if pricing:  # If pricing is provided
@@ -184,7 +185,7 @@ class TestStaticRegistryListModels:
 
         assert isinstance(models, list)
         assert len(models) >= 30  # ADR-026 requirement
-        assert "openai/gpt-4o" in models
+        assert mc.OPENAI_HIGH in models
 
     def test_list_includes_openai_models(self):
         """Should include OpenAI models."""
@@ -193,7 +194,7 @@ class TestStaticRegistryListModels:
         provider = StaticRegistryProvider()
         models = provider.list_available_models()
 
-        openai_models = [m for m in models if m.startswith("openai/")]
+        openai_models = [m for m in models if m.startswith(mc.PREFIX_OPENAI)]
         assert len(openai_models) >= 5
 
     def test_list_includes_anthropic_models(self):
@@ -203,7 +204,7 @@ class TestStaticRegistryListModels:
         provider = StaticRegistryProvider()
         models = provider.list_available_models()
 
-        anthropic_models = [m for m in models if m.startswith("anthropic/")]
+        anthropic_models = [m for m in models if m.startswith(mc.PREFIX_ANTHROPIC)]
         assert len(anthropic_models) >= 4
 
     def test_list_includes_local_models(self):

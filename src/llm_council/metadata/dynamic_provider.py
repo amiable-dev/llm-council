@@ -8,6 +8,7 @@ This module provides a dynamic metadata provider that:
 
 import logging
 from typing import Any, Dict, List, Optional
+from .. import model_constants as mc
 
 from .cache import ModelIntelligenceCache
 from .openrouter_client import OpenRouterClient
@@ -52,7 +53,7 @@ class DynamicMetadataProvider:
         """Get model info, preferring cache over static fallback.
 
         Args:
-            model_id: Model identifier (e.g., 'openai/gpt-4o')
+            model_id: Model identifier (e.g., mc.OPENAI_HIGH)
 
         Returns:
             ModelInfo if found, None otherwise

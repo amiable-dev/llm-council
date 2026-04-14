@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 # ADR-032: Migrated to unified_config (lazy import to avoid circular dependency)
+from . import model_constants
 
 
 def _get_tier_model_pools() -> Dict[str, List[str]]:
@@ -76,34 +77,34 @@ def get_tier_timeout(tier: str) -> Dict[str, int]:
 # Default pools used when config isn't loaded yet
 _DEFAULT_TIER_MODEL_POOLS = {
     "quick": [
-        "openai/gpt-4o-mini",
-        "anthropic/claude-3-haiku",
-        "google/gemini-2.0-flash-lite-001",
-        "qwen/qwen-turbo",
+        model_constants.OPENAI_QUICK,
+        model_constants.ANTHROPIC_QUICK,
+        model_constants.GOOGLE_QUICK,
+        model_constants.QWEN_QUICK,
     ],
     "balanced": [
-        "openai/gpt-4o-mini",
-        "anthropic/claude-3.5-haiku",
-        "google/gemini-2.0-flash-001",
-        "qwen/qwen-turbo",
+        model_constants.OPENAI_BALANCED,
+        model_constants.ANTHROPIC_BALANCED,
+        model_constants.GOOGLE_BALANCED,
+        model_constants.QWEN_BALANCED,
     ],
     "high": [
-        "openai/gpt-4o",
-        "anthropic/claude-3.7-sonnet",
-        "google/gemini-2.5-pro",
-        "qwen/qwen-plus",
+        model_constants.OPENAI_HIGH,
+        model_constants.ANTHROPIC_HIGH,
+        model_constants.GOOGLE_HIGH,
+        model_constants.QWEN_HIGH,
     ],
     "reasoning": [
-        "openai/o1",
-        "anthropic/claude-3.7-sonnet",
-        "google/gemini-2.5-flash-thinking-exp",
-        "deepseek/deepseek-r1",
+        model_constants.OPENAI_REASONING,
+        model_constants.ANTHROPIC_REASONING,
+        model_constants.GOOGLE_REASONING,
+        model_constants.QWEN_REASONING,
     ],
     "frontier": [
-        "openai/o1",
-        "anthropic/claude-3.7-sonnet",
-        "google/gemini-2.5-pro",
-        "deepseek/deepseek-r1",
+        model_constants.FRONTIER_OPENAI,     # openai/o1 (latest, not preview)
+        model_constants.FRONTIER_ANTHROPIC,  # anthropic/claude-3.7-sonnet
+        model_constants.FRONTIER_GOOGLE,     # google/gemini-2.5-pro
+        model_constants.FRONTIER_DEEPSEEK,   # deepseek/deepseek-r1
     ],
 }
 
@@ -119,11 +120,11 @@ if TYPE_CHECKING:
 # Tier-appropriate aggregator models (ADR-022 council recommendation)
 # Warning: Do not use a "mini" model to aggregate reasoning model outputs.
 TIER_AGGREGATORS: Dict[str, str] = {
-    "quick": "openai/gpt-4o-mini",  # Speed-matched
-    "balanced": "google/gemini-2.0-flash-001",  # Quality-matched
-    "high": "openai/gpt-4o",  # Full capability
-    "reasoning": "anthropic/claude-3.7-sonnet",  # Can understand reasoning outputs
-    "frontier": "anthropic/claude-3.7-sonnet",  # Best available for cutting-edge synthesis (ADR-027)
+    "quick": model_constants.OPENAI_QUICK,  # Speed-matched
+    "balanced": model_constants.GOOGLE_BALANCED,  # Quality-matched
+    "high": model_constants.OPENAI_HIGH,  # Full capability
+    "reasoning": model_constants.ANTHROPIC_HIGH,  # Can understand reasoning outputs
+    "frontier": model_constants.ANTHROPIC_HIGH,  # Best available for cutting-edge synthesis (ADR-027)
 }
 
 

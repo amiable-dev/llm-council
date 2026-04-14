@@ -7,12 +7,15 @@ These tests implement the RED phase of TDD.
 """
 
 import asyncio
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from llm_council.metadata.types import ModelInfo, ModelStatus, QualityTier
+from llm_council import model_constants as mc
 
 
 class TestModelStatusEnum:
@@ -43,7 +46,7 @@ class TestRegistryEntry:
         from llm_council.metadata.registry import RegistryEntry
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
@@ -59,7 +62,7 @@ class TestRegistryEntry:
         from llm_council.metadata.registry import RegistryEntry
 
         info = ModelInfo(
-            id="openai/gpt-3.5-turbo",
+            id=mc.OPENAI_LOW,
             context_window=16385,
             quality_tier=QualityTier.STANDARD,
         )
@@ -104,7 +107,7 @@ class TestModelRegistry:
         from llm_council.metadata.registry import ModelRegistry
 
         registry = ModelRegistry()
-        result = registry.get_model("unknown/model")
+        result = registry.get_model("unknown-model")
 
         assert result is None
 
@@ -141,16 +144,16 @@ class TestModelRegistry:
 
         registry = ModelRegistry()
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(
+        registry._cache[mc.OPENAI_HIGH] = RegistryEntry(
             info=info,
             fetched_at=datetime.now(UTC),
         )
 
-        result = registry.get_model("openai/gpt-4o")
+        result = registry.get_model(mc.OPENAI_HIGH)
 
         assert result == info
 
@@ -160,17 +163,17 @@ class TestModelRegistry:
 
         registry = ModelRegistry()
         info1 = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
         info2 = ModelInfo(
-            id="anthropic/claude-3-opus",
+            id=mc.ANTHROPIC_OPUS_LATEST,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(info=info1, fetched_at=datetime.now(UTC))
-        registry._cache["anthropic/claude-3-opus"] = RegistryEntry(
+        registry._cache[mc.OPENAI_HIGH] = RegistryEntry(info=info1, fetched_at=datetime.now(UTC))
+        registry._cache[mc.ANTHROPIC_OPUS_LATEST] = RegistryEntry(
             info=info2, fetched_at=datetime.now(UTC)
         )
 
@@ -194,7 +197,7 @@ class TestRegistryRefresh:
         # Mock provider that returns models
         mock_provider = MagicMock()
         mock_provider.list_available_models = MagicMock(
-            return_value=["openai/gpt-4o", "anthropic/claude-3-opus"]
+            return_value=[mc.OPENAI_HIGH, mc.ANTHROPIC_OPUS_LATEST]
         )
         mock_provider.get_model_info = MagicMock(
             side_effect=lambda model_id: ModelInfo(
@@ -207,8 +210,8 @@ class TestRegistryRefresh:
         await registry.refresh_registry(mock_provider)
 
         assert len(registry._cache) == 2
-        assert "openai/gpt-4o" in registry._cache
-        assert "anthropic/claude-3-opus" in registry._cache
+        assert mc.OPENAI_HIGH in registry._cache
+        assert mc.ANTHROPIC_OPUS_LATEST in registry._cache
         assert registry._last_refresh is not None
 
     @pytest.mark.asyncio
@@ -221,7 +224,7 @@ class TestRegistryRefresh:
         # Mock provider with one deprecated model
         mock_provider = MagicMock()
         mock_provider.list_available_models = MagicMock(
-            return_value=["openai/gpt-4o", "openai/gpt-3.5-turbo-deprecated"]
+            return_value=[mc.OPENAI_HIGH, "deprecated-model"]
         )
 
         def get_model_info(model_id):
@@ -242,8 +245,8 @@ class TestRegistryRefresh:
         await registry.refresh_registry(mock_provider)
 
         # Deprecated model should be filtered
-        assert "openai/gpt-3.5-turbo-deprecated" not in registry._cache
-        assert "openai/gpt-4o" in registry._cache
+        assert "deprecated-model" not in registry._cache
+        assert mc.OPENAI_HIGH in registry._cache
 
     @pytest.mark.asyncio
     async def test_refresh_handles_failures_with_backoff(self):
@@ -261,12 +264,12 @@ class TestRegistryRefresh:
             call_count += 1
             if call_count < 3:
                 raise ConnectionError("API unavailable")
-            return ["openai/gpt-4o"]
+            return [mc.OPENAI_HIGH]
 
         mock_provider.list_available_models = MagicMock(side_effect=list_models)
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )
@@ -287,12 +290,13 @@ class TestRegistryRefresh:
         registry = ModelRegistry()
 
         # Pre-populate cache with stale data
+        stale_id = f"{mc.OPENAI_HIGH}-stale"
         stale_info = ModelInfo(
-            id="openai/gpt-4o-stale",
+            id=stale_id,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o-stale"] = RegistryEntry(
+        registry._cache[stale_id] = RegistryEntry(
             info=stale_info,
             fetched_at=datetime.now(UTC) - timedelta(hours=1),
         )
@@ -308,7 +312,7 @@ class TestRegistryRefresh:
             await registry.refresh_registry(mock_provider, max_retries=2)
 
         # Stale cache should be preserved
-        assert "openai/gpt-4o-stale" in registry._cache
+        assert f"{mc.OPENAI_HIGH}-stale" in registry._cache
         assert registry._refresh_failures == 2
 
     @pytest.mark.asyncio
@@ -320,10 +324,10 @@ class TestRegistryRefresh:
         registry._refresh_failures = 5  # Previous failures
 
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(return_value=["openai/gpt-4o"])
+        mock_provider.list_available_models = MagicMock(return_value=[mc.OPENAI_HIGH])
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )

@@ -15,6 +15,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, TYPE_CHECKING
 
 # Import configuration from unified_config (ADR-025a alignment)
 from llm_council.unified_config import OllamaProviderConfig, get_config
+from llm_council import model_constants as mc
 
 # Hardware profiles for deployment guidance (per ADR-025)
 # These are recommendations, not enforced requirements
@@ -301,7 +302,7 @@ class OllamaGateway(BaseRouter):
         This is the core method that calls LiteLLM's async completion.
 
         Args:
-            model: Model identifier in 'ollama/model' format.
+            model: Model identifier in 'prefix/model' format.
             messages: LiteLLM-format messages.
             timeout: Request timeout.
             max_tokens: Max tokens to generate.
@@ -477,7 +478,7 @@ class OllamaGateway(BaseRouter):
         try:
             # Try to complete a simple request
             result = await self._query_ollama(
-                model="ollama/llama3.2",  # Common model for health check
+                model=mc.OLLAMA_HEALTH_CHECK_MODEL,
                 messages=[{"role": "user", "content": "ping"}],
                 timeout=10.0,
                 max_tokens=10,

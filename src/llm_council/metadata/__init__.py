@@ -16,9 +16,9 @@ Example usage:
     provider = get_provider()
 
     # Query model metadata
-    info = provider.get_model_info("openai/gpt-4o")
-    window = provider.get_context_window("openai/gpt-4o")
-    can_reason = provider.supports_reasoning("openai/o1")
+    info = provider.get_model_info("provider/model")
+    window = provider.get_context_window("provider/model")
+    can_reason = provider.supports_reasoning("provider/model")
 
 Environment Variables:
     LLM_COUNCIL_OFFLINE: Set to "true" to use StaticRegistryProvider exclusively

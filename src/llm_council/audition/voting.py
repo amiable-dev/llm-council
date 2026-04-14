@@ -7,7 +7,7 @@ This module maps AuditionState to VotingAuthority from ADR-027:
 
 Example:
     >>> from llm_council.audition.voting import get_audition_voting_authority
-    >>> authority = get_audition_voting_authority("openai/gpt-5", tracker)
+    >>> authority = get_audition_voting_authority("provider/model", tracker)
     >>> if authority == VotingAuthority.FULL:
     ...     # Count vote in consensus
 """

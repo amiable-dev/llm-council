@@ -6,6 +6,8 @@ Tests the Not Diamond API client for model routing and complexity classification
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import os
+from llm_council import model_constants as mc
+
 
 from llm_council.triage.not_diamond import (
     NotDiamondClient,
@@ -66,17 +68,17 @@ class TestNotDiamondClient:
     async def test_model_select_success(self, client):
         """Should select model from API response."""
         mock_response = {
-            "model": "openai/gpt-4o",
+            "model": mc.OPENAI_HIGH,
             "confidence": 0.95,
         }
 
         with patch.object(client, "_call_api", return_value=mock_response):
             result = await client.model_select(
                 query="What is 2+2?",
-                candidates=["openai/gpt-4o", "anthropic/claude-3-5-sonnet"],
+                candidates=[mc.OPENAI_HIGH, mc.ANTHROPIC_REASONING],
             )
 
-        assert result["model"] == "openai/gpt-4o"
+        assert result["model"] == mc.OPENAI_HIGH
         assert result["confidence"] == 0.95
 
     @pytest.mark.asyncio
@@ -86,7 +88,7 @@ class TestNotDiamondClient:
         allowed = tier_contract.allowed_models
 
         mock_response = {
-            "model": allowed[0] if allowed else "openai/gpt-4o-mini",
+            "model": allowed[0] if allowed else mc.OPENAI_BALANCED,
             "confidence": 0.9,
         }
 
@@ -205,17 +207,17 @@ class TestNotDiamondRouter:
     async def test_route_selects_best_model(self, router):
         """Should select optimal model for query."""
         mock_response = {
-            "model": "openai/gpt-4o",
+            "model": mc.OPENAI_HIGH,
             "confidence": 0.92,
         }
 
         with patch.object(router.client, "_call_api", return_value=mock_response):
             result = await router.route(
                 query="Explain quantum computing",
-                candidates=["openai/gpt-4o", "anthropic/claude-3-5-sonnet"],
+                candidates=[mc.OPENAI_HIGH, mc.ANTHROPIC_REASONING],
             )
 
-        assert result.model == "openai/gpt-4o"
+        assert result.model == mc.OPENAI_HIGH
         assert result.confidence >= 0.9
 
 

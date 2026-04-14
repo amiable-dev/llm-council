@@ -8,6 +8,7 @@ Written BEFORE implementation per TDD workflow.
 
 import pytest
 from unittest.mock import MagicMock, patch
+from llm_council import model_constants as mc
 
 
 class TestGetProviderSafe:
@@ -69,13 +70,13 @@ class TestQualityScoreFromMetadata:
         # Create mock provider that returns FRONTIER tier
         mock_provider = MagicMock()
         mock_provider.get_model_info.return_value = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             pricing={"prompt": 0.0025, "completion": 0.01},
             quality_tier=QualityTier.FRONTIER,
         )
 
-        score = _get_quality_score_from_metadata("openai/gpt-4o", mock_provider)
+        score = _get_quality_score_from_metadata(mc.OPENAI_HIGH, mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.FRONTIER]
         assert score == 0.95
 
@@ -89,13 +90,13 @@ class TestQualityScoreFromMetadata:
 
         mock_provider = MagicMock()
         mock_provider.get_model_info.return_value = ModelInfo(
-            id="anthropic/claude-3-5-sonnet",
+            id=mc.ANTHROPIC_HIGH,
             context_window=200000,
             pricing={"prompt": 0.003, "completion": 0.015},
             quality_tier=QualityTier.STANDARD,
         )
 
-        score = _get_quality_score_from_metadata("anthropic/claude-3-5-sonnet", mock_provider)
+        score = _get_quality_score_from_metadata(mc.ANTHROPIC_HIGH, mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.STANDARD]
         assert score == 0.85  # ADR-030: Updated from 0.75
 
@@ -109,13 +110,13 @@ class TestQualityScoreFromMetadata:
 
         mock_provider = MagicMock()
         mock_provider.get_model_info.return_value = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_LOW,
             context_window=128000,
             pricing={"prompt": 0.00015, "completion": 0.0006},
             quality_tier=QualityTier.ECONOMY,
         )
 
-        score = _get_quality_score_from_metadata("openai/gpt-4o-mini", mock_provider)
+        score = _get_quality_score_from_metadata(mc.OPENAI_LOW, mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.ECONOMY]
         assert score == 0.70  # ADR-030: Updated from 0.55
 
@@ -129,13 +130,13 @@ class TestQualityScoreFromMetadata:
 
         mock_provider = MagicMock()
         mock_provider.get_model_info.return_value = ModelInfo(
-            id="ollama/llama2",
+            id=mc.OLLAMA_ANY,
             context_window=4096,
             pricing={"prompt": 0.0, "completion": 0.0},
             quality_tier=QualityTier.LOCAL,
         )
 
-        score = _get_quality_score_from_metadata("ollama/llama2", mock_provider)
+        score = _get_quality_score_from_metadata(mc.OLLAMA_ANY, mock_provider)
         assert score == QUALITY_TIER_SCORES[QualityTier.LOCAL]
         assert score == 0.50  # ADR-030: Updated from 0.40
 
@@ -153,7 +154,7 @@ class TestQualityScoreFromMetadata:
         """No provider should return None to trigger fallback."""
         from llm_council.metadata.selection import _get_quality_score_from_metadata
 
-        score = _get_quality_score_from_metadata("openai/gpt-4o", None)
+        score = _get_quality_score_from_metadata(mc.OPENAI_HIGH, None)
         assert score is None
 
 
@@ -167,7 +168,7 @@ class TestCostScoreFromMetadata:
         mock_provider = MagicMock()
         mock_provider.get_pricing.return_value = {"prompt": 0.0, "completion": 0.0}
 
-        score = _get_cost_score_from_metadata("ollama/llama2", mock_provider)
+        score = _get_cost_score_from_metadata(mc.OLLAMA_ANY, mock_provider)
         assert score == 1.0
 
     def test_expensive_model_returns_low_score(self):
@@ -187,7 +188,7 @@ class TestCostScoreFromMetadata:
         # Expensive: 2x reference price
         mock_provider.get_pricing.return_value = {"prompt": 0.030, "completion": 0.06}
 
-        score = _get_cost_score_from_metadata("anthropic/claude-3-opus", mock_provider)
+        score = _get_cost_score_from_metadata(mc.ANTHROPIC_OPUS_LATEST, mock_provider)
         assert score is not None
         assert score < 0.5  # Log-ratio: 2x reference returns ~0.425
 
@@ -199,7 +200,7 @@ class TestCostScoreFromMetadata:
         # Very cheap
         mock_provider.get_pricing.return_value = {"prompt": 0.0001, "completion": 0.0004}
 
-        score = _get_cost_score_from_metadata("openai/gpt-4o-mini", mock_provider)
+        score = _get_cost_score_from_metadata(mc.OPENAI_QUICK, mock_provider)
         assert score is not None
         assert score > 0.8
 
@@ -210,7 +211,7 @@ class TestCostScoreFromMetadata:
         mock_provider = MagicMock()
         mock_provider.get_pricing.return_value = {"prompt": 0.003, "completion": 0.015}
 
-        score = _get_cost_score_from_metadata("anthropic/claude-3-5-sonnet", mock_provider)
+        score = _get_cost_score_from_metadata(mc.ANTHROPIC_HIGH, mock_provider)
         assert score is not None
         assert 0.4 < score < 0.9
 
@@ -228,7 +229,7 @@ class TestCostScoreFromMetadata:
         """No provider should return None."""
         from llm_council.metadata.selection import _get_cost_score_from_metadata
 
-        score = _get_cost_score_from_metadata("openai/gpt-4o", None)
+        score = _get_cost_score_from_metadata(mc.OPENAI_HIGH, None)
         assert score is None
 
 
@@ -338,7 +339,7 @@ class TestMeetsContextRequirement:
 
         # gpt-4o has 128000 context in registry
         candidate = ModelCandidate(
-            model_id="openai/gpt-4o",
+            model_id=mc.OPENAI_HIGH,
             latency_score=0.9,
             cost_score=0.9,
             quality_score=0.9,

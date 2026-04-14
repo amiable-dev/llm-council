@@ -32,14 +32,13 @@ class TestWebhookConfigParameter:
             events=["council.complete"],
         )
 
-        # This should not raise - webhook_config is accepted
-        # We'll mock the actual council execution
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = (
-                [],  # No results
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                {},  # No model statuses
-            )
+        # Mock the modular stage1 run
+        with patch("llm_council.council.run_stage1") as mock_stage1:
+            mock_stage1.return_value = {
+                "stage1_results": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "model_statuses": {},
+            }
 
             result = await run_council_with_fallback(
                 "Test query",
@@ -54,12 +53,12 @@ class TestWebhookConfigParameter:
         """run_council_with_fallback should work without webhook_config (backward compatible)."""
         from llm_council.council import run_council_with_fallback
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = (
-                [],  # No results
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                {},  # No model statuses
-            )
+        with patch("llm_council.council.run_stage1") as mock_stage1:
+            mock_stage1.return_value = {
+                "stage1_results": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "model_statuses": {},
+            }
 
             # No webhook_config - should still work
             result = await run_council_with_fallback("Test query")
@@ -86,12 +85,12 @@ class TestWebhookEventEmission:
             events=["council.deliberation_start", "council.complete"],
         )
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = (
-                [],  # No results
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                {},
-            )
+        with patch("llm_council.council.run_stage1") as mock_stage1:
+            mock_stage1.return_value = {
+                "stage1_results": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "model_statuses": {},
+            }
 
             # Patch the dispatcher's dispatch method at the module level
             with patch.object(WebhookDispatcher, "dispatch", capture_dispatch):
@@ -123,32 +122,30 @@ class TestWebhookEventEmission:
             events=["council.complete"],
         )
 
-        # Mock a successful council run
+        # Mock a successful modular council run
         with (
-            patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1,
-            patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5,
-            patch("llm_council.council.stage2_collect_rankings") as mock_stage2,
-            patch("llm_council.council.stage3_synthesize_final") as mock_stage3,
+            patch("llm_council.council.run_stage1") as mock_stage1,
+            patch("llm_council.council.run_stage2") as mock_stage2,
+            patch("llm_council.council.run_stage3") as mock_stage3,
         ):
-            mock_stage1.return_value = (
-                [{"model": "test/model", "response": "Test response"}],
-                {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
-                {"test/model": {"status": "ok", "latency_ms": 1000}},
-            )
-            mock_stage1_5.return_value = (
-                [{"model": "test/model", "response": "Test response"}],
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            )
-            mock_stage2.return_value = (
-                [{"model": "test/model", "ranking": "...", "parsed_ranking": {"ranking": []}}],
-                {"Response A": {"model": "test/model", "display_index": 0}},
-                {"prompt_tokens": 50, "completion_tokens": 25, "total_tokens": 75},
-            )
-            mock_stage3.return_value = (
-                {"model": "chairman/model", "response": "Final synthesis"},
-                {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
-                None,  # verdict_result (ADR-025b)
-            )
+            mock_stage1.return_value = {
+                "stage1_results": [{"model": "test/model", "response": "Test response"}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+                "model_statuses": {"test/model": {"status": "ok", "latency_ms": 1000}},
+            }
+            mock_stage2.return_value = {
+                "stage2_results": [
+                    {"model": "test/model", "ranking": "...", "parsed_ranking": {"ranking": []}}
+                ],
+                "label_to_model": {"Response A": {"model": "test/model", "display_index": 0}},
+                "aggregate_rankings": [{"model": "test/model", "borda_score": 1.0}],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 25, "total_tokens": 75},
+            }
+            mock_stage3.return_value = {
+                "chairman_result": {"model": "chairman/model", "response": "Final synthesis"},
+                "verdict_result": None,
+                "usage": {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
+            }
 
             # Patch the dispatcher's dispatch method at the module level
             with patch.object(WebhookDispatcher, "dispatch", capture_dispatch):
@@ -183,32 +180,30 @@ class TestWebhookEventEmission:
             ],
         )
 
-        # Mock a successful council run
+        # Mock a successful modular council run
         with (
-            patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1,
-            patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5,
-            patch("llm_council.council.stage2_collect_rankings") as mock_stage2,
-            patch("llm_council.council.stage3_synthesize_final") as mock_stage3,
+            patch("llm_council.council.run_stage1") as mock_stage1,
+            patch("llm_council.council.run_stage2") as mock_stage2,
+            patch("llm_council.council.run_stage3") as mock_stage3,
         ):
-            mock_stage1.return_value = (
-                [{"model": "test/model", "response": "Test response"}],
-                {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
-                {"test/model": {"status": "ok", "latency_ms": 1000}},
-            )
-            mock_stage1_5.return_value = (
-                [{"model": "test/model", "response": "Test response"}],
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            )
-            mock_stage2.return_value = (
-                [{"model": "test/model", "ranking": "...", "parsed_ranking": {"ranking": []}}],
-                {"Response A": {"model": "test/model", "display_index": 0}},
-                {"prompt_tokens": 50, "completion_tokens": 25, "total_tokens": 75},
-            )
-            mock_stage3.return_value = (
-                {"model": "chairman/model", "response": "Final synthesis"},
-                {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
-                None,  # verdict_result (ADR-025b)
-            )
+            mock_stage1.return_value = {
+                "stage1_results": [{"model": "test/model", "response": "Test response"}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+                "model_statuses": {"test/model": {"status": "ok", "latency_ms": 1000}},
+            }
+            mock_stage2.return_value = {
+                "stage2_results": [
+                    {"model": "test/model", "ranking": "...", "parsed_ranking": {"ranking": []}}
+                ],
+                "label_to_model": {"Response A": {"model": "test/model", "display_index": 0}},
+                "aggregate_rankings": [{"model": "test/model", "borda_score": 1.0}],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 25, "total_tokens": 75},
+            }
+            mock_stage3.return_value = {
+                "chairman_result": {"model": "chairman/model", "response": "Final synthesis"},
+                "verdict_result": None,
+                "usage": {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
+            }
 
             # Patch the dispatcher's dispatch method at the module level
             with patch.object(WebhookDispatcher, "dispatch", capture_dispatch):
@@ -242,7 +237,7 @@ class TestWebhookErrorHandling:
             events=["council.error", "council.complete"],
         )
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
+        with patch("llm_council.council.run_stage1") as mock_stage1:
             # Simulate an error
             mock_stage1.side_effect = Exception("Test error")
 
@@ -291,12 +286,12 @@ class TestWebhookConfigHierarchy:
             captured_config.append(config)
             return MagicMock(success=True)
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = (
-                [],
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                {},
-            )
+        with patch("llm_council.council.run_stage1") as mock_stage1:
+            mock_stage1.return_value = {
+                "stage1_results": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "model_statuses": {},
+            }
 
             with patch(
                 "llm_council.webhooks.event_bridge.WebhookDispatcher"
@@ -336,12 +331,12 @@ class TestWebhookCleanup:
             shutdown_called.append(True)
             return await original_shutdown(self)
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = (
-                [],
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                {},
-            )
+        with patch("llm_council.council.run_stage1") as mock_stage1:
+            mock_stage1.return_value = {
+                "stage1_results": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "model_statuses": {},
+            }
 
             with patch.object(EventBridge, "shutdown", track_shutdown):
                 await run_council_with_fallback(
@@ -370,7 +365,7 @@ class TestWebhookCleanup:
             shutdown_called.append(True)
             return await original_shutdown(self)
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
+        with patch("llm_council.council.run_stage1") as mock_stage1:
             mock_stage1.side_effect = Exception("Test error")
 
             with patch.object(EventBridge, "shutdown", track_shutdown):
@@ -397,12 +392,12 @@ class TestMetadataWebhookInfo:
             events=["council.complete"],
         )
 
-        with patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1:
-            mock_stage1.return_value = (
-                [],
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                {},
-            )
+        with patch("llm_council.council.run_stage1") as mock_stage1:
+            mock_stage1.return_value = {
+                "stage1_results": [],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "model_statuses": {},
+            }
 
             result = await run_council_with_fallback(
                 "Test query",
@@ -430,32 +425,30 @@ class TestIntegrationWithExistingLayerEvents:
             events=["council.complete"],
         )
 
-        # Mock a successful council run so L3_COUNCIL_COMPLETE is emitted
+        # Mock a successful modular council run
         with (
-            patch("llm_council.council.stage1_collect_responses_with_status") as mock_stage1,
-            patch("llm_council.council.stage1_5_normalize_styles") as mock_stage1_5,
-            patch("llm_council.council.stage2_collect_rankings") as mock_stage2,
-            patch("llm_council.council.stage3_synthesize_final") as mock_stage3,
+            patch("llm_council.council.run_stage1") as mock_stage1,
+            patch("llm_council.council.run_stage2") as mock_stage2,
+            patch("llm_council.council.run_stage3") as mock_stage3,
         ):
-            mock_stage1.return_value = (
-                [{"model": "test/model", "response": "Test response"}],
-                {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
-                {"test/model": {"status": "ok", "latency_ms": 1000}},
-            )
-            mock_stage1_5.return_value = (
-                [{"model": "test/model", "response": "Test response"}],
-                {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-            )
-            mock_stage2.return_value = (
-                [{"model": "test/model", "ranking": "...", "parsed_ranking": {"ranking": []}}],
-                {"Response A": {"model": "test/model", "display_index": 0}},
-                {"prompt_tokens": 50, "completion_tokens": 25, "total_tokens": 75},
-            )
-            mock_stage3.return_value = (
-                {"model": "chairman/model", "response": "Final synthesis"},
-                {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
-                None,  # verdict_result (ADR-025b)
-            )
+            mock_stage1.return_value = {
+                "stage1_results": [{"model": "test/model", "response": "Test response"}],
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+                "model_statuses": {"test/model": {"status": "ok", "latency_ms": 1000}},
+            }
+            mock_stage2.return_value = {
+                "stage2_results": [
+                    {"model": "test/model", "ranking": "...", "parsed_ranking": {"ranking": []}}
+                ],
+                "label_to_model": {"Response A": {"model": "test/model", "display_index": 0}},
+                "aggregate_rankings": [{"model": "test/model", "borda_score": 1.0}],
+                "usage": {"prompt_tokens": 50, "completion_tokens": 25, "total_tokens": 75},
+            }
+            mock_stage3.return_value = {
+                "chairman_result": {"model": "chairman/model", "response": "Final synthesis"},
+                "verdict_result": None,
+                "usage": {"prompt_tokens": 100, "completion_tokens": 100, "total_tokens": 200},
+            }
 
             await run_council_with_fallback(
                 "Test query",

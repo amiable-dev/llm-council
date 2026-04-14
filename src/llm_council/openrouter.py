@@ -47,7 +47,7 @@ async def query_model(
     Query a single model via OpenRouter API.
 
     Args:
-        model: OpenRouter model identifier (e.g., "openai/gpt-4o")
+        model: OpenRouter model identifier
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
         disable_tools: If True, explicitly disable tool/function calling
@@ -80,7 +80,7 @@ async def query_model_with_status(
     Query a single model via OpenRouter API with structured status (ADR-012).
 
     Args:
-        model: OpenRouter model identifier (e.g., "openai/gpt-4o")
+        model: OpenRouter model identifier (e.g., "provider/model")
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
         disable_tools: If True, explicitly disable tool/function calling
@@ -273,7 +273,7 @@ async def query_models_with_progress(
 
         if on_progress:
             status_emoji = "✓" if result["status"] == STATUS_OK else "✗"
-            model_short = model.split("/")[-1]  # e.g., "gpt-4" from "openai/gpt-4"
+            model_short = model.split("/")[-1]  # e.g., "model-name" from "provider/model-name"
             # Show which models are still pending
             pending = [m.split("/")[-1] for m in models if m not in results]
             if pending and completed < total:

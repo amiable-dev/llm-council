@@ -5,6 +5,8 @@ TDD: Write these tests first, then implement wildcard.py.
 
 import pytest
 from unittest.mock import patch
+from llm_council import model_constants as mc
+
 
 
 class TestClassifyQueryDomain:
@@ -170,9 +172,9 @@ class TestSelectWildcard:
         from llm_council.triage.types import DomainCategory
 
         base_council = [
-            "openai/gpt-4o",
-            "anthropic/claude-3-5-sonnet-20241022",
-            "google/gemini-1.5-pro",
+            mc.OPENAI_HIGH,
+            mc.ANTHROPIC_BALANCED,
+            mc.GOOGLE_HIGH,
         ]
         result = select_wildcard(DomainCategory.CODE, exclude_models=base_council)
 
@@ -186,7 +188,7 @@ class TestSelectWildcard:
         # Custom config with empty code pool
         config = WildcardConfig(
             specialist_pools={DomainCategory.CODE: []},
-            fallback_model="meta-llama/llama-3.1-70b-instruct",
+            fallback_model=mc.WILDCARD_FALLBACK_MODEL,
         )
 
         result = select_wildcard(DomainCategory.CODE, config=config)
@@ -203,7 +205,7 @@ class TestSelectWildcard:
         result = select_wildcard(DomainCategory.CODE, exclude_models=exclude_all)
 
         # Should return fallback
-        assert result == "meta-llama/llama-3.1-70b-instruct"
+        assert result == mc.WILDCARD_FALLBACK_MODEL
 
     def test_select_wildcard_with_tier_constraint(self):
         """Quick tier should still get a wildcard (from quick-appropriate pool)."""
@@ -350,7 +352,7 @@ class TestWildcardObservability:
 
         clear_layer_events()
 
-        result = select_wildcard(DomainCategory.CODE, exclude_models=["openai/gpt-4o"])
+        result = select_wildcard(DomainCategory.CODE, exclude_models=[mc.OPENAI_HIGH])
 
         assert result is not None
 
@@ -362,7 +364,7 @@ class TestWildcardObservability:
         event = wildcard_events[0]
         assert event.data["domain"] == "CODE"
         assert event.data["selected_model"] == result
-        assert "openai/gpt-4o" in event.data["excluded_models"]
+        assert mc.OPENAI_HIGH in event.data["excluded_models"]
 
     def test_select_wildcard_event_includes_tier_info(self):
         """Event should include tier constraint info if provided."""
@@ -394,12 +396,12 @@ class TestWildcardObservability:
         # Create config with empty pools to force fallback
         config = WildcardConfig(
             specialist_pools={DomainCategory.CODE: []},  # Empty pool
-            fallback_model="meta-llama/llama-3-70b-instruct",
+            fallback_model=mc.LLAMA_HIGH,
         )
 
         result = select_wildcard(DomainCategory.CODE, config=config)
 
-        assert result == "meta-llama/llama-3-70b-instruct"
+        assert result == mc.LLAMA_HIGH
 
         events = get_layer_events()
         wildcard_events = [e for e in events if e.event_type == LayerEventType.L2_WILDCARD_SELECTED]

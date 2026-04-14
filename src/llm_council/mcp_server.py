@@ -19,7 +19,7 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 # Local imports
-from .model_constants import OPENROUTER_API_KEY
+from . import model_constants
 from llm_council.constants import TIMEOUT_PER_MODEL_HARD, TIMEOUT_SYNTHESIS_TRIGGER
 from llm_council.utils.usage import _aggregate_stage_usage
 from llm_council.quality import (
@@ -378,7 +378,9 @@ async def council_health_check() -> str:
                     "Authorization": f"Bearer {api_key}",
                     "HTTP-Referer": "https://github.com/mgammarino/llm-council",
                 }
-                credit_resp = await client.get("https://openrouter.ai/api/v1/credits", headers=headers)
+                credit_resp = await client.get(
+                    "https://openrouter.ai/api/v1/credits", headers=headers
+                )
                 if credit_resp.status_code == 200:
                     data = credit_resp.json().get("data", {})
                     checks["account_credits"] = f"${data.get('total_credits', 0):.2f}"
@@ -400,7 +402,7 @@ async def council_health_check() -> str:
             # ADR-039: Fallback for 403 (Forbidden) on specific models
             if response["status"] == "auth_error" and "403" in str(response.get("error", "")):
                 # Try a widely-available "lite" model to verify API key validity
-                fallback_model = "openai/gpt-4o-mini"
+                fallback_model = model_constants.OPENAI_QUICK
                 fallback_response = await query_model_with_status(
                     fallback_model,
                     [{"role": "user", "content": "ping"}],
@@ -410,10 +412,14 @@ async def council_health_check() -> str:
                     # Key is valid, but Chairman model is restricted
                     response = fallback_response
                     test_model = fallback_model
-                    checks["ready_warning"] = f"Chairman model ({CHAIRMAN_MODEL}) is restricted (403). Using {fallback_model} for verification."
+                    checks["ready_warning"] = (
+                        f"Chairman model ({CHAIRMAN_MODEL}) is restricted (403). Using {fallback_model} for verification."
+                    )
                 else:
                     # Both models failed - likely a major auth issue
-                    checks["ready_warning"] = f"Critical: Both chairman ({CHAIRMAN_MODEL}) and fallback ({fallback_model}) returned 403. Check your OpenRouter balance and API key."
+                    checks["ready_warning"] = (
+                        f"Critical: Both chairman ({CHAIRMAN_MODEL}) and fallback ({fallback_model}) returned 403. Check your OpenRouter balance and API key."
+                    )
 
             latency_ms = int((time.time() - start) * 1000)
 
@@ -790,16 +796,19 @@ async def audit(
                 indent=2,
             )
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        return json.dumps({"error": str(e)})
 
 
-# --- Entry Point ---
-
-
-def main():
-    """Entry point for the llm-council command."""
-    mcp.run()
+@mcp.tool()
+async def list_models() -> str:
+    """List available model constants in the council registry."""
+    models = {
+        k: v
+        for k, v in vars(model_constants).items()
+        if not k.startswith("_") and isinstance(v, str)
+    }
+    return json.dumps(models, indent=2)
 
 
 if __name__ == "__main__":
-    main()
+    mcp.run()

@@ -6,6 +6,8 @@ Tests for discovery metrics, events, and health check functionality.
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
+from llm_council import model_constants as mc
+
 
 from llm_council.layer_contracts import (
     LayerEventType,
@@ -142,10 +144,10 @@ class TestRegistryMetrics:
         registry = get_registry()
 
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(return_value=["openai/gpt-4o"])
+        mock_provider.list_available_models = MagicMock(return_value=[mc.OPENAI_HIGH])
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )
@@ -168,10 +170,10 @@ class TestRegistryMetrics:
         registry = get_registry()
 
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(return_value=["openai/gpt-4o"])
+        mock_provider.list_available_models = MagicMock(return_value=[mc.OPENAI_HIGH])
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )
@@ -217,10 +219,10 @@ class TestRegistryMetrics:
 
         # First successful refresh
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(return_value=["openai/gpt-4o"])
+        mock_provider.list_available_models = MagicMock(return_value=[mc.OPENAI_HIGH])
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )

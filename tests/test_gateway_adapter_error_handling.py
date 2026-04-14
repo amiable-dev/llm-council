@@ -5,6 +5,7 @@ and that error results are properly returned instead of exceptions propagating.
 """
 
 import pytest
+from llm_council import model_constants as mc
 from unittest.mock import AsyncMock, patch, MagicMock
 
 
@@ -19,7 +20,7 @@ class TestQueryWithTrackingExceptionHandling:
 
         success_response = GatewayResponse(
             content="Hello!",
-            model="openai/gpt-5.1",
+            model=mc.OPENAI_HIGH,
             status="ok",
             latency_ms=100,
         )
@@ -27,8 +28,8 @@ class TestQueryWithTrackingExceptionHandling:
         mock_router = MagicMock()
 
         async def mock_complete(request):
-            if request.model == "x-ai/grok-4":
-                raise Exception("Gateway openrouter error: Bad request for x-ai/grok-4")
+            if request.model == mc.OPENAI_REASONING:
+                raise Exception(f"Gateway openrouter error: Bad request for {mc.OPENAI_REASONING}")
             return success_response
 
         mock_router.complete = mock_complete
@@ -39,7 +40,7 @@ class TestQueryWithTrackingExceptionHandling:
             patch("llm_council.gateway_adapter._get_gateway_router", return_value=mock_router),
         ):
             results = await query_models_with_progress(
-                models=["openai/gpt-5.1", "x-ai/grok-4", "google/gemini-3-pro"],
+                models=[mc.OPENAI_HIGH, mc.OPENAI_REASONING, mc.GOOGLE_HIGH],
                 messages=[{"role": "user", "content": "Hello"}],
             )
 
@@ -47,12 +48,12 @@ class TestQueryWithTrackingExceptionHandling:
         assert len(results) == 3
 
         # Successful models should have OK status
-        assert results["openai/gpt-5.1"]["status"] == STATUS_OK
-        assert results["google/gemini-3-pro"]["status"] == STATUS_OK
+        assert results[mc.OPENAI_HIGH]["status"] == STATUS_OK
+        assert results[mc.GOOGLE_HIGH]["status"] == STATUS_OK
 
         # Failed model should have error status, not crash
-        assert results["x-ai/grok-4"]["status"] == STATUS_ERROR
-        assert "Bad request" in results["x-ai/grok-4"]["error"]
+        assert results[mc.OPENAI_REASONING]["status"] == STATUS_ERROR
+        assert "Bad request" in results[mc.OPENAI_REASONING]["error"]
 
     @pytest.mark.asyncio
     async def test_all_models_fail_returns_all_errors(self):
@@ -95,15 +96,15 @@ class TestQueryWithTrackingExceptionHandling:
             patch("llm_council.gateway_adapter._get_gateway_router", return_value=mock_router),
         ):
             await query_models_with_progress(
-                models=["x-ai/grok-4"],
+                models=[mc.OPENAI_REASONING],
                 messages=[{"role": "user", "content": "Hello"}],
                 on_progress=track_progress,
             )
 
         # Should have initial progress + completion
         assert len(progress_calls) >= 1
-        # The failure progress should contain ✗
-        failure_msg = [call for call in progress_calls if "grok-4" in call[2]]
+        # The failure progress should contain ✗ and model_short
+        failure_msg = [call for call in progress_calls if mc.OPENAI_REASONING.split("/")[-1] in call[2]]
         assert len(failure_msg) == 1
         assert "✗" in failure_msg[0][2]
 
@@ -121,11 +122,11 @@ class TestQueryWithTrackingExceptionHandling:
             patch("llm_council.gateway_adapter._get_gateway_router", return_value=mock_router),
         ):
             results = await query_models_with_progress(
-                models=["x-ai/grok-4"],
+                models=[mc.OPENAI_REASONING],
                 messages=[{"role": "user", "content": "Hello"}],
             )
-
-        result = results["x-ai/grok-4"]
+        
+        result = results[mc.OPENAI_REASONING]
         assert result["status"] == STATUS_ERROR
         assert result["content"] is None
         assert result["latency_ms"] == 0
@@ -153,13 +154,13 @@ class TestOpenRouterHTTP400Handling:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             result = await query_model_with_status(
-                model="x-ai/grok-4",
+                model=mc.OPENAI_REASONING,
                 messages=[{"role": "user", "content": "Hello"}],
             )
 
         assert result["status"] == STATUS_ERROR
         assert "Bad request" in result["error"]
-        assert "grok-4" in result["error"]
+        assert mc.OPENAI_REASONING in result["error"]
 
     @pytest.mark.asyncio
     async def test_gateway_openrouter_handles_400(self):
@@ -180,14 +181,14 @@ class TestOpenRouterHTTP400Handling:
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             result = await gateway._query_openrouter(
-                model="x-ai/grok-4",
+                model=mc.OPENAI_REASONING,
                 messages=[{"role": "user", "content": "Hello"}],
                 timeout=30.0,
             )
 
         assert result["status"] == "error"
         assert "Bad request" in result["error"]
-        assert "grok-4" in result["error"]
+        assert mc.OPENAI_REASONING in result["error"]
 
 
 class TestHTTPServerErrorBoundary:

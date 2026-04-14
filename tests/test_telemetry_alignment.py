@@ -26,6 +26,7 @@ class TestTelemetryUnification:
             patch("llm_council.council.run_stage3", new_callable=AsyncMock) as mock_stage3,
             patch("llm_council.council.persist_session_bias_data", mock_persist),
             patch("llm_council.council.get_telemetry", return_value=mock_telemetry_client),
+            patch("llm_council.council._get_council_models", return_value=["m"]),
         ):
             # Setup minimal working mocks
             mock_stage1.return_value = {
@@ -40,7 +41,10 @@ class TestTelemetryUnification:
                 "usage": {},
             }
             mock_stage3.return_value = {
-                "chairman_result": {"response": "synthesis"},
+                "chairman_result": {
+                    "response": "synthesis",
+                    "bias_analysis": {"bias_detected": False},
+                },
                 "usage": {},
             }
 

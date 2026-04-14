@@ -94,7 +94,7 @@ class GatewayRequest:
     Contains the model identifier, messages, and optional generation parameters.
     """
 
-    model: str  # e.g., "openai/gpt-4o" or "anthropic/claude-3-5-sonnet"
+    model: str  # e.g., model_constants.OPENAI_HIGH
     messages: List[CanonicalMessage]
     max_tokens: Optional[int] = None
     temperature: Optional[float] = None

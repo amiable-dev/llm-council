@@ -12,6 +12,8 @@ from unittest.mock import patch
 from dataclasses import asdict
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestBiasMetricRecord:
@@ -70,8 +72,8 @@ class TestBiasMetricRecord:
             session_id="sess-abc-123",
             timestamp="2025-12-17T10:30:00Z",
             consent_level=2,
-            reviewer_id="google/gemini-3-pro-preview",
-            model_id="anthropic/claude-opus-4.6",
+            reviewer_id=mc.GOOGLE_QUICK,
+            model_id=mc.ANTHROPIC_OPUS_LATEST,
             position=2,
             response_length_chars=1200,
             score_value=8.5,
@@ -82,8 +84,8 @@ class TestBiasMetricRecord:
         )
 
         assert record.session_id == "sess-abc-123"
-        assert record.reviewer_id == "google/gemini-3-pro-preview"
-        assert record.model_id == "anthropic/claude-opus-4.6"
+        assert record.reviewer_id == mc.GOOGLE_QUICK
+        assert record.model_id == mc.ANTHROPIC_OPUS_LATEST
         assert record.position == 2
         assert record.response_length_chars == 1200
         assert record.score_value == 8.5
@@ -97,8 +99,8 @@ class TestBiasMetricRecord:
         record = BiasMetricRecord(
             session_id="sess-123",
             timestamp="2025-12-17T10:30:00Z",
-            reviewer_id="gpt-4",
-            model_id="claude-3",
+            reviewer_id=mc.OPENAI_HIGH,
+            model_id=mc.ANTHROPIC_HIGH,
             score_value=7.5,
         )
 
@@ -114,12 +116,12 @@ class TestBiasMetricRecord:
         """Deserialize from JSONL line."""
         from llm_council.bias_persistence import BiasMetricRecord
 
-        line = '{"schema_version": "1.1.0", "session_id": "sess-456", "timestamp": "2025-12-17T10:30:00Z", "consent_level": 1, "reviewer_id": "gpt-4", "model_id": "claude-3", "position": 1, "response_length_chars": 500, "score_value": 8.0, "score_scale": "1-10", "council_config_version": "0.3.0", "query_hash": null, "query_metadata": null}'
+        line = f'{{"schema_version": "1.1.0", "session_id": "sess-456", "timestamp": "2025-12-17T10:30:00Z", "consent_level": 1, "reviewer_id": "{mc.OPENAI_HIGH}", "model_id": "{mc.ANTHROPIC_HIGH}", "position": 1, "response_length_chars": 500, "score_value": 8.0, "score_scale": "1-10", "council_config_version": "0.3.0", "query_hash": null, "query_metadata": null}}'
 
         record = BiasMetricRecord.from_jsonl_line(line)
 
         assert record.session_id == "sess-456"
-        assert record.reviewer_id == "gpt-4"
+        assert record.reviewer_id == mc.OPENAI_HIGH
         assert record.score_value == 8.0
         assert record.query_hash is None
 

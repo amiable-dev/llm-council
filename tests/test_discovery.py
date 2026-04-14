@@ -7,8 +7,12 @@ These tests implement the RED phase of TDD.
 """
 
 import pytest
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from unittest.mock import MagicMock
+from llm_council import model_constants as mc
+
 
 from llm_council.metadata.registry import ModelRegistry, RegistryEntry
 from llm_council.metadata.types import ModelInfo, ModelStatus, QualityTier
@@ -24,11 +28,11 @@ class TestDiscoverTierCandidates:
         registry = ModelRegistry()
         # Pre-populate registry
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(info=info, fetched_at=datetime.now(UTC))
+        registry._cache[mc.OPENAI_HIGH] = RegistryEntry(info=info, fetched_at=datetime.now(UTC))
         registry._last_refresh = datetime.now(UTC)
 
         # Mock to detect if any API calls are made
@@ -53,21 +57,21 @@ class TestDiscoverTierCandidates:
 
         # Add FRONTIER model
         frontier_info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o"] = RegistryEntry(
+        registry._cache[mc.OPENAI_HIGH] = RegistryEntry(
             info=frontier_info, fetched_at=datetime.now(UTC)
         )
 
         # Add ECONOMY model
         economy_info = ModelInfo(
-            id="google/gemini-flash",
+            id=mc.GOOGLE_QUICK,
             context_window=128000,
             quality_tier=QualityTier.ECONOMY,
         )
-        registry._cache["google/gemini-flash"] = RegistryEntry(
+        registry._cache[mc.GOOGLE_QUICK] = RegistryEntry(
             info=economy_info, fetched_at=datetime.now(UTC)
         )
 
@@ -77,8 +81,8 @@ class TestDiscoverTierCandidates:
         candidates = discover_tier_candidates("frontier", registry)
         model_ids = [c.model_id for c in candidates]
 
-        assert "openai/gpt-4o" in model_ids
-        assert "google/gemini-flash" not in model_ids
+        assert mc.OPENAI_HIGH in model_ids
+        assert mc.GOOGLE_QUICK not in model_ids
 
     def test_discover_respects_context_requirement(self):
         """discover_tier_candidates should filter by context window."""
@@ -88,21 +92,21 @@ class TestDiscoverTierCandidates:
 
         # Add model with large context
         large_ctx = ModelInfo(
-            id="anthropic/claude-3-opus",
+            id=mc.ANTHROPIC_OPUS_LATEST,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["anthropic/claude-3-opus"] = RegistryEntry(
+        registry._cache[mc.ANTHROPIC_OPUS_LATEST] = RegistryEntry(
             info=large_ctx, fetched_at=datetime.now(UTC)
         )
 
         # Add model with small context
         small_ctx = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_QUICK,
             context_window=16000,
             quality_tier=QualityTier.FRONTIER,
         )
-        registry._cache["openai/gpt-4o-mini"] = RegistryEntry(
+        registry._cache[mc.OPENAI_QUICK] = RegistryEntry(
             info=small_ctx, fetched_at=datetime.now(UTC)
         )
 
@@ -112,8 +116,8 @@ class TestDiscoverTierCandidates:
         candidates = discover_tier_candidates("frontier", registry, required_context=100000)
         model_ids = [c.model_id for c in candidates]
 
-        assert "anthropic/claude-3-opus" in model_ids
-        assert "openai/gpt-4o-mini" not in model_ids
+        assert mc.ANTHROPIC_OPUS_LATEST in model_ids
+        assert mc.OPENAI_QUICK not in model_ids
 
     def test_discover_uses_static_fallback_when_empty(self):
         """discover_tier_candidates should fallback to static when registry empty."""
@@ -143,7 +147,7 @@ class TestMergeDeduplicates:
         # Dynamic candidate with updated pricing
         dynamic = [
             ModelCandidate(
-                model_id="openai/gpt-4o",
+                model_id=mc.OPENAI_HIGH,
                 latency_score=0.8,
                 cost_score=0.7,  # Updated cost
                 quality_score=0.95,
@@ -156,7 +160,7 @@ class TestMergeDeduplicates:
         # Static candidate with old pricing
         static = [
             ModelCandidate(
-                model_id="openai/gpt-4o",  # Same model
+                model_id=mc.OPENAI_HIGH,  # Same model
                 latency_score=0.8,
                 cost_score=0.5,  # Old cost
                 quality_score=0.95,
@@ -165,7 +169,7 @@ class TestMergeDeduplicates:
                 recent_traffic=0.1,
             ),
             ModelCandidate(
-                model_id="anthropic/claude-3-opus",  # Different model
+                model_id=mc.ANTHROPIC_OPUS_LATEST,  # Different model
                 latency_score=0.7,
                 cost_score=0.6,
                 quality_score=0.90,
@@ -181,12 +185,12 @@ class TestMergeDeduplicates:
         assert len(merged) == 2
 
         # Dynamic version of gpt-4o should be used (cost_score=0.7)
-        gpt4o = next(c for c in merged if c.model_id == "openai/gpt-4o")
+        gpt4o = next(c for c in merged if c.model_id == mc.OPENAI_HIGH)
         assert gpt4o.cost_score == 0.7
 
         # Claude should also be included
         claude_ids = [c.model_id for c in merged]
-        assert "anthropic/claude-3-opus" in claude_ids
+        assert mc.ANTHROPIC_OPUS_LATEST in claude_ids
 
 
 class TestTierQualification:
@@ -198,7 +202,7 @@ class TestTierQualification:
 
         # Fast model qualifies
         fast_model = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_QUICK,
             context_window=16000,
             quality_tier=QualityTier.STANDARD,
             pricing={"prompt": 0.0001, "completion": 0.0002},  # Cheap
@@ -208,7 +212,7 @@ class TestTierQualification:
 
         # Expensive slow model doesn't qualify
         expensive_model = ModelInfo(
-            id="openai/o1",
+            id=mc.OPENAI_O1,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             pricing={"prompt": 0.015, "completion": 0.06},  # Expensive
@@ -222,7 +226,7 @@ class TestTierQualification:
 
         # Under cost ceiling
         affordable = ModelInfo(
-            id="anthropic/claude-3-sonnet",
+            id=mc.ANTHROPIC_HIGH,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             pricing={"prompt": 0.003, "completion": 0.015},  # Under $0.03
@@ -232,7 +236,7 @@ class TestTierQualification:
 
         # Over cost ceiling
         expensive = ModelInfo(
-            id="openai/o1",
+            id=mc.OPENAI_O1,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             pricing={"prompt": 0.015, "completion": 0.06},  # Over $0.03
@@ -246,7 +250,7 @@ class TestTierQualification:
 
         # Stable model qualifies
         stable = ModelInfo(
-            id="anthropic/claude-3-opus",
+            id=mc.ANTHROPIC_OPUS_LATEST,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=False,
@@ -256,7 +260,7 @@ class TestTierQualification:
 
         # Preview model doesn't qualify
         preview = ModelInfo(
-            id="openai/gpt-5-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=True,
@@ -270,7 +274,7 @@ class TestTierQualification:
 
         # Model with reasoning capability
         reasoning = ModelInfo(
-            id="openai/o1",
+            id=mc.OPENAI_O1,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             supports_reasoning=True,
@@ -280,7 +284,7 @@ class TestTierQualification:
 
         # Model without reasoning
         no_reasoning = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             supports_reasoning=False,
@@ -297,7 +301,7 @@ class TestTierQualification:
 
         # Model in known reasoning family (even without flag)
         o1_model = ModelInfo(
-            id="openai/o1-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             supports_reasoning=False,  # Flag not set
@@ -313,7 +317,7 @@ class TestTierQualification:
 
         # FRONTIER qualifies
         frontier = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
@@ -322,7 +326,7 @@ class TestTierQualification:
 
         # STANDARD doesn't qualify
         standard = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_QUICK,
             context_window=16000,
             quality_tier=QualityTier.STANDARD,
         )
@@ -335,7 +339,7 @@ class TestTierQualification:
 
         # Create deprecated model (using ModelStatus)
         deprecated = ModelInfo(
-            id="openai/gpt-3.5-turbo-deprecated",
+            id="deprecated-model",
             context_window=16000,
             quality_tier=QualityTier.STANDARD,
         )
@@ -352,7 +356,7 @@ class TestTierQualification:
         from llm_council.metadata.discovery import _model_qualifies_for_tier
 
         model = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
@@ -365,7 +369,7 @@ class TestTierQualification:
         from llm_council.metadata.discovery import _model_qualifies_for_tier
 
         small_ctx = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_QUICK,
             context_window=16000,
             quality_tier=QualityTier.FRONTIER,
         )

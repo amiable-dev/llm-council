@@ -13,7 +13,7 @@ Key concepts:
 
 Example:
     >>> from llm_council.audition import AuditionState, AuditionStatus, AuditionCriteria
-    >>> status = AuditionStatus(model_id="openai/gpt-5", state=AuditionState.SHADOW)
+    >>> status = AuditionStatus(model_id="provider/model", state=AuditionState.SHADOW)
     >>> criteria = AuditionCriteria()
     >>> criteria.shadow_min_sessions
     10

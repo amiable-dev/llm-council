@@ -18,7 +18,7 @@ class ModelSessionMetric:
     Attributes:
         schema_version: Semver version string for schema compatibility
         session_id: UUID identifying the council session
-        model_id: Full model identifier (e.g., 'openai/gpt-4o')
+        model_id: Full model identifier (e.g., 'provider/model')
         timestamp: ISO 8601 timestamp of the session
         latency_ms: Response latency in milliseconds
         borda_score: Normalized Borda score (0-1) from peer review

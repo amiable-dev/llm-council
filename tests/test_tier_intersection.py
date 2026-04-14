@@ -7,6 +7,8 @@ These tests implement the RED phase of TDD - they should FAIL initially.
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestModelInfoIsPreview:
@@ -17,7 +19,7 @@ class TestModelInfoIsPreview:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/o1-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=128000,
             is_preview=True,
         )
@@ -29,7 +31,7 @@ class TestModelInfoIsPreview:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
         )
         assert info.is_preview is False
@@ -43,7 +45,7 @@ class TestModelInfoSupportsReasoning:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/o1",
+            id=mc.OPENAI_O1,
             context_window=200000,
             supports_reasoning=True,
         )
@@ -55,7 +57,7 @@ class TestModelInfoSupportsReasoning:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
         )
         assert info.supports_reasoning is False
@@ -70,7 +72,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         preview_model = ModelInfo(
-            id="openai/gpt-5-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=True,
@@ -88,7 +90,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         stable_frontier = ModelInfo(
-            id="anthropic/claude-opus-4.6",
+            id=mc.ANTHROPIC_CLAUDE_OPUS_REF,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=False,
@@ -106,7 +108,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         standard_model = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_QUICK,
             context_window=128000,
             quality_tier=QualityTier.STANDARD,
             is_preview=False,
@@ -124,7 +126,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         reasoning_preview = ModelInfo(
-            id="openai/o1-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=True,
@@ -145,7 +147,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         reasoning_preview = ModelInfo(
-            id="openai/o1-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=True,
@@ -166,7 +168,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         stable_reasoning = ModelInfo(
-            id="openai/o1",
+            id=mc.OPENAI_O1,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=False,
@@ -185,7 +187,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         non_reasoning = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=False,
@@ -204,7 +206,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         preview_model = ModelInfo(
-            id="openai/gpt-5-preview",
+            id=mc.OPENAI_REASONING_PREVIEW,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=True,
@@ -222,7 +224,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         stable_model = ModelInfo(
-            id="anthropic/claude-3.5-sonnet",
+            id=mc.ANTHROPIC_HIGH,
             context_window=200000,
             quality_tier=QualityTier.FRONTIER,
             is_preview=False,
@@ -240,7 +242,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         standard_model = ModelInfo(
-            id="openai/gpt-4o-mini",
+            id=mc.OPENAI_QUICK,
             context_window=128000,
             quality_tier=QualityTier.STANDARD,
             is_preview=False,
@@ -258,7 +260,7 @@ class TestResolveTierIntersection:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         economy_model = ModelInfo(
-            id="anthropic/claude-3-haiku",
+            id=mc.ANTHROPIC_QUICK,
             context_window=200000,
             quality_tier=QualityTier.ECONOMY,
             is_preview=False,
@@ -280,7 +282,7 @@ class TestTierIntersectionEdgeCases:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         model = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )
@@ -297,7 +299,7 @@ class TestTierIntersectionEdgeCases:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         local_model = ModelInfo(
-            id="ollama/llama3",
+            id=mc.OLLAMA_ANY,
             context_window=8192,
             quality_tier=QualityTier.LOCAL,
             is_preview=False,

@@ -11,13 +11,13 @@ Usage:
     ... )
     >>>
     >>> # Get or create a circuit breaker for a model
-    >>> breaker = get_circuit_breaker("openai/gpt-4o")
+    >>> breaker = get_circuit_breaker("provider/model")
     >>>
     >>> # Check if requests are allowed
-    >>> allowed, reason = check_circuit_breaker("openai/gpt-4o")
+    >>> allowed, reason = check_circuit_breaker("provider/model")
     >>>
     >>> # Record results (with automatic event emission)
-    >>> record_model_result("openai/gpt-4o", success=True)
+    >>> record_model_result("provider/model", success=True)
 """
 
 import logging
@@ -47,7 +47,7 @@ def get_circuit_breaker(
     the existing instance (config parameter is ignored in that case).
 
     Args:
-        model_id: Full model identifier (e.g., "openai/gpt-4o")
+        model_id: Full model identifier (e.g., "provider/model")
         config: Optional config for new breakers (ignored if breaker exists)
 
     Returns:

@@ -6,6 +6,7 @@ TDD: Write these tests first, then implement the RequestyGateway.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
+from llm_council import model_constants as mc
 
 
 class TestRequestyGateway:
@@ -79,7 +80,7 @@ class TestRequestyBYOK:
 
         gateway = RequestyGateway(byok_enabled=True, byok_keys={"anthropic": "sk-ant-test"})
 
-        headers = gateway._get_byok_headers("anthropic/claude-3-5-sonnet-20241022")
+        headers = gateway._get_byok_headers(mc.ANTHROPIC_HIGH)
         assert "x-provider-api-key" in headers or "X-Provider-API-Key" in headers
 
 
@@ -137,7 +138,7 @@ class TestRequestyComplete:
 
         gateway = RequestyGateway()
         request = GatewayRequest(
-            model="anthropic/claude-3-5-sonnet-20241022",
+            model=mc.ANTHROPIC_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -156,7 +157,7 @@ class TestRequestyComplete:
 
         assert isinstance(response, GatewayResponse)
         assert response.content == "Hi there!"
-        assert response.model == "anthropic/claude-3-5-sonnet-20241022"
+        assert response.model == mc.ANTHROPIC_HIGH
         assert response.status == "ok"
         assert response.latency_ms == 150
 
@@ -168,7 +169,7 @@ class TestRequestyComplete:
 
         gateway = RequestyGateway(byok_enabled=True, byok_keys={"anthropic": "sk-ant-test"})
         request = GatewayRequest(
-            model="anthropic/claude-3-5-sonnet-20241022",
+            model=mc.ANTHROPIC_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -194,7 +195,7 @@ class TestRequestyComplete:
 
         gateway = RequestyGateway()
         request = GatewayRequest(
-            model="anthropic/claude-3-5-sonnet-20241022",
+            model=mc.ANTHROPIC_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -218,7 +219,7 @@ class TestRequestyComplete:
 
         gateway = RequestyGateway()
         request = GatewayRequest(
-            model="anthropic/claude-3-5-sonnet-20241022",
+            model=mc.ANTHROPIC_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],

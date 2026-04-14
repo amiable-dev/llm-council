@@ -6,6 +6,8 @@ This implements Issue #115.
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestFrontierLayerEvents:
@@ -72,13 +74,13 @@ class TestFrontierEventEmission:
 
         emit_layer_event(
             LayerEventType.FRONTIER_MODEL_SELECTED,
-            {"model_id": "openai/gpt-5.2-pro", "tier": "frontier"},
+            {"model_id": mc.OPENAI_REASONING, "tier": "frontier"},
         )
 
         events = get_layer_events()
         assert len(events) == 1
         assert events[0].event_type == LayerEventType.FRONTIER_MODEL_SELECTED
-        assert events[0].data["model_id"] == "openai/gpt-5.2-pro"
+        assert events[0].data["model_id"] == mc.OPENAI_REASONING
 
         clear_layer_events()
 
@@ -96,8 +98,8 @@ class TestFrontierEventEmission:
         emit_layer_event(
             LayerEventType.FRONTIER_SHADOW_VOTE,
             {
-                "model_id": "openai/gpt-5.2-pro",
-                "top_pick": "anthropic/claude-opus-4.6",
+                "model_id": mc.OPENAI_REASONING,
+                "top_pick": mc.ANTHROPIC_CLAUDE_OPUS_REF,
                 "agreed_with_consensus": True,
             },
         )
@@ -123,9 +125,9 @@ class TestFrontierEventEmission:
         emit_layer_event(
             LayerEventType.FRONTIER_FALLBACK_TRIGGERED,
             {
-                "model_id": "openai/gpt-5.2-pro",
+                "model_id": mc.OPENAI_REASONING,
                 "reason": "timeout",
-                "fallback_model": "anthropic/claude-3.5-sonnet",
+                "fallback_model": mc.ANTHROPIC_REASONING,
             },
         )
 

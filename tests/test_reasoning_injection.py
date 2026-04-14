@@ -7,6 +7,8 @@ Written BEFORE implementation per TDD workflow.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 import os
+from llm_council import model_constants as mc
+
 
 
 class TestReasoningParamsDataclass:
@@ -92,7 +94,7 @@ class TestGatewayReasoningInjection:
 
         params = ReasoningParams(effort="high", max_tokens=32000)
         request = GatewayRequest(
-            model="openai/o1",
+            model=mc.OPENAI_O1,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -104,7 +106,7 @@ class TestGatewayReasoningInjection:
         from llm_council.gateway.types import GatewayRequest
 
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[{"role": "user", "content": "test"}],
         )
         assert request.reasoning_params is None
@@ -121,7 +123,7 @@ class TestOpenRouterPayloadInjection:
 
         params = ReasoningParams(effort="high", max_tokens=32000)
         payload = build_openrouter_payload(
-            model="openai/o1",
+            model=mc.OPENAI_O1,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -138,7 +140,7 @@ class TestOpenRouterPayloadInjection:
 
         params = ReasoningParams(effort="medium", max_tokens=16000)
         payload = build_openrouter_payload(
-            model="openai/o3-mini",
+            model=mc.OPENAI_O3_MINI,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -154,7 +156,7 @@ class TestOpenRouterPayloadInjection:
 
         params = ReasoningParams(effort="high", max_tokens=25600)
         payload = build_openrouter_payload(
-            model="deepseek/deepseek-r1",
+            model=mc.DEEPSEEK_R1,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -170,7 +172,7 @@ class TestOpenRouterPayloadInjection:
 
         params = ReasoningParams(effort="high", max_tokens=32000)
         payload = build_openrouter_payload(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -186,7 +188,7 @@ class TestOpenRouterPayloadInjection:
 
         params = ReasoningParams(effort="high", max_tokens=32000)
         payload = build_openrouter_payload(
-            model="anthropic/claude-opus-4.6",
+            model=mc.ANTHROPIC_CLAUDE_OPUS_REF,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -200,7 +202,7 @@ class TestOpenRouterPayloadInjection:
         from llm_council.gateway.openrouter import build_openrouter_payload
 
         payload = build_openrouter_payload(
-            model="openai/o1",
+            model=mc.OPENAI_O1,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=None,
         )
@@ -218,7 +220,7 @@ class TestPayloadFormat:
 
         params = ReasoningParams(effort="high", max_tokens=32000, exclude=True)
         payload = build_openrouter_payload(
-            model="openai/o1",
+            model=mc.OPENAI_O1,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )
@@ -236,7 +238,7 @@ class TestPayloadFormat:
         for effort in ["minimal", "low", "medium", "high", "xhigh"]:
             params = ReasoningParams(effort=effort, max_tokens=10000)
             payload = build_openrouter_payload(
-                model="openai/o1",
+                model=mc.OPENAI_O1,
                 messages=[{"role": "user", "content": "test"}],
                 reasoning_params=params,
             )
@@ -249,7 +251,7 @@ class TestPayloadFormat:
 
         params = ReasoningParams(effort="high", max_tokens=25600)
         payload = build_openrouter_payload(
-            model="openai/o1",
+            model=mc.OPENAI_O1,
             messages=[{"role": "user", "content": "test"}],
             reasoning_params=params,
         )

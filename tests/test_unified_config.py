@@ -354,8 +354,8 @@ class TestBackwardsCompatibility:
     def test_all_existing_env_vars_still_work(self):
         """All existing environment variables should still work."""
         env_vars = {
-            "LLM_COUNCIL_MODELS": "test/model-1,test/model-2",
-            "LLM_COUNCIL_CHAIRMAN": "test/chairman",
+            "LLM_COUNCIL_MODELS": f"{mc.OPENAI_HIGH},{mc.ANTHROPIC_HIGH}",
+            "LLM_COUNCIL_CHAIRMAN": mc.CHAIRMAN_MODEL,
             "LLM_COUNCIL_MODE": "debate",
             "LLM_COUNCIL_EXCLUDE_SELF_VOTES": "false",
             "LLM_COUNCIL_WILDCARD_ENABLED": "true",
@@ -381,7 +381,7 @@ class TestConfigAccess:
     def test_get_gateway_for_model(self):
         """Should be able to get gateway for a model."""
         config = UnifiedConfig()
-        gateway = config.get_gateway_for_model("anthropic/claude-3-5-sonnet-20241022")
+        gateway = config.get_gateway_for_model(mc.ANTHROPIC_CLAUDE_3_5_SONNET_20241022)
         assert gateway in ["openrouter", "requesty", "direct"]
 
     def test_get_gateway_fallback_chain(self):
@@ -427,9 +427,9 @@ council:
       "google/*": openrouter
 """)
         config = load_config(config_file)
-        assert config.get_gateway_for_model("anthropic/claude-3-5-sonnet") == "requesty"
-        assert config.get_gateway_for_model("openai/gpt-4o") == "direct"
-        assert config.get_gateway_for_model("google/gemini-1.5-pro") == "openrouter"
+        assert config.get_gateway_for_model(mc.ANTHROPIC_HIGH) == "requesty"
+        assert config.get_gateway_for_model(mc.OPENAI_HIGH) == "direct"
+        assert config.get_gateway_for_model(mc.GOOGLE_HIGH) == "openrouter"
 
     def test_model_routing_default_fallback(self):
         """Unknown models should use default gateway."""
@@ -1390,8 +1390,8 @@ class TestParseModelList:
         """Single model string is parsed correctly."""
         from llm_council.unified_config import parse_model_list
 
-        result = parse_model_list("openai/gpt-4o")
-        assert result == ["openai/gpt-4o"]
+        result = parse_model_list(mc.OPENAI_HIGH)
+        assert result == [mc.OPENAI_HIGH]
 
 
 class TestSecretsConfig:
@@ -1781,13 +1781,11 @@ council:
 
     def test_council_config_from_yaml(self, tmp_path):
         """CouncilConfig should load from YAML."""
-        yaml_content = """
+        yaml_content = f"""
 council:
   council:
-    models:
-      - openai/gpt-4o
-      - anthropic/claude-3
-    chairman: "google/gemini-2.5-pro"
+    models: ["{mc.OPENAI_HIGH}", "{mc.ANTHROPIC_BALANCED}"]
+    chairman: "{mc.GOOGLE_HIGH}"
     synthesis_mode: "debate"
     exclude_self_votes: false
     style_normalization: "auto"
@@ -1797,8 +1795,8 @@ council:
 
         config = load_config(config_file)
 
-        assert config.council.models == ["openai/gpt-4o", "anthropic/claude-3"]
-        assert config.council.chairman == "google/gemini-2.5-pro"
+        assert config.council.models == [mc.OPENAI_HIGH, mc.ANTHROPIC_BALANCED]
+        assert config.council.chairman == mc.GOOGLE_HIGH
         assert config.council.synthesis_mode == "debate"
         assert config.council.exclude_self_votes is False
         assert config.council.style_normalization == "auto"

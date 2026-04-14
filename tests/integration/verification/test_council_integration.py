@@ -19,6 +19,8 @@ import pytest
 
 from llm_council.verification.api import VerifyRequest, run_verification
 from llm_council.verification.transcript import TranscriptStore
+from llm_council import model_constants as mc
+
 
 
 class TestCouncilDeliberationIntegration:
@@ -51,17 +53,17 @@ class TestCouncilDeliberationIntegration:
         """Mock Stage 1 responses from council models."""
         return [
             {
-                "model": "openai/gpt-4o",
+                "model": mc.OPENAI_HIGH,
                 "response": "The code follows security best practices. "
                 "Input validation is present and SQL injection is prevented.",
             },
             {
-                "model": "anthropic/claude-3.5-sonnet",
+                "model": mc.ANTHROPIC_HIGH,
                 "response": "Security review: The implementation correctly "
                 "sanitizes user input and uses parameterized queries.",
             },
             {
-                "model": "google/gemini-pro-1.5",
+                "model": mc.GOOGLE_HIGH,
                 "response": "This code appears secure. Authentication is "
                 "handled properly with JWT tokens.",
             },
@@ -72,7 +74,7 @@ class TestCouncilDeliberationIntegration:
         """Mock Stage 2 rankings with rubric scores."""
         rankings = [
             {
-                "reviewer": "openai/gpt-4o",
+                "reviewer": mc.OPENAI_HIGH,
                 "evaluation": "Response B provides the most comprehensive analysis.",
                 "parsed_ranking": ["Response B", "Response A", "Response C"],
                 "rubric_scores": {
@@ -84,7 +86,7 @@ class TestCouncilDeliberationIntegration:
                 },
             },
             {
-                "reviewer": "anthropic/claude-3.5-sonnet",
+                "reviewer": mc.ANTHROPIC_HIGH,
                 "evaluation": "Response A offers clear security assessment.",
                 "parsed_ranking": ["Response A", "Response B", "Response C"],
                 "rubric_scores": {
@@ -97,9 +99,9 @@ class TestCouncilDeliberationIntegration:
             },
         ]
         label_to_model = {
-            "Response A": {"model": "openai/gpt-4o", "display_index": 0},
-            "Response B": {"model": "anthropic/claude-3.5-sonnet", "display_index": 1},
-            "Response C": {"model": "google/gemini-pro-1.5", "display_index": 2},
+            "Response A": {"model": mc.OPENAI_HIGH, "display_index": 0},
+            "Response B": {"model": mc.ANTHROPIC_HIGH, "display_index": 1},
+            "Response C": {"model": mc.GOOGLE_HIGH, "display_index": 2},
         }
         usage = {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500}
         return rankings, label_to_model, usage
@@ -108,7 +110,7 @@ class TestCouncilDeliberationIntegration:
     def mock_stage3_result(self) -> tuple:
         """Mock Stage 3 synthesis with verdict."""
         synthesis = {
-            "model": "anthropic/claude-3.5-sonnet",
+            "model": mc.ANTHROPIC_REASONING,
             "response": "VERDICT: APPROVED\n\nBased on council consensus, "
             "the code meets security requirements. All reviewers agree that "
             "input validation and authentication are properly implemented.",
@@ -121,9 +123,9 @@ class TestCouncilDeliberationIntegration:
     def mock_aggregate_rankings(self) -> list:
         """Mock aggregate rankings result."""
         return [
-            {"model": "anthropic/claude-3.5-sonnet", "borda_score": 0.9, "rank": 1},
-            {"model": "openai/gpt-4o", "borda_score": 0.7, "rank": 2},
-            {"model": "google/gemini-pro-1.5", "borda_score": 0.5, "rank": 3},
+            {"model": mc.ANTHROPIC_HIGH, "borda_score": 0.9, "rank": 1},
+            {"model": mc.OPENAI_HIGH, "borda_score": 0.7, "rank": 2},
+            {"model": mc.GOOGLE_HIGH, "borda_score": 0.5, "rank": 3},
         ]
 
     @pytest.mark.asyncio
@@ -270,28 +272,28 @@ class TestTranscriptPersistence:
     def mock_council_responses(self):
         """Mock all council stage responses."""
         stage1 = [
-            {"model": "openai/gpt-4o", "response": "Security review passed."},
-            {"model": "anthropic/claude-3.5-sonnet", "response": "Code is secure."},
+            {"model": mc.OPENAI_HIGH, "response": "Security review passed."},
+            {"model": mc.ANTHROPIC_HIGH, "response": "Code is secure."},
         ]
         stage2_rankings = [
             {
-                "reviewer": "openai/gpt-4o",
+                "reviewer": mc.OPENAI_HIGH,
                 "evaluation": "Both responses are accurate.",
                 "parsed_ranking": ["Response A", "Response B"],
                 "rubric_scores": {"accuracy": 8.5, "relevance": 8.0},
             },
         ]
         stage2_label_map = {
-            "Response A": {"model": "openai/gpt-4o", "display_index": 0},
-            "Response B": {"model": "anthropic/claude-3.5-sonnet", "display_index": 1},
+            "Response A": {"model": mc.OPENAI_HIGH, "display_index": 0},
+            "Response B": {"model": mc.ANTHROPIC_REASONING, "display_index": 1},
         }
         stage3 = {
-            "model": "anthropic/claude-3.5-sonnet",
+            "model": mc.ANTHROPIC_REASONING,
             "response": "VERDICT: APPROVED. Code meets requirements.",
         }
         aggregate = [
-            {"model": "openai/gpt-4o", "borda_score": 0.8, "rank": 1},
-            {"model": "anthropic/claude-3.5-sonnet", "borda_score": 0.6, "rank": 2},
+            {"model": mc.OPENAI_HIGH, "borda_score": 0.8, "rank": 1},
+            {"model": mc.ANTHROPIC_HIGH, "borda_score": 0.6, "rank": 2},
         ]
         return {
             "stage1": (stage1, {"total_tokens": 500}, {}),
@@ -452,7 +454,7 @@ class TestDynamicScoreExtraction:
 
         stage2_rankings = [
             {
-                "reviewer": "openai/gpt-4o",
+                "reviewer": mc.OPENAI_HIGH,
                 "rubric_scores": expected_scores,
             },
         ]
@@ -471,21 +473,21 @@ class TestDynamicScoreExtraction:
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
             mock_stage1.return_value = (
-                [{"model": "openai/gpt-4o", "response": "Looks good."}],
+                [{"model": mc.OPENAI_HIGH, "response": "Looks good."}],
                 {"total_tokens": 100},
                 {},
             )
             mock_stage2.return_value = (
                 stage2_rankings,
-                {"Response A": {"model": "openai/gpt-4o", "display_index": 0}},
+                {"Response A": {"model": mc.OPENAI_HIGH, "display_index": 0}},
                 {"total_tokens": 200},
             )
             mock_stage3.return_value = (
-                {"model": "anthropic/claude-3.5-sonnet", "response": "APPROVED"},
+                {"model": mc.ANTHROPIC_HIGH, "response": "APPROVED"},
                 {"total_tokens": 100},
                 None,
             )
-            mock_agg.return_value = [{"model": "openai/gpt-4o", "borda_score": 0.9, "rank": 1}]
+            mock_agg.return_value = [{"model": mc.OPENAI_HIGH, "borda_score": 0.9, "rank": 1}]
 
             result = await run_verification(valid_request, transcript_store)
 
@@ -521,21 +523,21 @@ class TestDynamicScoreExtraction:
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
             mock_stage1.return_value = (
-                [{"model": "openai/gpt-4o", "response": "Review complete."}],
+                [{"model": mc.OPENAI_HIGH, "response": "Review complete."}],
                 {"total_tokens": 100},
                 {},
             )
             mock_stage2.return_value = (
-                [{"reviewer": "openai/gpt-4o", "rubric_scores": {"accuracy": 6.0}}],
-                {"Response A": {"model": "openai/gpt-4o", "display_index": 0}},
+                [{"reviewer": mc.OPENAI_HIGH, "rubric_scores": {"accuracy": 6.0}}],
+                {"Response A": {"model": mc.OPENAI_HIGH, "display_index": 0}},
                 {"total_tokens": 200},
             )
             mock_stage3.return_value = (
-                {"model": "anthropic/claude-3.5-sonnet", "response": "APPROVED"},
+                {"model": mc.ANTHROPIC_HIGH, "response": "APPROVED"},
                 {"total_tokens": 100},
                 None,
             )
-            mock_agg.return_value = [{"model": "openai/gpt-4o", "borda_score": 0.8, "rank": 1}]
+            mock_agg.return_value = [{"model": mc.OPENAI_HIGH, "borda_score": 0.8, "rank": 1}]
 
             result = await run_verification(valid_request, transcript_store)
 
@@ -588,24 +590,24 @@ class TestVerdictExtraction:
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
             mock_stage1.return_value = (
-                [{"model": "openai/gpt-4o", "response": "OK"}],
+                [{"model": mc.OPENAI_HIGH, "response": "OK"}],
                 {"total_tokens": 100},
                 {},
             )
             mock_stage2.return_value = (
-                [{"reviewer": "openai/gpt-4o", "rubric_scores": {"accuracy": 9.0}}],
-                {"Response A": {"model": "openai/gpt-4o", "display_index": 0}},
+                [{"reviewer": mc.OPENAI_HIGH, "rubric_scores": {"accuracy": 9.0}}],
+                {"Response A": {"model": mc.OPENAI_HIGH, "display_index": 0}},
                 {"total_tokens": 200},
             )
             mock_stage3.return_value = (
                 {
-                    "model": "anthropic/claude-3.5-sonnet",
+                    "model": mc.ANTHROPIC_HIGH,
                     "response": "VERDICT: APPROVED\n\nThe code meets all requirements.",
                 },
                 {"total_tokens": 100},
                 None,
             )
-            mock_agg.return_value = [{"model": "openai/gpt-4o", "borda_score": 0.9, "rank": 1}]
+            mock_agg.return_value = [{"model": mc.OPENAI_HIGH, "borda_score": 0.9, "rank": 1}]
 
             result = await run_verification(request, transcript_store)
 
@@ -637,24 +639,24 @@ class TestVerdictExtraction:
             patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
         ):
             mock_stage1.return_value = (
-                [{"model": "openai/gpt-4o", "response": "Security issues found."}],
+                [{"model": mc.OPENAI_HIGH, "response": "Security issues found."}],
                 {"total_tokens": 100},
                 {},
             )
             mock_stage2.return_value = (
-                [{"reviewer": "openai/gpt-4o", "rubric_scores": {"accuracy": 3.0}}],
-                {"Response A": {"model": "openai/gpt-4o", "display_index": 0}},
+                [{"reviewer": mc.OPENAI_HIGH, "rubric_scores": {"accuracy": 3.0}}],
+                {"Response A": {"model": mc.OPENAI_HIGH, "display_index": 0}},
                 {"total_tokens": 200},
             )
             mock_stage3.return_value = (
                 {
-                    "model": "anthropic/claude-3.5-sonnet",
+                    "model": mc.ANTHROPIC_HIGH,
                     "response": "VERDICT: REJECTED\n\nCritical security vulnerabilities.",
                 },
                 {"total_tokens": 100},
                 None,
             )
-            mock_agg.return_value = [{"model": "openai/gpt-4o", "borda_score": 0.3, "rank": 1}]
+            mock_agg.return_value = [{"model": mc.OPENAI_HIGH, "borda_score": 0.3, "rank": 1}]
 
             result = await run_verification(request, transcript_store)
 

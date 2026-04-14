@@ -11,6 +11,8 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestQualityPercentileUnknownModel:
@@ -40,7 +42,7 @@ class TestQualityPercentileUnknownModel:
                     [
                         ModelSessionMetric(
                             session_id=f"session-{i}",
-                            model_id="openai/gpt-5",
+                            model_id=mc.OPENAI_HIGH,
                             latency_ms=1000,
                             borda_score=0.8,
                             parse_success=True,
@@ -48,7 +50,7 @@ class TestQualityPercentileUnknownModel:
                     ],
                 )
 
-            result = tracker.get_quality_percentile("openai/gpt-5")
+            result = tracker.get_quality_percentile(mc.OPENAI_HIGH)
             assert result is None
 
 
@@ -70,7 +72,7 @@ class TestQualityPercentileSingleModel:
                     [
                         ModelSessionMetric(
                             session_id=f"session-{i}",
-                            model_id="openai/gpt-5",
+                            model_id=mc.OPENAI_HIGH,
                             latency_ms=1000,
                             borda_score=0.8,
                             parse_success=True,
@@ -78,7 +80,7 @@ class TestQualityPercentileSingleModel:
                     ],
                 )
 
-            result = tracker.get_quality_percentile("openai/gpt-5")
+            result = tracker.get_quality_percentile(mc.OPENAI_HIGH)
             # Single model is at 100th percentile (best among 1)
             assert result == 1.0
 

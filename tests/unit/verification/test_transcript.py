@@ -12,8 +12,11 @@ Transcript persistence provides:
 import json
 import os
 import tempfile
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from pathlib import Path
+from llm_council import model_constants as mc
 from typing import Any, Dict
 
 import pytest
@@ -136,8 +139,8 @@ class TestAtomicWrites:
         try:
             stage1_data = {
                 "responses": {
-                    "openai/gpt-4": {"content": "Response 1", "latency_ms": 100},
-                    "anthropic/claude-3": {"content": "Response 2", "latency_ms": 150},
+                    mc.OPENAI_HIGH: {"content": "Response 1", "latency_ms": 100},
+                    mc.ANTHROPIC_BALANCED: {"content": "Response 2", "latency_ms": 150},
                 },
                 "timestamp": datetime.now(UTC).isoformat(),
             }
@@ -160,7 +163,7 @@ class TestAtomicWrites:
                     {"reviewer": "model_a", "ranking": ["Response B", "Response A"]},
                     {"reviewer": "model_b", "ranking": ["Response A", "Response B"]},
                 ],
-                "label_to_model": {"Response A": "openai/gpt-4"},
+                "label_to_model": {"Response A": mc.OPENAI_HIGH},
             }
 
             store.write_stage(vid, "stage2", stage2_data)
@@ -178,7 +181,7 @@ class TestAtomicWrites:
         try:
             stage3_data = {
                 "synthesis": "Final synthesized response...",
-                "chairman_model": "openai/gpt-4",
+                "chairman_model": mc.OPENAI_HIGH,
             }
 
             store.write_stage(vid, "stage3", stage3_data)

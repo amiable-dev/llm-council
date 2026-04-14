@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import dataclass
 from typing import List, Optional
 
+from llm_council import model_constants as mc
 from llm_council.layer_contracts import (
     TierContract,
     TriageResult,
@@ -82,7 +83,7 @@ class TestTierEscalationPaths:
 
         # Create a triage result that recommends escalation
         result = TriageResult(
-            resolved_models=["openai/gpt-4o-mini"],
+            resolved_models=[mc.OPENAI_LOW],
             optimized_prompts={},
             escalation_recommended=True,
             escalation_reason="Low confidence on complex query",
@@ -144,7 +145,7 @@ class TestGatewayFailureIsolation:
                 "from_gateway": "openrouter",
                 "to_gateway": "requesty",
                 "reason": "timeout",
-                "model": "openai/gpt-4o",
+                "model": mc.OPENAI_HIGH,
             },
             layer_from="L4",
             layer_to="L4",  # Stays within L4
@@ -386,13 +387,13 @@ class TestEndToEndFlow:
         cross_l1_to_l2(contract, query)
 
         triage_result = TriageResult(
-            resolved_models=["openai/gpt-4o-mini"],
+            resolved_models=[mc.OPENAI_LOW],
             optimized_prompts={},
         )
         cross_l2_to_l3(triage_result)
 
         request = GatewayRequest(
-            model="openai/gpt-4o-mini",
+            model=mc.OPENAI_LOW,
             messages=[
                 CanonicalMessage(
                     role="user",
@@ -549,7 +550,7 @@ class TestGatewayWiring:
         # Setup mock router
         mock_router = AsyncMock()
         mock_response = GatewayResponse(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             content="Test response",
             status="ok",
             latency_ms=100,

@@ -6,6 +6,7 @@ TDD: Write these tests first, then implement the GatewayRouter.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
+from llm_council import model_constants as mc
 
 
 class TestGatewayRouterBasics:
@@ -49,7 +50,7 @@ class TestGatewayRouterModelRouting:
 
         router = GatewayRouter()
 
-        gateway = router.get_gateway_for_model("openai/gpt-4o")
+        gateway = router.get_gateway_for_model(mc.OPENAI_HIGH)
         assert gateway is not None
 
     def test_get_gateway_for_model_uses_routing_config(self):
@@ -64,7 +65,7 @@ class TestGatewayRouterModelRouting:
         )
 
         # Claude models should route to custom gateway
-        gateway = router.get_gateway_for_model("anthropic/claude-3-5-sonnet")
+        gateway = router.get_gateway_for_model(mc.ANTHROPIC_HIGH)
         assert gateway == router.gateways["custom"]
 
 
@@ -84,7 +85,7 @@ class TestGatewayRouterComplete:
 
         router = GatewayRouter()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -92,7 +93,7 @@ class TestGatewayRouterComplete:
 
         mock_response = GatewayResponse(
             content="Hi there!",
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             status="ok",
             latency_ms=100,
         )
@@ -120,7 +121,7 @@ class TestGatewayRouterComplete:
 
         router = GatewayRouter()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -248,7 +249,7 @@ class TestGatewayRouterParallelQueries:
 
         requests = [
             GatewayRequest(
-                model=f"openai/gpt-4o-{i}",
+                model=f"{mc.OPENAI_HIGH}-{i}",
                 messages=[
                     CanonicalMessage(
                         role="user", content=[ContentBlock(type="text", text=f"Query {i}")]
@@ -261,7 +262,7 @@ class TestGatewayRouterParallelQueries:
         mock_responses = [
             GatewayResponse(
                 content=f"Response {i}",
-                model=f"openai/gpt-4o-{i}",
+                model=f"{mc.OPENAI_HIGH}-{i}",
                 status="ok",
                 latency_ms=100,
             )
@@ -292,7 +293,7 @@ class TestGatewayRouterParallelQueries:
 
         requests = [
             GatewayRequest(
-                model=f"openai/gpt-4o-{i}",
+                model=f"{mc.OPENAI_HIGH}-{i}",
                 messages=[
                     CanonicalMessage(
                         role="user", content=[ContentBlock(type="text", text=f"Query {i}")]

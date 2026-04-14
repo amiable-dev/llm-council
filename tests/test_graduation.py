@@ -7,6 +7,8 @@ This implements Issue #112.
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
@@ -69,14 +71,14 @@ class TestModelStats:
         from llm_council.graduation import ModelStats
 
         stats = ModelStats(
-            model_id="openai/gpt-5.2-pro",
+            model_id=mc.OPENAI_REASONING,
             days_tracked=45,
             completed_sessions=150,
             error_rate=0.01,
             quality_percentile=0.85,
         )
 
-        assert stats.model_id == "openai/gpt-5.2-pro"
+        assert stats.model_id == mc.OPENAI_REASONING
         assert stats.days_tracked == 45
         assert stats.completed_sessions == 150
         assert stats.error_rate == 0.01
@@ -216,7 +218,7 @@ class TestShouldGraduate:
 
         criteria = GraduationCriteria()
         stats = ModelStats(
-            model_id="openai/gpt-5.2-pro",
+            model_id=mc.OPENAI_REASONING,
             days_tracked=45,
             completed_sessions=150,
             error_rate=0.01,

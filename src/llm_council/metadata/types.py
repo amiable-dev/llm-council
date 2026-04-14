@@ -12,6 +12,7 @@ capability detection, tier selection, and cost optimization.
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List
+from .. import model_constants as mc
 
 
 class QualityTier(Enum):
@@ -59,7 +60,7 @@ class ModelInfo:
     It is frozen (immutable) to ensure thread-safety and hashability.
 
     Attributes:
-        id: Full model identifier (e.g., "openai/gpt-4o")
+        id: Full model identifier
         context_window: Maximum context length in tokens
         pricing: Dict with "prompt" and "completion" costs per 1K tokens
         supported_parameters: List of supported API parameters
@@ -70,7 +71,7 @@ class ModelInfo:
 
     Example:
         >>> info = ModelInfo(
-        ...     id="openai/gpt-4o",
+        ...     id=mc.OPENAI_HIGH,
         ...     context_window=128000,
         ...     pricing={"prompt": 0.0025, "completion": 0.01},
         ...     supported_parameters=["temperature", "top_p", "tools"],

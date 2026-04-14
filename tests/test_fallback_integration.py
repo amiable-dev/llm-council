@@ -7,6 +7,7 @@ These tests implement the RED phase of TDD - they should FAIL initially.
 """
 
 import pytest
+from llm_council import model_constants as mc
 
 from llm_council.layer_contracts import (
     LayerEventType,
@@ -14,6 +15,8 @@ from llm_council.layer_contracts import (
     get_layer_events,
     clear_layer_events,
 )
+from llm_council import model_constants as mc
+
 
 
 class TestFallbackEventEmission:
@@ -32,16 +35,16 @@ class TestFallbackEventEmission:
         from llm_council.frontier_fallback import emit_fallback_event
 
         emit_fallback_event(
-            frontier_model="openai/gpt-5-preview",
-            fallback_model="anthropic/claude-3.5-sonnet",
+            frontier_model=mc.OPENAI_REASONING,
+            fallback_model=mc.ANTHROPIC_REASONING,
             reason="timeout",
         )
 
         events = get_layer_events()
         assert len(events) == 1
         assert events[0].event_type == LayerEventType.FRONTIER_FALLBACK_TRIGGERED
-        assert events[0].data["model_id"] == "openai/gpt-5-preview"
-        assert events[0].data["fallback_model"] == "anthropic/claude-3.5-sonnet"
+        assert events[0].data["model_id"] == mc.OPENAI_REASONING
+        assert events[0].data["fallback_model"] == mc.ANTHROPIC_REASONING
         assert events[0].data["reason"] == "timeout"
 
     def test_fallback_event_includes_all_reasons(self):
@@ -52,8 +55,8 @@ class TestFallbackEventEmission:
         for reason in reasons:
             clear_layer_events()
             emit_fallback_event(
-                frontier_model="openai/gpt-5-preview",
-                fallback_model="anthropic/claude-3.5-sonnet",
+                frontier_model=mc.OPENAI_REASONING,
+                fallback_model=mc.ANTHROPIC_REASONING,
                 reason=reason,
             )
             events = get_layer_events()
@@ -108,7 +111,7 @@ class TestExecuteWithFallbackDetailed:
 
             result = await execute_with_fallback_detailed(
                 query="Test query",
-                frontier_model="openai/gpt-5-preview",
+                frontier_model=mc.OPENAI_REASONING,
             )
 
             assert result.used_fallback is False
@@ -135,11 +138,11 @@ class TestExecuteWithFallbackDetailed:
             ]
 
             with patch("llm_council.frontier_fallback.get_tier_models") as mock_tier:
-                mock_tier.return_value = ["anthropic/claude-3.5-sonnet"]
+                mock_tier.return_value = [mc.ANTHROPIC_REASONING]
 
                 result = await execute_with_fallback_detailed(
                     query="Test query",
-                    frontier_model="openai/gpt-5-preview",
+                    frontier_model=mc.OPENAI_REASONING,
                 )
 
                 assert result.used_fallback is True
@@ -149,7 +152,7 @@ class TestExecuteWithFallbackDetailed:
                     e for e in events if e.event_type == LayerEventType.FRONTIER_FALLBACK_TRIGGERED
                 ]
                 assert len(fallback_events) == 1
-                assert fallback_events[0].data["model_id"] == "openai/gpt-5-preview"
+                assert fallback_events[0].data["model_id"] == mc.OPENAI_REASONING
                 assert fallback_events[0].data["reason"] == "timeout"
 
 

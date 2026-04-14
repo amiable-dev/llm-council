@@ -19,6 +19,7 @@ Example:
 
 import logging
 from typing import TYPE_CHECKING, List, Optional, Set
+from .. import model_constants as mc
 
 from .types import ModelInfo, QualityTier
 
@@ -85,9 +86,9 @@ def _get_model_family(model_id: str) -> str:
     """Extract model family from model ID.
 
     Examples:
-        openai/o1-preview -> o1
-        anthropic/claude-3-opus -> claude-3-opus
-        qwen/qwq-32b-preview -> qwq
+        mc.OPENAI_REASONING -> o1
+        mc.ANTHROPIC_OPUS_LATEST -> claude-3-opus
+        mc.QWEN_REASONING -> qwq
 
     Args:
         model_id: Full model identifier

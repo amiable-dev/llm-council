@@ -9,6 +9,7 @@ with quality degradation notices for local model usage.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from llm_council import model_constants as mc
 
 
 class TestOllamaGateway:
@@ -52,28 +53,28 @@ class TestOllamaGateway:
 
         gateway = OllamaGateway()
         # All ollama models should be identified as local
-        assert gateway._is_local_model("ollama/llama3.2") is True
-        assert gateway._is_local_model("ollama/mistral") is True
-        assert gateway._is_local_model("openai/gpt-4o") is False
+        assert gateway._is_local_model(mc.OLLAMA_ANY) is True
+        assert gateway._is_local_model(mc.OLLAMA_LOCAL) is True
+        assert gateway._is_local_model(mc.OPENAI_HIGH) is False
 
 
 class TestOllamaModelIdentifier:
     """Test model identifier parsing for ollama/* format."""
 
     def test_parse_ollama_model_format(self):
-        """Should parse 'ollama/llama3.2' format correctly."""
+        """Should parse Ollama model format correctly."""
         from llm_council.gateway.ollama import OllamaGateway
 
         gateway = OllamaGateway()
         # ollama/model-name format passes through to LiteLLM
-        assert gateway._get_model_name("ollama/llama3.2") == "ollama/llama3.2"
+        assert gateway._get_model_name(mc.OLLAMA_ANY) == mc.OLLAMA_ANY
 
     def test_extract_model_name(self):
-        """Should extract 'llama3.2' from 'ollama/llama3.2' when needed."""
+        """Should extract model name from Ollama format when needed."""
         from llm_council.gateway.ollama import OllamaGateway
 
         gateway = OllamaGateway()
-        assert gateway._extract_model_name("ollama/llama3.2") == "llama3.2"
+        assert gateway._extract_model_name(mc.OLLAMA_ANY) == "llama3.2"
         assert gateway._extract_model_name("ollama/mistral:7b") == "mistral:7b"
 
     def test_add_ollama_prefix_if_missing(self):
@@ -81,8 +82,8 @@ class TestOllamaModelIdentifier:
         from llm_council.gateway.ollama import OllamaGateway
 
         gateway = OllamaGateway()
-        assert gateway._get_model_name("llama3.2") == "ollama/llama3.2"
-        assert gateway._get_model_name("ollama/llama3.2") == "ollama/llama3.2"
+        assert gateway._get_model_name("llama3.2") == mc.OLLAMA_ANY
+        assert gateway._get_model_name(mc.OLLAMA_ANY) == mc.OLLAMA_ANY
 
 
 class TestOllamaMessageConversion:
@@ -178,7 +179,7 @@ class TestOllamaComplete:
 
         gateway = OllamaGateway()
         request = GatewayRequest(
-            model="ollama/llama3.2",
+            model=mc.OLLAMA_ANY,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -202,7 +203,7 @@ class TestOllamaComplete:
 
         assert isinstance(response, GatewayResponse)
         assert response.content == "Hi there!"
-        assert response.model == "ollama/llama3.2"
+        assert response.model == mc.OLLAMA_ANY
         assert response.status == "ok"
 
     @pytest.mark.asyncio
@@ -218,7 +219,7 @@ class TestOllamaComplete:
 
         gateway = OllamaGateway()
         request = GatewayRequest(
-            model="ollama/llama3.2",
+            model=mc.OLLAMA_ANY,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -254,7 +255,7 @@ class TestOllamaComplete:
 
         gateway = OllamaGateway()
         request = GatewayRequest(
-            model="ollama/llama3.2",
+            model=mc.OLLAMA_ANY,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -280,7 +281,7 @@ class TestOllamaComplete:
 
         gateway = OllamaGateway()
         request = GatewayRequest(
-            model="ollama/llama3.2",
+            model=mc.OLLAMA_ANY,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -307,7 +308,7 @@ class TestOllamaComplete:
 
         gateway = OllamaGateway()
         request = GatewayRequest(
-            model="ollama/llama3.2",
+            model=mc.OLLAMA_ANY,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -330,19 +331,19 @@ class TestOllamaComplete:
             # Verify acompletion was called with correct params
             mock_litellm.acompletion.assert_called_once()
             call_kwargs = mock_litellm.acompletion.call_args.kwargs
-            assert call_kwargs["model"] == "ollama/llama3.2"
+            assert call_kwargs["model"] == mc.OLLAMA_ANY
             assert call_kwargs["max_tokens"] == 100
             assert call_kwargs["temperature"] == 0.7
 
     @pytest.mark.asyncio
     async def test_complete_passes_ollama_model_format(self):
-        """Should pass 'ollama/model-name' format to LiteLLM."""
+        """Should pass Ollama model format to LiteLLM."""
         from llm_council.gateway.ollama import OllamaGateway
         from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         gateway = OllamaGateway()
         request = GatewayRequest(
-            model="ollama/mistral:7b",
+            model="local/mistral:7b",
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -361,7 +362,7 @@ class TestOllamaComplete:
             await gateway.complete(request)
 
             call_kwargs = mock_litellm.acompletion.call_args.kwargs
-            assert call_kwargs["model"] == "ollama/mistral:7b"
+            assert call_kwargs["model"] == "ollama/local/mistral:7b"
 
 
 class TestOllamaQualityDegradation:
@@ -372,7 +373,7 @@ class TestOllamaQualityDegradation:
         from llm_council.gateway.ollama import OllamaGateway
 
         gateway = OllamaGateway()
-        notice = gateway._create_quality_degradation_notice("ollama/llama3.2")
+        notice = gateway._create_quality_degradation_notice(mc.OLLAMA_ANY)
 
         assert notice is not None
         assert notice.is_local_model is True
@@ -385,7 +386,7 @@ class TestOllamaQualityDegradation:
         from llm_council.gateway.ollama import OllamaGateway
 
         gateway = OllamaGateway()
-        notice = gateway._create_quality_degradation_notice("ollama/llama3.2")
+        notice = gateway._create_quality_degradation_notice(mc.OLLAMA_ANY)
 
         # Check for required elements per ADR-025
         assert (
@@ -401,7 +402,7 @@ class TestOllamaQualityDegradation:
         from llm_council.gateway.ollama import OllamaGateway
 
         gateway = OllamaGateway()
-        notice = gateway._create_quality_degradation_notice("ollama/llama3.2")
+        notice = gateway._create_quality_degradation_notice(mc.OLLAMA_ANY)
 
         # Should suggest hardware profile
         assert notice.suggested_hardware_profile is not None
@@ -419,7 +420,7 @@ class TestOllamaQualityDegradation:
         gateway = OllamaGateway()
 
         # Small models get minimum profile
-        notice_small = gateway._create_quality_degradation_notice("ollama/llama3.2:7b")
+        notice_small = gateway._create_quality_degradation_notice("local/llama3.2:7b")
         assert notice_small.suggested_hardware_profile in ["minimum", "recommended"]
 
         # This is a basic test - actual implementation may be more sophisticated
@@ -539,11 +540,11 @@ class TestOllamaRouterIntegration:
         )
 
         # ollama/* should route to ollama gateway
-        selected = router.get_gateway_for_model("ollama/llama3.2")
+        selected = router.get_gateway_for_model(mc.OLLAMA_ANY)
         assert selected is ollama_gateway
 
         # Other models should use default
-        selected = router.get_gateway_for_model("openai/gpt-4o")
+        selected = router.get_gateway_for_model(mc.OPENAI_HIGH)
         assert selected is openrouter_gateway
 
     def test_fallback_chain_works(self):

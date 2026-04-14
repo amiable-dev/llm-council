@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestOpenRouterClient:
@@ -28,7 +30,7 @@ class TestOpenRouterClient:
 
         assert len(models) == 1
         assert isinstance(models[0], ModelInfo)
-        assert models[0].id == "openai/gpt-4o"
+        assert models[0].id == mc.OPENAI_HIGH
         assert models[0].context_window == 128000
 
     @pytest.mark.asyncio
@@ -173,7 +175,7 @@ class TestModelInfoTransform:
         from llm_council.metadata.openrouter_client import transform_api_model
 
         api_model = {
-            "id": "openai/o1",
+            "id": mc.OPENAI_O1,
             "context_length": 200000,
             "supported_parameters": ["reasoning"],
         }
@@ -187,7 +189,7 @@ class TestModelInfoTransform:
         from llm_council.metadata.types import QualityTier
 
         api_model = {
-            "id": "openai/gpt-4o",
+            "id": mc.OPENAI_HIGH,
             "context_length": 128000,
             "pricing": {"prompt": "0.015", "completion": "0.075"},
         }
@@ -201,7 +203,7 @@ class TestModelInfoTransform:
         from llm_council.metadata.types import QualityTier
 
         api_model = {
-            "id": "openai/gpt-4o",
+            "id": "standard/model",
             "context_length": 128000,
             "pricing": {"prompt": "0.002", "completion": "0.008"},
         }
@@ -215,7 +217,7 @@ class TestModelInfoTransform:
         from llm_council.metadata.types import QualityTier
 
         api_model = {
-            "id": "openai/gpt-4o-mini",
+            "id": mc.OPENAI_QUICK,
             "context_length": 128000,
             "pricing": {"prompt": "0.00015", "completion": "0.0006"},
         }
@@ -259,7 +261,7 @@ class TestModelInfoTransform:
         from llm_council.metadata.types import QualityTier
 
         api_model = {
-            "id": "ollama/llama3.2",
+            "id": mc.OLLAMA_ANY,
             "context_length": 128000,
             "pricing": {"prompt": "0", "completion": "0"},
         }

@@ -12,7 +12,7 @@ Example:
     >>> registry = get_registry()
     >>> if not registry.is_stale:
     ...     candidates = registry.get_candidates()
-    ...     model = registry.get_model("openai/gpt-4o")
+    ...     model = registry.get_model(mc.OPENAI_HIGH)
 """
 
 import asyncio
@@ -21,6 +21,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Dict, List, Optional
+from .. import model_constants as mc
 
 from .types import ModelInfo, ModelStatus
 
@@ -122,7 +123,7 @@ class ModelRegistry:
         """Get specific model info by ID (O(1) lookup).
 
         Args:
-            model_id: Full model identifier (e.g., "openai/gpt-4o")
+            model_id: Full model identifier
 
         Returns:
             ModelInfo if found, None otherwise.

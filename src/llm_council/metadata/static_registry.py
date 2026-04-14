@@ -15,6 +15,7 @@ the system must function without external dependencies when offline.
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
+from .. import model_constants as mc
 
 import yaml
 
@@ -43,7 +44,7 @@ class StaticRegistryProvider:
 
     Example:
         >>> provider = StaticRegistryProvider()
-        >>> info = provider.get_model_info("openai/gpt-4o")
+        >>> info = provider.get_model_info(mc.OPENAI_HIGH)
         >>> print(info.context_window)  # 128000
     """
 
@@ -135,7 +136,7 @@ class StaticRegistryProvider:
         """Get full model information.
 
         Args:
-            model_id: Full model identifier (e.g., "openai/gpt-4o")
+        model_id: Full model identifier
 
         Returns:
             ModelInfo if model is known, None otherwise

@@ -8,6 +8,7 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from llm_council import model_constants as mc
 
 # Skip all tests in this module if HTTP deps not installed
 fastapi = pytest.importorskip(
@@ -95,18 +96,18 @@ class TestCouncilRunEndpoint:
         """Response should contain stage1, stage2, stage3, metadata."""
         from llm_council.http_server import app
 
-        mock_stage1 = [{"model": "openai/gpt-4", "response": "Answer 1"}]
+        mock_stage1 = [{"model": mc.OPENAI_HIGH, "response": "Answer 1"}]
         mock_stage2 = [
             {
-                "model": "anthropic/claude",
+                "model": mc.ANTHROPIC_BALANCED,
                 "ranking": "FINAL RANKING:\n1. Response A",
                 "parsed_ranking": {"ranking": ["Response A"], "scores": {}},
             }
         ]
         mock_stage3 = {"final_answer": "The synthesized answer", "model": "chairman"}
         mock_metadata = {
-            "aggregate_rankings": [{"model": "openai/gpt-4", "rank": 1}],
-            "label_to_model": {"Response A": "openai/gpt-4"},
+            "aggregate_rankings": [{"model": mc.OPENAI_HIGH, "rank": 1}],
+            "label_to_model": {"Response A": mc.OPENAI_HIGH},
         }
 
         with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock:
@@ -147,7 +148,7 @@ class TestCouncilRunEndpoint:
                 json={
                     "prompt": "test",
                     "api_key": "sk-test",
-                    "models": ["openai/gpt-4", "anthropic/claude-3-opus"],
+                    "models": [mc.OPENAI_HIGH, mc.ANTHROPIC_REASONING],
                 },
             )
 
@@ -155,7 +156,7 @@ class TestCouncilRunEndpoint:
             # Verify models were passed to run_full_council
             mock.assert_called_once()
             call_kwargs = mock.call_args
-            assert call_kwargs[1].get("models") == ["openai/gpt-4", "anthropic/claude-3-opus"]
+            assert call_kwargs[1].get("models") == [mc.OPENAI_HIGH, mc.ANTHROPIC_REASONING]
 
 
 class TestOpenAPISpec:

@@ -6,6 +6,7 @@ TDD: Write these tests first, then implement the OpenRouterGateway.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
+from llm_council import model_constants as mc
 
 
 class TestOpenRouterGateway:
@@ -134,7 +135,7 @@ class TestOpenRouterComplete:
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -154,7 +155,7 @@ class TestOpenRouterComplete:
 
         assert isinstance(response, GatewayResponse)
         assert response.content == "Hi there!"
-        assert response.model == "openai/gpt-4o"
+        assert response.model == mc.OPENAI_HIGH
         assert response.status == "ok"
         assert response.latency_ms == 150
 
@@ -171,7 +172,7 @@ class TestOpenRouterComplete:
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -201,7 +202,7 @@ class TestOpenRouterComplete:
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -225,7 +226,7 @@ class TestOpenRouterComplete:
 
         gateway = OpenRouterGateway()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],

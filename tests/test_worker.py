@@ -13,6 +13,7 @@ import pytest
 
 from llm_council.metadata.registry import ModelRegistry
 from llm_council.metadata.types import ModelInfo, QualityTier
+from llm_council import model_constants as mc
 
 
 class TestDiscoveryWorker:
@@ -25,10 +26,10 @@ class TestDiscoveryWorker:
 
         registry = ModelRegistry()
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(return_value=["openai/gpt-4o"])
+        mock_provider.list_available_models = MagicMock(return_value=[mc.OPENAI_HIGH])
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )
@@ -237,10 +238,10 @@ class TestDiscoveryWorker:
 
         registry = ModelRegistry()
         mock_provider = MagicMock()
-        mock_provider.list_available_models = MagicMock(return_value=["openai/gpt-4o"])
+        mock_provider.list_available_models = MagicMock(return_value=[mc.OPENAI_HIGH])
         mock_provider.get_model_info = MagicMock(
             return_value=ModelInfo(
-                id="openai/gpt-4o",
+                id=mc.OPENAI_HIGH,
                 context_window=128000,
                 quality_tier=QualityTier.FRONTIER,
             )

@@ -15,6 +15,7 @@ from llm_council.layer_contracts import (
     clear_layer_events,
 )
 from llm_council.voting import VotingAuthority
+from llm_council import model_constants as mc
 
 
 class TestShadowVoteTracking:
@@ -35,7 +36,7 @@ class TestShadowVoteTracking:
         # Sample stage2 results with an ADVISORY reviewer
         stage2_results = [
             {
-                "model": "openai/gpt-4o",  # FULL authority
+                "model": mc.OPENAI_HIGH,  # FULL authority
                 "response": "Response A is best...",
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
@@ -43,7 +44,7 @@ class TestShadowVoteTracking:
                 },
             },
             {
-                "model": "openai/gpt-5-preview",  # ADVISORY (frontier)
+                "model": mc.OPENAI_REASONING_PREVIEW,  # ADVISORY (frontier)
                 "response": "Response B is best...",
                 "parsed_ranking": {
                     "ranking": ["Response B", "Response A"],
@@ -53,13 +54,13 @@ class TestShadowVoteTracking:
         ]
 
         label_to_model = {
-            "Response A": {"model": "anthropic/claude-3.5-sonnet", "display_index": 0},
-            "Response B": {"model": "google/gemini-2.5-pro", "display_index": 1},
+            "Response A": {"model": mc.ANTHROPIC_HIGH, "display_index": 0},
+            "Response B": {"model": mc.GOOGLE_HIGH, "display_index": 1},
         }
 
         voting_authorities = {
-            "openai/gpt-4o": VotingAuthority.FULL,
-            "openai/gpt-5-preview": VotingAuthority.ADVISORY,
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
+            mc.OPENAI_REASONING_PREVIEW: VotingAuthority.ADVISORY,
         }
 
         result = calculate_aggregate_rankings(
@@ -80,7 +81,7 @@ class TestShadowVoteTracking:
 
         stage2_results = [
             {
-                "model": "openai/gpt-5-preview",  # ADVISORY
+                "model": mc.OPENAI_REASONING_PREVIEW,  # ADVISORY
                 "response": "Response B is best...",
                 "parsed_ranking": {
                     "ranking": ["Response B", "Response A"],
@@ -90,12 +91,11 @@ class TestShadowVoteTracking:
         ]
 
         label_to_model = {
-            "Response A": {"model": "anthropic/claude-3.5-sonnet", "display_index": 0},
-            "Response B": {"model": "google/gemini-2.5-pro", "display_index": 1},
+            "Response A": {"model": mc.ANTHROPIC_HIGH, "display_index": 0},
+            "Response B": {"model": mc.GOOGLE_HIGH, "display_index": 1},
         }
-
         voting_authorities = {
-            "openai/gpt-5-preview": VotingAuthority.ADVISORY,
+            mc.OPENAI_REASONING_PREVIEW: VotingAuthority.ADVISORY,
         }
 
         result = calculate_aggregate_rankings(
@@ -108,8 +108,8 @@ class TestShadowVoteTracking:
         # Get shadow_votes from any result entry
         shadow_votes = result[0].get("shadow_votes", [])
         assert len(shadow_votes) == 1
-        assert shadow_votes[0]["reviewer"] == "openai/gpt-5-preview"
-        assert shadow_votes[0]["top_pick"] == "google/gemini-2.5-pro"
+        assert shadow_votes[0]["reviewer"] == mc.OPENAI_REASONING_PREVIEW
+        assert shadow_votes[0]["top_pick"] == mc.GOOGLE_HIGH
 
     def test_shadow_votes_not_included_by_default(self):
         """When return_shadow_votes=False (default), no shadow_votes in results."""
@@ -117,7 +117,7 @@ class TestShadowVoteTracking:
 
         stage2_results = [
             {
-                "model": "openai/gpt-4o",
+                "model": mc.OPENAI_HIGH,
                 "response": "Response A is best...",
                 "parsed_ranking": {
                     "ranking": ["Response A", "Response B"],
@@ -127,8 +127,8 @@ class TestShadowVoteTracking:
         ]
 
         label_to_model = {
-            "Response A": {"model": "anthropic/claude-3.5-sonnet", "display_index": 0},
-            "Response B": {"model": "google/gemini-2.5-pro", "display_index": 1},
+            "Response A": {"model": mc.ANTHROPIC_HIGH, "display_index": 0},
+            "Response B": {"model": mc.GOOGLE_HIGH, "display_index": 1},
         }
 
         # Default: return_shadow_votes=False
@@ -161,21 +161,21 @@ class TestShadowVoteEventEmission:
 
         shadow_votes = [
             {
-                "reviewer": "openai/gpt-5-preview",
-                "top_pick": "anthropic/claude-3.5-sonnet",
-                "ranking": ["anthropic/claude-3.5-sonnet", "google/gemini-2.5-pro"],
+                "reviewer": mc.OPENAI_REASONING_PREVIEW,
+                "top_pick": mc.ANTHROPIC_BALANCED,
+                "ranking": [mc.ANTHROPIC_BALANCED, mc.GOOGLE_BALANCED],
             },
         ]
 
-        consensus_winner = "google/gemini-2.5-pro"
+        consensus_winner = mc.GOOGLE_BALANCED
 
         emit_shadow_vote_events(shadow_votes, consensus_winner)
 
         events = get_layer_events()
         assert len(events) == 1
         assert events[0].event_type == LayerEventType.FRONTIER_SHADOW_VOTE
-        assert events[0].data["model_id"] == "openai/gpt-5-preview"
-        assert events[0].data["top_pick"] == "anthropic/claude-3.5-sonnet"
+        assert events[0].data["model_id"] == mc.OPENAI_REASONING_PREVIEW
+        assert events[0].data["top_pick"] == mc.ANTHROPIC_BALANCED
         assert events[0].data["agreed_with_consensus"] is False
 
     def test_shadow_vote_agreement_calculated_correctly(self):
@@ -186,13 +186,13 @@ class TestShadowVoteEventEmission:
 
         shadow_votes = [
             {
-                "reviewer": "openai/gpt-5-preview",
-                "top_pick": "anthropic/claude-3.5-sonnet",  # Same as consensus
-                "ranking": ["anthropic/claude-3.5-sonnet", "google/gemini-2.5-pro"],
+                "reviewer": mc.OPENAI_REASONING_PREVIEW,
+                "top_pick": mc.ANTHROPIC_BALANCED,  # Same as consensus
+                "ranking": [mc.ANTHROPIC_BALANCED, mc.GOOGLE_BALANCED],
             },
         ]
 
-        consensus_winner = "anthropic/claude-3.5-sonnet"
+        consensus_winner = mc.ANTHROPIC_BALANCED
 
         emit_shadow_vote_events(shadow_votes, consensus_winner)
 

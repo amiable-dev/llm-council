@@ -4,9 +4,12 @@ Tests are written FIRST (RED phase) per TDD methodology.
 Issue: https://github.com/amiable-dev/llm-council/issues/128
 """
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 import pytest
+from llm_council import model_constants as mc
 
 
 class TestAuditionStateEnum:
@@ -57,17 +60,17 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
-        assert status.model_id == "openai/gpt-5-mini"
+        assert status.model_id == mc.OPENAI_BALANCED
 
     def test_audition_status_has_state(self):
         """AuditionStatus requires state."""
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.PROBATION,
         )
         assert status.state == AuditionState.PROBATION
@@ -77,7 +80,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.session_count == 0
@@ -87,7 +90,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.first_seen is None
@@ -97,7 +100,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.last_seen is None
@@ -107,7 +110,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.consecutive_failures == 0
@@ -117,7 +120,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.quality_percentile is None
@@ -127,7 +130,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.quarantine_until is None
@@ -139,7 +142,7 @@ class TestAuditionStatus:
         now = datetime.now(UTC)
         five_days_ago = now - timedelta(days=5)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             first_seen=five_days_ago,
             last_seen=now,
@@ -153,7 +156,7 @@ class TestAuditionStatus:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
         )
         assert status.days_tracked is None

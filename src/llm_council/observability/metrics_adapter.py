@@ -21,6 +21,7 @@ import os
 import socket
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
+from .. import model_constants as mc
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class StatsDBackend:
 
     Example:
         backend = StatsDBackend(host="localhost", port=8125, prefix="llm_council")
-        backend.emit_counter("circuit_breaker_open", 1, {"model_id": "openai/gpt-4o"})
+        backend.emit_counter("circuit_breaker_open", 1, {"model_id": mc.OPENAI_HIGH})
     """
 
     def __init__(

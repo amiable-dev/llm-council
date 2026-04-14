@@ -5,6 +5,8 @@ TDD: Write these tests first, then implement the gateway package.
 
 import pytest
 from dataclasses import FrozenInstanceError
+from llm_council import model_constants as mc
+
 
 
 class TestCanonicalMessage:
@@ -92,13 +94,13 @@ class TestGatewayRequest:
         from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
         )
 
-        assert request.model == "openai/gpt-4o"
+        assert request.model == mc.OPENAI_HIGH
         assert len(request.messages) == 1
 
     def test_gateway_request_optional_params(self):
@@ -106,7 +108,7 @@ class TestGatewayRequest:
         from llm_council.gateway.types import GatewayRequest, CanonicalMessage, ContentBlock
 
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -129,12 +131,12 @@ class TestGatewayResponse:
 
         response = GatewayResponse(
             content="Hello, how can I help?",
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             status="ok",
         )
 
         assert response.content == "Hello, how can I help?"
-        assert response.model == "openai/gpt-4o"
+        assert response.model == mc.OPENAI_HIGH
         assert response.status == "ok"
 
     def test_gateway_response_optional_usage(self):
@@ -144,7 +146,7 @@ class TestGatewayResponse:
         usage = UsageInfo(prompt_tokens=10, completion_tokens=20, total_tokens=30)
         response = GatewayResponse(
             content="Hello",
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             status="ok",
             usage=usage,
             latency_ms=150,
@@ -300,9 +302,9 @@ class TestGatewayErrors:
         """ModelNotFoundError should have model_id."""
         from llm_council.gateway.errors import ModelNotFoundError
 
-        error = ModelNotFoundError("Model not found", model_id="invalid/model")
+        error = ModelNotFoundError("Model not found", model_id="invalid-model")
 
-        assert error.model_id == "invalid/model"
+        assert error.model_id == "invalid-model"
 
     def test_circuit_open_error(self):
         """CircuitOpenError for circuit breaker."""

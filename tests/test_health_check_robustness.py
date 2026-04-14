@@ -6,11 +6,14 @@ from unittest.mock import AsyncMock, patch
 from llm_council.mcp_server import council_health_check
 from llm_council.openrouter import STATUS_OK, STATUS_AUTH_ERROR
 from llm_council.council import CHAIRMAN_MODEL
+from llm_council import model_constants as mc
+
+
 
 @pytest.mark.asyncio
 async def test_council_health_check_403_fallback_success():
     """Test health check when chairman fails with 403 but fallback succeeds (ADR-039)."""
-    
+
     async def mock_query_with_status(model, *args, **kwargs):
         if model == CHAIRMAN_MODEL:
             return {
@@ -18,7 +21,7 @@ async def test_council_health_check_403_fallback_success():
                 "error": "Authentication failed for model: 403",
                 "latency_ms": 50,
             }
-        elif model == "openai/gpt-4o-mini":
+        elif model == mc.OPENAI_LOW:
             return {
                 "status": STATUS_OK,
                 "latency_ms": 100,
@@ -36,13 +39,14 @@ async def test_council_health_check_403_fallback_success():
         assert "ready_warning" in data
         assert CHAIRMAN_MODEL in data["ready_warning"]
         assert "403" in data["ready_warning"]
-        assert data["api_connectivity"]["test_model"] == "openai/gpt-4o-mini"
+        assert data["api_connectivity"]["test_model"] == mc.OPENAI_LOW
         assert "API Key Valid" in data["message"]
+
 
 @pytest.mark.asyncio
 async def test_council_health_check_403_fallback_failure():
     """Test health check when both chairman and fallback fail with 403."""
-    
+
     mock_response = {
         "status": STATUS_AUTH_ERROR,
         "error": "Authentication failed for model: 403",
@@ -60,10 +64,11 @@ async def test_council_health_check_403_fallback_failure():
         assert data["api_connectivity"]["status"] == STATUS_AUTH_ERROR
         assert "connectivity issue" in data["message"].lower()
 
+
 @pytest.mark.asyncio
 async def test_council_health_check_direct_success():
     """Test health check when chairman succeeds directly."""
-    
+
     mock_response = {
         "status": STATUS_OK,
         "latency_ms": 150,
