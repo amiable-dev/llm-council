@@ -810,5 +810,10 @@ async def list_models() -> str:
     return json.dumps(models, indent=2)
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the llm-council command."""
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
