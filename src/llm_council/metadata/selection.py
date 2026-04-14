@@ -95,7 +95,7 @@ class ModelCandidate:
     """Candidate model with scoring attributes.
 
     Attributes:
-        model_id: Full model identifier (e.g., 'openai/gpt-4o')
+        model_id: Full model identifier (e.g., 'provider/model')
         latency_score: 0-1 score for response latency (higher = faster)
         cost_score: 0-1 score for cost efficiency (higher = cheaper)
         quality_score: 0-1 score for output quality (higher = better)
@@ -577,7 +577,7 @@ def _get_quality_score_from_metadata(
     allowing caller to fall back to heuristic estimation.
 
     Args:
-        model_id: Full model identifier (e.g., 'openai/gpt-4o')
+        model_id: Full model identifier (e.g., 'provider/model')
         provider: MetadataProvider instance or None
 
     Returns:
@@ -702,7 +702,7 @@ def _create_synthetic_model_info(model_id: str) -> "ModelInfo":
     ModelInfo based on common patterns in model naming.
 
     Args:
-        model_id: Full model identifier (e.g., 'openai/gpt-4o')
+        model_id: Full model identifier (e.g., 'provider/model')
 
     Returns:
         Synthetic ModelInfo with heuristic-based values

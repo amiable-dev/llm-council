@@ -7,7 +7,8 @@ This module defines the state machine and data structures for model audition:
 
 Example:
     >>> from llm_council.audition.types import AuditionState, AuditionStatus
-    >>> status = AuditionStatus(model_id="openai/gpt-5", state=AuditionState.SHADOW)
+    >>> from llm_council import model_constants as mc
+    >>> status = AuditionStatus(model_id=mc.OPENAI_HIGH, state=AuditionState.SHADOW)
     >>> status.session_count
     0
 """
@@ -41,7 +42,7 @@ class AuditionStatus:
     """Tracks a model's audition progress.
 
     Attributes:
-        model_id: Full model identifier (e.g., "openai/gpt-5-mini")
+        model_id: Full model identifier
         state: Current audition state
         session_count: Number of council sessions participated in
         first_seen: When the model was first discovered

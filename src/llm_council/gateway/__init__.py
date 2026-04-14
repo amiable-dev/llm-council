@@ -13,7 +13,7 @@ Example usage:
 
     router = GatewayRouter()
     request = GatewayRequest(
-        model="openai/gpt-4o",
+        model=mc.OPENAI_HIGH,
         messages=[
             CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
         ]

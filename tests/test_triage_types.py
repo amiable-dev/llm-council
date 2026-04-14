@@ -4,6 +4,8 @@ TDD: Write these tests first, then implement the triage package.
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 from dataclasses import FrozenInstanceError
 
 
@@ -15,12 +17,12 @@ class TestTriageResult:
         from llm_council.triage.types import TriageResult
 
         result = TriageResult(
-            resolved_models=["openai/gpt-4o", "anthropic/claude-3-5-sonnet-20241022"],
-            optimized_prompts={"openai/gpt-4o": "Test prompt"},
+            resolved_models=[mc.OPENAI_HIGH, mc.ANTHROPIC_BALANCED],
+            optimized_prompts={mc.OPENAI_HIGH: "Test prompt"},
         )
 
-        assert result.resolved_models == ["openai/gpt-4o", "anthropic/claude-3-5-sonnet-20241022"]
-        assert result.optimized_prompts["openai/gpt-4o"] == "Test prompt"
+        assert result.resolved_models == [mc.OPENAI_HIGH, mc.ANTHROPIC_BALANCED]
+        assert result.optimized_prompts[mc.OPENAI_HIGH] == "Test prompt"
 
     def test_triage_result_default_fast_path_false(self):
         """TriageResult.fast_path should default to False."""
@@ -114,8 +116,8 @@ class TestWildcardConfig:
 
         config = WildcardConfig(
             specialist_pools={
-                DomainCategory.CODE: ["deepseek/deepseek-chat", "codestral/codestral-latest"],
-                DomainCategory.REASONING: ["openai/o1-preview", "deepseek/deepseek-r1"],
+                DomainCategory.CODE: [mc.DEEPSEEK_CHAT, mc.CODESTRAL],
+                DomainCategory.REASONING: [mc.OPENAI_REASONING_PREVIEW, mc.DEEPSEEK_R1],
             }
         )
 
@@ -137,10 +139,10 @@ class TestWildcardConfig:
 
         config = WildcardConfig(
             specialist_pools={},
-            fallback_model="meta-llama/llama-3.1-70b-instruct",
+            fallback_model=mc.LLAMA_HIGH,
         )
 
-        assert config.fallback_model == "meta-llama/llama-3.1-70b-instruct"
+        assert config.fallback_model == mc.LLAMA_HIGH
 
     def test_wildcard_config_selection_timeout(self):
         """WildcardConfig should have max selection timeout."""

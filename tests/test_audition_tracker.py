@@ -5,10 +5,13 @@ Issue: https://github.com/amiable-dev/llm-council/issues/130
 """
 
 import tempfile
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 from pathlib import Path
 
 import pytest
+from llm_council import model_constants as mc
 
 
 class TestAuditionTrackerSingleton:
@@ -36,7 +39,7 @@ class TestAuditionTrackerGetStatus:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        result = tracker.get_status("nonexistent/model")
+        result = tracker.get_status("generic/local")
         assert result is None
 
 
@@ -49,9 +52,9 @@ class TestAuditionTrackerRecordSession:
         from llm_council.audition.types import AuditionState
 
         tracker = AuditionTracker()
-        status = tracker.record_session("openai/gpt-5-mini", success=True)
+        status = tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
-        assert status.model_id == "openai/gpt-5-mini"
+        assert status.model_id == mc.OPENAI_BALANCED
         assert status.state == AuditionState.SHADOW  # New models start in SHADOW
         assert status.session_count == 1
 
@@ -60,8 +63,8 @@ class TestAuditionTrackerRecordSession:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        tracker.record_session("openai/gpt-5-mini", success=True)
-        status = tracker.record_session("openai/gpt-5-mini", success=True)
+        tracker.record_session(mc.OPENAI_BALANCED, success=True)
+        status = tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
         assert status.session_count == 2
 
@@ -70,8 +73,8 @@ class TestAuditionTrackerRecordSession:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        tracker.record_session("openai/gpt-5-mini", success=True)
-        status = tracker.record_session("openai/gpt-5-mini", success=False)
+        tracker.record_session(mc.OPENAI_BALANCED, success=True)
+        status = tracker.record_session(mc.OPENAI_BALANCED, success=False)
 
         assert status.consecutive_failures == 1
 
@@ -80,9 +83,9 @@ class TestAuditionTrackerRecordSession:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        tracker.record_session("openai/gpt-5-mini", success=False)
-        tracker.record_session("openai/gpt-5-mini", success=False)
-        status = tracker.record_session("openai/gpt-5-mini", success=True)
+        tracker.record_session(mc.OPENAI_BALANCED, success=False)
+        tracker.record_session(mc.OPENAI_BALANCED, success=False)
+        status = tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
         assert status.consecutive_failures == 0
 
@@ -91,9 +94,9 @@ class TestAuditionTrackerRecordSession:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        tracker.record_session("openai/gpt-5-mini", success=True)
+        tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
-        cached = tracker.get_status("openai/gpt-5-mini")
+        cached = tracker.get_status(mc.OPENAI_BALANCED)
         assert cached is not None
         assert cached.session_count == 1
 
@@ -106,10 +109,10 @@ class TestAuditionTrackerQualityPercentile:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        tracker.record_session("openai/gpt-5-mini", success=True)
-        tracker.update_quality_percentile("openai/gpt-5-mini", 0.82)
+        tracker.record_session(mc.OPENAI_BALANCED, success=True)
+        tracker.update_quality_percentile(mc.OPENAI_BALANCED, 0.82)
 
-        status = tracker.get_status("openai/gpt-5-mini")
+        status = tracker.get_status(mc.OPENAI_BALANCED)
         assert status is not None
         assert status.quality_percentile == 0.82
 
@@ -119,7 +122,7 @@ class TestAuditionTrackerQualityPercentile:
 
         tracker = AuditionTracker()
         # Should not raise
-        tracker.update_quality_percentile("nonexistent/model", 0.80)
+        tracker.update_quality_percentile("generic/local", 0.80)
 
 
 class TestAuditionTrackerCheckTransitions:
@@ -134,19 +137,19 @@ class TestAuditionTrackerCheckTransitions:
 
         # Create model ready to graduate from SHADOW to PROBATION
         for _ in range(12):
-            tracker.record_session("openai/gpt-5-mini", success=True)
+            tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
         # Manually adjust first_seen to meet min_days requirement
-        status = tracker.get_status("openai/gpt-5-mini")
+        status = tracker.get_status(mc.OPENAI_BALANCED)
         status.first_seen = datetime.now(UTC) - timedelta(days=5)
-        tracker._cache["openai/gpt-5-mini"] = status
+        tracker._cache[mc.OPENAI_BALANCED] = status
 
         criteria = AuditionCriteria()
         transitions = tracker.check_transitions(criteria)
 
         assert len(transitions) == 1
         model_id, from_state, to_state = transitions[0]
-        assert model_id == "openai/gpt-5-mini"
+        assert model_id == mc.OPENAI_BALANCED
         assert from_state == AuditionState.SHADOW
         assert to_state == AuditionState.PROBATION
 
@@ -159,17 +162,17 @@ class TestAuditionTrackerCheckTransitions:
 
         # Create model ready to graduate
         for _ in range(12):
-            tracker.record_session("openai/gpt-5-mini", success=True)
+            tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
-        status = tracker.get_status("openai/gpt-5-mini")
+        status = tracker.get_status(mc.OPENAI_BALANCED)
         status.first_seen = datetime.now(UTC) - timedelta(days=5)
-        tracker._cache["openai/gpt-5-mini"] = status
+        tracker._cache[mc.OPENAI_BALANCED] = status
 
         criteria = AuditionCriteria()
         tracker.check_transitions(criteria)
 
         # Verify state was updated
-        updated = tracker.get_status("openai/gpt-5-mini")
+        updated = tracker.get_status(mc.OPENAI_BALANCED)
         assert updated.state == AuditionState.PROBATION
 
 
@@ -181,17 +184,17 @@ class TestAuditionTrackerGetAllStatuses:
         from llm_council.audition.tracker import AuditionTracker
 
         tracker = AuditionTracker()
-        tracker.record_session("openai/gpt-5-mini", success=True)
-        tracker.record_session("anthropic/claude-4", success=True)
-        tracker.record_session("google/gemini-3", success=True)
+        tracker.record_session(mc.OPENAI_HIGH, success=True)
+        tracker.record_session(mc.ANTHROPIC_HIGH, success=True)
+        tracker.record_session(mc.GOOGLE_HIGH, success=True)
 
         all_statuses = tracker.get_all_statuses()
         model_ids = {s.model_id for s in all_statuses}
 
         assert len(all_statuses) == 3
-        assert "openai/gpt-5-mini" in model_ids
-        assert "anthropic/claude-4" in model_ids
-        assert "google/gemini-3" in model_ids
+        assert mc.OPENAI_HIGH in model_ids
+        assert mc.ANTHROPIC_HIGH in model_ids
+        assert mc.GOOGLE_HIGH in model_ids
 
 
 class TestAuditionTrackerPersistence:
@@ -207,16 +210,16 @@ class TestAuditionTrackerPersistence:
 
             # Create tracker with persistence
             tracker1 = AuditionTracker(store_path=str(store_path))
-            tracker1.record_session("openai/gpt-5-mini", success=True)
-            tracker1.record_session("openai/gpt-5-mini", success=True)
-            tracker1.record_session("openai/gpt-5-mini", success=False)
+            tracker1.record_session(mc.OPENAI_BALANCED, success=True)
+            tracker1.record_session(mc.OPENAI_BALANCED, success=True)
+            tracker1.record_session(mc.OPENAI_BALANCED, success=False)
 
             # Create new tracker from same file
             tracker2 = AuditionTracker(store_path=str(store_path))
 
-            status = tracker2.get_status("openai/gpt-5-mini")
+            status = tracker2.get_status(mc.OPENAI_BALANCED)
             assert status is not None
-            assert status.model_id == "openai/gpt-5-mini"
+            assert status.model_id == mc.OPENAI_BALANCED
             assert status.state == AuditionState.SHADOW
             assert status.session_count == 3
             assert status.consecutive_failures == 1
@@ -230,7 +233,7 @@ class TestAuditionTrackerPersistence:
             assert not store_path.exists()
 
             tracker = AuditionTracker(store_path=str(store_path))
-            tracker.record_session("openai/gpt-5-mini", success=True)
+            tracker.record_session(mc.OPENAI_BALANCED, success=True)
 
             assert store_path.exists()
 

@@ -5,6 +5,8 @@ from unittest.mock import MagicMock, patch
 from llm_council.metadata.openrouter_client import OpenRouterClient
 from llm_council.openrouter import query_model_with_status
 from llm_council.council import run_full_council
+from llm_council import model_constants as mc
+
 
 
 @pytest.mark.asyncio
@@ -33,7 +35,7 @@ async def test_metadata_headers_sent():
 @pytest.mark.asyncio
 async def test_completion_headers_sent():
     """Verify that identity and tracing headers are sent during completion queries."""
-    model = "openai/gpt-4o"
+    model = mc.OPENAI_HIGH
     messages = [{"role": "user", "content": "Hello"}]
     test_council_id = str(uuid.uuid4())
 

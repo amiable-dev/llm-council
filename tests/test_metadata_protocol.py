@@ -7,6 +7,8 @@ These tests are written FIRST per TDD methodology.
 import pytest
 import inspect
 from typing import Optional, Dict, List
+from llm_council import model_constants as mc
+
 
 
 class TestMetadataProviderProtocol:
@@ -133,10 +135,10 @@ class TestMockProviderCompliance:
                 return {"prompt": 0.01, "completion": 0.03}
 
             def supports_reasoning(self, model_id: str) -> bool:
-                return model_id.startswith("openai/o")
+                return model_id.startswith(mc.PREFIX_OPENAI) and "/o" in model_id
 
             def list_available_models(self) -> List[str]:
-                return ["openai/gpt-4o", "anthropic/claude-opus-4.6"]
+                return [mc.OPENAI_HIGH, mc.ANTHROPIC_OPUS_LATEST]
 
         provider = TypedProvider()
 
@@ -150,7 +152,7 @@ class TestMockProviderCompliance:
         pricing = provider.get_pricing("test")
         assert isinstance(pricing, dict)
 
-        reasoning = provider.supports_reasoning("openai/o1")
+        reasoning = provider.supports_reasoning(mc.OPENAI_REASONING_LATEST)
         assert isinstance(reasoning, bool)
 
         models = provider.list_available_models()

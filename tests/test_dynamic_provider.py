@@ -7,6 +7,7 @@ with caching and falls back to StaticRegistryProvider.
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import os
+from llm_council import model_constants as mc
 
 
 class TestDynamicMetadataProvider:
@@ -27,7 +28,7 @@ class TestDynamicMetadataProvider:
 
         provider = DynamicMetadataProvider()
         # With empty cache, should fall back to static
-        result = provider.get_model_info("openai/gpt-4o")
+        result = provider.get_model_info(mc.OPENAI_HIGH)
         assert result is None or isinstance(result, ModelInfo)
 
     def test_get_context_window_returns_int(self):
@@ -73,7 +74,7 @@ class TestDynamicProviderFallback:
 
         provider = DynamicMetadataProvider()
         # GPT-4o is in static registry
-        window = provider.get_context_window("openai/gpt-4o")
+        window = provider.get_context_window(mc.OPENAI_HIGH)
 
         # Should get data from static registry fallback
         assert window >= 4096
@@ -83,7 +84,7 @@ class TestDynamicProviderFallback:
         from llm_council.metadata.dynamic_provider import DynamicMetadataProvider
 
         provider = DynamicMetadataProvider()
-        window = provider.get_context_window("unknown/model")
+        window = provider.get_context_window("unknown-model")
 
         # Should get safe default
         assert window == 4096
@@ -97,13 +98,13 @@ class TestDynamicProviderFallback:
 
         # Simulate populated cache with different context window
         test_model = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=999999,  # Different from static
             quality_tier=QualityTier.FRONTIER,
         )
-        provider._cache.registry_cache.set("openai/gpt-4o", test_model)
+        provider._cache.registry_cache.set(mc.OPENAI_HIGH, test_model)
 
-        info = provider.get_model_info("openai/gpt-4o")
+        info = provider.get_model_info(mc.OPENAI_HIGH)
         assert info is not None
         assert info.context_window == 999999
 
@@ -115,8 +116,8 @@ class TestDynamicProviderFallback:
 
         # These are in static registry
         models = provider.list_available_models()
-        assert "openai/gpt-4o" in models
-        assert "anthropic/claude-opus-4.6" in models
+        assert mc.OPENAI_HIGH in models
+        assert mc.ANTHROPIC_OPUS_LATEST in models
 
 
 class TestDynamicProviderRefresh:
@@ -208,7 +209,7 @@ class TestDynamicProviderOfflineMode:
             provider = DynamicMetadataProvider()
 
             # GPT-4o from static registry
-            info = provider.get_model_info("openai/gpt-4o")
+            info = provider.get_model_info(mc.OPENAI_HIGH)
             assert info is not None
 
 

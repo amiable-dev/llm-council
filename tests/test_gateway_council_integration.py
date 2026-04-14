@@ -7,6 +7,8 @@ ADR-032: Updated to use gateway_adapter.USE_GATEWAY_LAYER instead of config.py.
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
+from llm_council import model_constants as mc
+
 
 
 class TestGatewayConfig:
@@ -78,7 +80,7 @@ class TestAdapterGatewayEnabled:
             with patch("llm_council.gateway_adapter._gateway_router") as mock_router:
                 mock_response = GatewayResponse(
                     content="Hello from gateway",
-                    model="openai/gpt-4o",
+                    model=mc.OPENAI_HIGH,
                     status="ok",
                     latency_ms=100,
                 )
@@ -86,7 +88,7 @@ class TestAdapterGatewayEnabled:
 
                 from llm_council.gateway_adapter import query_model
 
-                result = await query_model("openai/gpt-4o", [{"role": "user", "content": "Hello"}])
+                result = await query_model(mc.OPENAI_HIGH, [{"role": "user", "content": "Hello"}])
 
                 assert result is not None
                 assert result["content"] == "Hello from gateway"
@@ -104,7 +106,7 @@ class TestAdapterGatewayDisabled:
 
                 from llm_council.gateway_adapter import query_model
 
-                result = await query_model("openai/gpt-4o", [{"role": "user", "content": "Hello"}])
+                result = await query_model(mc.OPENAI_HIGH, [{"role": "user", "content": "Hello"}])
 
                 mock_direct.assert_called_once()
 

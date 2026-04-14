@@ -11,7 +11,7 @@ Context isolation ensures:
 
 import asyncio
 import re
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -101,11 +101,14 @@ class TestCreateIsolatedContext:
 
     def test_create_isolated_context_captures_timestamp(self):
         """Context should capture creation timestamp."""
-        before = datetime.now(UTC)
+        before = datetime.now(timezone.utc)
+        # Robust check: context creation must happen within the execution window
+        # We allow for slight microsecond overlap (>= / <=)
         ctx = create_isolated_context(snapshot_id="abc1234")
-        after = datetime.now(UTC)
+        after = datetime.now(timezone.utc)
 
-        assert before <= ctx.created_at <= after
+        assert before <= ctx.created_at
+        assert ctx.created_at <= after
 
     def test_create_isolated_context_with_rubric_focus(self):
         """Context should accept optional rubric focus."""

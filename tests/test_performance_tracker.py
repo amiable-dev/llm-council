@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestInternalPerformanceTrackerInit:
@@ -60,7 +62,7 @@ class TestRecordSession:
             metrics = [
                 ModelSessionMetric(
                     session_id="s1",
-                    model_id="openai/gpt-4o",
+                    model_id=mc.OPENAI_HIGH,
                     timestamp=datetime.now(timezone.utc).isoformat(),
                     latency_ms=1500,
                     borda_score=0.75,
@@ -81,9 +83,9 @@ class TestRecordSession:
             tracker = InternalPerformanceTracker(store_path=path)
 
             metrics = [
-                ModelSessionMetric(session_id="s1", model_id="openai/gpt-4o", borda_score=0.8),
-                ModelSessionMetric(session_id="s1", model_id="anthropic/claude", borda_score=0.7),
-                ModelSessionMetric(session_id="s1", model_id="google/gemini", borda_score=0.6),
+                ModelSessionMetric(session_id="s1", model_id=mc.OPENAI_HIGH, borda_score=0.8),
+                ModelSessionMetric(session_id="s1", model_id=mc.ANTHROPIC_HIGH, borda_score=0.7),
+                ModelSessionMetric(session_id="s1", model_id=mc.GOOGLE_HIGH, borda_score=0.6),
             ]
             count = tracker.record_session("s1", metrics)
 
@@ -106,7 +108,7 @@ class TestGetModelIndex:
             metrics = [
                 ModelSessionMetric(
                     session_id="s1",
-                    model_id="openai/gpt-4o",
+                    model_id=mc.OPENAI_HIGH,
                     timestamp=now,
                     latency_ms=1000,
                     borda_score=0.8,
@@ -114,7 +116,7 @@ class TestGetModelIndex:
                 ),
                 ModelSessionMetric(
                     session_id="s2",
-                    model_id="openai/gpt-4o",
+                    model_id=mc.OPENAI_HIGH,
                     timestamp=now,
                     latency_ms=1200,
                     borda_score=0.7,
@@ -124,10 +126,10 @@ class TestGetModelIndex:
             tracker.record_session("s1", [metrics[0]])
             tracker.record_session("s2", [metrics[1]])
 
-            index = tracker.get_model_index("openai/gpt-4o")
+            index = tracker.get_model_index(mc.OPENAI_HIGH)
 
             assert isinstance(index, ModelPerformanceIndex)
-            assert index.model_id == "openai/gpt-4o"
+            assert index.model_id == mc.OPENAI_HIGH
             assert index.sample_size == 2
 
     def test_get_model_index_with_no_data_returns_cold_start(self):

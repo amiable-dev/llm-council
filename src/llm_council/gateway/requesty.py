@@ -102,7 +102,7 @@ class RequestyGateway(BaseRouter):
         """Extract provider name from model identifier.
 
         Args:
-            model: Model identifier (e.g., "anthropic/claude-3-5-sonnet-20241022")
+            model: Model identifier (e.g., mc.ANTHROPIC_HIGH)
 
         Returns:
             Provider name (e.g., "anthropic")

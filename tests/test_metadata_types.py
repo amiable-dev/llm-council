@@ -6,6 +6,8 @@ These tests are written FIRST per TDD methodology.
 
 import pytest
 from dataclasses import FrozenInstanceError
+from llm_council import model_constants as mc
+
 
 
 class TestModelInfo:
@@ -16,10 +18,10 @@ class TestModelInfo:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
         )
-        assert info.id == "openai/gpt-4o"
+        assert info.id == mc.OPENAI_HIGH
         assert info.context_window == 128000
 
     def test_model_info_pricing(self):
@@ -27,7 +29,7 @@ class TestModelInfo:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="anthropic/claude-opus-4.6",
+            id=mc.ANTHROPIC_OPUS_LATEST,
             context_window=200000,
             pricing={"prompt": 0.015, "completion": 0.075},
         )
@@ -46,7 +48,7 @@ class TestModelInfo:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             supported_parameters=["temperature", "top_p", "tools", "reasoning"],
         )
@@ -65,7 +67,7 @@ class TestModelInfo:
         from llm_council.metadata.types import ModelInfo
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             modalities=["text", "vision"],
         )
@@ -84,7 +86,7 @@ class TestModelInfo:
         from llm_council.metadata.types import ModelInfo, QualityTier
 
         info = ModelInfo(
-            id="openai/gpt-4o",
+            id=mc.OPENAI_HIGH,
             context_window=128000,
             quality_tier=QualityTier.FRONTIER,
         )

@@ -6,6 +6,7 @@ This implements Issue #111.
 
 import pytest
 from typing import Dict, Any, List
+from llm_council import model_constants as mc
 
 
 class TestShadowVotingIntegration:
@@ -27,8 +28,8 @@ class TestShadowVotingIntegration:
         from llm_council.council import calculate_aggregate_rankings
 
         stage2_results = [
-            self._create_stage2_result("openai/gpt-4o", ["Response A", "Response B"]),
-            self._create_stage2_result("anthropic/claude", ["Response A", "Response B"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.ANTHROPIC_HIGH, ["Response A", "Response B"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
 
@@ -44,13 +45,13 @@ class TestShadowVotingIntegration:
         from llm_council.voting import VotingAuthority
 
         stage2_results = [
-            self._create_stage2_result("openai/gpt-4o", ["Response A", "Response B"]),
-            self._create_stage2_result("anthropic/claude", ["Response A", "Response B"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.ANTHROPIC_HIGH, ["Response A", "Response B"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {
-            "openai/gpt-4o": VotingAuthority.FULL,
-            "anthropic/claude": VotingAuthority.FULL,
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
+            mc.ANTHROPIC_HIGH: VotingAuthority.FULL,
         }
 
         rankings = calculate_aggregate_rankings(
@@ -67,15 +68,15 @@ class TestShadowVotingIntegration:
 
         # Frontier model votes for A, others vote for B
         stage2_results = [
-            self._create_stage2_result("frontier/preview", ["Response A", "Response B"]),
-            self._create_stage2_result("openai/gpt-4o", ["Response B", "Response A"]),
-            self._create_stage2_result("anthropic/claude", ["Response B", "Response A"]),
+            self._create_stage2_result(mc.OPENAI_REASONING, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response B", "Response A"]),
+            self._create_stage2_result(mc.ANTHROPIC_HIGH, ["Response B", "Response A"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {
-            "frontier/preview": VotingAuthority.ADVISORY,  # Shadow vote
-            "openai/gpt-4o": VotingAuthority.FULL,
-            "anthropic/claude": VotingAuthority.FULL,
+            mc.OPENAI_REASONING: VotingAuthority.ADVISORY,  # Shadow vote
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
+            mc.ANTHROPIC_HIGH: VotingAuthority.FULL,
         }
 
         rankings = calculate_aggregate_rankings(
@@ -97,13 +98,13 @@ class TestShadowVotingIntegration:
         from llm_council.voting import VotingAuthority
 
         stage2_results = [
-            self._create_stage2_result("frontier/a", ["Response A", "Response B"]),
-            self._create_stage2_result("frontier/b", ["Response B", "Response A"]),
+            self._create_stage2_result(mc.OPENAI_REASONING, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.DEEPSEEK_R1, ["Response B", "Response A"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {
-            "frontier/a": VotingAuthority.ADVISORY,
-            "frontier/b": VotingAuthority.ADVISORY,
+            mc.OPENAI_REASONING: VotingAuthority.ADVISORY,
+            mc.DEEPSEEK_R1: VotingAuthority.ADVISORY,
         }
 
         rankings = calculate_aggregate_rankings(
@@ -121,17 +122,17 @@ class TestShadowVotingIntegration:
 
         # 2 FULL votes for A, 2 ADVISORY votes for B
         stage2_results = [
-            self._create_stage2_result("openai/gpt-4o", ["Response A", "Response B"]),
-            self._create_stage2_result("anthropic/claude", ["Response A", "Response B"]),
-            self._create_stage2_result("frontier/a", ["Response B", "Response A"]),
-            self._create_stage2_result("frontier/b", ["Response B", "Response A"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.ANTHROPIC_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.OPENAI_REASONING, ["Response B", "Response A"]),
+            self._create_stage2_result(mc.DEEPSEEK_R1, ["Response B", "Response A"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {
-            "openai/gpt-4o": VotingAuthority.FULL,
-            "anthropic/claude": VotingAuthority.FULL,
-            "frontier/a": VotingAuthority.ADVISORY,
-            "frontier/b": VotingAuthority.ADVISORY,
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
+            mc.ANTHROPIC_HIGH: VotingAuthority.FULL,
+            mc.OPENAI_REASONING: VotingAuthority.ADVISORY,
+            mc.DEEPSEEK_R1: VotingAuthority.ADVISORY,
         }
 
         rankings = calculate_aggregate_rankings(
@@ -148,12 +149,12 @@ class TestShadowVotingIntegration:
         from llm_council.voting import VotingAuthority
 
         stage2_results = [
-            self._create_stage2_result("openai/gpt-4o", ["Response A", "Response B"]),
-            self._create_stage2_result("excluded/model", ["Response B", "Response A"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result("excluded/model", ["Response B", "Response A"]), # excluded/model is fine as it's not a real provider prefix
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {
-            "openai/gpt-4o": VotingAuthority.FULL,
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
             "excluded/model": VotingAuthority.EXCLUDED,
         }
 
@@ -188,13 +189,13 @@ class TestShadowVoteTracking:
         from llm_council.voting import VotingAuthority
 
         stage2_results = [
-            self._create_stage2_result("openai/gpt-4o", ["Response A", "Response B"]),
-            self._create_stage2_result("frontier/preview", ["Response B", "Response A"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.OPENAI_REASONING_PREVIEW, ["Response B", "Response A"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {
-            "openai/gpt-4o": VotingAuthority.FULL,
-            "frontier/preview": VotingAuthority.ADVISORY,
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
+            mc.OPENAI_REASONING_PREVIEW: VotingAuthority.ADVISORY,
         }
 
         rankings = calculate_aggregate_rankings(
@@ -213,14 +214,14 @@ class TestShadowVoteTracking:
         from llm_council.voting import VotingAuthority
 
         stage2_results = [
-            self._create_stage2_result("openai/gpt-4o", ["Response A", "Response B"]),
-            self._create_stage2_result("frontier/preview", ["Response B", "Response A"]),
+            self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
+            self._create_stage2_result(mc.OPENAI_REASONING_PREVIEW, ["Response B", "Response A"]),
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
 
         # Only specify authority for some models
         voting_authorities = {
-            "openai/gpt-4o": VotingAuthority.FULL,
+            mc.OPENAI_HIGH: VotingAuthority.FULL,
             # frontier/preview not specified - should still work
         }
 
@@ -241,8 +242,8 @@ class TestShadowVoteAgreement:
 
         consensus_winner = "model-a"
         shadow_votes = [
-            {"reviewer": "frontier/a", "top_pick": "model-a"},
-            {"reviewer": "frontier/b", "top_pick": "model-a"},
+            {"reviewer": mc.OPENAI_REASONING, "top_pick": "model-a"},
+            {"reviewer": mc.DEEPSEEK_R1, "top_pick": "model-a"},
         ]
 
         agreement = calculate_shadow_agreement(consensus_winner, shadow_votes)
@@ -254,8 +255,8 @@ class TestShadowVoteAgreement:
 
         consensus_winner = "model-a"
         shadow_votes = [
-            {"reviewer": "frontier/a", "top_pick": "model-b"},
-            {"reviewer": "frontier/b", "top_pick": "model-c"},
+            {"reviewer": mc.OPENAI_REASONING, "top_pick": "model-b"},
+            {"reviewer": mc.DEEPSEEK_R1, "top_pick": "model-c"},
         ]
 
         agreement = calculate_shadow_agreement(consensus_winner, shadow_votes)
@@ -267,8 +268,8 @@ class TestShadowVoteAgreement:
 
         consensus_winner = "model-a"
         shadow_votes = [
-            {"reviewer": "frontier/a", "top_pick": "model-a"},  # Agrees
-            {"reviewer": "frontier/b", "top_pick": "model-b"},  # Disagrees
+            {"reviewer": mc.OPENAI_REASONING, "top_pick": "model-a"},  # Agrees
+            {"reviewer": mc.DEEPSEEK_R1, "top_pick": "model-b"},  # Disagrees
         ]
 
         agreement = calculate_shadow_agreement(consensus_winner, shadow_votes)

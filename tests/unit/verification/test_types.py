@@ -5,7 +5,9 @@ TDD Red Phase: These tests should fail until types.py is implemented.
 """
 
 import json
-from datetime import datetime, UTC
+from datetime import datetime, timezone
+
+UTC = timezone.utc
 from typing import List
 
 import pytest

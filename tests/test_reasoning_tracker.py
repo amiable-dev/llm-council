@@ -5,6 +5,8 @@ Written BEFORE implementation per TDD workflow.
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestReasoningUsageDataclass:
@@ -16,7 +18,7 @@ class TestReasoningUsageDataclass:
         from dataclasses import is_dataclass
 
         usage = ReasoningUsage(
-            model_id="openai/o1",
+            model_id=mc.OPENAI_O1,
             reasoning_tokens=2000,
             budget_tokens=32000,
             efficiency=0.0625,
@@ -28,12 +30,12 @@ class TestReasoningUsageDataclass:
         from llm_council.reasoning.tracker import ReasoningUsage
 
         usage = ReasoningUsage(
-            model_id="openai/o1",
+            model_id=mc.OPENAI_O1,
             reasoning_tokens=5000,
             budget_tokens=10000,
             efficiency=0.5,
         )
-        assert usage.model_id == "openai/o1"
+        assert usage.model_id == mc.OPENAI_O1
         assert usage.reasoning_tokens == 5000
         assert usage.budget_tokens == 10000
         assert usage.efficiency == 0.5
@@ -43,7 +45,7 @@ class TestReasoningUsageDataclass:
         from llm_council.reasoning.tracker import ReasoningUsage
 
         usage = ReasoningUsage(
-            model_id="openai/o1",
+            model_id=mc.OPENAI_O1,
             reasoning_tokens=5000,
             budget_tokens=10000,
             efficiency=0.5,
@@ -55,7 +57,7 @@ class TestReasoningUsageDataclass:
         from llm_council.reasoning.tracker import ReasoningUsage
 
         usage = ReasoningUsage(
-            model_id="openai/o1",
+            model_id=mc.OPENAI_O1,
             reasoning_tokens=15000,
             budget_tokens=10000,
             efficiency=1.5,
@@ -78,7 +80,7 @@ class TestExtractReasoningUsage:
                 "reasoning_tokens": 2000,
             },
         }
-        usage = extract_reasoning_usage(response, "openai/o1", budget=32000)
+        usage = extract_reasoning_usage(response, mc.OPENAI_O1, budget=32000)
 
         assert usage is not None
         assert usage.reasoning_tokens == 2000
@@ -93,7 +95,7 @@ class TestExtractReasoningUsage:
             "reasoning_details": {"tokens": 1500},
             "usage": {"prompt_tokens": 100, "completion_tokens": 500},
         }
-        usage = extract_reasoning_usage(response, "openai/o1", budget=32000)
+        usage = extract_reasoning_usage(response, mc.OPENAI_O1, budget=32000)
 
         assert usage is not None
         assert usage.reasoning_tokens == 1500
@@ -106,7 +108,7 @@ class TestExtractReasoningUsage:
             "choices": [{"message": {"content": "response"}}],
             "usage": {"prompt_tokens": 100, "completion_tokens": 500},
         }
-        usage = extract_reasoning_usage(response, "openai/gpt-4o", budget=32000)
+        usage = extract_reasoning_usage(response, mc.OPENAI_HIGH, budget=32000)
 
         assert usage is None
 
@@ -117,7 +119,7 @@ class TestExtractReasoningUsage:
         response = {
             "usage": {"reasoning_tokens": 8000},
         }
-        usage = extract_reasoning_usage(response, "openai/o1", budget=32000)
+        usage = extract_reasoning_usage(response, mc.OPENAI_O1, budget=32000)
 
         assert usage is not None
         assert usage.efficiency == 0.25  # 8000 / 32000
@@ -145,8 +147,8 @@ class TestAggregatedUsage:
         from llm_council.reasoning.tracker import AggregatedUsage, ReasoningUsage
 
         per_model = [
-            ReasoningUsage("openai/o1", 5000, 32000, 0.156),
-            ReasoningUsage("openai/o3-mini", 3000, 16000, 0.188),
+            ReasoningUsage(mc.OPENAI_O1, 5000, 32000, 0.156),
+            ReasoningUsage(mc.OPENAI_O3_MINI, 3000, 16000, 0.188),
         ]
         agg = AggregatedUsage(
             total_reasoning_tokens=8000,
@@ -172,8 +174,8 @@ class TestAggregateReasoningUsage:
         )
 
         usages = [
-            ReasoningUsage("openai/o1", 5000, 32000, 0.156),
-            ReasoningUsage("openai/o3-mini", 3000, 16000, 0.188),
+            ReasoningUsage(mc.OPENAI_O1, 5000, 32000, 0.156),
+            ReasoningUsage(mc.OPENAI_O3_MINI, 3000, 16000, 0.188),
         ]
         agg = aggregate_reasoning_usage(usages)
 
@@ -188,8 +190,8 @@ class TestAggregateReasoningUsage:
         )
 
         usages = [
-            ReasoningUsage("openai/o1", 16000, 32000, 0.5),
-            ReasoningUsage("openai/o3-mini", 8000, 16000, 0.5),
+            ReasoningUsage(mc.OPENAI_O1, 16000, 32000, 0.5),
+            ReasoningUsage(mc.OPENAI_O3_MINI, 8000, 16000, 0.5),
         ]
         agg = aggregate_reasoning_usage(usages)
 
@@ -203,8 +205,8 @@ class TestAggregateReasoningUsage:
         )
 
         usages = [
-            ReasoningUsage("openai/o1", 16000, 32000, 0.5),  # under budget
-            ReasoningUsage("openai/o3-mini", 20000, 16000, 1.25),  # over budget
+            ReasoningUsage(mc.OPENAI_O1, 16000, 32000, 0.5),  # under budget
+            ReasoningUsage(mc.OPENAI_O3_MINI, 20000, 16000, 1.25),  # over budget
         ]
         agg = aggregate_reasoning_usage(usages)
 

@@ -5,6 +5,7 @@ TDD: Write these tests first, then implement the TierContract.
 
 import pytest
 from typing import Dict, List
+from llm_council import model_constants as mc
 
 
 class TestTierContractStructure:
@@ -22,8 +23,8 @@ class TestTierContractStructure:
             max_attempts=3,
             requires_peer_review=True,
             requires_verifier=False,
-            allowed_models=["openai/gpt-4o", "anthropic/claude-opus-4-6"],
-            aggregator_model="openai/gpt-4o",
+            allowed_models=[mc.OPENAI_HIGH, mc.ANTHROPIC_OPUS_LATEST],
+            aggregator_model=mc.OPENAI_HIGH,
             override_policy={"can_escalate": True, "can_deescalate": False},
         )
 
@@ -34,7 +35,7 @@ class TestTierContractStructure:
         assert contract.requires_peer_review is True
         assert contract.requires_verifier is False
         assert len(contract.allowed_models) == 2
-        assert contract.aggregator_model == "openai/gpt-4o"
+        assert contract.aggregator_model == mc.OPENAI_HIGH
         assert contract.override_policy["can_escalate"] is True
 
     def test_tier_contract_is_immutable(self):
@@ -49,8 +50,8 @@ class TestTierContractStructure:
             max_attempts=1,
             requires_peer_review=False,
             requires_verifier=False,
-            allowed_models=["openai/gpt-4o-mini"],
-            aggregator_model="openai/gpt-4o-mini",
+            allowed_models=[mc.OPENAI_LOW],
+            aggregator_model=mc.OPENAI_LOW,
             override_policy={"can_escalate": True, "can_deescalate": False},
         )
 
@@ -166,7 +167,9 @@ class TestTierAggregators:
 
         aggregator = TIER_AGGREGATORS["reasoning"]
         # Should be Claude Opus, Gemini Pro, Sonnet, or similar (can understand chain-of-thought)
-        assert any(capable in aggregator.lower() for capable in ["opus", "gpt-5", "pro", "o1", "sonnet"])
+        assert any(
+            capable in aggregator.lower() for capable in ["opus", "gpt-5", "pro", "o1", "sonnet"]
+        )
 
     def test_create_tier_contract_uses_tier_aggregators(self):
         """Factory function should use TIER_AGGREGATORS for aggregator_model."""
@@ -285,8 +288,8 @@ class TestTierContractReasoningConfig:
             max_attempts=3,
             requires_peer_review=True,
             requires_verifier=False,
-            allowed_models=["openai/gpt-4o"],
-            aggregator_model="openai/gpt-4o",
+            allowed_models=[mc.OPENAI_HIGH],
+            aggregator_model=mc.OPENAI_HIGH,
             override_policy={"can_escalate": True, "can_deescalate": False},
             reasoning_config=None,
         )

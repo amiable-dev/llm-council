@@ -10,7 +10,7 @@ This module provides the main tracker class for managing model audition state:
 Example:
     >>> from llm_council.audition.tracker import get_audition_tracker
     >>> tracker = get_audition_tracker()
-    >>> status = tracker.record_session("openai/gpt-5", success=True)
+    >>> status = tracker.record_session(mc.OPENAI_HIGH, success=True)
     >>> tracker.check_transitions(criteria)
 """
 
@@ -18,6 +18,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
+from .. import model_constants as mc
 
 from .store import append_audition_record, read_audition_records
 from .types import (
@@ -106,7 +107,7 @@ class AuditionTracker:
         """Get current audition status for a model.
 
         Args:
-            model_id: Full model identifier (e.g., "openai/gpt-5-mini")
+            model_id: Full model identifier
 
         Returns:
             AuditionStatus if model is tracked, None otherwise

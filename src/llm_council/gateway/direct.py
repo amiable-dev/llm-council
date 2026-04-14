@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import AsyncIterator, Dict, Any, List, Optional
 
 import httpx
+from llm_council import model_constants as mc
 
 from .base import (
     BaseRouter,
@@ -90,7 +91,7 @@ class DirectGateway(BaseRouter):
         """Extract provider name from model identifier.
 
         Args:
-            model: Model identifier (e.g., "anthropic/claude-3-5-sonnet-20241022")
+            model: Model identifier (e.g., mc.ANTHROPIC_HIGH)
 
         Returns:
             Provider name (e.g., "anthropic")
@@ -103,7 +104,7 @@ class DirectGateway(BaseRouter):
         """Extract model name from model identifier.
 
         Args:
-            model: Model identifier (e.g., "anthropic/claude-3-5-sonnet-20241022")
+            model: Model identifier (e.g., mc.ANTHROPIC_HIGH)
 
         Returns:
             Model name without provider prefix
@@ -592,11 +593,11 @@ class DirectGateway(BaseRouter):
                 # Use a minimal query to check health
                 result = await self._query_provider(
                     provider=provider,
-                    model="gpt-4o-mini"
+                    model=mc.OPENAI_QUICK
                     if provider == "openai"
-                    else "claude-3-5-haiku-20241022"
+                    else mc.ANTHROPIC_QUICK
                     if provider == "anthropic"
-                    else "gemini-2.0-flash-001",
+                    else mc.GOOGLE_QUICK,
                     messages=[{"role": "user", "content": "ping"}],
                     timeout=10.0,
                 )

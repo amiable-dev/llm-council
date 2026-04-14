@@ -56,7 +56,7 @@ def build_openrouter_payload(
     """Build OpenRouter API payload with optional reasoning parameters.
 
     Args:
-        model: Model identifier (e.g., "openai/o1")
+        model: Model identifier (e.g., mc.OPENAI_REASONING)
         messages: List of message dicts in OpenRouter format
         reasoning_params: Optional reasoning parameters (ADR-026 Phase 2)
         max_tokens: Optional max tokens for generation

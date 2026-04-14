@@ -8,6 +8,7 @@ ADR-032: Updated to use unified_config instead of config.py.
 import os
 import pytest
 from unittest.mock import patch, AsyncMock
+from llm_council import model_constants as mc
 
 
 class TestTriageConfiguration:
@@ -121,9 +122,9 @@ class TestCouncilTriageIntegration:
 
                     # Mock triage returns council models + wildcard
                     mock_triage.return_value = TriageResult(
-                        resolved_models=list(COUNCIL_MODELS) + ["deepseek/deepseek-chat"],
+                        resolved_models=list(COUNCIL_MODELS) + [mc.WILDCARD_CODE_QWEN],
                         optimized_prompts={m: "Test query" for m in COUNCIL_MODELS},
-                        metadata={"mode": "wildcard", "wildcard": "deepseek/deepseek-chat"},
+                        metadata={"mode": "wildcard", "wildcard": mc.WILDCARD_CODE_QWEN},
                     )
 
                     await run_council_with_fallback(

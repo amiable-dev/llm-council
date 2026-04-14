@@ -7,6 +7,8 @@ These tests are written FIRST per TDD methodology.
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 import os
+from llm_council import model_constants as mc
+
 
 
 class TestOfflineModeDetection:
@@ -107,8 +109,8 @@ class TestOfflineModeCoreOperations:
 
             # All tier models should be available
             models = provider.list_available_models()
-            assert "openai/gpt-4o" in models
-            assert "anthropic/claude-opus-4.6" in models
+            assert mc.OPENAI_HIGH in models
+            assert mc.ANTHROPIC_CLAUDE_OPUS_REF in models
             assert len(models) >= 30
 
     def test_context_window_available_offline(self):
@@ -120,7 +122,7 @@ class TestOfflineModeCoreOperations:
             provider = get_provider()
 
             # Context windows should be available
-            window = provider.get_context_window("openai/gpt-4o")
+            window = provider.get_context_window(mc.OPENAI_HIGH)
             assert window >= 4096  # At least the safe default
             assert window == 128000  # Should be exact from registry
 

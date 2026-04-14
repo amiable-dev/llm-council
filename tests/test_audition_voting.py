@@ -7,6 +7,7 @@ Maps AuditionState to VotingAuthority from ADR-027.
 """
 
 import pytest
+from llm_council import model_constants as mc
 
 
 class TestStateVotingAuthorityMapping:
@@ -64,7 +65,7 @@ class TestGetAuditionVotingAuthority:
 
         tracker = AuditionTracker()
 
-        result = get_audition_voting_authority("unknown/model", tracker)
+        result = get_audition_voting_authority("generic/local", tracker)
         assert result == VotingAuthority.ADVISORY
 
     def test_shadow_model_returns_advisory(self):

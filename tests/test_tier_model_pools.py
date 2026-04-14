@@ -8,6 +8,7 @@ ADR-032: Updated to use unified_config and tier_contract instead of config.py.
 import os
 import pytest
 from unittest.mock import patch
+from llm_council import model_constants as mc
 
 
 class TestTierModelPoolsStructure:
@@ -182,11 +183,12 @@ class TestEnvironmentVariableOverrides:
         from llm_council.tier_contract import _get_tier_model_pools
 
         with patch.dict(
-            os.environ, {"LLM_COUNCIL_MODELS_REASONING": "openai/o1-preview,deepseek/deepseek-r1"}
+            os.environ,
+            {"LLM_COUNCIL_MODELS_REASONING": f"{mc.OPENAI_REASONING_PREVIEW},{mc.DEEPSEEK_R1}"},
         ):
             unified_config.reload_config()
             pools = _get_tier_model_pools()
-            assert pools["reasoning"] == ["openai/o1-preview", "deepseek/deepseek-r1"]
+            assert pools["reasoning"] == [mc.OPENAI_REASONING_PREVIEW, mc.DEEPSEEK_R1]
 
         # Cleanup
         unified_config.reload_config()

@@ -5,6 +5,8 @@ Issue: https://github.com/amiable-dev/llm-council/issues/132
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestGetSelectionWeight:
@@ -16,7 +18,7 @@ class TestGetSelectionWeight:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.SHADOW,
         )
         weight = get_selection_weight(status)
@@ -28,7 +30,7 @@ class TestGetSelectionWeight:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.PROBATION,
         )
         weight = get_selection_weight(status)
@@ -41,7 +43,7 @@ class TestGetSelectionWeight:
 
         # Early evaluation (25 sessions, just entered) - should be ~0.3
         early_status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.EVALUATION,
             session_count=25,
         )
@@ -50,7 +52,7 @@ class TestGetSelectionWeight:
 
         # Late evaluation (49 sessions, about to graduate) - should be close to 1.0
         late_status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.EVALUATION,
             session_count=49,
         )
@@ -63,7 +65,7 @@ class TestGetSelectionWeight:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.FULL,
         )
         weight = get_selection_weight(status)
@@ -75,7 +77,7 @@ class TestGetSelectionWeight:
         from llm_council.audition.types import AuditionState, AuditionStatus
 
         status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.QUARANTINE,
         )
         weight = get_selection_weight(status)

@@ -5,6 +5,7 @@ This implements Issue #110.
 """
 
 import pytest
+from llm_council import model_constants as mc
 
 
 class TestVotingAuthorityEnum:
@@ -116,7 +117,7 @@ class TestGetModelVotingAuthority:
         """High tier models should get FULL by default."""
         from llm_council.voting import VotingAuthority, get_model_voting_authority
 
-        authority = get_model_voting_authority(model_id="openai/gpt-4o", tier="high")
+        authority = get_model_voting_authority(model_id=mc.OPENAI_HIGH, tier="high")
         assert authority == VotingAuthority.FULL
 
     def test_get_model_voting_authority_respects_override(self):

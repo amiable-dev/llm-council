@@ -17,6 +17,8 @@ from llm_council.evaluation import (
     SAMPLE_BENCHMARK,
     create_sample_benchmark_file,
 )
+from llm_council import model_constants as mc
+
 
 
 class TestEvaluateResponse:
@@ -207,7 +209,7 @@ class TestPrintBenchmarkReport:
                 question_category="technical",
                 council_score=ResponseScore(3, 4, 0.75, 100, {}),
                 single_model_scores={
-                    "openai/gpt-4": ResponseScore(2, 4, 0.5, 80, {}),
+                    mc.OPENAI_HIGH: ResponseScore(2, 4, 0.5, 80, {}),
                 },
                 council_response="",
                 single_model_responses={},

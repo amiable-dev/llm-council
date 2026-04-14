@@ -8,6 +8,7 @@ from llm_council.gateway.types import (
     ContentBlock,
 )
 from llm_council.layer_contracts import LayerEventType, emit_layer_event
+from llm_council import model_constants as mc
 
 
 @pytest.mark.asyncio
@@ -30,7 +31,7 @@ async def test_gateway_emits_observability_events():
         router.gateways["openrouter"] = mock_gateway
 
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],

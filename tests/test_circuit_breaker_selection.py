@@ -14,6 +14,8 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestCircuitBreakerSelectionIntegration:
@@ -34,12 +36,12 @@ class TestCircuitBreakerSelectionIntegration:
 
         # Trip the circuit for a model
         config = EnhancedCircuitBreakerConfig(min_requests=2, failure_threshold=0.25)
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
         breaker.record_failure()
         breaker.record_failure()  # 100% failure rate
 
         # Should detect open circuit
-        is_open = _is_circuit_breaker_open("openai/gpt-4o")
+        is_open = _is_circuit_breaker_open(mc.OPENAI_HIGH)
         assert is_open is True
 
     def test_closed_circuit_allows_selection(self):
@@ -50,7 +52,7 @@ class TestCircuitBreakerSelectionIntegration:
         _reset_registry()
 
         # Fresh model has closed circuit
-        is_open = _is_circuit_breaker_open("openai/gpt-4o")
+        is_open = _is_circuit_breaker_open(mc.OPENAI_HIGH)
         assert is_open is False
 
     def test_half_open_allows_limited_selection(self):
@@ -70,7 +72,7 @@ class TestCircuitBreakerSelectionIntegration:
             failure_threshold=0.25,
             cooldown_seconds=0.1,
         )
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
         breaker.record_failure()
         breaker.record_failure()
 
@@ -81,7 +83,7 @@ class TestCircuitBreakerSelectionIntegration:
         breaker.allow_request()
 
         # Half-open should allow requests
-        is_open = _is_circuit_breaker_open("openai/gpt-4o")
+        is_open = _is_circuit_breaker_open(mc.OPENAI_HIGH)
         assert is_open is False
 
     def test_circuit_breaker_disabled_bypasses_check(self):
@@ -97,14 +99,14 @@ class TestCircuitBreakerSelectionIntegration:
 
         # Trip the circuit
         config = EnhancedCircuitBreakerConfig(min_requests=2, failure_threshold=0.25)
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
         breaker.record_failure()
         breaker.record_failure()
 
         # With circuit breaker disabled, should report as not open
         with patch("llm_council.metadata.selection._is_circuit_breaker_enabled") as mock:
             mock.return_value = False
-            is_open = _is_circuit_breaker_open("openai/gpt-4o")
+            is_open = _is_circuit_breaker_open(mc.OPENAI_HIGH)
             assert is_open is False
 
 
@@ -262,7 +264,7 @@ class TestSelectTierModelsWithCircuitBreaker:
 
         # Trip the circuit for gpt-4o
         config = EnhancedCircuitBreakerConfig(min_requests=2, failure_threshold=0.25)
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
         breaker.record_failure()
         breaker.record_failure()
 
@@ -270,7 +272,7 @@ class TestSelectTierModelsWithCircuitBreaker:
         models = select_tier_models(tier="balanced", count=3)
 
         # Verify gpt-4o is excluded
-        assert "openai/gpt-4o" not in models
+        assert mc.OPENAI_HIGH not in models
 
     def test_select_tier_models_includes_closed_circuit(self):
         """select_tier_models should include models with closed circuits."""

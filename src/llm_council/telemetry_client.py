@@ -146,7 +146,8 @@ class HttpTelemetry:
             # Check if we should flush
             should_flush = (
                 len(self._buffer) >= self.batch_size
-                or (datetime.now(timezone.utc) - self._last_flush).total_seconds() >= self.flush_interval
+                or (datetime.now(timezone.utc) - self._last_flush).total_seconds()
+                >= self.flush_interval
             )
 
             if should_flush:

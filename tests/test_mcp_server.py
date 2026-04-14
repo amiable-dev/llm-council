@@ -8,6 +8,8 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from llm_council import model_constants as mc
+
 
 # Skip all tests in this module if MCP is not installed
 pytest.importorskip(
@@ -157,8 +159,8 @@ async def test_consult_council_with_rankings_metadata():
             "warning": None,
             "label_to_model": {},
             "aggregate_rankings": [
-                {"model": "openai/gpt-4", "borda_score": 0.85, "rank": 1},
-                {"model": "anthropic/claude", "borda_score": 0.75, "rank": 2},
+                {"model": mc.OPENAI_HIGH, "borda_score": 0.85, "rank": 1},
+                {"model": mc.ANTHROPIC_HIGH, "borda_score": 0.75, "rank": 2},
             ],
         },
     }
@@ -169,7 +171,7 @@ async def test_consult_council_with_rankings_metadata():
         result = await consult_council("test query")
 
         assert "### Council Rankings" in result
-        assert "openai/gpt-4" in result
+        assert mc.OPENAI_HIGH in result
         assert "0.85" in result
 
 
@@ -360,7 +362,7 @@ async def test_timeout_preserves_diagnostic_info():
         patch("llm_council.openrouter.query_model_with_status", side_effect=mock_query_with_status),
         patch(
             "llm_council.council.COUNCIL_MODELS",
-            ["openai/gpt-4", "anthropic/claude", "google/gemini"],
+            [mc.OPENAI_HIGH, mc.ANTHROPIC_HIGH, mc.GOOGLE_HIGH],
         ),
     ):
         # Run with a very short timeout to trigger global timeout

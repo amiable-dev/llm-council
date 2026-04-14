@@ -8,6 +8,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
+from llm_council import model_constants as mc
+
 
 import pytest
 
@@ -30,16 +32,16 @@ class TestPersistSessionPerformanceData:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
             model_statuses = {
-                "openai/gpt-4o": {"status": "ok", "latency_ms": 1500},
-                "anthropic/claude": {"status": "ok", "latency_ms": 2000},
+                mc.OPENAI_HIGH: {"status": "ok", "latency_ms": 1500},
+                mc.ANTHROPIC_HIGH: {"status": "ok", "latency_ms": 2000},
             }
             aggregate_rankings = {
-                "openai/gpt-4o": {"borda_score": 0.75, "rank": 1},
-                "anthropic/claude": {"borda_score": 0.65, "rank": 2},
+                mc.OPENAI_HIGH: {"borda_score": 0.75, "rank": 1},
+                mc.ANTHROPIC_HIGH: {"borda_score": 0.65, "rank": 2},
             }
             stage2_results = [
-                {"model": "openai/gpt-4o", "parsed_ranking": ["Response A", "Response B"]},
-                {"model": "anthropic/claude", "parsed_ranking": ["Response B", "Response A"]},
+                {"model": mc.OPENAI_HIGH, "parsed_ranking": ["Response A", "Response B"]},
+                {"model": mc.ANTHROPIC_HIGH, "parsed_ranking": ["Response B", "Response A"]},
             ]
 
             with patch("llm_council.performance.integration.PERFORMANCE_STORE_PATH", store_path):
@@ -63,10 +65,10 @@ class TestPersistSessionPerformanceData:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
             model_statuses = {
-                "openai/gpt-4o": {"status": "ok", "latency_ms": 1234},
+                mc.OPENAI_HIGH: {"status": "ok", "latency_ms": 1234},
             }
             aggregate_rankings = {
-                "openai/gpt-4o": {"borda_score": 0.5},
+                mc.OPENAI_HIGH: {"borda_score": 0.5},
             }
 
             with patch("llm_council.performance.integration.PERFORMANCE_STORE_PATH", store_path):

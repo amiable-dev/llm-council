@@ -4,6 +4,8 @@ TDD: Write these tests first, then implement prompt_optimizer.py.
 """
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestPromptOptimizer:
@@ -14,17 +16,17 @@ class TestPromptOptimizer:
         from llm_council.triage.prompt_optimizer import PromptOptimizer
 
         optimizer = PromptOptimizer()
-        result = optimizer.optimize("Test prompt", ["openai/gpt-4o"])
+        result = optimizer.optimize("Test prompt", [mc.OPENAI_HIGH])
 
         assert isinstance(result, dict)
-        assert "openai/gpt-4o" in result
+        assert mc.OPENAI_HIGH in result
 
     def test_optimize_includes_all_models(self):
         """optimize() should return prompts for all requested models."""
         from llm_council.triage.prompt_optimizer import PromptOptimizer
 
         optimizer = PromptOptimizer()
-        models = ["openai/gpt-4o", "anthropic/claude-3-5-sonnet", "google/gemini-1.5-pro"]
+        models = [mc.OPENAI_HIGH, mc.ANTHROPIC_BALANCED, mc.GOOGLE_HIGH]
         result = optimizer.optimize("Test prompt", models)
 
         for model in models:
@@ -36,10 +38,10 @@ class TestPromptOptimizer:
 
         optimizer = PromptOptimizer()
         original = "What is quantum computing?"
-        result = optimizer.optimize(original, ["openai/gpt-4o"])
+        result = optimizer.optimize(original, [mc.OPENAI_HIGH])
 
         # Original query should appear in adapted prompt
-        assert original in result["openai/gpt-4o"]
+        assert original in result[mc.OPENAI_HIGH]
 
 
 class TestModelAdapters:
@@ -50,9 +52,9 @@ class TestModelAdapters:
         from llm_council.triage.prompt_optimizer import PromptOptimizer
 
         optimizer = PromptOptimizer()
-        result = optimizer.optimize("Test query", ["anthropic/claude-3-5-sonnet"])
+        result = optimizer.optimize("Test query", [mc.ANTHROPIC_BALANCED])
 
-        prompt = result["anthropic/claude-3-5-sonnet"]
+        prompt = result[mc.ANTHROPIC_BALANCED]
         # Should have XML-like structure
         assert "<" in prompt and ">" in prompt
 
@@ -61,9 +63,9 @@ class TestModelAdapters:
         from llm_council.triage.prompt_optimizer import PromptOptimizer
 
         optimizer = PromptOptimizer()
-        result = optimizer.optimize("Test query", ["anthropic/claude-3-opus"])
+        result = optimizer.optimize("Test query", [mc.ANTHROPIC_OPUS_LATEST])
 
-        prompt = result["anthropic/claude-3-opus"]
+        prompt = result[mc.ANTHROPIC_OPUS_LATEST]
         assert "<query>" in prompt or "<question>" in prompt or "<task>" in prompt
 
     def test_openai_adapter_uses_markdown(self):
@@ -71,9 +73,9 @@ class TestModelAdapters:
         from llm_council.triage.prompt_optimizer import PromptOptimizer
 
         optimizer = PromptOptimizer()
-        result = optimizer.optimize("Test query", ["openai/gpt-4o"])
+        result = optimizer.optimize("Test query", [mc.OPENAI_HIGH])
 
-        prompt = result["openai/gpt-4o"]
+        prompt = result[mc.OPENAI_HIGH]
         # Should have markdown elements or be clear text
         # OpenAI works well with clear formatting
         assert "Test query" in prompt
@@ -83,9 +85,9 @@ class TestModelAdapters:
         from llm_council.triage.prompt_optimizer import PromptOptimizer
 
         optimizer = PromptOptimizer()
-        result = optimizer.optimize("Test query", ["google/gemini-1.5-pro"])
+        result = optimizer.optimize("Test query", [mc.GOOGLE_HIGH])
 
-        prompt = result["google/gemini-1.5-pro"]
+        prompt = result[mc.GOOGLE_HIGH]
         assert "Test query" in prompt
 
     def test_unknown_model_uses_fallback(self):
@@ -173,7 +175,7 @@ class TestOptimizationFallback:
 
         optimizer = PromptOptimizer(enabled=False)
         original = "Test query"
-        models = ["openai/gpt-4o", "anthropic/claude-3-5-sonnet"]
+        models = [mc.OPENAI_HIGH, mc.ANTHROPIC_BALANCED]
 
         result = optimizer.optimize(original, models)
 
@@ -238,22 +240,22 @@ class TestModelProviderDetection:
         """Should detect Anthropic from model ID."""
         from llm_council.triage.prompt_optimizer import get_model_provider
 
-        assert get_model_provider("anthropic/claude-3-5-sonnet") == "anthropic"
-        assert get_model_provider("anthropic/claude-3-opus") == "anthropic"
+        assert get_model_provider(mc.ANTHROPIC_BALANCED) == "anthropic"
+        assert get_model_provider(mc.ANTHROPIC_OPUS_LATEST) == "anthropic"
 
     def test_detect_openai(self):
         """Should detect OpenAI from model ID."""
         from llm_council.triage.prompt_optimizer import get_model_provider
 
-        assert get_model_provider("openai/gpt-4o") == "openai"
-        assert get_model_provider("openai/gpt-4-turbo") == "openai"
+        assert get_model_provider(mc.OPENAI_HIGH) == "openai"
+        assert get_model_provider(mc.OPENAI_ULTRA) == "openai"
 
     def test_detect_google(self):
         """Should detect Google from model ID."""
         from llm_council.triage.prompt_optimizer import get_model_provider
 
-        assert get_model_provider("google/gemini-1.5-pro") == "google"
-        assert get_model_provider("google/gemini-2.0-flash") == "google"
+        assert get_model_provider(mc.GOOGLE_HIGH) == "google"
+        assert get_model_provider(mc.GOOGLE_MODEL_LATEST) == "google"
 
     def test_detect_unknown(self):
         """Should return 'unknown' for unrecognized providers."""

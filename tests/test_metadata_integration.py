@@ -9,6 +9,7 @@ End-to-end integration tests for the metadata system including:
 import pytest
 from unittest.mock import patch, AsyncMock
 import os
+from llm_council import model_constants as mc
 
 
 class TestMetadataProviderFactory:
@@ -63,10 +64,10 @@ class TestBundledRegistryContent:
         provider = get_provider()
         models = provider.list_available_models()
 
-        openai_models = [m for m in models if m.startswith("openai/")]
+        openai_models = [m for m in models if m.startswith(mc.PREFIX_OPENAI)]
         assert len(openai_models) >= 5
-        assert "openai/gpt-4o" in models
-        assert "openai/gpt-4o-mini" in models
+        assert mc.OPENAI_HIGH in models
+        assert mc.OPENAI_LOW in models
 
     def test_registry_has_anthropic_models(self):
         """Registry should include Anthropic models."""
@@ -76,9 +77,9 @@ class TestBundledRegistryContent:
         provider = get_provider()
         models = provider.list_available_models()
 
-        anthropic_models = [m for m in models if m.startswith("anthropic/")]
+        anthropic_models = [m for m in models if m.startswith(mc.PREFIX_ANTHROPIC)]
         assert len(anthropic_models) >= 4
-        assert "anthropic/claude-opus-4.6" in models
+        assert mc.ANTHROPIC_CLAUDE_OPUS_REF in models
 
     def test_registry_has_google_models(self):
         """Registry should include Google models."""
@@ -88,7 +89,7 @@ class TestBundledRegistryContent:
         provider = get_provider()
         models = provider.list_available_models()
 
-        google_models = [m for m in models if m.startswith("google/")]
+        google_models = [m for m in models if m.startswith(mc.PREFIX_GOOGLE)]
         assert len(google_models) >= 3
 
     def test_registry_has_local_models(self):
@@ -123,7 +124,7 @@ class TestReasoningModelDetection:
         reload_provider()
         provider = get_provider()
 
-        assert provider.supports_reasoning("openai/o1") is True
+        assert provider.supports_reasoning(mc.OPENAI_REASONING_LATEST) is True
 
     def test_detects_openai_o1_preview_as_reasoning(self):
         """Should detect OpenAI o1-preview as reasoning model."""
@@ -132,7 +133,7 @@ class TestReasoningModelDetection:
         reload_provider()
         provider = get_provider()
 
-        assert provider.supports_reasoning("openai/o1-preview") is True
+        assert provider.supports_reasoning(mc.OPENAI_REASONING_PREVIEW) is True
 
     def test_detects_openai_o1_mini_as_reasoning(self):
         """Should detect OpenAI o1-mini as reasoning model."""
@@ -141,7 +142,7 @@ class TestReasoningModelDetection:
         reload_provider()
         provider = get_provider()
 
-        assert provider.supports_reasoning("openai/o1-mini") is True
+        assert provider.supports_reasoning(mc.OPENAI_REASONING_LOW) is True
 
     def test_detects_deepseek_r1_as_reasoning(self):
         """Should detect DeepSeek R1 as reasoning model."""
@@ -150,7 +151,7 @@ class TestReasoningModelDetection:
         reload_provider()
         provider = get_provider()
 
-        assert provider.supports_reasoning("deepseek/deepseek-r1") is True
+        assert provider.supports_reasoning(mc.DEEPSEEK_R1) is True
 
     def test_detects_non_reasoning_models(self):
         """Should correctly identify non-reasoning models."""
@@ -159,8 +160,8 @@ class TestReasoningModelDetection:
         reload_provider()
         provider = get_provider()
 
-        assert provider.supports_reasoning("openai/gpt-4o-mini") is False
-        assert provider.supports_reasoning("anthropic/claude-3-5-haiku-20241022") is False
+        assert provider.supports_reasoning(mc.OPENAI_LOW) is False
+        assert provider.supports_reasoning(mc.ANTHROPIC_BALANCED) is False
 
 
 class TestModelInfoContent:
@@ -173,10 +174,10 @@ class TestModelInfoContent:
 
         reload_provider()
         provider = get_provider()
-        info = provider.get_model_info("openai/gpt-4o")
+        info = provider.get_model_info(mc.OPENAI_HIGH)
 
         assert info is not None
-        assert info.id == "openai/gpt-4o"
+        assert info.id == mc.OPENAI_HIGH
         assert info.context_window == 128000
         assert "vision" in info.modalities
         assert info.quality_tier == QualityTier.FRONTIER
@@ -188,10 +189,10 @@ class TestModelInfoContent:
 
         reload_provider()
         provider = get_provider()
-        info = provider.get_model_info("anthropic/claude-opus-4.6")
+        info = provider.get_model_info(mc.ANTHROPIC_CLAUDE_OPUS_REF)
 
         assert info is not None
-        assert info.id == "anthropic/claude-opus-4.6"
+        assert info.id == mc.ANTHROPIC_CLAUDE_OPUS_REF
         assert info.context_window == 200000
         assert "vision" in info.modalities
         assert info.quality_tier == QualityTier.FRONTIER
@@ -203,7 +204,7 @@ class TestModelInfoContent:
 
         reload_provider()
         provider = get_provider()
-        info = provider.get_model_info("ollama/llama3.2")
+        info = provider.get_model_info(mc.OLLAMA_ANY)
 
         assert info is not None
         assert info.quality_tier == QualityTier.LOCAL
@@ -260,7 +261,7 @@ class TestDynamicProviderIntegration:
 
             provider = DynamicMetadataProvider()
             # Without cache populated, should use static fallback
-            window = provider.get_context_window("openai/gpt-4o")
+            window = provider.get_context_window(mc.OPENAI_HIGH)
             assert window >= 4096
 
     def test_dynamic_provider_lists_static_models(self):
@@ -271,8 +272,8 @@ class TestDynamicProviderIntegration:
         models = provider.list_available_models()
 
         # Should include static registry models
-        assert "openai/gpt-4o" in models
-        assert "anthropic/claude-opus-4.6" in models
+        assert mc.OPENAI_HIGH in models
+        assert mc.ANTHROPIC_CLAUDE_OPUS_REF in models
 
 
 class TestTierSelectionIntegration:

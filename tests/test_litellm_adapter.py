@@ -6,6 +6,7 @@ These tests are written FIRST per TDD methodology.
 
 import pytest
 from unittest.mock import patch, MagicMock
+from llm_council import model_constants as mc
 
 
 class TestLiteLLMAdapter:
@@ -33,7 +34,7 @@ class TestLiteLLMAdapter:
         }
 
         with patch.object(adapter, "_get_litellm", return_value=mock_litellm):
-            window = adapter.get_context_window("openai/gpt-4o")
+            window = adapter.get_context_window(mc.OPENAI_HIGH)
             assert window == 128000
 
     def test_adapter_returns_none_for_unknown(self):
@@ -66,13 +67,13 @@ class TestLiteLLMAdapter:
         adapter = LiteLLMAdapter()
 
         # LiteLLM uses different formats for model IDs
-        assert adapter._normalize_model_id("openai/gpt-4o") == "gpt-4o"
+        assert adapter._normalize_model_id(mc.OPENAI_HIGH) == "gpt-4o"
         assert (
-            adapter._normalize_model_id("anthropic/claude-3-5-sonnet-20241022")
+            adapter._normalize_model_id(mc.ANTHROPIC_CLAUDE_3_5_SONNET_20241022)
             == "claude-3-5-sonnet-20241022"
         )
         # Ollama models keep their prefix for LiteLLM
-        assert adapter._normalize_model_id("ollama/llama3.2") == "ollama/llama3.2"
+        assert adapter._normalize_model_id(mc.OLLAMA_ANY) == mc.OLLAMA_ANY
 
     def test_adapter_get_pricing(self):
         """Should extract pricing from LiteLLM."""
@@ -89,7 +90,7 @@ class TestLiteLLMAdapter:
         }
 
         with patch.object(adapter, "_get_litellm", return_value=mock_litellm):
-            pricing = adapter.get_pricing("openai/gpt-4o")
+            pricing = adapter.get_pricing(mc.OPENAI_HIGH)
             assert pricing is not None
             # Should convert to per-1K format
             assert "prompt" in pricing
@@ -109,9 +110,9 @@ class TestLiteLLMAdapter:
 
         with patch.object(adapter, "_get_litellm", return_value=mock_litellm):
             # o1 should support reasoning
-            assert adapter.supports_reasoning("openai/o1") is True
+            assert adapter.supports_reasoning(mc.OPENAI_O1) is True
             # gpt-4o should not
-            assert adapter.supports_reasoning("openai/gpt-4o") is False
+            assert adapter.supports_reasoning(mc.OPENAI_HIGH) is False
 
 
 class TestLiteLLMAdapterCaching:
@@ -135,7 +136,7 @@ class TestLiteLLMAdapterCaching:
             return mock_litellm
 
         with patch.object(adapter, "_get_litellm", counting_get):
-            adapter.get_context_window("openai/gpt-4o")
-            adapter.get_context_window("openai/gpt-4o")
+            adapter.get_context_window(mc.OPENAI_HIGH)
+            adapter.get_context_window(mc.OPENAI_HIGH)
             # Note: Actual caching depends on implementation
             # This test documents expected behavior

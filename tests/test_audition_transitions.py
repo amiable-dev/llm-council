@@ -4,9 +4,12 @@ Tests are written FIRST (RED phase) per TDD methodology.
 Issue: https://github.com/amiable-dev/llm-council/issues/129
 """
 
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
 
 import pytest
+from llm_council import model_constants as mc
 
 
 class TestShadowToProbation:
@@ -23,7 +26,7 @@ class TestShadowToProbation:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=10,  # Meets min sessions
             first_seen=now - timedelta(days=4),  # Meets min days
@@ -45,7 +48,7 @@ class TestShadowToProbation:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,  # Below min sessions (10)
             first_seen=now - timedelta(days=4),
@@ -67,7 +70,7 @@ class TestShadowToProbation:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=15,  # Meets min sessions
             first_seen=now - timedelta(days=1),  # Below min days (3)
@@ -93,7 +96,7 @@ class TestProbationToEvaluation:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.PROBATION,
             session_count=25,  # Meets min sessions
             first_seen=now - timedelta(days=10),  # Meets min days
@@ -115,7 +118,7 @@ class TestProbationToEvaluation:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.PROBATION,
             session_count=20,  # Below min sessions (25)
             first_seen=now - timedelta(days=10),
@@ -137,7 +140,7 @@ class TestProbationToEvaluation:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.PROBATION,
             session_count=30,  # Meets min sessions
             first_seen=now - timedelta(days=5),  # Below min days (7)
@@ -163,7 +166,7 @@ class TestEvaluationToFull:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.EVALUATION,
             session_count=50,  # Meets min sessions
             first_seen=now - timedelta(days=30),
@@ -186,7 +189,7 @@ class TestEvaluationToFull:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.EVALUATION,
             session_count=40,  # Below min sessions (50)
             first_seen=now - timedelta(days=30),
@@ -209,7 +212,7 @@ class TestEvaluationToFull:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.EVALUATION,
             session_count=60,
             first_seen=now - timedelta(days=30),
@@ -232,7 +235,7 @@ class TestEvaluationToFull:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.EVALUATION,
             session_count=60,
             first_seen=now - timedelta(days=30),
@@ -259,7 +262,7 @@ class TestQuarantineTransitions:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,
             first_seen=now - timedelta(days=2),
@@ -282,7 +285,7 @@ class TestQuarantineTransitions:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.PROBATION,
             session_count=20,
             first_seen=now - timedelta(days=5),
@@ -305,7 +308,7 @@ class TestQuarantineTransitions:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.QUARANTINE,
             session_count=5,
             first_seen=now - timedelta(days=10),
@@ -327,7 +330,7 @@ class TestQuarantineTransitions:
         )
 
         status = AuditionStatus(
-            model_id="openai/gpt-5",
+            model_id=mc.OPENAI_HIGH,
             state=AuditionState.QUARANTINE,
             session_count=5,
             first_seen=datetime.now(UTC) - timedelta(days=10),
@@ -353,7 +356,7 @@ class TestRecordSessionResult:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,
             first_seen=now - timedelta(days=2),
@@ -373,7 +376,7 @@ class TestRecordSessionResult:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,
             first_seen=now - timedelta(days=2),
@@ -394,7 +397,7 @@ class TestRecordSessionResult:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,
             first_seen=now - timedelta(days=2),
@@ -415,7 +418,7 @@ class TestRecordSessionResult:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,
             first_seen=now - timedelta(days=2),
@@ -435,7 +438,7 @@ class TestRecordSessionResult:
 
         old_last_seen = datetime.now(UTC) - timedelta(hours=1)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=5,
             first_seen=old_last_seen - timedelta(days=2),
@@ -454,7 +457,7 @@ class TestRecordSessionResult:
         )
 
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.SHADOW,
             session_count=0,
             first_seen=None,
@@ -479,7 +482,7 @@ class TestFullStateNoTransition:
 
         now = datetime.now(UTC)
         status = AuditionStatus(
-            model_id="openai/gpt-5-mini",
+            model_id=mc.OPENAI_BALANCED,
             state=AuditionState.FULL,
             session_count=100,
             first_seen=now - timedelta(days=60),

@@ -8,6 +8,8 @@ This implements Issue #113.
 
 import pytest
 from typing import Tuple, Optional
+from llm_council import model_constants as mc
+
 
 
 class TestApplyCostCeiling:
@@ -18,7 +20,7 @@ class TestApplyCostCeiling:
         from llm_council.cost_ceiling import apply_cost_ceiling
 
         result = apply_cost_ceiling(
-            model_id="openai/gpt-5.2-pro",
+            model_id=mc.OPENAI_REASONING,
             model_cost=0.010,
             tier="frontier",
             high_tier_avg_cost=0.005,
@@ -36,7 +38,7 @@ class TestApplyCostCeiling:
         # 5x multiplier: ceiling = 0.005 * 5 = 0.025
         # Model cost 0.010 < 0.025, should pass
         allowed, reason = apply_cost_ceiling(
-            model_id="openai/gpt-5.2-pro",
+            model_id=mc.OPENAI_REASONING,
             model_cost=0.010,
             tier="frontier",
             high_tier_avg_cost=0.005,

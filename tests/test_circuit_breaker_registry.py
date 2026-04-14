@@ -15,6 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestCircuitBreakerRegistry:
@@ -29,9 +31,9 @@ class TestCircuitBreakerRegistry:
 
         _reset_registry()
 
-        breaker = get_circuit_breaker("openai/gpt-4o")
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH)
         assert breaker is not None
-        assert breaker.model_id == "openai/gpt-4o"
+        assert breaker.model_id == mc.OPENAI_HIGH
 
     def test_reuses_existing_breaker(self):
         """Should return same breaker instance for same model."""
@@ -42,8 +44,8 @@ class TestCircuitBreakerRegistry:
 
         _reset_registry()
 
-        breaker1 = get_circuit_breaker("openai/gpt-4o")
-        breaker2 = get_circuit_breaker("openai/gpt-4o")
+        breaker1 = get_circuit_breaker(mc.OPENAI_HIGH)
+        breaker2 = get_circuit_breaker(mc.OPENAI_HIGH)
 
         assert breaker1 is breaker2
 
@@ -56,8 +58,8 @@ class TestCircuitBreakerRegistry:
 
         _reset_registry()
 
-        breaker1 = get_circuit_breaker("openai/gpt-4o")
-        breaker2 = get_circuit_breaker("anthropic/claude-3")
+        breaker1 = get_circuit_breaker(mc.OPENAI_HIGH)
+        breaker2 = get_circuit_breaker(mc.ANTHROPIC_HIGH)
 
         assert breaker1 is not breaker2
 
@@ -75,7 +77,7 @@ class TestCircuitBreakerRegistry:
 
         def get_breaker():
             try:
-                breaker = get_circuit_breaker("openai/gpt-4o")
+                breaker = get_circuit_breaker(mc.OPENAI_HIGH)
                 results.append(breaker)
             except Exception as e:
                 errors.append(e)
@@ -101,7 +103,7 @@ class TestCircuitBreakerRegistry:
         _reset_registry()
 
         config = EnhancedCircuitBreakerConfig(min_requests=10, failure_threshold=0.50)
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
 
         assert breaker.config.min_requests == 10
         assert breaker.config.failure_threshold == 0.50
@@ -119,7 +121,7 @@ class TestCheckCircuitBreaker:
 
         _reset_registry()
 
-        allowed, reason = check_circuit_breaker("openai/gpt-4o")
+        allowed, reason = check_circuit_breaker(mc.OPENAI_HIGH)
         assert allowed is True
         assert reason is None
 
@@ -136,11 +138,11 @@ class TestCheckCircuitBreaker:
 
         # Trip the circuit
         config = EnhancedCircuitBreakerConfig(min_requests=2, failure_threshold=0.25)
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
         breaker.record_failure()
         breaker.record_failure()  # 100% failure rate
 
-        allowed, reason = check_circuit_breaker("openai/gpt-4o")
+        allowed, reason = check_circuit_breaker(mc.OPENAI_HIGH)
         assert allowed is False
         assert reason is not None
         assert "open" in reason.lower()
@@ -159,9 +161,9 @@ class TestRecordModelResult:
 
         _reset_registry()
 
-        record_model_result("openai/gpt-4o", success=True)
+        record_model_result(mc.OPENAI_HIGH, success=True)
 
-        breaker = get_circuit_breaker("openai/gpt-4o")
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH)
         assert breaker.request_count_in_window() == 1
         assert breaker.failure_count_in_window() == 0
 
@@ -175,9 +177,9 @@ class TestRecordModelResult:
 
         _reset_registry()
 
-        record_model_result("openai/gpt-4o", success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
 
-        breaker = get_circuit_breaker("openai/gpt-4o")
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH)
         assert breaker.request_count_in_window() == 1
         assert breaker.failure_count_in_window() == 1
 
@@ -200,18 +202,18 @@ class TestCircuitBreakerEventEmission:
 
         # Create breaker with low threshold
         config = EnhancedCircuitBreakerConfig(min_requests=2, failure_threshold=0.25)
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
 
         # Trip the circuit (using registry function to get events)
-        record_model_result("openai/gpt-4o", success=False)
-        record_model_result("openai/gpt-4o", success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
 
         events = get_layer_events()
         open_events = [e for e in events if e.event_type == LayerEventType.L4_CIRCUIT_BREAKER_OPEN]
         assert len(open_events) >= 1
 
         event = open_events[-1]
-        assert event.data["model_id"] == "openai/gpt-4o"
+        assert event.data["model_id"] == mc.OPENAI_HIGH
         assert "failure_rate" in event.data
 
     def test_emits_circuit_close_event(self):
@@ -235,11 +237,11 @@ class TestCircuitBreakerEventEmission:
             half_open_max_requests=2,
             half_open_success_threshold=0.50,
         )
-        breaker = get_circuit_breaker("openai/gpt-4o", config=config)
+        breaker = get_circuit_breaker(mc.OPENAI_HIGH, config=config)
 
         # Trip the circuit
-        record_model_result("openai/gpt-4o", success=False)
-        record_model_result("openai/gpt-4o", success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
 
         # Wait for cooldown
         time.sleep(0.15)
@@ -248,8 +250,8 @@ class TestCircuitBreakerEventEmission:
         breaker.allow_request()
 
         # Record successes to close
-        record_model_result("openai/gpt-4o", success=True)
-        record_model_result("openai/gpt-4o", success=True)
+        record_model_result(mc.OPENAI_HIGH, success=True)
+        record_model_result(mc.OPENAI_HIGH, success=True)
 
         events = get_layer_events()
         close_events = [
@@ -258,7 +260,7 @@ class TestCircuitBreakerEventEmission:
         assert len(close_events) >= 1
 
         event = close_events[-1]
-        assert event.data["model_id"] == "openai/gpt-4o"
+        assert event.data["model_id"] == mc.OPENAI_HIGH
 
     def test_event_includes_failure_rate(self):
         """Open event should include failure_rate."""
@@ -274,10 +276,10 @@ class TestCircuitBreakerEventEmission:
         clear_layer_events()
 
         config = EnhancedCircuitBreakerConfig(min_requests=2, failure_threshold=0.25)
-        get_circuit_breaker("openai/gpt-4o", config=config)
+        get_circuit_breaker(mc.OPENAI_HIGH, config=config)
 
-        record_model_result("openai/gpt-4o", success=False)
-        record_model_result("openai/gpt-4o", success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
+        record_model_result(mc.OPENAI_HIGH, success=False)
 
         events = get_layer_events()
         open_events = [e for e in events if e.event_type == LayerEventType.L4_CIRCUIT_BREAKER_OPEN]
@@ -298,8 +300,8 @@ class TestRegistryHelpers:
             get_all_breakers,
         )
 
-        get_circuit_breaker("openai/gpt-4o")
-        get_circuit_breaker("anthropic/claude-3")
+        get_circuit_breaker(mc.OPENAI_HIGH)
+        get_circuit_breaker(mc.ANTHROPIC_HIGH)
 
         assert len(get_all_breakers()) == 2
 
@@ -317,13 +319,13 @@ class TestRegistryHelpers:
 
         _reset_registry()
 
-        get_circuit_breaker("openai/gpt-4o")
-        get_circuit_breaker("anthropic/claude-3")
+        get_circuit_breaker(mc.OPENAI_HIGH)
+        get_circuit_breaker(mc.ANTHROPIC_HIGH)
 
         breakers = get_all_breakers()
         assert len(breakers) == 2
-        assert "openai/gpt-4o" in breakers
-        assert "anthropic/claude-3" in breakers
+        assert mc.OPENAI_HIGH in breakers
+        assert mc.ANTHROPIC_HIGH in breakers
 
 
 class TestModuleExports:

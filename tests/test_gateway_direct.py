@@ -6,6 +6,7 @@ TDD: Write these tests first, then implement the DirectGateway.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
+from llm_council import model_constants as mc
 
 
 class TestDirectGateway:
@@ -50,8 +51,8 @@ class TestDirectProviderDetection:
 
         gateway = DirectGateway()
 
-        assert gateway._get_provider("anthropic/claude-3-5-sonnet-20241022") == "anthropic"
-        assert gateway._get_provider("anthropic/claude-3-opus-20240229") == "anthropic"
+        assert gateway._get_provider(mc.ANTHROPIC_HIGH) == "anthropic"
+        assert gateway._get_provider(mc.ANTHROPIC_OPUS_LATEST) == "anthropic"
 
     def test_detect_openai_provider(self):
         """Should detect OpenAI models."""
@@ -59,8 +60,8 @@ class TestDirectProviderDetection:
 
         gateway = DirectGateway()
 
-        assert gateway._get_provider("openai/gpt-4o") == "openai"
-        assert gateway._get_provider("openai/gpt-4-turbo") == "openai"
+        assert gateway._get_provider(mc.OPENAI_HIGH) == "openai"
+        assert gateway._get_provider(mc.OPENAI_ULTRA) == "openai"
 
     def test_detect_google_provider(self):
         """Should detect Google models."""
@@ -68,8 +69,8 @@ class TestDirectProviderDetection:
 
         gateway = DirectGateway()
 
-        assert gateway._get_provider("google/gemini-1.5-pro") == "google"
-        assert gateway._get_provider("google/gemini-2.0-flash-001") == "google"
+        assert gateway._get_provider(mc.GOOGLE_BALANCED) == "google"
+        assert gateway._get_provider(mc.GOOGLE_QUICK) == "google"
 
     def test_unknown_provider_raises(self):
         """Should handle unknown providers gracefully."""
@@ -185,7 +186,7 @@ class TestDirectComplete:
 
         gateway = DirectGateway(provider_keys={"openai": "test-key"})
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -204,7 +205,7 @@ class TestDirectComplete:
 
         assert isinstance(response, GatewayResponse)
         assert response.content == "Hi there!"
-        assert response.model == "openai/gpt-4o"
+        assert response.model == mc.OPENAI_HIGH
         assert response.status == "ok"
 
     @pytest.mark.asyncio
@@ -215,7 +216,7 @@ class TestDirectComplete:
 
         gateway = DirectGateway(provider_keys={"anthropic": "ant-key"})
         request = GatewayRequest(
-            model="anthropic/claude-3-5-sonnet-20241022",
+            model=mc.ANTHROPIC_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -241,7 +242,7 @@ class TestDirectComplete:
 
         gateway = DirectGateway(provider_keys={"openai": "test-key"})
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],
@@ -266,7 +267,7 @@ class TestDirectComplete:
         # No keys provided
         gateway = DirectGateway()
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(role="user", content=[ContentBlock(type="text", text="Hello")])
             ],

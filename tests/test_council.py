@@ -2,6 +2,7 @@
 
 import pytest
 from llm_council.council import parse_ranking_from_text, calculate_aggregate_rankings
+from llm_council import model_constants as mc
 
 
 def test_council_imports():
@@ -39,18 +40,19 @@ def test_calculate_aggregate_rankings():
 
     stage2_results = [
         {
-            "model": "model1",
+            "model": mc.OPENAI_HIGH,
             "ranking": "FINAL RANKING:\n1. Response A\n2. Response B",
             "parsed_ranking": {"ranking": ["Response A", "Response B"], "scores": {}},
         },
         {
-            "model": "model2",
+            "model": mc.ANTHROPIC_HIGH,
             "ranking": "FINAL RANKING:\n1. Response B\n2. Response A",
             "parsed_ranking": {"ranking": ["Response B", "Response A"], "scores": {}},
         },
     ]
 
-    label_to_model = {"Response A": "openai/gpt-4", "Response B": "anthropic/claude"}
+    label_to_model = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH}
+
 
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
 
@@ -134,7 +136,7 @@ def test_borda_count_calculation():
 
     stage2_results = [
         {
-            "model": "reviewer1",
+            "model": mc.OPENAI_HIGH,
             "ranking": "",
             "parsed_ranking": {
                 "ranking": ["Response A", "Response B", "Response C"],
@@ -142,7 +144,7 @@ def test_borda_count_calculation():
             },
         },
         {
-            "model": "reviewer2",
+            "model": mc.ANTHROPIC_HIGH,
             "ranking": "",
             "parsed_ranking": {
                 "ranking": ["Response B", "Response A", "Response C"],
@@ -151,18 +153,18 @@ def test_borda_count_calculation():
         },
     ]
 
-    label_to_model = {"Response A": "model_a", "Response B": "model_b", "Response C": "model_c"}
-
+    label_to_model = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH, "Response C": mc.CODESTRAL}
+    
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
-
+    
     # Check Borda scores exist
     assert all("borda_score" in r for r in result)
-
+    
     # A and B should be tied with normalized borda_score of 0.75 each
     scores_by_model = {r["model"]: r["borda_score"] for r in result}
-    assert scores_by_model["model_a"] == 0.75
-    assert scores_by_model["model_b"] == 0.75
-    assert scores_by_model["model_c"] == 0.0
+    assert scores_by_model[mc.GOOGLE_HIGH] == 0.75
+    assert scores_by_model[mc.QWEN_HIGH] == 0.75
+    assert scores_by_model[mc.CODESTRAL] == 0.0
 
 
 def test_borda_normalization_council_size_independence():
@@ -175,17 +177,17 @@ def test_borda_normalization_council_size_independence():
     # 3-candidate council: max_borda = 2
     stage2_small = [
         {
-            "model": "reviewer1",
+            "model": mc.OPENAI_HIGH,
             "ranking": "",
             "parsed_ranking": {"ranking": ["Response A", "Response B", "Response C"], "scores": {}},
         },
     ]
-    label_small = {"Response A": "model_a", "Response B": "model_b", "Response C": "model_c"}
+    label_small = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH, "Response C": mc.CODESTRAL}
 
     # 5-candidate council: max_borda = 4
     stage2_large = [
         {
-            "model": "reviewer1",
+            "model": mc.OPENAI_HIGH,
             "ranking": "",
             "parsed_ranking": {
                 "ranking": ["Response A", "Response B", "Response C", "Response D", "Response E"],
@@ -194,11 +196,11 @@ def test_borda_normalization_council_size_independence():
         },
     ]
     label_large = {
-        "Response A": "model_a",
-        "Response B": "model_b",
-        "Response C": "model_c",
-        "Response D": "model_d",
-        "Response E": "model_e",
+        "Response A": mc.GOOGLE_HIGH,
+        "Response B": mc.QWEN_HIGH,
+        "Response C": mc.CODESTRAL,
+        "Response D": mc.DEEPSEEK_CHAT,
+        "Response E": mc.ANTHROPIC_HIGH,
     }
 
     result_small = calculate_aggregate_rankings(stage2_small, label_small)
@@ -208,24 +210,24 @@ def test_borda_normalization_council_size_independence():
     scores_small = {r["model"]: r["borda_score"] for r in result_small}
     scores_large = {r["model"]: r["borda_score"] for r in result_large}
 
-    assert scores_small["model_a"] == 1.0, "3-model council: 1st place should be 1.0"
-    assert scores_large["model_a"] == 1.0, "5-model council: 1st place should be 1.0"
+    assert scores_small[mc.GOOGLE_HIGH] == 1.0, "3-model council: 1st place should be 1.0"
+    assert scores_large[mc.GOOGLE_HIGH] == 1.0, "5-model council: 1st place should be 1.0"
 
     # Last place should get 0.0 in BOTH
-    assert scores_small["model_c"] == 0.0, "3-model council: last place should be 0.0"
-    assert scores_large["model_e"] == 0.0, "5-model council: last place should be 0.0"
+    assert scores_small[mc.CODESTRAL] == 0.0, "3-model council: last place should be 0.0"
+    assert scores_large[mc.ANTHROPIC_HIGH] == 0.0, "5-model council: last place should be 0.0"
 
 
 def test_borda_count_excludes_abstentions():
     """Test that abstained reviewers are excluded from Borda count."""
     stage2_results = [
         {
-            "model": "reviewer1",
+            "model": mc.OPENAI_HIGH,
             "ranking": "",
             "parsed_ranking": {"ranking": ["Response A", "Response B"], "scores": {}},
         },
         {
-            "model": "reviewer2",
+            "model": mc.ANTHROPIC_HIGH,
             "ranking": "",
             "parsed_ranking": {
                 "abstained": True,
@@ -236,7 +238,7 @@ def test_borda_count_excludes_abstentions():
         },
     ]
 
-    label_to_model = {"Response A": "model_a", "Response B": "model_b"}
+    label_to_model = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH}
 
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
 

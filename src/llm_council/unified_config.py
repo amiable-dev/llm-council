@@ -1028,7 +1028,7 @@ class UnifiedConfig(BaseModel):
         """Get the gateway to use for a specific model.
 
         Args:
-            model: Model identifier (e.g., "anthropic/claude-3-5-sonnet-20241022")
+            model: Model identifier (e.g., model_constants.ANTHROPIC_HIGH)
 
         Returns:
             Gateway name (openrouter, requesty, or direct)

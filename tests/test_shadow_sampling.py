@@ -8,6 +8,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import dataclass
 import random
+from llm_council import model_constants as mc
 
 from llm_council.triage.shadow_sampling import (
     ShadowSampler,
@@ -104,7 +105,7 @@ class TestShadowSampleResult:
         """Result when fast path agrees with council."""
         result = ShadowSampleResult(
             query_hash="abc123",
-            fast_path_model="openai/gpt-4o-mini",
+            fast_path_model=mc.OPENAI_LOW,
             fast_path_response="The answer is 4.",
             council_consensus="The answer is 4.",
             agreement_score=0.98,
@@ -117,7 +118,7 @@ class TestShadowSampleResult:
         """Result when fast path disagrees with council."""
         result = ShadowSampleResult(
             query_hash="abc123",
-            fast_path_model="openai/gpt-4o-mini",
+            fast_path_model=mc.OPENAI_LOW,
             fast_path_response="The answer is 5.",
             council_consensus="The answer is 4.",
             agreement_score=0.45,
@@ -193,7 +194,7 @@ class TestShadowMetricStore:
         """Should record shadow sampling results."""
         result = ShadowSampleResult(
             query_hash="abc123",
-            fast_path_model="openai/gpt-4o-mini",
+            fast_path_model=mc.OPENAI_LOW,
             fast_path_response="Answer A",
             council_consensus="Answer A",
             agreement_score=0.95,
@@ -209,7 +210,7 @@ class TestShadowMetricStore:
             store.record(
                 ShadowSampleResult(
                     query_hash=f"hash{i}",
-                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_model=mc.OPENAI_LOW,
                     fast_path_response="Same answer",
                     council_consensus="Same answer",
                     agreement_score=0.95,
@@ -227,7 +228,7 @@ class TestShadowMetricStore:
             store.record(
                 ShadowSampleResult(
                     query_hash=f"agree{i}",
-                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_model=mc.OPENAI_LOW,
                     fast_path_response="Answer A",
                     council_consensus="Answer A",
                     agreement_score=0.95,
@@ -240,7 +241,7 @@ class TestShadowMetricStore:
             store.record(
                 ShadowSampleResult(
                     query_hash=f"disagree{i}",
-                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_model=mc.OPENAI_LOW,
                     fast_path_response="Answer A",
                     council_consensus="Answer B",
                     agreement_score=0.40,
@@ -258,7 +259,7 @@ class TestShadowMetricStore:
             store.record(
                 ShadowSampleResult(
                     query_hash=f"hash{i}",
-                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_model=mc.OPENAI_LOW,
                     fast_path_response="Answer",
                     council_consensus="Answer",
                     agreement_score=0.95,
@@ -277,7 +278,7 @@ class TestShadowMetricStore:
             store.record(
                 ShadowSampleResult(
                     query_hash=f"hash{i}",
-                    fast_path_model="openai/gpt-4o-mini",
+                    fast_path_model=mc.OPENAI_LOW,
                     fast_path_response="Fast answer",
                     council_consensus="Council answer",
                     agreement_score=0.30,
@@ -289,7 +290,7 @@ class TestShadowMetricStore:
         store.record(
             ShadowSampleResult(
                 query_hash="agree",
-                fast_path_model="openai/gpt-4o-mini",
+                fast_path_model=mc.OPENAI_LOW,
                 fast_path_response="Same",
                 council_consensus="Same",
                 agreement_score=0.95,
@@ -305,7 +306,7 @@ class TestShadowMetricStore:
         store.record(
             ShadowSampleResult(
                 query_hash="persist_test",
-                fast_path_model="openai/gpt-4o-mini",
+                fast_path_model=mc.OPENAI_LOW,
                 fast_path_response="Answer",
                 council_consensus="Answer",
                 agreement_score=0.95,
@@ -340,7 +341,7 @@ class TestShadowSamplingIntegration:
 
             fast_path_result = MagicMock()
             fast_path_result.response = "Fast path answer"
-            fast_path_result.model = "openai/gpt-4o-mini"
+            fast_path_result.model = mc.OPENAI_LOW
 
             result = await run_shadow_sample(
                 query="What is 2+2?",

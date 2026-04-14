@@ -11,6 +11,8 @@ from unittest.mock import MagicMock, patch, call
 from typing import Dict, Any
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestMetricsConfig:
@@ -166,7 +168,7 @@ class TestStatsDBackend:
             mock_socket.return_value = mock_instance
 
             backend = StatsDBackend(host="localhost", port=8125, prefix="test")
-            backend.emit_counter("circuit_breaker_open", 1, {"model_id": "openai/gpt-4o"})
+            backend.emit_counter("circuit_breaker_open", 1, {"model_id": mc.OPENAI_HIGH})
 
             # Should have sent data to socket
             assert mock_instance.sendto.called
@@ -180,7 +182,7 @@ class TestStatsDBackend:
             mock_socket.return_value = mock_instance
 
             backend = StatsDBackend(host="localhost", port=8125, prefix="llm_council")
-            backend.emit_counter("circuit_breaker_open", 1, {"model_id": "openai/gpt-4o"})
+            backend.emit_counter("circuit_breaker_open", 1, {"model_id": mc.OPENAI_HIGH})
 
             # Check that the metric was formatted correctly
             call_args = mock_instance.sendto.call_args
@@ -204,7 +206,7 @@ class TestPrometheusBackend:
 
         backend = PrometheusBackend(prefix="test")
         # Should not raise
-        backend.emit_counter("circuit_breaker_open", 1, {"model_id": "openai/gpt-4o"})
+        backend.emit_counter("circuit_breaker_open", 1, {"model_id": mc.OPENAI_HIGH})
 
 
 class TestNoOpBackend:
@@ -247,7 +249,7 @@ class TestMetricsAdapter:
         event = LayerEvent(
             event_type=LayerEventType.L4_CIRCUIT_BREAKER_OPEN,
             data={
-                "model_id": "openai/gpt-4o",
+                "model_id": mc.OPENAI_HIGH,
                 "failure_rate": 0.30,
                 "cooldown_seconds": 1800,
             },
@@ -271,7 +273,7 @@ class TestMetricsAdapter:
         event = LayerEvent(
             event_type=LayerEventType.L4_CIRCUIT_BREAKER_CLOSE,
             data={
-                "model_id": "openai/gpt-4o",
+                "model_id": mc.OPENAI_HIGH,
                 "from_state": "half_open",
             },
         )
@@ -293,7 +295,7 @@ class TestMetricsAdapter:
         event = LayerEvent(
             event_type=LayerEventType.L4_CIRCUIT_BREAKER_OPEN,
             data={
-                "model_id": "openai/gpt-4o",
+                "model_id": mc.OPENAI_HIGH,
                 "failure_rate": 0.30,
             },
         )
@@ -303,7 +305,7 @@ class TestMetricsAdapter:
         call_args = mock_backend.emit_counter.call_args
         tags = call_args[0][2]  # Third argument is tags
         assert "model_id" in tags
-        assert tags["model_id"] == "openai/gpt-4o"
+        assert tags["model_id"] == mc.OPENAI_HIGH
 
     def test_metrics_adapter_emits_failure_rate_gauge(self):
         """MetricsAdapter should emit failure_rate as a gauge on circuit open."""
@@ -316,7 +318,7 @@ class TestMetricsAdapter:
         event = LayerEvent(
             event_type=LayerEventType.L4_CIRCUIT_BREAKER_OPEN,
             data={
-                "model_id": "openai/gpt-4o",
+                "model_id": mc.OPENAI_HIGH,
                 "failure_rate": 0.30,
             },
         )
@@ -403,7 +405,7 @@ class TestMetricsAdapterIntegration:
             emit_layer_event(
                 LayerEventType.L4_CIRCUIT_BREAKER_OPEN,
                 {
-                    "model_id": "openai/gpt-4o",
+                    "model_id": mc.OPENAI_HIGH,
                     "failure_rate": 0.30,
                     "cooldown_seconds": 1800,
                 },

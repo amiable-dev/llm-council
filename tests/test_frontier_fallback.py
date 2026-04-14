@@ -9,6 +9,8 @@ This implements Issue #114.
 from unittest.mock import patch
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestExecuteWithFallback:
@@ -23,7 +25,7 @@ class TestExecuteWithFallback:
         with patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"):
             response = await execute_with_fallback(
                 query="What is 2+2?",
-                frontier_model="openai/gpt-4o",
+                frontier_model=mc.OPENAI_HIGH,
             )
 
             assert response is not None
@@ -44,11 +46,11 @@ class TestExecuteWithFallback:
             ]
 
             with patch("llm_council.frontier_fallback.get_tier_models") as mock_get_models:
-                mock_get_models.return_value = ["anthropic/claude-3.5-sonnet"]
+                mock_get_models.return_value = [mc.ANTHROPIC_HIGH]
 
                 response = await execute_with_fallback(
                     query="What is 2+2?",
-                    frontier_model="openai/gpt-5.2-pro",
+                    frontier_model=mc.OPENAI_REASONING,
                 )
 
                 assert response is not None
@@ -67,11 +69,11 @@ class TestExecuteWithFallback:
             ]
 
             with patch("llm_council.frontier_fallback.get_tier_models") as mock_get_models:
-                mock_get_models.return_value = ["anthropic/claude-3.5-sonnet"]
+                mock_get_models.return_value = [mc.ANTHROPIC_HIGH]
 
                 response = await execute_with_fallback(
                     query="What is 2+2?",
-                    frontier_model="openai/gpt-5.2-pro",
+                    frontier_model=mc.OPENAI_REASONING,
                 )
 
                 assert response is not None
@@ -91,12 +93,12 @@ class TestExecuteWithFallback:
             ]
 
             with patch("llm_council.frontier_fallback.get_tier_models") as mock_get_models:
-                mock_get_models.return_value = ["anthropic/claude-3.5-sonnet"]
+                mock_get_models.return_value = [mc.ANTHROPIC_HIGH]
 
                 with patch("llm_council.frontier_fallback.logger") as mock_logger:
                     await execute_with_fallback(
                         query="What is 2+2?",
-                        frontier_model="openai/gpt-5.2-pro",
+                        frontier_model=mc.OPENAI_REASONING,
                     )
 
                     # Should have logged a warning
@@ -116,11 +118,11 @@ class TestExecuteWithFallback:
             ]
 
             with patch("llm_council.frontier_fallback.get_tier_models") as mock_get_models:
-                mock_get_models.return_value = ["openai/gpt-4o"]
+                mock_get_models.return_value = [mc.OPENAI_HIGH]
 
                 await execute_with_fallback(
                     query="What is 2+2?",
-                    frontier_model="openai/gpt-5.2-pro",
+                    frontier_model=mc.OPENAI_REASONING,
                     fallback_tier="balanced",  # Custom fallback tier
                 )
 
@@ -179,13 +181,13 @@ class TestFallbackResult:
             response={"content": "Test"},
             used_fallback=True,
             original_error="Timeout",
-            fallback_model="anthropic/claude-3.5-sonnet",
+            fallback_model=mc.ANTHROPIC_HIGH,
         )
 
         assert result.response == {"content": "Test"}
         assert result.used_fallback is True
         assert result.original_error == "Timeout"
-        assert result.fallback_model == "anthropic/claude-3.5-sonnet"
+        assert result.fallback_model == mc.ANTHROPIC_HIGH
 
     def test_fallback_result_without_fallback(self):
         """FallbackResult should work without fallback."""

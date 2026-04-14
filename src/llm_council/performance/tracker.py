@@ -142,7 +142,7 @@ class InternalPerformanceTracker:
         Returns cold-start defaults for unknown models.
 
         Args:
-            model_id: Full model identifier (e.g., 'openai/gpt-4o')
+            model_id: Full model identifier (e.g., 'provider/model')
 
         Returns:
             ModelPerformanceIndex with aggregated metrics

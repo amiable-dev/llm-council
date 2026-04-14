@@ -8,7 +8,7 @@ Usage:
     from llm_council.gateway_adapter import query_model, query_models_parallel
 
     # Uses the configured backend (direct or gateway)
-    response = await query_model("openai/gpt-4o", messages)
+    response = await query_model("provider/model", messages)
 """
 
 import asyncio
@@ -107,7 +107,7 @@ async def query_model(
     openrouter module.
 
     Args:
-        model: OpenRouter model identifier (e.g., "openai/gpt-4o")
+        model: OpenRouter model identifier (e.g., mc.OPENAI_HIGH)
         messages: List of message dicts with 'role' and 'content'
         timeout: Request timeout in seconds
         disable_tools: If True, explicitly disable tool/function calling

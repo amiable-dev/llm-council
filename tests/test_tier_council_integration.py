@@ -16,7 +16,9 @@ class TestCouncilTierContractParameter:
 
         tier_contract = create_tier_contract("quick")
 
-        with patch("llm_council.council.run_full_council", new_callable=AsyncMock) as mock_full_council:
+        with patch(
+            "llm_council.council.run_full_council", new_callable=AsyncMock
+        ) as mock_full_council:
             mock_full_council.return_value = ([], [], {"response": "ok"}, {"label_to_model": {}})
 
             result = await run_council_with_fallback("Test query", tier_contract=tier_contract)
@@ -35,7 +37,9 @@ class TestTierContractUsesAllowedModels:
 
         tier_contract = create_tier_contract("quick")
 
-        with patch("llm_council.council.run_full_council", new_callable=AsyncMock) as mock_full_council:
+        with patch(
+            "llm_council.council.run_full_council", new_callable=AsyncMock
+        ) as mock_full_council:
             mock_full_council.return_value = ([], [], {"response": "ok"}, {"label_to_model": {}})
 
             await run_council_with_fallback("Test query", tier_contract=tier_contract)
@@ -53,7 +57,9 @@ class TestTierContractUsesAllowedModels:
         tier_contract = create_tier_contract("quick")
         explicit_models = ["test/model-a", "test/model-b"]
 
-        with patch("llm_council.council.run_full_council", new_callable=AsyncMock) as mock_full_council:
+        with patch(
+            "llm_council.council.run_full_council", new_callable=AsyncMock
+        ) as mock_full_council:
             mock_full_council.return_value = ([], [], {"response": "ok"}, {"label_to_model": {}})
 
             await run_council_with_fallback(

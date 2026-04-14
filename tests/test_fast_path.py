@@ -8,6 +8,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from dataclasses import dataclass
 from typing import Optional
+from llm_council import model_constants as mc
+
 
 from llm_council.triage.fast_path import (
     FastPathRouter,
@@ -35,13 +37,13 @@ class TestFastPathConfig:
             {
                 "LLM_COUNCIL_FAST_PATH_ENABLED": "true",
                 "LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD": "0.95",
-                "LLM_COUNCIL_FAST_PATH_MODEL": "openai/gpt-4o",
+                "LLM_COUNCIL_FAST_PATH_MODEL": mc.OPENAI_HIGH,
             },
         ):
             config = FastPathConfig.from_env()
             assert config.enabled is True
             assert config.confidence_threshold == 0.95
-            assert config.model == "openai/gpt-4o"
+            assert config.model == mc.OPENAI_HIGH
 
     def test_config_validation_threshold_range(self):
         """Confidence threshold must be between 0 and 1."""
@@ -117,7 +119,7 @@ class TestFastPathResult:
         result = FastPathResult(
             used_fast_path=True,
             response="The answer is 42.",
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             confidence=0.95,
             escalated=False,
         )
@@ -130,7 +132,7 @@ class TestFastPathResult:
         result = FastPathResult(
             used_fast_path=True,
             response="I'm not sure about this.",
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             confidence=0.65,
             escalated=True,
             escalation_reason="confidence_below_threshold",
@@ -246,8 +248,8 @@ class TestFastPathIntegration:
     def test_triage_result_includes_fast_path_flag(self):
         """TriageResult should indicate if fast path was used."""
         result = TriageResult(
-            resolved_models=["openai/gpt-4o"],
-            optimized_prompts={"openai/gpt-4o": "What is 2+2?"},
+            resolved_models=[mc.OPENAI_HIGH],
+            optimized_prompts={mc.OPENAI_HIGH: "What is 2+2?"},
             fast_path=True,
             escalation_recommended=False,
         )
@@ -256,8 +258,8 @@ class TestFastPathIntegration:
     def test_triage_result_escalation_from_fast_path(self):
         """TriageResult should indicate escalation recommendation."""
         result = TriageResult(
-            resolved_models=["openai/gpt-4o"],
-            optimized_prompts={"openai/gpt-4o": "Complex query"},
+            resolved_models=[mc.OPENAI_HIGH],
+            optimized_prompts={mc.OPENAI_HIGH: "Complex query"},
             fast_path=True,
             escalation_recommended=True,
             escalation_reason="confidence_below_threshold",

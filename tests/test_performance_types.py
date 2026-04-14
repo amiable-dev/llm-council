@@ -10,6 +10,8 @@ from dataclasses import is_dataclass
 from pathlib import Path
 
 import pytest
+from llm_council import model_constants as mc
+
 
 
 class TestModelSessionMetricDataclass:
@@ -21,7 +23,7 @@ class TestModelSessionMetricDataclass:
 
         metric = ModelSessionMetric(
             session_id="test-session",
-            model_id="openai/gpt-4o",
+            model_id=mc.OPENAI_HIGH,
             timestamp="2025-12-24T00:00:00Z",
             latency_ms=1500,
             borda_score=0.75,
@@ -35,14 +37,14 @@ class TestModelSessionMetricDataclass:
 
         metric = ModelSessionMetric(
             session_id="sess-123",
-            model_id="anthropic/claude-3-opus",
+            model_id=mc.ANTHROPIC_OPUS_LATEST,
             timestamp="2025-12-24T12:00:00Z",
             latency_ms=2000,
             borda_score=0.85,
             parse_success=True,
         )
         assert metric.session_id == "sess-123"
-        assert metric.model_id == "anthropic/claude-3-opus"
+        assert metric.model_id == mc.ANTHROPIC_OPUS_LATEST
         assert metric.timestamp == "2025-12-24T12:00:00Z"
         assert metric.latency_ms == 2000
         assert metric.borda_score == 0.85
@@ -98,7 +100,7 @@ class TestModelSessionMetricSerialization:
 
         metric = ModelSessionMetric(
             session_id="sess-456",
-            model_id="openai/gpt-4o",
+            model_id=mc.OPENAI_HIGH,
             timestamp="2025-12-24T00:00:00Z",
             latency_ms=1500,
             borda_score=0.75,
@@ -109,7 +111,7 @@ class TestModelSessionMetricSerialization:
         # Should be valid JSON
         parsed = json.loads(line)
         assert parsed["session_id"] == "sess-456"
-        assert parsed["model_id"] == "openai/gpt-4o"
+        assert parsed["model_id"] == mc.OPENAI_HIGH
         assert parsed["borda_score"] == 0.75
 
     def test_from_jsonl_line(self):
@@ -120,7 +122,7 @@ class TestModelSessionMetricSerialization:
             {
                 "schema_version": "1.0.0",
                 "session_id": "sess-789",
-                "model_id": "anthropic/claude-3-opus",
+                "model_id": mc.ANTHROPIC_OPUS_LATEST,
                 "timestamp": "2025-12-24T00:00:00Z",
                 "latency_ms": 2000,
                 "borda_score": 0.85,
@@ -131,7 +133,7 @@ class TestModelSessionMetricSerialization:
 
         metric = ModelSessionMetric.from_jsonl_line(line)
         assert metric.session_id == "sess-789"
-        assert metric.model_id == "anthropic/claude-3-opus"
+        assert metric.model_id == mc.ANTHROPIC_OPUS_LATEST
         assert metric.borda_score == 0.85
 
     def test_roundtrip_serialization(self):
@@ -141,7 +143,7 @@ class TestModelSessionMetricSerialization:
         original = ModelSessionMetric(
             schema_version="1.0.0",
             session_id="sess-roundtrip",
-            model_id="google/gemini-2.0-flash",
+            model_id=mc.GOOGLE_BALANCED,
             timestamp="2025-12-24T12:00:00Z",
             latency_ms=1200,
             borda_score=0.90,
@@ -181,7 +183,7 @@ class TestModelSessionMetricSerialization:
             {
                 "schema_version": "0.9.0",
                 "session_id": "old-session",
-                "model_id": "openai/gpt-4",
+                "model_id": mc.OPENAI_ULTRA,
                 "timestamp": "2025-01-01T00:00:00Z",
                 "latency_ms": 1000,
                 "borda_score": 0.5,
@@ -203,7 +205,7 @@ class TestModelPerformanceIndexDataclass:
         from llm_council.performance.types import ModelPerformanceIndex
 
         index = ModelPerformanceIndex(
-            model_id="openai/gpt-4o",
+            model_id=mc.OPENAI_HIGH,
             sample_size=50,
             mean_borda_score=0.75,
             p50_latency_ms=1500,
@@ -218,7 +220,7 @@ class TestModelPerformanceIndexDataclass:
         from llm_council.performance.types import ModelPerformanceIndex
 
         index = ModelPerformanceIndex(
-            model_id="anthropic/claude-3-opus",
+            model_id=mc.ANTHROPIC_OPUS_LATEST,
             sample_size=100,
             mean_borda_score=0.80,
             p50_latency_ms=2000,
@@ -227,7 +229,7 @@ class TestModelPerformanceIndexDataclass:
             confidence_level="HIGH",
         )
 
-        assert index.model_id == "anthropic/claude-3-opus"
+        assert index.model_id == mc.ANTHROPIC_OPUS_LATEST
         assert index.sample_size == 100
         assert index.mean_borda_score == 0.80
         assert index.p50_latency_ms == 2000
@@ -387,15 +389,15 @@ class TestReadPerformanceRecords:
             path = Path(tmpdir) / "metrics.jsonl"
 
             records = [
-                ModelSessionMetric(session_id="s1", model_id="openai/gpt-4o"),
-                ModelSessionMetric(session_id="s2", model_id="anthropic/claude"),
-                ModelSessionMetric(session_id="s3", model_id="openai/gpt-4o"),
+                ModelSessionMetric(session_id="s1", model_id=mc.OPENAI_HIGH),
+                ModelSessionMetric(session_id="s2", model_id=mc.ANTHROPIC_HIGH),
+                ModelSessionMetric(session_id="s3", model_id=mc.OPENAI_HIGH),
             ]
             append_performance_records(records, path)
 
-            result = read_performance_records(path, model_id="openai/gpt-4o")
+            result = read_performance_records(path, model_id=mc.OPENAI_HIGH)
             assert len(result) == 2
-            assert all(r.model_id == "openai/gpt-4o" for r in result)
+            assert all(r.model_id == mc.OPENAI_HIGH for r in result)
 
     def test_filter_by_max_days(self):
         """Should filter records by max_days from now."""

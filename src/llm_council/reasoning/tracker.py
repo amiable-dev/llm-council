@@ -6,6 +6,7 @@ usage from OpenRouter API responses.
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+from .. import model_constants as mc
 
 
 @dataclass
@@ -13,7 +14,7 @@ class ReasoningUsage:
     """Usage data for a single reasoning model response.
 
     Attributes:
-        model_id: Model identifier (e.g., "openai/o1")
+        model_id: Full model identifier
         reasoning_tokens: Number of tokens used for reasoning
         budget_tokens: Maximum tokens allocated for reasoning
         efficiency: Ratio of reasoning_tokens to budget_tokens

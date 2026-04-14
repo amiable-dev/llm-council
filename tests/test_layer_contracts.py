@@ -6,6 +6,7 @@ Tests the formal layer boundaries and validation for the unified routing archite
 import pytest
 from unittest.mock import MagicMock, patch
 
+from llm_council import model_constants as mc
 from llm_council.layer_contracts import (
     # Layer interface types (re-exported)
     TierContract,
@@ -48,19 +49,19 @@ class TestLayerInterfaceExports:
         """TriageResult should be exported from layer_contracts."""
         assert TriageResult is not None
         result = TriageResult(
-            resolved_models=["model-a", "model-b"],
-            optimized_prompts={"model-a": "prompt-a"},
+            resolved_models=[mc.OPENAI_HIGH, mc.ANTHROPIC_HIGH],
+            optimized_prompts={mc.OPENAI_HIGH: "prompt-a"},
         )
-        assert result.resolved_models == ["model-a", "model-b"]
+        assert result.resolved_models == [mc.OPENAI_HIGH, mc.ANTHROPIC_HIGH]
 
     def test_gateway_request_exported(self):
         """GatewayRequest should be exported from layer_contracts."""
         assert GatewayRequest is not None
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[],
         )
-        assert request.model == "openai/gpt-4o"
+        assert request.model == mc.OPENAI_HIGH
 
     def test_canonical_message_exported(self):
         """CanonicalMessage should be exported from layer_contracts."""
@@ -101,10 +102,10 @@ class TestTriageResultValidation:
     def test_valid_triage_result(self):
         """Valid TriageResult should pass validation."""
         result = TriageResult(
-            resolved_models=["openai/gpt-4o", "anthropic/claude-3-5-sonnet"],
+            resolved_models=[mc.OPENAI_HIGH, mc.ANTHROPIC_HIGH],
             optimized_prompts={
-                "openai/gpt-4o": "prompt",
-                "anthropic/claude-3-5-sonnet": "prompt",
+                mc.OPENAI_HIGH: "prompt",
+                mc.ANTHROPIC_HIGH: "prompt",
             },
         )
         assert validate_triage_result(result) is True
@@ -131,7 +132,7 @@ class TestGatewayRequestValidation:
     def test_valid_gateway_request(self):
         """Valid GatewayRequest should pass validation."""
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(
                     role="user",
@@ -149,7 +150,7 @@ class TestGatewayRequestValidation:
 
     def test_gateway_request_requires_messages(self):
         """GatewayRequest must have at least one message."""
-        request = GatewayRequest(model="openai/gpt-4o", messages=[])
+        request = GatewayRequest(model=mc.OPENAI_HIGH, messages=[])
         with pytest.raises(ValueError, match="message"):
             validate_gateway_request(request)
 
@@ -189,7 +190,7 @@ class TestBoundaryValidation:
     def test_l3_to_l4_boundary(self):
         """L3 to L4 boundary should validate GatewayRequest."""
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(
                     role="user",
@@ -279,7 +280,7 @@ class TestBoundaryCrossingHelpers:
     def test_cross_l3_to_l4(self):
         """cross_l3_to_l4 should validate and emit event."""
         request = GatewayRequest(
-            model="openai/gpt-4o",
+            model=mc.OPENAI_HIGH,
             messages=[
                 CanonicalMessage(
                     role="user",
@@ -357,7 +358,7 @@ class TestLayerSovereignty:
 
         # Try to use a model not in quick tier
         triage_result = TriageResult(
-            resolved_models=["openai/gpt-5.2-pro"],  # Reasoning model
+            resolved_models=[mc.OPENAI_REASONING],  # Reasoning model
             optimized_prompts={},
         )
 
