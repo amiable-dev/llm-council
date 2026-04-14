@@ -796,16 +796,19 @@ async def audit(
                 indent=2,
             )
     except Exception as e:
-        return json.dumps({"error": str(e)}, indent=2)
+        return json.dumps({"error": str(e)})
 
 
-# --- Entry Point ---
-
-
-def main():
-    """Entry point for the llm-council command."""
-    mcp.run()
+@mcp.tool()
+async def list_models() -> str:
+    """List available model constants in the council registry."""
+    models = {
+        k: v
+        for k, v in vars(model_constants).items()
+        if not k.startswith("_") and isinstance(v, str)
+    }
+    return json.dumps(models, indent=2)
 
 
 if __name__ == "__main__":
-    main()
+    mcp.run()

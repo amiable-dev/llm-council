@@ -34,7 +34,6 @@ DEEPSEEK_CHAT = "deepseek/deepseek-chat"
 CODESTRAL = "mistralai/codestral-latest"
 OPENAI_REASONING_LOW = "openai/o1-mini"
 
-
 # Utility Models (formatting, normalization, etc.)
 UTILITY_TITLE_GENERATOR = "google/gemini-2.0-flash-lite-001"
 UTILITY_NORMALIZER_MODEL = "google/gemini-3.1-flash-lite-preview"
@@ -54,6 +53,7 @@ WILDCARD_CREATIVE_COHERE = "cohere/command-r-plus"
 # Additional Frontier Placeholders
 ANTHROPIC_OPUS_LATEST = "anthropic/claude-3-opus-20240229"
 WILDCARD_FALLBACK_MODEL = "meta-llama/llama-3.1-70b-instruct"
+
 # Specific versions for test stability
 OPENAI_O1 = "openai/o1"           # Canonical: latest o1
 OPENAI_O1_PREVIEW = OPENAI_REASONING_PREVIEW  # Alias → "openai/o1-preview"
