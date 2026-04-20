@@ -32,9 +32,8 @@ import json
 import os
 import re
 from contextvars import ContextVar
-from dataclasses import field
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
@@ -57,15 +56,9 @@ from .tier_contract import TierContract, create_tier_contract
 #     finally:
 #         _request_api_key.set({})  # Clear after request
 
-_request_api_key: ContextVar[Dict[str, str]] = ContextVar("request_api_key", default={})
+_request_api_key: ContextVar[dict[str, str]] = ContextVar("request_api_key", default={})
 
 
-def _get_home_directory() -> Optional[Path]:
-    """Safely get home directory without crashing in restricted environments."""
-    try:
-        return Path.home()
-    except (RuntimeError, KeyError):
-        return None
 
 
 def set_request_api_key(provider: str, key: str) -> None:
@@ -87,7 +80,7 @@ def clear_request_api_keys() -> None:
     _request_api_key.set({})
 
 
-def get_request_api_key(provider: str) -> Optional[str]:
+def get_request_api_key(provider: str) -> str | None:
     """Get a request-scoped API key if set.
 
     Args:
@@ -104,7 +97,7 @@ def get_request_api_key(provider: str) -> Optional[str]:
 # =============================================================================
 
 
-def parse_model_list(value: Union[str, List[str]]) -> List[str]:
+def parse_model_list(value: str | list[str]) -> list[str]:
     """Parse model list from string or list (ADR-032 auto-detection).
 
     Supports:
@@ -153,7 +146,7 @@ def _get_safe_home_directory() -> Path:
 
 
 # Type alias for model lists with auto-detection
-ModelList = Annotated[List[str], BeforeValidator(parse_model_list)]
+ModelList = Annotated[list[str], BeforeValidator(parse_model_list)]
 
 
 # =============================================================================
@@ -164,9 +157,11 @@ ModelList = Annotated[List[str], BeforeValidator(parse_model_list)]
 class TierPoolConfig(BaseModel):
     """Configuration for a single tier's model pool."""
 
-    models: List[str] = Field(default_factory=list)
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
+    models: list[str] = Field(default_factory=list)
     timeout_seconds: int = Field(default=90, ge=1, le=3600)
-    per_model_timeout_seconds: Optional[int] = None
+    per_model_timeout_seconds: int | None = None
     peer_review: str = Field(default="standard")  # standard | lightweight
 
     @model_validator(mode="after")
@@ -188,8 +183,10 @@ class EscalationConfig(BaseModel):
 class TierConfig(BaseModel):
     """Configuration for tier selection (ADR-022, Layer 1)."""
 
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
     default: str = Field(default="balanced")
-    pools: Dict[str, TierPoolConfig] = Field(default_factory=dict)
+    pools: dict[str, TierPoolConfig] = Field(default_factory=dict)
     escalation: EscalationConfig = Field(default_factory=EscalationConfig)
     # Note: frontier field is populated by model_validator after class definitions
 
@@ -281,9 +278,11 @@ class PromptOptimizationConfig(BaseModel):
 class WildcardConfig(BaseModel):
     """Configuration for wildcard model selection."""
 
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
     enabled: bool = True
     pool: str = "domain_specialist"
-    fallback_model: Optional[str] = None
+    fallback_model: str | None = None
 
 
 class FastPathConfig(BaseModel):
@@ -309,10 +308,12 @@ class TriageConfig(BaseModel):
 class GatewayProviderConfig(BaseModel):
     """Configuration for a single gateway provider."""
 
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
     enabled: bool = True
-    api_key: Optional[str] = None
-    base_url: Optional[str] = None
-    byok: Optional[Dict[str, str]] = None
+    api_key: str | None = None
+    base_url: str | None = None
+    byok: dict[str, str] | None = None
 
 
 class OllamaProviderConfig(BaseModel):
@@ -325,7 +326,7 @@ class OllamaProviderConfig(BaseModel):
     enabled: bool = True
     base_url: str = Field(default="http://localhost:11434")
     timeout_seconds: float = Field(default=120.0, ge=1.0, le=3600.0)
-    hardware_profile: Optional[Literal["minimum", "recommended", "professional", "enterprise"]] = (
+    hardware_profile: Literal["minimum", "recommended", "professional", "enterprise"] | None = (
         None
     )
 
@@ -337,20 +338,24 @@ class WebhookConfig(BaseModel):
     Note: url and secret are runtime-only, not stored in config.
     """
 
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
     enabled: bool = False  # Opt-in
     timeout_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
     max_retries: int = Field(default=3, ge=0, le=10)
     https_only: bool = True
-    default_events: List[str] = Field(default_factory=lambda: ["council.complete", "council.error"])
+    default_events: list[str] = Field(default_factory=lambda: ["council.complete", "council.error"])
 
 
 class FallbackConfig(BaseModel):
     """Configuration for gateway fallback behavior."""
 
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
     enabled: bool = True
-    chain: List[str] = Field(default_factory=lambda: ["openrouter", "requesty", "direct"])
-    retry_on: List[str] = Field(default_factory=lambda: ["timeout", "rate_limit", "server_error"])
-    do_not_retry_on: List[str] = Field(
+    chain: list[str] = Field(default_factory=lambda: ["openrouter", "requesty", "direct"])
+    retry_on: list[str] = Field(default_factory=lambda: ["timeout", "rate_limit", "server_error"])
+    do_not_retry_on: list[str] = Field(
         default_factory=lambda: ["auth_error", "invalid_request", "content_filter"]
     )
 
@@ -359,13 +364,13 @@ class GatewayConfig(BaseModel):
     """Configuration for gateway routing (ADR-023, Layer 4)."""
 
     # Allow fields starting with "model_" (Pydantic v2 reserves this prefix by default)
-    model_config = ConfigDict(protected_namespaces=())
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
 
     default: str = Field(default="openrouter")
-    providers: Dict[str, Union[GatewayProviderConfig, OllamaProviderConfig]] = Field(
+    providers: dict[str, GatewayProviderConfig | OllamaProviderConfig] = Field(
         default_factory=dict
     )
-    model_routing: Dict[str, str] = Field(default_factory=dict)
+    model_routing: dict[str, str] = Field(default_factory=dict)
     fallback: FallbackConfig = Field(default_factory=FallbackConfig)
 
     @field_validator("default")
@@ -378,7 +383,7 @@ class GatewayConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def convert_ollama_provider(cls, data: Any) -> Any:
+    def convert_ollama_provider(cls, data: dict[str, Any]) -> dict[str, Any]:
         """Convert ollama provider dict to OllamaProviderConfig."""
         if isinstance(data, dict) and "providers" in data:
             providers = data.get("providers", {})
@@ -393,7 +398,7 @@ class GatewayConfig(BaseModel):
     @model_validator(mode="after")
     def ensure_default_providers(self) -> "GatewayConfig":
         """Ensure all standard gateway providers exist."""
-        default_providers: Dict[str, Union[GatewayProviderConfig, OllamaProviderConfig]] = {
+        default_providers: dict[str, GatewayProviderConfig | OllamaProviderConfig] = {
             "openrouter": GatewayProviderConfig(
                 enabled=True,
                 base_url="https://openrouter.ai/api/v1/chat/completions",
@@ -418,12 +423,14 @@ class GatewayConfig(BaseModel):
 class CredentialsConfig(BaseModel):
     """Configuration for API credentials."""
 
-    not_diamond: Optional[str] = None
-    openrouter: Optional[str] = None
-    requesty: Optional[str] = None
-    anthropic: Optional[str] = None
-    openai: Optional[str] = None
-    google: Optional[str] = None
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
+    not_diamond: str | None = None
+    openrouter: str | None = None
+    requesty: str | None = None
+    anthropic: str | None = None
+    openai: str | None = None
+    google: str | None = None
 
 
 # =============================================================================
@@ -506,13 +513,15 @@ class DiscoveryConfig(BaseModel):
     Controls background model registry refresh and request-time discovery.
     """
 
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
     enabled: bool = True  # Discovery enabled by default when model_intelligence is on
     refresh_interval_seconds: int = Field(default=300, ge=60, le=3600)  # 5 minutes
     min_candidates_per_tier: int = Field(default=3, ge=1, le=10)
     max_candidates_per_tier: int = Field(default=10, ge=3, le=50)
     stale_threshold_minutes: int = Field(default=30, ge=5, le=120)
     max_refresh_retries: int = Field(default=3, ge=1, le=10)
-    providers: Dict[str, DiscoveryProviderConfig] = Field(default_factory=dict)
+    providers: dict[str, DiscoveryProviderConfig] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_candidates_range(self) -> "DiscoveryConfig":
@@ -736,7 +745,9 @@ class SecretsConfig(BaseModel):
     Use get_api_key() helper for resolution.
     """
 
-    required_providers: List[str] = Field(
+    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+
+    required_providers: list[str] = Field(
         default_factory=lambda: ["openrouter"],
         description="Providers that require API keys",
     )
@@ -749,7 +760,7 @@ class SecretsConfig(BaseModel):
 class CouncilConfig(BaseModel):
     """Core council behavior configuration (ADR-032)."""
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     models: ModelList = Field(
         default_factory=lambda: [
@@ -772,7 +783,7 @@ class CouncilConfig(BaseModel):
         default=True,
         alias="LLM_COUNCIL_EXCLUDE_SELF_VOTES",
     )
-    style_normalization: Union[bool, Literal["auto"]] = Field(
+    style_normalization: bool | Literal["auto"] = Field(
         default=False,
         alias="LLM_COUNCIL_STYLE_NORMALIZATION",
     )
@@ -780,7 +791,7 @@ class CouncilConfig(BaseModel):
         default=model_constants.UTILITY_NORMALIZER_MODEL,
         alias="LLM_COUNCIL_NORMALIZER_MODEL",
     )
-    max_reviewers: Optional[int] = Field(
+    max_reviewers: int | None = Field(
         default=None,
         alias="LLM_COUNCIL_MAX_REVIEWERS",
     )
@@ -788,7 +799,7 @@ class CouncilConfig(BaseModel):
         default=False,
         alias="LLM_COUNCIL_ADVERSARIAL_MODE",
     )
-    adversarial_model: Optional[str] = Field(
+    adversarial_model: str | None = Field(
         default=None,
         alias="LLM_COUNCIL_ADVERSARIAL_MODEL",
     )
@@ -807,7 +818,7 @@ class TimeoutsConfig(BaseModel):
     All timeout values are in milliseconds.
     """
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     quick: TierTimeoutConfig = Field(
         default_factory=lambda: TierTimeoutConfig(total=30000, per_model=20000)
@@ -852,7 +863,7 @@ class TimeoutsConfig(BaseModel):
 class CacheConfig(BaseModel):
     """Response caching configuration (ADR-032)."""
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     enabled: bool = Field(
         default=False,
@@ -871,7 +882,7 @@ class CacheConfig(BaseModel):
 class TelemetryConfig(BaseModel):
     """Opt-in telemetry configuration (ADR-032)."""
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     level: Literal["off", "anonymous", "debug"] = Field(
         default="off",
@@ -897,13 +908,13 @@ class RubricConfig(BaseModel):
     Weights must sum to 1.0 and include all 5 dimensions.
     """
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     enabled: bool = Field(default=False, validation_alias="RUBRIC_SCORING_ENABLED")
     accuracy_ceiling_enabled: bool = Field(
         default=True, validation_alias="ACCURACY_CEILING_ENABLED"
     )
-    weights: Dict[str, float] = Field(
+    weights: dict[str, float] = Field(
         default_factory=lambda: {
             "accuracy": 0.35,
             "relevance": 0.10,
@@ -915,7 +926,7 @@ class RubricConfig(BaseModel):
 
     @field_validator("weights")
     @classmethod
-    def validate_weights(cls, v: Dict[str, float]) -> Dict[str, float]:
+    def validate_weights(cls, v: dict[str, float]) -> dict[str, float]:
         """Validate rubric weights: non-negative, sum to 1.0, all dimensions present."""
         if not v:
             return v
@@ -944,7 +955,7 @@ class SafetyConfig(BaseModel):
     When enabled, caps scores for responses that fail safety checks.
     """
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     enabled: bool = Field(default=False, validation_alias="SAFETY_GATE_ENABLED")
     score_cap: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -956,7 +967,7 @@ class BiasConfig(BaseModel):
     Controls bias detection and persistence for evaluator calibration.
     """
 
-    model_config = {"populate_by_name": True}
+    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     audit_enabled: bool = Field(default=False, validation_alias="BIAS_AUDIT_ENABLED")
     persistence_enabled: bool = Field(default=False, validation_alias="BIAS_PERSISTENCE_ENABLED")
@@ -1040,7 +1051,7 @@ class UnifiedConfig(BaseModel):
         # Fall back to default
         return self.gateways.default
 
-    def get_fallback_chain(self) -> List[str]:
+    def get_fallback_chain(self) -> list[str]:
         """Get the gateway fallback chain.
 
         Returns:
@@ -1059,7 +1070,7 @@ class UnifiedConfig(BaseModel):
         config_dict = {"council": self.to_dict()}
         return yaml.dump(config_dict, default_flow_style=False, sort_keys=False)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize configuration to dictionary.
 
         Returns:
@@ -1093,7 +1104,7 @@ def _substitute_env_vars(value: Any) -> Any:
     return value
 
 
-def _merge_dicts(base: dict, override: dict) -> dict:
+def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Deep merge two dictionaries, with override taking precedence."""
     result = base.copy()
     for key, value in override.items():
@@ -1105,7 +1116,7 @@ def _merge_dicts(base: dict, override: dict) -> dict:
 
 
 def load_config(
-    config_path: Optional[Path] = None,
+    config_path: Path | None = None,
     strict: bool = False,
 ) -> UnifiedConfig:
     """Load configuration from YAML file.
@@ -1189,7 +1200,7 @@ def load_config(
         return UnifiedConfig()
 
 
-def _find_config_file() -> Optional[Path]:
+def _find_config_file() -> Path | None:
     """Find configuration file in standard locations.
 
     Search order:
@@ -1526,7 +1537,7 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     return UnifiedConfig(**config_dict)
 
 
-def get_effective_config(config_path: Optional[Path] = None) -> UnifiedConfig:
+def get_effective_config(config_path: Path | None = None) -> UnifiedConfig:
     """Get the effective configuration with all overrides applied.
 
     Priority: Environment Variables > YAML > Defaults
@@ -1556,7 +1567,7 @@ def get_effective_config(config_path: Optional[Path] = None) -> UnifiedConfig:
 # =============================================================================
 
 # Lazy-loaded global config instance
-_global_config: Optional[UnifiedConfig] = None
+_global_config: UnifiedConfig | None = None
 
 
 def get_config() -> UnifiedConfig:
@@ -1623,7 +1634,7 @@ def _is_fail_backend() -> bool:
         return False
 
 
-def _get_api_key_from_keychain(provider: str = "openrouter_api_key") -> Optional[str]:
+def _get_api_key_from_keychain(provider: str = "openrouter_api_key") -> str | None:
     """Get API key from system keychain (ADR-013).
 
     Args:
@@ -1664,7 +1675,7 @@ def get_key_source() -> str:
     return _key_source
 
 
-def _get_api_key(provider: str = "openrouter") -> Optional[str]:
+def _get_api_key(provider: str = "openrouter") -> str | None:
     """Internal API key resolution with source tracking (ADR-013).
 
     This is the internal implementation that tracks key source.
@@ -1725,10 +1736,10 @@ def _get_api_key(provider: str = "openrouter") -> Optional[str]:
 
 
 # User config for backwards compatibility with config file keys
-_user_config: Dict[str, Any] = {}
+_user_config: dict[str, Any] = {}
 
 
-def get_api_key(provider: str) -> Optional[str]:
+def get_api_key(provider: str) -> str | None:
     """Resolve API key for provider (ADR-013 resolution chain).
 
     Priority:

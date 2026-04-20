@@ -12,20 +12,20 @@ with tier-appropriate reasoning parameters for models that support reasoning.
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 
 # ADR-032: Migrated to unified_config (lazy import to avoid circular dependency)
 from . import model_constants
 
 
-def _get_tier_model_pools() -> Dict[str, List[str]]:
+def _get_tier_model_pools() -> dict[str, list[str]]:
     """Get tier model pools from unified config."""
     # Lazy import to avoid circular dependency
     from .unified_config import get_config
 
     config = get_config()
 
-    def get_models(tier: str) -> List[str]:
+    def get_models(tier: str) -> list[str]:
         """Extract models list from TierPoolConfig or return empty list."""
         pool = config.tiers.pools.get(tier)
         if pool is None:
@@ -47,7 +47,7 @@ def _get_tier_model_pools() -> Dict[str, List[str]]:
     }
 
 
-def _get_tier_timeout(tier: str) -> Dict[str, int]:
+def _get_tier_timeout(tier: str) -> dict[str, int]:
     """Get tier timeout config from unified config."""
     # Lazy import to avoid circular dependency
     from .unified_config import get_config
@@ -60,7 +60,7 @@ def _get_tier_timeout(tier: str) -> Dict[str, int]:
     }
 
 
-def get_tier_timeout(tier: str) -> Dict[str, int]:
+def get_tier_timeout(tier: str) -> dict[str, int]:
     """Get timeout configuration for a tier.
 
     Public API for getting tier timeouts.
@@ -119,7 +119,7 @@ if TYPE_CHECKING:
 
 # Tier-appropriate aggregator models (ADR-022 council recommendation)
 # Warning: Do not use a "mini" model to aggregate reasoning model outputs.
-TIER_AGGREGATORS: Dict[str, str] = {
+TIER_AGGREGATORS: dict[str, str] = {
     "quick": model_constants.OPENAI_QUICK,  # Speed-matched
     "balanced": model_constants.GOOGLE_BALANCED,  # Quality-matched
     "high": model_constants.OPENAI_HIGH,  # Full capability
@@ -153,10 +153,10 @@ class TierContract:
     max_attempts: int
     requires_peer_review: bool
     requires_verifier: bool
-    allowed_models: List[str]
+    allowed_models: list[str]
     aggregator_model: str
-    override_policy: Dict[str, bool]
-    reasoning_config: Optional["ReasoningConfig"] = None
+    override_policy: dict[str, bool]
+    reasoning_config: "ReasoningConfig | None" = None
 
 
 def _is_model_intelligence_enabled() -> bool:
@@ -165,7 +165,7 @@ def _is_model_intelligence_enabled() -> bool:
     return value in {"true", "1", "yes", "on"}
 
 
-def _get_allowed_models(tier: str, task_domain: Optional[str] = None) -> List[str]:
+def _get_allowed_models(tier: str, task_domain: str | None = None) -> list[str]:
     """Get allowed models for a tier, using dynamic selection if enabled.
 
     Args:
@@ -188,7 +188,7 @@ def _get_allowed_models(tier: str, task_domain: Optional[str] = None) -> List[st
 
 def create_tier_contract(
     tier: str,
-    task_domain: Optional[str] = None,
+    task_domain: str | None = None,
 ) -> TierContract:
     """Factory function to create a TierContract from a confidence tier.
 
@@ -283,16 +283,16 @@ def create_tier_contract(
         requires_verifier=cast(bool, config["requires_verifier"]),
         allowed_models=allowed_models,
         aggregator_model=TIER_AGGREGATORS[tier_lower],
-        override_policy=cast(Dict[str, bool], config["override_policy"]),
+        override_policy=cast(dict[str, bool], config["override_policy"]),
         reasoning_config=reasoning_config,
     )
 
 
 # Lazy-loaded default contracts for each tier
-_default_tier_contracts: Optional[Dict[str, TierContract]] = None
+_default_tier_contracts: dict[str, TierContract] | None = None
 
 
-def get_default_tier_contracts() -> Dict[str, TierContract]:
+def get_default_tier_contracts() -> dict[str, TierContract]:
     """Get pre-built default contracts for each tier (lazy-loaded)."""
     global _default_tier_contracts
     if _default_tier_contracts is None:

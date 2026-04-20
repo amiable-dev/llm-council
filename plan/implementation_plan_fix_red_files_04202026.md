@@ -18,6 +18,11 @@ Resolve the linting and type-checking errors in `tier_contract.py` and `unified_
 
 #### [MODIFY] [unified_config.py](file:///c:/git_projects/llm-council/src/llm_council/unified_config.py)
 - Address any internal type inconsistencies surfaced after installing YAML stubs.
+- **Modernization Pass**:
+    - Replace legacy typing aliases (`List`, `Dict`, `Optional`, `Union`) with native types (`list`, `dict`, `| None`, `|`).
+    - Add explicit type arguments to generic collections (e.g., `dict` -> `dict[str, Any]`).
+    - Secure Pydantic models by adding type annotations to `model_config` or marking classes as `@final`.
+    - Resolve "unaccessed" warnings for fields and imports.
 
 #### [MODIFY] [tier_contract.py](file:///c:/git_projects/llm-council/src/llm_council/tier_contract.py)
 - Add explicit type casting or narrowing in `create_tier_contract` when extracting values from the `tier_configs` dictionary to satisfy Mypy's strict type checking.
