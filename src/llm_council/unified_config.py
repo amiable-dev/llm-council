@@ -157,7 +157,7 @@ ModelList = Annotated[list[str], BeforeValidator(parse_model_list)]
 class TierPoolConfig(BaseModel):
     """Configuration for a single tier's model pool."""
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     models: list[str] = Field(default_factory=list)
     timeout_seconds: int = Field(default=90, ge=1, le=3600)
@@ -183,7 +183,7 @@ class EscalationConfig(BaseModel):
 class TierConfig(BaseModel):
     """Configuration for tier selection (ADR-022, Layer 1)."""
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     default: str = Field(default="balanced")
     pools: dict[str, TierPoolConfig] = Field(default_factory=dict)
@@ -278,7 +278,7 @@ class PromptOptimizationConfig(BaseModel):
 class WildcardConfig(BaseModel):
     """Configuration for wildcard model selection."""
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     enabled: bool = True
     pool: str = "domain_specialist"
@@ -308,7 +308,7 @@ class TriageConfig(BaseModel):
 class GatewayProviderConfig(BaseModel):
     """Configuration for a single gateway provider."""
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     enabled: bool = True
     api_key: str | None = None
@@ -338,7 +338,7 @@ class WebhookConfig(BaseModel):
     Note: url and secret are runtime-only, not stored in config.
     """
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     enabled: bool = False  # Opt-in
     timeout_seconds: float = Field(default=5.0, ge=0.1, le=60.0)
@@ -350,7 +350,7 @@ class WebhookConfig(BaseModel):
 class FallbackConfig(BaseModel):
     """Configuration for gateway fallback behavior."""
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     enabled: bool = True
     chain: list[str] = Field(default_factory=lambda: ["openrouter", "requesty", "direct"])
@@ -364,7 +364,7 @@ class GatewayConfig(BaseModel):
     """Configuration for gateway routing (ADR-023, Layer 4)."""
 
     # Allow fields starting with "model_" (Pydantic v2 reserves this prefix by default)
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     default: str = Field(default="openrouter")
     providers: dict[str, GatewayProviderConfig | OllamaProviderConfig] = Field(
@@ -423,7 +423,7 @@ class GatewayConfig(BaseModel):
 class CredentialsConfig(BaseModel):
     """Configuration for API credentials."""
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     not_diamond: str | None = None
     openrouter: str | None = None
@@ -513,7 +513,7 @@ class DiscoveryConfig(BaseModel):
     Controls background model registry refresh and request-time discovery.
     """
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     enabled: bool = True  # Discovery enabled by default when model_intelligence is on
     refresh_interval_seconds: int = Field(default=300, ge=60, le=3600)  # 5 minutes
@@ -745,7 +745,7 @@ class SecretsConfig(BaseModel):
     Use get_api_key() helper for resolution.
     """
 
-    model_config: ConfigDict = ConfigDict(protected_namespaces=())
+    model_config = ConfigDict(protected_namespaces=())
 
     required_providers: list[str] = Field(
         default_factory=lambda: ["openrouter"],
@@ -760,7 +760,7 @@ class SecretsConfig(BaseModel):
 class CouncilConfig(BaseModel):
     """Core council behavior configuration (ADR-032)."""
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     models: ModelList = Field(
         default_factory=lambda: [
@@ -818,7 +818,7 @@ class TimeoutsConfig(BaseModel):
     All timeout values are in milliseconds.
     """
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     quick: TierTimeoutConfig = Field(
         default_factory=lambda: TierTimeoutConfig(total=30000, per_model=20000)
@@ -863,7 +863,7 @@ class TimeoutsConfig(BaseModel):
 class CacheConfig(BaseModel):
     """Response caching configuration (ADR-032)."""
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     enabled: bool = Field(
         default=False,
@@ -882,7 +882,7 @@ class CacheConfig(BaseModel):
 class TelemetryConfig(BaseModel):
     """Opt-in telemetry configuration (ADR-032)."""
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     level: Literal["off", "anonymous", "debug"] = Field(
         default="off",
@@ -908,7 +908,7 @@ class RubricConfig(BaseModel):
     Weights must sum to 1.0 and include all 5 dimensions.
     """
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     enabled: bool = Field(default=False, validation_alias="RUBRIC_SCORING_ENABLED")
     accuracy_ceiling_enabled: bool = Field(
@@ -955,7 +955,7 @@ class SafetyConfig(BaseModel):
     When enabled, caps scores for responses that fail safety checks.
     """
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     enabled: bool = Field(default=False, validation_alias="SAFETY_GATE_ENABLED")
     score_cap: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -967,7 +967,7 @@ class BiasConfig(BaseModel):
     Controls bias detection and persistence for evaluator calibration.
     """
 
-    model_config: ConfigDict = ConfigDict(populate_by_name=True, protected_namespaces=())
+    model_config = ConfigDict(populate_by_name=True, protected_namespaces=())
 
     audit_enabled: bool = Field(default=False, validation_alias="BIAS_AUDIT_ENABLED")
     persistence_enabled: bool = Field(default=False, validation_alias="BIAS_PERSISTENCE_ENABLED")
