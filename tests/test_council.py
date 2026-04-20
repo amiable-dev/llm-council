@@ -53,7 +53,6 @@ def test_calculate_aggregate_rankings():
 
     label_to_model = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH}
 
-
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
 
     # Both models should be in results
@@ -153,13 +152,17 @@ def test_borda_count_calculation():
         },
     ]
 
-    label_to_model = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH, "Response C": mc.CODESTRAL}
-    
+    label_to_model = {
+        "Response A": mc.GOOGLE_HIGH,
+        "Response B": mc.QWEN_HIGH,
+        "Response C": mc.CODESTRAL,
+    }
+
     result = calculate_aggregate_rankings(stage2_results, label_to_model)
-    
+
     # Check Borda scores exist
     assert all("borda_score" in r for r in result)
-    
+
     # A and B should be tied with normalized borda_score of 0.75 each
     scores_by_model = {r["model"]: r["borda_score"] for r in result}
     assert scores_by_model[mc.GOOGLE_HIGH] == 0.75
@@ -182,7 +185,11 @@ def test_borda_normalization_council_size_independence():
             "parsed_ranking": {"ranking": ["Response A", "Response B", "Response C"], "scores": {}},
         },
     ]
-    label_small = {"Response A": mc.GOOGLE_HIGH, "Response B": mc.QWEN_HIGH, "Response C": mc.CODESTRAL}
+    label_small = {
+        "Response A": mc.GOOGLE_HIGH,
+        "Response B": mc.QWEN_HIGH,
+        "Response C": mc.CODESTRAL,
+    }
 
     # 5-candidate council: max_borda = 4
     stage2_large = [

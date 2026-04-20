@@ -188,7 +188,7 @@ class EscalationConfig(BaseModel):
 class TierConfig(BaseModel):
     """Configuration for tier selection (ADR-022, Layer 1)."""
 
-    default: str = Field(default="high")
+    default: str = Field(default="balanced")
     pools: Dict[str, TierPoolConfig] = Field(default_factory=dict)
     escalation: EscalationConfig = Field(default_factory=EscalationConfig)
     # Note: frontier field is populated by model_validator after class definitions
@@ -753,10 +753,10 @@ class CouncilConfig(BaseModel):
 
     models: ModelList = Field(
         default_factory=lambda: [
-            model_constants.OPENAI_HIGH,
-            model_constants.GOOGLE_HIGH,
-            model_constants.ANTHROPIC_HIGH,
-            model_constants.QWEN_HIGH,
+            model_constants.OPENAI_BALANCED,
+            model_constants.GOOGLE_BALANCED,
+            model_constants.ANTHROPIC_BALANCED,
+            model_constants.QWEN_BALANCED,
         ],
         alias="LLM_COUNCIL_MODELS",
     )

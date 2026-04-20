@@ -8,7 +8,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestGetSelectionWeight:
     """Test get_selection_weight function."""
 

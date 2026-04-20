@@ -101,10 +101,10 @@ _DEFAULT_TIER_MODEL_POOLS = {
         model_constants.QWEN_REASONING,
     ],
     "frontier": [
-        model_constants.FRONTIER_OPENAI,     # openai/o1 (latest, not preview)
+        model_constants.FRONTIER_OPENAI,  # openai/o1 (latest, not preview)
         model_constants.FRONTIER_ANTHROPIC,  # anthropic/claude-3.7-sonnet
-        model_constants.FRONTIER_GOOGLE,     # google/gemini-2.5-pro
-        model_constants.FRONTIER_DEEPSEEK,   # deepseek/deepseek-r1
+        model_constants.FRONTIER_GOOGLE,  # google/gemini-2.5-pro
+        model_constants.FRONTIER_DEEPSEEK,  # deepseek/deepseek-r1
     ],
 }
 

@@ -104,7 +104,9 @@ class TestQueryWithTrackingExceptionHandling:
         # Should have initial progress + completion
         assert len(progress_calls) >= 1
         # The failure progress should contain ✗ and model_short
-        failure_msg = [call for call in progress_calls if mc.OPENAI_REASONING.split("/")[-1] in call[2]]
+        failure_msg = [
+            call for call in progress_calls if mc.OPENAI_REASONING.split("/")[-1] in call[2]
+        ]
         assert len(failure_msg) == 1
         assert "✗" in failure_msg[0][2]
 
@@ -125,7 +127,7 @@ class TestQueryWithTrackingExceptionHandling:
                 models=[mc.OPENAI_REASONING],
                 messages=[{"role": "user", "content": "Hello"}],
             )
-        
+
         result = results[mc.OPENAI_REASONING]
         assert result["status"] == STATUS_ERROR
         assert result["content"] is None

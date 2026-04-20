@@ -10,7 +10,6 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from llm_council import model_constants as mc
 
 
-
 class TestGatewayConfig:
     """Test gateway configuration options."""
 

@@ -13,7 +13,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestModelSessionMetricDataclass:
     """Test ModelSessionMetric dataclass definition."""
 

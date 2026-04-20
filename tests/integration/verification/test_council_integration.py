@@ -22,7 +22,6 @@ from llm_council.verification.transcript import TranscriptStore
 from llm_council import model_constants as mc
 
 
-
 class TestCouncilDeliberationIntegration:
     """Tests that verify run_verification() calls council stages."""
 

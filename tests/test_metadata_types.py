@@ -9,7 +9,6 @@ from dataclasses import FrozenInstanceError
 from llm_council import model_constants as mc
 
 
-
 class TestModelInfo:
     """Test ModelInfo dataclass for model metadata."""
 

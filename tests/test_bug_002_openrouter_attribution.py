@@ -8,7 +8,6 @@ from llm_council.council import run_full_council
 from llm_council import model_constants as mc
 
 
-
 @pytest.mark.asyncio
 async def test_metadata_headers_sent():
     """Verify that identity headers are sent during metadata discovery."""

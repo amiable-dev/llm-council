@@ -23,7 +23,7 @@ LLAMA_HIGH = "meta-llama/llama-3.1-405b-instruct"
 
 # Reasoning Tier Models
 OPENAI_REASONING_PREVIEW = "openai/o1-preview"  # Canonical: specific version
-OPENAI_REASONING = OPENAI_REASONING_PREVIEW        # Alias: reasoning-tier pool default
+OPENAI_REASONING = OPENAI_REASONING_PREVIEW  # Alias: reasoning-tier pool default
 ANTHROPIC_REASONING = "anthropic/claude-3-5-sonnet-20241022"
 GOOGLE_REASONING = "google/gemini-3.1-pro-preview"
 QWEN_REASONING = "qwen/qwq-32b-preview"
@@ -54,17 +54,17 @@ ANTHROPIC_OPUS_LATEST = "anthropic/claude-3-opus-20240229"
 WILDCARD_FALLBACK_MODEL = "meta-llama/llama-3.1-70b-instruct"
 
 # Specific versions for test stability
-OPENAI_O1 = "openai/o1"           # Canonical: latest o1
+OPENAI_O1 = "openai/o1"  # Canonical: latest o1
 OPENAI_O1_PREVIEW = OPENAI_REASONING_PREVIEW  # Alias → "openai/o1-preview"
-OPENAI_REASONING_LATEST = OPENAI_O1           # Alias → "openai/o1"
+OPENAI_REASONING_LATEST = OPENAI_O1  # Alias → "openai/o1"
 ANTHROPIC_CLAUDE_3_5_SONNET_20241022 = "anthropic/claude-3-5-sonnet-20241022"
 ANTHROPIC_CLAUDE_OPUS_REF = "anthropic/claude-opus-4.6"
 
 # Frontier Tier Models (distinct from reasoning — latest/preview cutting-edge models)
-FRONTIER_OPENAI = OPENAI_O1              # Latest o1 (not preview)
-FRONTIER_ANTHROPIC = ANTHROPIC_HIGH      # claude-3.7-sonnet
-FRONTIER_GOOGLE = GOOGLE_HIGH            # gemini-2.5-pro
-FRONTIER_DEEPSEEK = DEEPSEEK_R1          # deepseek-r1
+FRONTIER_OPENAI = OPENAI_O1  # Latest o1 (not preview)
+FRONTIER_ANTHROPIC = ANTHROPIC_HIGH  # claude-3.7-sonnet
+FRONTIER_GOOGLE = GOOGLE_HIGH  # gemini-2.5-pro
+FRONTIER_DEEPSEEK = DEEPSEEK_R1  # deepseek-r1
 
 # Chairman
 CHAIRMAN_MODEL = GOOGLE_REASONING

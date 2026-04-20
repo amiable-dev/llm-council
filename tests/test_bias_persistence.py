@@ -15,7 +15,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestBiasMetricRecord:
     """Tests for BiasMetricRecord dataclass."""
 

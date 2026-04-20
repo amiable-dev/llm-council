@@ -18,7 +18,6 @@ from llm_council.layer_contracts import (
 from llm_council import model_constants as mc
 
 
-
 class TestFallbackEventEmission:
     """Test FRONTIER_FALLBACK_TRIGGERED event emission."""
 

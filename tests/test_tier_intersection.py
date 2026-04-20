@@ -10,7 +10,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestModelInfoIsPreview:
     """Test is_preview field on ModelInfo dataclass."""
 

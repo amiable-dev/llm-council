@@ -9,7 +9,6 @@ from llm_council.council import CHAIRMAN_MODEL
 from llm_council import model_constants as mc
 
 
-
 @pytest.mark.asyncio
 async def test_council_health_check_403_fallback_success():
     """Test health check when chairman fails with 403 but fallback succeeds (ADR-039)."""

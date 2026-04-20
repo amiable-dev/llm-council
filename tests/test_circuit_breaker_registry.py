@@ -18,7 +18,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestCircuitBreakerRegistry:
     """Test per-model circuit breaker registry."""
 

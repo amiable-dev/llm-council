@@ -17,7 +17,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestCircuitBreakerSelectionIntegration:
     """Test circuit breaker integration with model selection."""
 

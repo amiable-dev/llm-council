@@ -123,14 +123,14 @@ class TestRunVerificationTierSupport:
             assert models_arg == balanced_models
 
     @pytest.mark.asyncio
-    async def test_run_verification_default_tier_uses_high_models(self):
-        """Default tier (high) should use high tier model pool."""
+    async def test_run_verification_default_tier_uses_balanced_models(self):
+        """Default tier (balanced) should use balanced tier model pool."""
         from llm_council.verification.api import run_verification, VerifyRequest
         from llm_council.tier_contract import _get_tier_model_pools
 
-        high_models = _get_tier_model_pools()["high"]
+        balanced_models = _get_tier_model_pools()["balanced"]
 
-        request = VerifyRequest(snapshot_id="abc1234", tier="high")
+        request = VerifyRequest(snapshot_id="abc1234")  # No tier specified
 
         with (
             patch(
@@ -176,7 +176,7 @@ class TestRunVerificationTierSupport:
             mock_stage1.assert_called_once()
             call_kwargs = mock_stage1.call_args
             models_arg = call_kwargs.kwargs.get("models") or call_kwargs[1].get("models")
-            assert models_arg == high_models
+            assert models_arg == balanced_models
 
     @pytest.mark.asyncio
     async def test_run_verification_uses_tier_timeout(self):
@@ -280,8 +280,8 @@ class TestMCPVerifyToolTierParameter:
             assert request_obj.tier == "balanced"
 
     @pytest.mark.asyncio
-    async def test_verify_tool_tier_defaults_to_high(self):
-        """verify tool should default tier to 'high' when not specified."""
+    async def test_verify_tool_tier_defaults_to_balanced(self):
+        """verify tool should default tier to 'balanced' when not specified."""
         from llm_council.mcp_server import verify
 
         mock_result = {

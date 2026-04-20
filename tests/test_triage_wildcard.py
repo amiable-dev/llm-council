@@ -8,7 +8,6 @@ from unittest.mock import patch
 from llm_council import model_constants as mc
 
 
-
 class TestClassifyQueryDomain:
     """Test classify_query_domain() heuristic."""
 

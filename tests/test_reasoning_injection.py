@@ -10,7 +10,6 @@ import os
 from llm_council import model_constants as mc
 
 
-
 class TestReasoningParamsDataclass:
     """Test ReasoningParams dataclass definition."""
 

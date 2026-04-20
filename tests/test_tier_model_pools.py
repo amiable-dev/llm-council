@@ -70,13 +70,13 @@ class TestDefaultTierModelPools:
             "Reasoning tier should have reasoning model variants"
         )
 
-    def test_high_tier_is_default_equivalent(self):
-        """High tier should be similar to current default COUNCIL_MODELS."""
+    def test_balanced_tier_is_default_equivalent(self):
+        """Balanced tier should be similar to current default COUNCIL_MODELS."""
         from llm_council.tier_contract import _DEFAULT_TIER_MODEL_POOLS
 
-        high_models = _DEFAULT_TIER_MODEL_POOLS["high"]
-        # High tier should have 4+ models for full council
-        assert len(high_models) >= 4, "High tier should have 4+ models for full council"
+        balanced_models = _DEFAULT_TIER_MODEL_POOLS["balanced"]
+        # Balanced tier should have 4+ models for full council
+        assert len(balanced_models) >= 4, "Balanced tier should have 4+ models for full council"
 
 
 class TestProviderDiversity:

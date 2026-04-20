@@ -14,7 +14,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestQualityPercentileUnknownModel:
     """Test percentile for unknown/insufficient data models."""
 

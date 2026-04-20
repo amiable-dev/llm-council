@@ -8,7 +8,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestReasoningUsageDataclass:
     """Test ReasoningUsage dataclass definition."""
 
