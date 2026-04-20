@@ -12,7 +12,7 @@ with tier-appropriate reasoning parameters for models that support reasoning.
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
 # ADR-032: Migrated to unified_config (lazy import to avoid circular dependency)
 from . import model_constants
@@ -277,13 +277,13 @@ def create_tier_contract(
         tier=tier_lower,
         deadline_ms=deadline_ms,
         per_model_timeout_ms=per_model_timeout_ms,
-        token_budget=config["token_budget"],
-        max_attempts=config["max_attempts"],
-        requires_peer_review=config["requires_peer_review"],
-        requires_verifier=config["requires_verifier"],
+        token_budget=cast(int, config["token_budget"]),
+        max_attempts=cast(int, config["max_attempts"]),
+        requires_peer_review=cast(bool, config["requires_peer_review"]),
+        requires_verifier=cast(bool, config["requires_verifier"]),
         allowed_models=allowed_models,
         aggregator_model=TIER_AGGREGATORS[tier_lower],
-        override_policy=config["override_policy"],
+        override_policy=cast(Dict[str, bool], config["override_policy"]),
         reasoning_config=reasoning_config,
     )
 
