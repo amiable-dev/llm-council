@@ -10,7 +10,6 @@ import os
 from llm_council import model_constants as mc
 
 
-
 class TestOfflineModeDetection:
     """Test offline mode detection from environment."""
 

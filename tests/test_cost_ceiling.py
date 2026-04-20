@@ -11,7 +11,6 @@ from typing import Tuple, Optional
 from llm_council import model_constants as mc
 
 
-
 class TestApplyCostCeiling:
     """Test apply_cost_ceiling() function."""
 

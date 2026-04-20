@@ -20,7 +20,6 @@ from llm_council.evaluation import (
 from llm_council import model_constants as mc
 
 
-
 class TestEvaluateResponse:
     """Tests for the evaluate_response function."""
 

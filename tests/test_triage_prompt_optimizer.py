@@ -7,7 +7,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestPromptOptimizer:
     """Test PromptOptimizer class."""
 
@@ -255,7 +254,7 @@ class TestModelProviderDetection:
         from llm_council.triage.prompt_optimizer import get_model_provider
 
         assert get_model_provider(mc.GOOGLE_HIGH) == "google"
-        assert get_model_provider(mc.GOOGLE_MODEL_LATEST) == "google"
+        assert get_model_provider(mc.GOOGLE_BALANCED) == "google"
 
     def test_detect_unknown(self):
         """Should return 'unknown' for unrecognized providers."""

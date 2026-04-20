@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Default Council Tier (ADR-032 Alignment)**: Migrated the default confidence tier from `high` to `balanced`.
+  - Updated `UnifiedConfig` to use `balanced` as the default tier when not specified.
+  - Harmonized `CouncilConfig` default models to align with the `balanced` model pool (using OpenAI-mini, Gemini-flash, etc.).
+  - This change reduces default latency and cost for standard queries (Refs #50).
+
+
 ## [0.25.1] - 2026-04-11
 
 ### Fixed

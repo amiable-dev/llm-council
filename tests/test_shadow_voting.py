@@ -150,7 +150,9 @@ class TestShadowVotingIntegration:
 
         stage2_results = [
             self._create_stage2_result(mc.OPENAI_HIGH, ["Response A", "Response B"]),
-            self._create_stage2_result("excluded/model", ["Response B", "Response A"]), # excluded/model is fine as it's not a real provider prefix
+            self._create_stage2_result(
+                "excluded/model", ["Response B", "Response A"]
+            ),  # excluded/model is fine as it's not a real provider prefix
         ]
         label_to_model = self._create_label_to_model(["model-a", "model-b"])
         voting_authorities = {

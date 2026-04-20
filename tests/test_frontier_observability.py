@@ -9,7 +9,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestFrontierLayerEvents:
     """Test frontier-specific LayerEventType values."""
 

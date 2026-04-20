@@ -14,7 +14,6 @@ import pytest
 from llm_council import model_constants as mc
 
 
-
 class TestOpenRouterClient:
     """Test OpenRouterClient API interactions."""
 

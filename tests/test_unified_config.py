@@ -37,7 +37,7 @@ class TestUnifiedConfigSchema:
     def test_tier_config_defaults(self):
         """Tier configuration should have correct defaults."""
         config = UnifiedConfig()
-        assert config.tiers.default == "high"
+        assert config.tiers.default == "balanced"
         assert "quick" in config.tiers.pools
         assert "balanced" in config.tiers.pools
         assert "high" in config.tiers.pools
@@ -119,7 +119,7 @@ council:
         """Should return default config when file doesn't exist."""
         config_file = tmp_path / "nonexistent.yaml"
         config = load_config(config_file)
-        assert config.tiers.default == "high"  # Default value
+        assert config.tiers.default == "balanced"  # Default value
 
     def test_load_config_with_partial_yaml(self, tmp_path):
         """Should merge partial YAML with defaults."""
@@ -160,7 +160,7 @@ council:
         config_file.write_text("invalid: yaml: content:")
         config = load_config(config_file)
         # Should fall back to defaults
-        assert config.tiers.default == "high"
+        assert config.tiers.default == "balanced"
 
     def test_load_config_with_env_var_substitution(self, tmp_path):
         """Should substitute environment variables in YAML."""
@@ -1439,7 +1439,7 @@ class TestCouncilConfig:
         config = CouncilConfig()
 
         # Defaults from config.py and model_constants.py
-        assert mc.OPENAI_HIGH in config.models
+        assert mc.OPENAI_BALANCED in config.models
         assert config.chairman == mc.CHAIRMAN_MODEL
         assert config.synthesis_mode == "consensus"
         assert config.exclude_self_votes is True

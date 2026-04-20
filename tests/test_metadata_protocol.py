@@ -10,7 +10,6 @@ from typing import Optional, Dict, List
 from llm_council import model_constants as mc
 
 
-
 class TestMetadataProviderProtocol:
     """Test MetadataProvider Protocol definition."""
 
