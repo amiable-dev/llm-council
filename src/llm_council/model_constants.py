@@ -19,8 +19,7 @@ ANTHROPIC_HIGH = "anthropic/claude-3.7-sonnet"
 GOOGLE_HIGH = "google/gemini-2.5-pro"
 QWEN_HIGH = "qwen/qwen-plus"
 OPENAI_ULTRA = "openai/gpt-4-turbo"
-GOOGLE_MODEL_LATEST = GOOGLE_HIGH
-LLAMA_HIGH = "meta-llama/llama-3.1-405b"
+LLAMA_HIGH = "meta-llama/llama-3.1-405b-instruct"
 
 # Reasoning Tier Models
 OPENAI_REASONING_PREVIEW = "openai/o1-preview"  # Canonical: specific version
