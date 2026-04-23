@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.35] - 2026-04-23
+
+### Changed
+
+- **April 2026 model refresh** — refreshed tier defaults to incorporate newly-available models:
+  - **Claude Opus 4.6 → 4.7** in `high`, `reasoning`, and `frontier` tier pools + aggregators. Opus 4.7 (GA on OpenRouter since Apr 16, 2026) ships a 13% coding-benchmark lift over 4.6, 3× vision resolution, and a 1M context window. Pricing unchanged per Anthropic.
+  - **Balanced tier aggregator and pool: `gpt-5.3-chat` → `gpt-5.4-mini`** — newer model, 400K context (was 128K), ~57% cheaper input / 68% cheaper output, with reasoning support.
+  - Updated `CouncilConfig.models` default, `TIER_AGGREGATORS`, `_DEFAULT_TIER_MODEL_POOLS`, and `llm_council.yaml`.
+
+### Added
+
+- **Registry entries** in `src/llm_council/models/registry.yaml`:
+  - `anthropic/claude-opus-4.7` (FRONTIER, 1M ctx, $15/$75 per 1M)
+  - `openai/gpt-5.4-mini` (STANDARD, 400K ctx, $0.75/$4.50 per 1M, reasoning)
+  - `openai/gpt-5.4-nano` (ECONOMY, 400K ctx, $0.20/$1.25 per 1M, reasoning)
+  - Older entries retained for backwards compatibility.
+
 ## [0.24.34] - 2026-03-12
 
 ### Fixed

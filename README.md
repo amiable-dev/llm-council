@@ -190,7 +190,7 @@ council:
       high:
         models:
           - openai/gpt-4o
-          - anthropic/claude-opus-4-6
+          - anthropic/claude-opus-4-7
           - google/gemini-3-pro
         timeout_seconds: 180
 
@@ -463,7 +463,7 @@ The council includes built-in reliability features for long-running operations:
 
 **Progress Feedback**: During deliberation, progress updates show which models have responded and which are still pending:
 ```
-✓ claude-opus-4.6 (1/4) | waiting: gpt-5.1, gemini-3-pro, grok-4
+✓ claude-opus-4.7 (1/4) | waiting: gpt-5.1, gemini-3-pro, grok-4
 ✓ gemini-3-pro (2/4) | waiting: gpt-5.1, grok-4
 ```
 
@@ -1115,7 +1115,7 @@ This implements the "Sovereign Orchestrator" philosophy: the system must functio
 | Provider | Count | Examples |
 |----------|-------|----------|
 | OpenAI | 9 | gpt-4o, gpt-4o-mini, gpt-5.2, gpt-5-mini, o1, o1-preview, o1-mini, o3-mini |
-| Anthropic | 5 | claude-opus-4.6, claude-3-5-sonnet, claude-3-5-haiku |
+| Anthropic | 6 | claude-opus-4.7, claude-opus-4.6, claude-sonnet-4.6, claude-haiku-4.5 |
 | Google | 5 | gemini-3-pro, gemini-2.5-pro, gemini-2.0-flash, gemini-1.5-pro |
 | xAI | 2 | grok-4, grok-4.1-fast |
 | DeepSeek | 2 | deepseek-r1, deepseek-chat |
@@ -1137,7 +1137,7 @@ print(f"Context window: {info.context_window}")  # 128000
 print(f"Quality tier: {info.quality_tier}")      # frontier
 
 # Check capabilities
-window = provider.get_context_window("anthropic/claude-opus-4.6")  # 200000
+window = provider.get_context_window("anthropic/claude-opus-4.7")  # 1000000
 supports = provider.supports_reasoning("openai/o1")  # True
 
 # List all available models

@@ -188,7 +188,7 @@ class TierConfig(BaseModel):
             ),
             "balanced": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.3-chat",
+                    "openai/gpt-5.4-mini",
                     "anthropic/claude-sonnet-4.6",
                     "google/gemini-3.1-flash-lite-preview",
                     "deepseek/deepseek-v3.2",
@@ -198,7 +198,7 @@ class TierConfig(BaseModel):
             "high": TierPoolConfig(
                 models=[
                     "openai/gpt-5.4",
-                    "anthropic/claude-opus-4.6",
+                    "anthropic/claude-opus-4.7",
                     "google/gemini-3.1-pro-preview",
                     "deepseek/deepseek-v3.2-speciale",
                 ],
@@ -207,7 +207,7 @@ class TierConfig(BaseModel):
             "reasoning": TierPoolConfig(
                 models=[
                     "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.6",
+                    "anthropic/claude-opus-4.7",
                     "google/gemini-3.1-pro-preview",
                     "deepseek/deepseek-v3.2-speciale",
                 ],
@@ -217,7 +217,7 @@ class TierConfig(BaseModel):
             "frontier": TierPoolConfig(
                 models=[
                     "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.6",
+                    "anthropic/claude-opus-4.7",
                     "google/gemini-3.1-pro-preview",
                     "deepseek/deepseek-v3.2-speciale",
                 ],
@@ -722,7 +722,7 @@ class CouncilConfig(BaseModel):
         default_factory=lambda: [
             "openai/gpt-5.4",
             "google/gemini-3.1-pro-preview",
-            "anthropic/claude-opus-4.6",
+            "anthropic/claude-opus-4.7",
             "deepseek/deepseek-v3.2-speciale",
         ],
         alias="LLM_COUNCIL_MODELS",
