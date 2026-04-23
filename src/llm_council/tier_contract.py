@@ -82,26 +82,26 @@ _DEFAULT_TIER_MODEL_POOLS = {
         "deepseek/deepseek-v3.2",
     ],
     "balanced": [
-        "openai/gpt-5.3-chat",
+        "openai/gpt-5.4-mini",
         "anthropic/claude-sonnet-4.6",
         "google/gemini-3.1-flash-lite-preview",
         "deepseek/deepseek-v3.2",
     ],
     "high": [
         "openai/gpt-5.4",
-        "anthropic/claude-opus-4.6",
+        "anthropic/claude-opus-4.7",
         "google/gemini-3.1-pro-preview",
         "deepseek/deepseek-v3.2-speciale",
     ],
     "reasoning": [
         "openai/gpt-5.4-pro",
-        "anthropic/claude-opus-4.6",
+        "anthropic/claude-opus-4.7",
         "google/gemini-3.1-pro-preview",
         "deepseek/deepseek-v3.2-speciale",
     ],
     "frontier": [
         "openai/gpt-5.4-pro",
-        "anthropic/claude-opus-4.6",
+        "anthropic/claude-opus-4.7",
         "google/gemini-3.1-pro-preview",
         "deepseek/deepseek-v3.2-speciale",
     ],
@@ -120,10 +120,10 @@ if TYPE_CHECKING:
 # Warning: Do not use a "mini" model to aggregate reasoning model outputs.
 TIER_AGGREGATORS: Dict[str, str] = {
     "quick": "openai/gpt-5-mini",  # Speed-matched
-    "balanced": "openai/gpt-5.3-chat",  # Quality-matched
+    "balanced": "openai/gpt-5.4-mini",  # Quality-matched
     "high": "openai/gpt-5.4",  # Full capability
-    "reasoning": "anthropic/claude-opus-4.6",  # Can understand reasoning outputs
-    "frontier": "anthropic/claude-opus-4.6",  # Best available for cutting-edge synthesis (ADR-027)
+    "reasoning": "anthropic/claude-opus-4.7",  # Can understand reasoning outputs
+    "frontier": "anthropic/claude-opus-4.7",  # Best available for cutting-edge synthesis (ADR-027)
 }
 
 
