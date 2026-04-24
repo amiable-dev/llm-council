@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.36] - 2026-04-24
+
+### Fixed
+
+- **Security Scanning workflow repaired** ([#332](https://github.com/amiable-dev/llm-council/pull/332)) — two unrelated failures had been blocking the `Security Scanning` status badge since mid-March:
+  - `aquasecurity/trivy-action@0.34.2` no longer resolved. The original unprefixed tags (`0.0.1`–`0.34.2`) were deleted during remediation of the March 2026 trivy-action supply chain compromise ([CVE-2026-33634](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23)) and republished with a `v` prefix. Bumped to `v0.36.0` (published 2026-04-22, post-remediation) and pinned to commit SHA for supply-chain robustness.
+  - Gitleaks kept flagging a historical OpenRouter key in commit `b8ad10d` (tagged in v0.3.0, Dec 2025). Key already revoked; added a commit-level allowlist entry so scheduled scans pass.
+- **Supply chain exposure assessment:** No exposure. Last successful Trivy run was 2026-03-12, seven days before the 12-hour attack window on 2026-03-19. No master pushes occurred during or after the window until this fix, so no malicious trivy-action code ever reached a runner.
+
 ## [0.24.35] - 2026-04-23
 
 ### Changed
