@@ -34,3 +34,7 @@ paths = [
     '''tests/.*\.py$''',  # Test files may contain mock keys
     '''docs/.*\.md$''',
 ]
+# Historical leaks present in git history. Exposed keys must be revoked on the provider side.
+commits = [
+    "b8ad10d7e9fbe33177a6d6e2e83bc7b9169f42a7",  # v0.3.0: OpenRouter key in .mcp.json (revoked)
+]
