@@ -103,7 +103,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.34.2  # Pinned version
+        # Pinned to commit SHA following the March 2026 trivy-action supply chain
+        # compromise (CVE-2026-33634) where 76 of 77 version tags were force-pushed.
+        # v0.36.0 published 2026-04-22, post-remediation.
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8  # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
