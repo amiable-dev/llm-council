@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Bundled skills synced** — `.github/skills/` (dev copy) and `src/llm_council/skills/bundled/` (shipped copy) had drifted across all three bundled skills:
+  - `council-verify`: ADR-042 evidence content (Evidence section + `references/evidence.md` + compatibility bump to `>= 2.1`) was missing from bundled — introduced in v0.24.37.
+  - `council-review`: ADR-040 timeout-behavior section + `completed_stages`/`timeout_fired` schema fields were never synced to bundled (pre-existing drift, surfaced by the new regression test).
+  - `council-gate`: same ADR-040 timeout-handling section missing from bundled (pre-existing drift).
+  Synced all three bundled copies to match the dev copies. Added `tests/unit/test_bundled_skills_in_sync.py` as a regression guard — fails on any future drift between the two trees, with an error message that tells the editor exactly how to fix it. Users who ran `llm-council install-skills` from any version up to v0.24.37 should upgrade to v0.24.38 and re-install to get the up-to-date skill content.
+
 ### Added
 
 - **ADR-042: Verify evidence injection** ([#336](https://github.com/amiable-dev/llm-council/issues/336)) — pre-computed analysis output from upstream tools (linters, slop detectors, custom checkers) can now be passed to verify calls via a new optional `evidence` parameter on `POST /v1/council/verify` and the MCP `verify` tool. Each item carries `source`, `format` (markdown/json/text), `content`, `strength` (informational/blocking), and optional `evidence_id`. Council renders evidence inside `<evidence_item>` XML-sentinel wrappers with tilde-fenced bodies (prevents prompt-injection via heading collisions and fence escapes). The Chairman synthesis prompt is extended to require a fenced JSON `evidence_dispositions` block with a `status` enum (`acknowledged | confirmed | rejected | unresolved | not_reviewed_due_to_budget | parser_error`). `VerifyResponse` gains `evidence_summary` (one disposition per submitted item, including dropped-by-budget) and `evidence_warnings` (structured budgeting notes). A new `evidence.json` transcript artefact is persisted alongside `request.json`/`stage[1-3].json`/`result.json`. `input_metrics` gains evidence-specific counters; raw source/version strings are intentionally kept out of telemetry dimensions (cardinality hygiene). Oversized blocking evidence triggers a structured HTTP 422 (and a mirrored MCP error blob) rather than being silently dropped. Backward compatible — `evidence=None` produces byte-identical prompts to pre-ADR-042 behaviour (locked by a golden hash regression test). See [docs/adr/ADR-042-verify-evidence-injection.md](docs/adr/ADR-042-verify-evidence-injection.md) for the design and [docs/adr/ADR-042-implementation-spec.md](docs/adr/ADR-042-implementation-spec.md) for the prescriptive spec.

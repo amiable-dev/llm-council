@@ -6,7 +6,7 @@ description: |
   Keywords: verify, check, validate, review, approve, pass/fail, consensus, multi-model
 
 license: Apache-2.0
-compatibility: "llm-council >= 2.0, mcp >= 1.0"
+compatibility: "llm-council >= 2.1, mcp >= 1.0"
 metadata:
   category: verification
   domain: ai-governance
@@ -55,45 +55,31 @@ Use LLM Council's multi-model deliberation to verify work with structured, machi
 
 **Important**: `high`/`reasoning` use slow frontier models. For large diffs (>20K chars), prefer `balanced` to avoid timeouts.
 
+## Evidence (ADR-042)
+
+Pass pre-computed analysis from upstream tools (linters, slop detectors) via `evidence: List[EvidenceItem]`. Council emits `evidence_summary` and `evidence_warnings` in the response. See [`references/evidence.md`](references/evidence.md) for fields, limits, example.
+
 ## Output Schema
 
 ```json
 {
   "verdict": "pass|fail|unclear",
   "confidence": 0.85,
-  "rubric_scores": {
-    "accuracy": 8.5,
-    "completeness": 7.0,
-    "clarity": 9.0,
-    "conciseness": 8.0
-  },
+  "rubric_scores": { "accuracy": 8.5, "completeness": 7.0, "...": "..." },
   "blocking_issues": [...],
   "rationale": "Chairman synthesis...",
   "transcript_location": ".council/logs/...",
   "partial": false,
   "timeout_fired": false,
   "completed_stages": ["stage1", "stage2", "stage3"],
-  "timing": {
-    "stage1_elapsed_ms": 45000,
-    "stage2_elapsed_ms": 78000,
-    "stage3_elapsed_ms": 19000,
-    "total_elapsed_ms": 142000,
-    "global_deadline_ms": 270000,
-    "budget_utilization": 0.53
-  },
-  "input_metrics": {
-    "content_chars": 32000,
-    "tier_max_chars": 50000,
-    "num_models": 4,
-    "num_reviewers": 4,
-    "tier": "high"
-  }
+  "timing": { "total_elapsed_ms": 142000, "budget_utilization": 0.53, "...": "..." },
+  "input_metrics": { "content_chars": 32000, "tier": "high", "...": "..." },
+  "evidence_summary": [...],
+  "evidence_warnings": [...]
 }
 ```
 
-### Timeout & Partial Results (ADR-040)
-
-If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stages` for progress. Max input: quick=15K, balanced=30K, high/reasoning=50K chars. `timing.budget_utilization` shows time used vs deadline (1.0 on timeout). On timeout, only completed stages appear in `timing`.
+If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stages` for progress. `timing.budget_utilization` shows time used vs deadline (1.0 on timeout). See ADR-040 for full timeout semantics.
 
 ## Rules
 
