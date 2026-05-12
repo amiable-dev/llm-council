@@ -1370,6 +1370,7 @@ async def stage3_synthesize_final(
     aggregate_rankings: Optional[List[Dict[str, Any]]] = None,
     verdict_type: VerdictType = VerdictType.SYNTHESIS,
     timeout: float = 120.0,
+    dispositions_instruction: Optional[str] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, int], Optional[VerdictResult]]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -1431,6 +1432,7 @@ async def stage3_synthesize_final(
             query=user_query,
             rankings=rankings_summary,
             top_candidates=top_candidates,
+            dispositions_instruction=dispositions_instruction,
         )
     else:
         # Mode-specific instructions for SYNTHESIS mode
@@ -1470,6 +1472,9 @@ IMPORTANT: Do NOT flatten nuance into a single "best" answer. The user benefits 
 
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom."""
 
+        # ADR-042: inject dispositions instruction when evidence is present.
+        # Empty string when None preserves byte-identical prompt.
+        dispositions_block = dispositions_instruction or ""
         chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
 
 Original Question: {user_query}
@@ -1479,7 +1484,7 @@ STAGE 1 - Individual Responses:
 
 STAGE 2 - Peer Rankings:
 {stage2_text}{rankings_context}
-
+{dispositions_block}
 {mode_instructions}"""
 
     messages = [{"role": "user", "content": chairman_prompt}]

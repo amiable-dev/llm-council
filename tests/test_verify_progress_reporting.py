@@ -37,7 +37,10 @@ class TestRunVerificationProgressCallback:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value="test prompt",
+                return_value=(
+                    "test prompt",
+                    {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+                ),
             ),
         ):
             mock_ctx = MagicMock()
@@ -94,7 +97,10 @@ class TestRunVerificationProgressCallback:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value="test prompt",
+                return_value=(
+                    "test prompt",
+                    {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+                ),
             ),
         ):
             mock_ctx = MagicMock()
@@ -158,7 +164,10 @@ class TestRunVerificationProgressCallback:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value="test prompt",
+                return_value=(
+                    "test prompt",
+                    {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+                ),
             ),
         ):
             mock_ctx = MagicMock()
@@ -214,7 +223,10 @@ class TestRunVerificationProgressCallback:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value="test prompt",
+                return_value=(
+                    "test prompt",
+                    {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+                ),
             ),
         ):
             mock_ctx = MagicMock()
@@ -269,7 +281,10 @@ class TestRunVerificationProgressCallback:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value="test prompt",
+                return_value=(
+                    "test prompt",
+                    {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+                ),
             ),
         ):
             mock_ctx = MagicMock()

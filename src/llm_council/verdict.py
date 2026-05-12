@@ -29,7 +29,16 @@ import logging
 import re
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # ADR-042: only used for type hints; deferred import breaks the
+    # circular dependency at runtime (verdict.py is imported by api.py).
+    from llm_council.verification.api import (
+        EvidenceDisposition,
+        EvidenceItem,
+        EvidenceWarning,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -264,11 +273,148 @@ def parse_tie_breaker_verdict(chairman_response: str) -> VerdictResult:
     return result
 
 
+def parse_evidence_dispositions(
+    chairman_response: str,
+    submitted_items: List[Tuple[int, "EvidenceItem"]],
+) -> Tuple[List["EvidenceDisposition"], List["EvidenceWarning"]]:
+    """Parse the evidence_dispositions JSON block from Chairman synthesis (ADR-042).
+
+    Args:
+        chairman_response: Full chairman synthesis text (may contain a verdict
+            JSON block first, then the dispositions block).
+        submitted_items: The (request_index, item) tuples the budgeter kept.
+            Used for hallucination guard + missing-item fill.
+
+    Returns:
+        (dispositions, warnings) where:
+        - dispositions is List[EvidenceDisposition] with one entry per
+          submitted item (no entries for hallucinated sources).
+        - warnings is List[EvidenceWarning] containing
+          `duplicate_source_disambiguated` notes when ids/indices were needed.
+
+    Failure modes (none of which raise):
+        - No JSON block found → all items get status=parser_error.
+        - JSON parses but structure is wrong → all items get status=parser_error.
+        - Item missing from JSON but submitted → status=parser_error.
+        - JSON includes a source not in submitted_items → silently dropped.
+    """
+    # Deferred import — verdict.py is imported by verification.api, so a
+    # top-level import would create a circular dependency at runtime.
+    from llm_council.verification.api import (
+        EvidenceDisposition,
+        EvidenceWarning,
+    )
+
+    # Build the index of submitted items by evidence_id (or auto-N fallback).
+    by_id: Dict[str, Tuple[int, "EvidenceItem"]] = {}
+    for req_idx, item in submitted_items:
+        item_id = item.evidence_id or f"auto-{req_idx}"
+        by_id[item_id] = (req_idx, item)
+
+    # Find ALL fenced json blocks; pick the first one with evidence_dispositions key.
+    fenced_blocks = re.findall(r"```(?:json)?\s*\n(.*?)```", chairman_response, re.DOTALL)
+    parsed_dispositions: Optional[List[Dict[str, Any]]] = None
+    for block in fenced_blocks:
+        try:
+            data = json.loads(block.strip())
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(data, dict) and "evidence_dispositions" in data:
+            candidate = data["evidence_dispositions"]
+            if isinstance(candidate, list):
+                parsed_dispositions = candidate
+                break
+
+    warnings: List["EvidenceWarning"] = []
+
+    if parsed_dispositions is None:
+        # Parser-error fallback for ALL submitted items.
+        return (
+            [
+                EvidenceDisposition(
+                    evidence_id=item.evidence_id or f"auto-{req_idx}",
+                    request_index=req_idx,
+                    source=item.source,
+                    strength=item.strength,
+                    status="parser_error",
+                    council_confirmed=None,
+                    council_rationale=None,
+                )
+                for req_idx, item in submitted_items
+            ],
+            warnings,
+        )
+
+    # Match dispositions to submitted items by evidence_id; hallucinations
+    # silently drop.
+    matched: Dict[str, Dict[str, Any]] = {}
+    for raw in parsed_dispositions:
+        if not isinstance(raw, dict):
+            continue
+        ev_id = raw.get("evidence_id")
+        if not isinstance(ev_id, str) or ev_id not in by_id:
+            continue  # hallucinated source — drop silently
+        matched[ev_id] = raw
+
+    dispositions: List["EvidenceDisposition"] = []
+    for req_idx, item in submitted_items:
+        item_id = item.evidence_id or f"auto-{req_idx}"
+        raw = matched.get(item_id)
+        if raw is None:
+            # Submitted but Chairman didn't produce a disposition — parser_error.
+            dispositions.append(
+                EvidenceDisposition(
+                    evidence_id=item_id,
+                    request_index=req_idx,
+                    source=item.source,
+                    strength=item.strength,
+                    status="parser_error",
+                    council_confirmed=None,
+                    council_rationale=None,
+                )
+            )
+            continue
+
+        # Sanitise + validate fields.
+        status_raw = raw.get("status")
+        if status_raw not in {
+            "acknowledged",
+            "confirmed",
+            "rejected",
+            "unresolved",
+        }:
+            status_raw = "parser_error"
+
+        if status_raw in {"confirmed", "rejected"}:
+            council_confirmed: Optional[bool] = status_raw == "confirmed"
+        else:
+            council_confirmed = None  # Force None for other statuses.
+
+        rationale = raw.get("council_rationale")
+        if not isinstance(rationale, str):
+            rationale = None
+
+        dispositions.append(
+            EvidenceDisposition(
+                evidence_id=item_id,
+                request_index=req_idx,
+                source=item.source,
+                strength=item.strength,
+                status=status_raw,
+                council_confirmed=council_confirmed,
+                council_rationale=rationale,
+            )
+        )
+
+    return dispositions, warnings
+
+
 def get_chairman_prompt(
     verdict_type: VerdictType,
     query: str,
     rankings: str,
     top_candidates: str = "",
+    dispositions_instruction: Optional[str] = None,
 ) -> str:
     """Get the appropriate chairman prompt for the verdict type.
 
@@ -277,21 +423,32 @@ def get_chairman_prompt(
         query: Original user query
         rankings: Formatted rankings summary from Stage 2
         top_candidates: For tie-breaker, the top candidates within threshold
+        dispositions_instruction: ADR-042 — when evidence was provided, the
+            verification pipeline passes an instruction string requiring the
+            Chairman to emit a fenced JSON block with evidence_dispositions.
+            None when no evidence (preserves pre-ADR-042 prompt verbatim).
 
     Returns:
         Formatted chairman prompt string
     """
     if verdict_type == VerdictType.BINARY:
-        return _get_binary_chairman_prompt(query, rankings)
+        return _get_binary_chairman_prompt(query, rankings, dispositions_instruction)
     elif verdict_type == VerdictType.TIE_BREAKER:
-        return _get_tie_breaker_chairman_prompt(query, rankings, top_candidates)
+        return _get_tie_breaker_chairman_prompt(
+            query, rankings, top_candidates, dispositions_instruction
+        )
     else:
         # SYNTHESIS - use default prompt (handled elsewhere for backward compatibility)
-        return _get_synthesis_chairman_prompt(query, rankings)
+        return _get_synthesis_chairman_prompt(query, rankings, dispositions_instruction)
 
 
-def _get_binary_chairman_prompt(query: str, rankings: str) -> str:
+def _get_binary_chairman_prompt(
+    query: str,
+    rankings: str,
+    dispositions_instruction: Optional[str] = None,
+) -> str:
     """Generate chairman prompt for binary verdict mode."""
+    dispositions_block = dispositions_instruction or ""
     return f"""You are the Chairman synthesizing the council's deliberation.
 
 The council has reviewed and ranked responses to the following query:
@@ -309,7 +466,7 @@ Consider:
 
 RANKINGS SUMMARY:
 {rankings}
-
+{dispositions_block}
 Output ONLY valid JSON with no additional text:
 {{
   "verdict": "approved" or "rejected",
@@ -318,8 +475,14 @@ Output ONLY valid JSON with no additional text:
 }}"""
 
 
-def _get_tie_breaker_chairman_prompt(query: str, rankings: str, top_candidates: str) -> str:
+def _get_tie_breaker_chairman_prompt(
+    query: str,
+    rankings: str,
+    top_candidates: str,
+    dispositions_instruction: Optional[str] = None,
+) -> str:
     """Generate chairman prompt for tie-breaker mode."""
+    dispositions_block = dispositions_instruction or ""
     return f"""You are the Chairman resolving a DEADLOCKED deliberation.
 
 The council is evenly split on the following query:
@@ -333,7 +496,7 @@ TOP CANDIDATES (within scoring threshold):
 
 FULL RANKINGS:
 {rankings}
-
+{dispositions_block}
 As Chairman, carefully consider:
 1. Subtle quality differences between top candidates
 2. Any edge cases or concerns raised in evaluations
@@ -348,8 +511,13 @@ Output ONLY valid JSON with no additional text:
 }}"""
 
 
-def _get_synthesis_chairman_prompt(query: str, rankings: str) -> str:
+def _get_synthesis_chairman_prompt(
+    query: str,
+    rankings: str,
+    dispositions_instruction: Optional[str] = None,
+) -> str:
     """Generate chairman prompt for synthesis mode (default behavior)."""
+    dispositions_block = dispositions_instruction or ""
     return f"""You are the Chairman synthesizing the council's deliberation.
 
 The council has reviewed and ranked responses to:
@@ -358,7 +526,7 @@ QUERY: {query}
 
 RANKINGS SUMMARY:
 {rankings}
-
+{dispositions_block}
 Synthesize the best elements from the top-ranked responses into a comprehensive,
 well-structured final answer. Incorporate the strongest arguments and address
 any concerns raised during peer review.

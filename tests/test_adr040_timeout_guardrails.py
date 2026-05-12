@@ -168,7 +168,10 @@ def _standard_verification_mocks():
         "prompt": patch(
             "llm_council.verification.api._build_verification_prompt",
             new_callable=AsyncMock,
-            return_value="test prompt",
+            return_value=(
+                "test prompt",
+                {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+            ),
         ),
     }
 
@@ -607,7 +610,10 @@ class TestTieredInputSizeLimits:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value=large_prompt,
+                return_value=(
+                    large_prompt,
+                    {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+                ),
             ),
         ):
             mock_ctx = MagicMock()
@@ -638,7 +644,10 @@ class TestTieredInputSizeLimits:
         patches["prompt"] = patch(
             "llm_council.verification.api._build_verification_prompt",
             new_callable=AsyncMock,
-            return_value=small_prompt,
+            return_value=(
+                small_prompt,
+                {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+            ),
         )
         with (
             patches["stage1"] as mock_s1,
@@ -729,7 +738,10 @@ class TestPreflightCheck:
         patches["prompt"] = patch(
             "llm_council.verification.api._build_verification_prompt",
             new_callable=AsyncMock,
-            return_value="a" * 5000,
+            return_value=(
+                "a" * 5000,
+                {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+            ),
         )
         with (
             patches["stage1"] as mock_s1,
@@ -776,7 +788,10 @@ class TestPreflightCheck:
         patches["prompt"] = patch(
             "llm_council.verification.api._build_verification_prompt",
             new_callable=AsyncMock,
-            return_value=near_limit_prompt,
+            return_value=(
+                near_limit_prompt,
+                {"kept": [], "warnings": [], "chars_rendered": 0, "chars_submitted": 0},
+            ),
         )
         with (
             patches["stage1"] as mock_s1,

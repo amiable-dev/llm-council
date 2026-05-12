@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **ADR-042: Verify evidence injection** ([#336](https://github.com/amiable-dev/llm-council/issues/336)) — pre-computed analysis output from upstream tools (linters, slop detectors, custom checkers) can now be passed to verify calls via a new optional `evidence` parameter on `POST /v1/council/verify` and the MCP `verify` tool. Each item carries `source`, `format` (markdown/json/text), `content`, `strength` (informational/blocking), and optional `evidence_id`. Council renders evidence inside `<evidence_item>` XML-sentinel wrappers with tilde-fenced bodies (prevents prompt-injection via heading collisions and fence escapes). The Chairman synthesis prompt is extended to require a fenced JSON `evidence_dispositions` block with a `status` enum (`acknowledged | confirmed | rejected | unresolved | not_reviewed_due_to_budget | parser_error`). `VerifyResponse` gains `evidence_summary` (one disposition per submitted item, including dropped-by-budget) and `evidence_warnings` (structured budgeting notes). A new `evidence.json` transcript artefact is persisted alongside `request.json`/`stage[1-3].json`/`result.json`. `input_metrics` gains evidence-specific counters; raw source/version strings are intentionally kept out of telemetry dimensions (cardinality hygiene). Oversized blocking evidence triggers a structured HTTP 422 (and a mirrored MCP error blob) rather than being silently dropped. Backward compatible — `evidence=None` produces byte-identical prompts to pre-ADR-042 behaviour (locked by a golden hash regression test). See [docs/adr/ADR-042-verify-evidence-injection.md](docs/adr/ADR-042-verify-evidence-injection.md) for the design and [docs/adr/ADR-042-implementation-spec.md](docs/adr/ADR-042-implementation-spec.md) for the prescriptive spec.
+
 ## [0.24.36] - 2026-04-24
 
 ### Fixed

@@ -13,7 +13,7 @@ Implements ADR-012: MCP Server Reliability and Long-Running Operation Handling
 import json
 import time
 import asyncio
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP, Context
 
@@ -22,7 +22,11 @@ from llm_council.council import (
     TIMEOUT_SYNTHESIS_TRIGGER,
 )
 from llm_council.verdict import VerdictType
-from llm_council.verification.api import run_verification, VerifyRequest
+from llm_council.verification.api import (
+    BlockingEvidenceTooLarge,
+    VerifyRequest,
+    run_verification,
+)
 from llm_council.verification.context import InvalidSnapshotError
 from llm_council.verification.formatting import format_verification_result
 from llm_council.verification.transcript import (
@@ -373,6 +377,7 @@ async def verify(
     rubric_focus: Optional[str] = None,
     confidence_threshold: float = 0.7,
     tier: str = "balanced",
+    evidence: Optional[List[Dict[str, Any]]] = None,
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -388,12 +393,21 @@ async def verify(
         rubric_focus: Optional rubric focus area (e.g., "security", "performance").
         confidence_threshold: Minimum confidence for pass verdict (0.0-1.0, default 0.7).
         tier: Confidence tier for model selection - "quick", "balanced" (default), "high", or "reasoning".
+        evidence: ADR-042 — pre-computed analysis from upstream tools. List of
+            dicts with keys: source (required), content (required), strength
+            (informational|blocking, default informational), format
+            (markdown|json|text, default markdown), evidence_id (optional).
+            Up to 20 items; per-tier budget applies (quick=1.5K, balanced=6K,
+            high/reasoning=10K chars). A blocking item exceeding budget
+            returns a structured error blob (not a verdict).
         ctx: MCP context for progress reporting (injected automatically).
 
     Returns:
         JSON string containing verification result with verdict, confidence,
         exit_code (0=PASS, 1=FAIL, 2=UNCLEAR), rubric scores, blocking issues,
-        rationale, and transcript location for audit trail.
+        rationale, and transcript location for audit trail. When evidence is
+        provided, the response also includes evidence_summary (per-source
+        dispositions) and evidence_warnings (structured warnings).
     """
 
     # Progress reporting bridge: MCP context <-> run_verification callback
@@ -405,13 +419,15 @@ async def verify(
                 pass  # Progress reporting is best-effort
 
     try:
-        # Create request object and transcript store
+        # Create request object and transcript store.
+        # Pydantic validates evidence dicts → List[EvidenceItem] for us.
         request = VerifyRequest(
             snapshot_id=snapshot_id,
             target_paths=target_paths,
             rubric_focus=rubric_focus,
             confidence_threshold=confidence_threshold,
             tier=tier,
+            evidence=evidence,
         )
         store = create_transcript_store()
 
@@ -424,6 +440,25 @@ async def verify(
         json_output = json.dumps(result, indent=2)
 
         return f"{formatted}\n\n---\n\n<details>\n<summary>Raw JSON</summary>\n\n```json\n{json_output}\n```\n</details>"
+
+    except BlockingEvidenceTooLarge as e:
+        # ADR-042: oversized blocking evidence — fail closed with structured error.
+        # Mirrors the HTTP 422 body shape from verify_endpoint for parity.
+        return json.dumps(
+            {
+                "error": "blocking_evidence_too_large",
+                "message": str(e),
+                "evidence_index": e.index,
+                "source": e.source,
+                "chars": e.chars,
+                "budget": e.budget,
+                "tier": tier,
+                "exit_code": 2,
+                "verdict": "unclear",
+                "confidence": 0.0,
+            },
+            indent=2,
+        )
 
     except InvalidSnapshotError as e:
         return json.dumps(
