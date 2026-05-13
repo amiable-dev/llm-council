@@ -210,6 +210,42 @@ class BlockingEvidenceTooLarge(Exception):
         )
 
 
+class SnapshotResolutionError(Exception):
+    """Raised when caller-supplied target_paths cannot be resolved at the
+    given snapshot_id (issue #340).
+
+    Fixes the silent-failure mode where verify would send a boilerplate-only
+    prompt (~916 chars) to the council, get UNCLEAR back, and instruct the
+    caller to "accept and move on." The route handler / MCP wrapper maps
+    this to HTTP 422 (or a structured error blob) so callers can distinguish
+    "verification ran and was inconclusive" from "verification could not
+    read your code."
+
+    Common upstream causes:
+      - snapshot_id is on a branch not fetched in the daemon's local clone
+      - push-replication race: commit was just pushed and hasn't propagated
+      - paths refer to files that don't exist at this commit
+    """
+
+    def __init__(
+        self,
+        *,
+        snapshot_id: str,
+        unresolved_paths: List[str],
+        expansion_warnings: List[str],
+    ) -> None:
+        self.snapshot_id = snapshot_id
+        self.unresolved_paths = unresolved_paths
+        self.expansion_warnings = expansion_warnings
+        first = unresolved_paths[0] if unresolved_paths else "<none>"
+        super().__init__(
+            f"None of the {len(unresolved_paths)} target_paths could be "
+            f"resolved at snapshot {snapshot_id} (first: {first}). "
+            "Verify the snapshot exists in the daemon's checkout and that "
+            "the paths exist at that commit."
+        )
+
+
 # =============================================================================
 # End ADR-042 Evidence Injection Types
 # =============================================================================
@@ -995,11 +1031,25 @@ async def _get_git_object_type(snapshot_id: str, path: str) -> Optional[str]:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=git_root,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
             if proc.returncode == 0:
                 return stdout.decode("utf-8").strip()
-        except Exception:
-            pass
+            # Issue #340: surface stderr instead of swallowing it silently.
+            # Common cause: snapshot not in the daemon's local clone.
+            stderr_text = stderr.decode("utf-8", errors="replace").strip()
+            logger.warning(
+                "git cat-file failed for %s:%s (rc=%s): %s",
+                snapshot_id,
+                path,
+                proc.returncode,
+                stderr_text or "<no stderr>",
+            )
+        except Exception as e:
+            # Issue #340: log the exception so subprocess failures are
+            # diagnosable (timeouts, missing git binary, etc).
+            logger.warning("git cat-file raised for %s:%s: %s", snapshot_id, path, e)
 
     return None
 
@@ -1038,9 +1088,20 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
                 stderr=asyncio.subprocess.PIPE,
                 cwd=git_root,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
 
             if proc.returncode != 0:
+                # Issue #340: surface git stderr at WARN.
+                stderr_text = stderr.decode("utf-8", errors="replace").strip()
+                logger.warning(
+                    "git ls-tree failed for %s:%s (rc=%s): %s",
+                    snapshot_id,
+                    tree_path,
+                    proc.returncode,
+                    stderr_text or "<no stderr>",
+                )
                 return []
 
             # Parse NUL-delimited output
@@ -1079,7 +1140,9 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
 
             return files
 
-        except Exception:
+        except Exception as e:
+            # Issue #340: log so subprocess/timeout failures are diagnosable.
+            logger.warning("git ls-tree raised for %s:%s: %s", snapshot_id, tree_path, e)
             return []
 
 
@@ -1458,8 +1521,21 @@ async def _build_verification_prompt(
     if rubric_focus:
         focus_section = f"\n\n**Focus Area**: {rubric_focus}\nPay particular attention to {rubric_focus.lower()}-related concerns."
 
-    # Fetch actual file contents (async to avoid blocking event loop)
-    file_contents = await _fetch_files_for_verification_async(snapshot_id, target_paths)
+    # Fetch actual file contents (async to avoid blocking event loop).
+    # Issue #340: use the metadata-aware variant so we can surface
+    # expansion warnings on the response — and hard-fail when caller-
+    # supplied target_paths resolved to zero files (otherwise the council
+    # silently reviews a boilerplate-only prompt).
+    file_contents, expansion_metadata = await _fetch_files_for_verification_async_with_metadata(
+        snapshot_id, target_paths
+    )
+
+    if target_paths and not expansion_metadata.get("expanded_paths"):
+        raise SnapshotResolutionError(
+            snapshot_id=snapshot_id,
+            unresolved_paths=list(target_paths),
+            expansion_warnings=list(expansion_metadata.get("expansion_warnings", [])),
+        )
 
     evidence_instructions = _build_evidence_instructions(bool(kept_evidence))
 
@@ -1490,6 +1566,10 @@ Be specific and cite file paths and line numbers when identifying issues."""
         "warnings": evidence_warnings,
         "chars_rendered": chars_rendered,
         "chars_submitted": chars_submitted,
+        # Issue #340: surface expansion metadata so the pipeline can copy
+        # expanded_paths / paths_truncated / expansion_warnings onto the
+        # response. Was being silently discarded before.
+        "expansion": expansion_metadata,
     }
     return prompt, render_info
 
@@ -1860,6 +1940,10 @@ async def _run_verification_pipeline(
         ),
     }
 
+    # Issue #340: surface expansion metadata so operators can see when
+    # some paths failed to resolve even if the verdict still came back OK.
+    expansion = evidence_render_info.get("expansion") or {}
+
     result = {
         "verification_id": verification_id,
         "verdict": verdict,
@@ -1877,6 +1961,10 @@ async def _run_verification_pipeline(
         # ADR-042: per-source dispositions + structured warnings.
         "evidence_summary": partial_state.get("evidence_summary"),
         "evidence_warnings": partial_state.get("evidence_warnings"),
+        # Issue #340: expansion metadata (was orphaned in the response schema).
+        "expanded_paths": expansion.get("expanded_paths") or None,
+        "paths_truncated": expansion.get("paths_truncated"),
+        "expansion_warnings": expansion.get("expansion_warnings") or None,
     }
 
     # Persist result
@@ -2079,6 +2167,26 @@ async def run_verification(
                 # if the budgeter ran before timing out.
                 "evidence_summary": None,
                 "evidence_warnings": partial_state.get("evidence_warnings"),
+                # Issue #340: expansion metadata is computed in the prompt
+                # builder before the wait_for wrapper, so it's available
+                # even on timeout.
+                "expanded_paths": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("expanded_paths")
+                    or None
+                ),
+                "paths_truncated": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("paths_truncated")
+                ),
+                "expansion_warnings": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("expansion_warnings")
+                    or None
+                ),
             }
 
 
@@ -2132,6 +2240,21 @@ async def verify_endpoint(request: VerifyRequest) -> VerifyResponse:
                 "chars": e.chars,
                 "budget": e.budget,
                 "tier": request.tier,
+            },
+        )
+
+    except SnapshotResolutionError as e:
+        # Issue #340: target_paths could not be resolved at snapshot_id —
+        # do not silently fall back to a boilerplate-only review. Caller
+        # needs to know the council never saw their code.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "snapshot_resolution_failed",
+                "message": str(e),
+                "snapshot_id": e.snapshot_id,
+                "unresolved_paths": e.unresolved_paths,
+                "expansion_warnings": e.expansion_warnings,
             },
         )
 

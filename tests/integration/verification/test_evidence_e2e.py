@@ -27,9 +27,12 @@ async def test_evidence_none_prompt_byte_identical():
     the ADR §11 invariant before regenerating the hash.
     """
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async",
+        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
-        return_value="FILE_BODY_PLACEHOLDER",
+        return_value=(
+            "FILE_BODY_PLACEHOLDER",
+            {"expanded_paths": ["src/x.py"], "paths_truncated": False, "expansion_warnings": []},
+        ),
     ):
         prompt, info = await _build_verification_prompt(
             snapshot_id="abc1234",
@@ -57,9 +60,12 @@ async def test_evidence_none_prompt_byte_identical():
 async def test_empty_evidence_list_equals_none():
     """ADR-042 §11: evidence=[] produces the same rendered prompt as evidence=None."""
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async",
+        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
-        return_value="FILE_BODY_PLACEHOLDER",
+        return_value=(
+            "FILE_BODY_PLACEHOLDER",
+            {"expanded_paths": ["src/x.py"], "paths_truncated": False, "expansion_warnings": []},
+        ),
     ):
         prompt_none, _ = await _build_verification_prompt(
             snapshot_id="abc1234",
@@ -84,9 +90,12 @@ async def test_evidence_section_inserted_at_correct_position():
     from llm_council.verification.api import EvidenceItem
 
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async",
+        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
-        return_value="FILE_BODY_PLACEHOLDER",
+        return_value=(
+            "FILE_BODY_PLACEHOLDER",
+            {"expanded_paths": ["src/x.py"], "paths_truncated": False, "expansion_warnings": []},
+        ),
     ):
         prompt, _ = await _build_verification_prompt(
             snapshot_id="abc1234",
@@ -125,9 +134,16 @@ async def test_evidence_json_artefact_written(tmp_path):
     # Mock heavy machinery so we can run the pipeline cheaply.
     with (
         patch(
-            "llm_council.verification.api._fetch_files_for_verification_async",
+            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
-            return_value="FILE_BODY",
+            return_value=(
+                "FILE_BODY",
+                {
+                    "expanded_paths": ["src/x.py"],
+                    "paths_truncated": False,
+                    "expansion_warnings": [],
+                },
+            ),
         ),
         patch(
             "llm_council.verification.api.stage1_collect_responses_with_status",
@@ -210,9 +226,16 @@ async def test_request_json_carries_evidence_present_flag(tmp_path):
 
     with (
         patch(
-            "llm_council.verification.api._fetch_files_for_verification_async",
+            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
-            return_value="FILE_BODY",
+            return_value=(
+                "FILE_BODY",
+                {
+                    "expanded_paths": ["src/x.py"],
+                    "paths_truncated": False,
+                    "expansion_warnings": [],
+                },
+            ),
         ),
         patch(
             "llm_council.verification.api.stage1_collect_responses_with_status",
@@ -375,9 +398,12 @@ async def test_evidence_instructions_added_only_when_evidence_present():
     from llm_council.verification.api import EvidenceItem
 
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async",
+        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
-        return_value="FILE_BODY_PLACEHOLDER",
+        return_value=(
+            "FILE_BODY_PLACEHOLDER",
+            {"expanded_paths": ["src/x.py"], "paths_truncated": False, "expansion_warnings": []},
+        ),
     ):
         prompt_none, _ = await _build_verification_prompt(
             snapshot_id="abc1234",
