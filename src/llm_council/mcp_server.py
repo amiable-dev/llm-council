@@ -24,6 +24,7 @@ from llm_council.council import (
 from llm_council.verdict import VerdictType
 from llm_council.verification.api import (
     BlockingEvidenceTooLarge,
+    SnapshotResolutionError,
     VerifyRequest,
     run_verification,
 )
@@ -453,6 +454,25 @@ async def verify(
                 "chars": e.chars,
                 "budget": e.budget,
                 "tier": tier,
+                "exit_code": 2,
+                "verdict": "unclear",
+                "confidence": 0.0,
+            },
+            indent=2,
+        )
+
+    except SnapshotResolutionError as e:
+        # Issue #340: target_paths unresolvable at snapshot_id — surface as
+        # a structured error blob (parallel to BlockingEvidenceTooLarge) so
+        # the caller sees "verification could not read your code" rather
+        # than a soft UNCLEAR verdict that skill rules say to ignore.
+        return json.dumps(
+            {
+                "error": "snapshot_resolution_failed",
+                "message": str(e),
+                "snapshot_id": e.snapshot_id,
+                "unresolved_paths": e.unresolved_paths,
+                "expansion_warnings": e.expansion_warnings,
                 "exit_code": 2,
                 "verdict": "unclear",
                 "confidence": 0.0,

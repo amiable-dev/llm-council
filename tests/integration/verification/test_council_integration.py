@@ -38,10 +38,16 @@ class TestCouncilDeliberationIntegration:
 
     @pytest.fixture
     def valid_request(self) -> VerifyRequest:
-        """Create valid verification request."""
+        """Create valid verification request.
+
+        target_paths=None puts these tests on the snapshot-wide fallback
+        path so they don't trip the issue #340 hard-fail (which catches
+        non-empty target_paths that fail to resolve). These tests assert
+        council-stage wiring, not snapshot resolution.
+        """
         return VerifyRequest(
             snapshot_id="abc1234def5678",
-            target_paths=["src/"],
+            target_paths=None,
             rubric_focus="Security",
             confidence_threshold=0.7,
         )
@@ -258,10 +264,16 @@ class TestTranscriptPersistence:
 
     @pytest.fixture
     def valid_request(self) -> VerifyRequest:
-        """Create valid verification request."""
+        """Create valid verification request.
+
+        target_paths=None puts these tests on the snapshot-wide fallback
+        path so they don't trip the issue #340 hard-fail (which catches
+        non-empty target_paths that fail to resolve). These tests assert
+        council-stage wiring, not snapshot resolution.
+        """
         return VerifyRequest(
             snapshot_id="abc1234def5678",
-            target_paths=["src/"],
+            target_paths=None,
             rubric_focus="Security",
             confidence_threshold=0.7,
         )
@@ -426,10 +438,16 @@ class TestDynamicScoreExtraction:
 
     @pytest.fixture
     def valid_request(self) -> VerifyRequest:
-        """Create valid verification request."""
+        """Create valid verification request.
+
+        target_paths=None puts these tests on the snapshot-wide fallback
+        path so they don't trip the issue #340 hard-fail (which catches
+        non-empty target_paths that fail to resolve). These tests assert
+        council-stage wiring, not snapshot resolution.
+        """
         return VerifyRequest(
             snapshot_id="abc1234def5678",
-            target_paths=["src/"],
+            target_paths=None,
             rubric_focus="Security",
             confidence_threshold=0.7,
         )
