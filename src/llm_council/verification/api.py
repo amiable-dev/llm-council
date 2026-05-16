@@ -210,6 +210,42 @@ class BlockingEvidenceTooLarge(Exception):
         )
 
 
+class SnapshotResolutionError(Exception):
+    """Raised when caller-supplied target_paths cannot be resolved at the
+    given snapshot_id (issue #340).
+
+    Fixes the silent-failure mode where verify would send a boilerplate-only
+    prompt (~916 chars) to the council, get UNCLEAR back, and instruct the
+    caller to "accept and move on." The route handler / MCP wrapper maps
+    this to HTTP 422 (or a structured error blob) so callers can distinguish
+    "verification ran and was inconclusive" from "verification could not
+    read your code."
+
+    Common upstream causes:
+      - snapshot_id is on a branch not fetched in the daemon's local clone
+      - push-replication race: commit was just pushed and hasn't propagated
+      - paths refer to files that don't exist at this commit
+    """
+
+    def __init__(
+        self,
+        *,
+        snapshot_id: str,
+        unresolved_paths: List[str],
+        expansion_warnings: List[str],
+    ) -> None:
+        self.snapshot_id = snapshot_id
+        self.unresolved_paths = unresolved_paths
+        self.expansion_warnings = expansion_warnings
+        first = unresolved_paths[0] if unresolved_paths else "<none>"
+        super().__init__(
+            f"None of the {len(unresolved_paths)} target_paths could be "
+            f"resolved at snapshot {snapshot_id} (first: {first}). "
+            "Verify the snapshot exists in the daemon's checkout and that "
+            "the paths exist at that commit."
+        )
+
+
 # =============================================================================
 # End ADR-042 Evidence Injection Types
 # =============================================================================
@@ -379,9 +415,14 @@ def _verdict_to_exit_code(verdict: str) -> int:
         return 2
 
 
-# Maximum characters per file to include in prompt
+# Maximum characters per file to include in prompt.
+# Issue #342: legacy default — used only when a caller does not specify a
+# tier. Tier-aware paths derive the per-file cap from TIER_MAX_CHARS so a
+# single big file (e.g. a 56K ADR at the reasoning tier) is not silently
+# amputated by a constant that pre-dates the tier system.
 MAX_FILE_CHARS = 15000
-# Maximum total characters for all files
+# Maximum total characters for all files (legacy default; tier-aware fetch
+# scales this to TIER_MAX_CHARS[tier]).
 MAX_TOTAL_CHARS = 50000
 
 # =============================================================================
@@ -995,11 +1036,25 @@ async def _get_git_object_type(snapshot_id: str, path: str) -> Optional[str]:
                 stderr=asyncio.subprocess.PIPE,
                 cwd=git_root,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
             if proc.returncode == 0:
                 return stdout.decode("utf-8").strip()
-        except Exception:
-            pass
+            # Issue #340: surface stderr instead of swallowing it silently.
+            # Common cause: snapshot not in the daemon's local clone.
+            stderr_text = stderr.decode("utf-8", errors="replace").strip()
+            logger.warning(
+                "git cat-file failed for %s:%s (rc=%s): %s",
+                snapshot_id,
+                path,
+                proc.returncode,
+                stderr_text or "<no stderr>",
+            )
+        except Exception as e:
+            # Issue #340: log the exception so subprocess failures are
+            # diagnosable (timeouts, missing git binary, etc).
+            logger.warning("git cat-file raised for %s:%s: %s", snapshot_id, path, e)
 
     return None
 
@@ -1038,9 +1093,20 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
                 stderr=asyncio.subprocess.PIPE,
                 cwd=git_root,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
 
             if proc.returncode != 0:
+                # Issue #340: surface git stderr at WARN.
+                stderr_text = stderr.decode("utf-8", errors="replace").strip()
+                logger.warning(
+                    "git ls-tree failed for %s:%s (rc=%s): %s",
+                    snapshot_id,
+                    tree_path,
+                    proc.returncode,
+                    stderr_text or "<no stderr>",
+                )
                 return []
 
             # Parse NUL-delimited output
@@ -1079,7 +1145,9 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
 
             return files
 
-        except Exception:
+        except Exception as e:
+            # Issue #340: log so subprocess/timeout failures are diagnosable.
+            logger.warning("git ls-tree raised for %s:%s: %s", snapshot_id, tree_path, e)
             return []
 
 
@@ -1195,7 +1263,11 @@ async def _expand_target_paths(
 # =============================================================================
 
 
-async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
+async def _fetch_file_at_commit_async(
+    snapshot_id: str,
+    file_path: str,
+    max_file_chars: Optional[int] = None,
+) -> Tuple[str, bool]:
     """
     Fetch file contents from git at a specific commit (async version).
 
@@ -1206,10 +1278,17 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
     Args:
         snapshot_id: Git commit SHA
         file_path: Path to file relative to repo root
+        max_file_chars: Per-call cap on bytes read and final content length.
+            Defaults to the legacy MAX_FILE_CHARS constant when None.
+            Issue #342: the multi-file fetcher passes a tier-derived value
+            so a single big file is not silently amputated to 15K when the
+            tier budget is 50K.
 
     Returns:
         Tuple of (content, was_truncated)
     """
+    limit = MAX_FILE_CHARS if max_file_chars is None else max_file_chars
+
     # Validate file path to prevent path traversal
     if not _validate_file_path(file_path):
         return f"[Error: Invalid file path: {file_path}]", False
@@ -1241,7 +1320,7 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
                 async def read_with_limit() -> None:
                     """Read chunks until limit or EOF."""
                     nonlocal bytes_read, truncated
-                    while bytes_read < MAX_FILE_CHARS:
+                    while bytes_read < limit:
                         # Read in chunks of 8KB
                         chunk = await proc.stdout.read(8192)  # type: ignore[union-attr]
                         if not chunk:
@@ -1250,7 +1329,7 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
                         bytes_read += len(chunk)
 
                     # Check if there's more data (truncation needed)
-                    if bytes_read >= MAX_FILE_CHARS:
+                    if bytes_read >= limit:
                         extra = await proc.stdout.read(1)  # type: ignore[union-attr]
                         if extra:
                             truncated = True
@@ -1282,10 +1361,10 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
             content_bytes = b"".join(chunks)
             content = content_bytes.decode("utf-8", errors="replace")
 
-            if truncated or len(content) > MAX_FILE_CHARS:
+            if truncated or len(content) > limit:
                 content = (
-                    content[:MAX_FILE_CHARS]
-                    + f"\n\n... [truncated, original file larger than {MAX_FILE_CHARS} chars]"
+                    content[:limit]
+                    + f"\n\n... [truncated, original file larger than {limit} chars]"
                 )
                 truncated = True
 
@@ -1321,6 +1400,7 @@ async def _fetch_files_for_verification_async(
 async def _fetch_files_for_verification_async_with_metadata(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
+    tier: str = "balanced",
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Fetch file contents for verification prompt with expansion metadata.
@@ -1328,9 +1408,15 @@ async def _fetch_files_for_verification_async_with_metadata(
     ADR-034 v2.6: This is the core implementation that handles directory
     expansion and returns metadata about what was expanded.
 
+    Issue #342: per-file and per-batch byte caps now scale with `tier`,
+    derived from TIER_MAX_CHARS. Per-file truncation is surfaced as a
+    structured warning in `expansion_warnings` instead of being silently
+    dropped (the original `truncated` boolean was bound and discarded).
+
     Args:
         snapshot_id: Git commit SHA
         target_paths: Optional list of specific paths (files or directories)
+        tier: Active tier name; controls per-file / per-batch char budgets
 
     Returns:
         Tuple of (formatted content string, metadata dict)
@@ -1344,12 +1430,19 @@ async def _fetch_files_for_verification_async_with_metadata(
     }
     git_root = await _get_git_root_async()
 
+    # Issue #342: derive per-file and per-batch caps from the tier so the
+    # legacy 15K per-file limit cannot silently amputate a single big file
+    # at the reasoning tier (which has 50K of headroom).
+    tier_budget = TIER_MAX_CHARS.get(tier, 50000)
+    per_file_budget = tier_budget
+    per_batch_budget = tier_budget
+
     # ADR-034 v2.6: Expand directories in target_paths
     if target_paths:
         files_to_fetch, truncated, warnings = await _expand_target_paths(snapshot_id, target_paths)
         expansion_metadata["expanded_paths"] = files_to_fetch
         expansion_metadata["paths_truncated"] = truncated
-        expansion_metadata["expansion_warnings"] = warnings
+        expansion_metadata["expansion_warnings"] = list(warnings)
     else:
         # If no target paths, get files changed in this commit
         try:
@@ -1392,21 +1485,24 @@ async def _fetch_files_for_verification_async_with_metadata(
 
     for i in range(0, len(files_to_fetch), BATCH_SIZE):
         # Check limit before fetching next batch
-        if total_chars >= MAX_TOTAL_CHARS:
+        if total_chars >= per_batch_budget:
             sections.append(
-                f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+                f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
             )
             break
 
         batch = files_to_fetch[i : i + BATCH_SIZE]
         results = await asyncio.gather(
-            *[_fetch_file_at_commit_async(snapshot_id, fp) for fp in batch]
+            *[
+                _fetch_file_at_commit_async(snapshot_id, fp, max_file_chars=per_file_budget)
+                for fp in batch
+            ]
         )
 
         for file_path, (content, truncated) in zip(batch, results):
-            if total_chars >= MAX_TOTAL_CHARS:
+            if total_chars >= per_batch_budget:
                 sections.append(
-                    f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+                    f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
                 )
                 break
 
@@ -1414,6 +1510,16 @@ async def _fetch_files_for_verification_async_with_metadata(
             files_fetched += 1
             section = f"### {file_path}\n```\n{content}\n```"
             sections.append(section)
+
+            # Issue #342: surface per-file truncation. Previously the
+            # `truncated` boolean was bound and immediately discarded so
+            # callers had no structured signal — only the inline
+            # `[truncated, ...]` marker inside the file body itself.
+            if truncated:
+                expansion_metadata["expansion_warnings"].append(
+                    f"file '{file_path}' truncated at {per_file_budget} chars "
+                    f"({tier} tier per-file budget)"
+                )
 
     return "\n\n".join(sections), expansion_metadata
 
@@ -1458,8 +1564,21 @@ async def _build_verification_prompt(
     if rubric_focus:
         focus_section = f"\n\n**Focus Area**: {rubric_focus}\nPay particular attention to {rubric_focus.lower()}-related concerns."
 
-    # Fetch actual file contents (async to avoid blocking event loop)
-    file_contents = await _fetch_files_for_verification_async(snapshot_id, target_paths)
+    # Fetch actual file contents (async to avoid blocking event loop).
+    # Issue #340: use the metadata-aware variant so we can surface
+    # expansion warnings on the response — and hard-fail when caller-
+    # supplied target_paths resolved to zero files (otherwise the council
+    # silently reviews a boilerplate-only prompt).
+    file_contents, expansion_metadata = await _fetch_files_for_verification_async_with_metadata(
+        snapshot_id, target_paths, tier=tier
+    )
+
+    if target_paths and not expansion_metadata.get("expanded_paths"):
+        raise SnapshotResolutionError(
+            snapshot_id=snapshot_id,
+            unresolved_paths=list(target_paths),
+            expansion_warnings=list(expansion_metadata.get("expansion_warnings", [])),
+        )
 
     evidence_instructions = _build_evidence_instructions(bool(kept_evidence))
 
@@ -1490,6 +1609,10 @@ Be specific and cite file paths and line numbers when identifying issues."""
         "warnings": evidence_warnings,
         "chars_rendered": chars_rendered,
         "chars_submitted": chars_submitted,
+        # Issue #340: surface expansion metadata so the pipeline can copy
+        # expanded_paths / paths_truncated / expansion_warnings onto the
+        # response. Was being silently discarded before.
+        "expansion": expansion_metadata,
     }
     return prompt, render_info
 
@@ -1860,6 +1983,10 @@ async def _run_verification_pipeline(
         ),
     }
 
+    # Issue #340: surface expansion metadata so operators can see when
+    # some paths failed to resolve even if the verdict still came back OK.
+    expansion = evidence_render_info.get("expansion") or {}
+
     result = {
         "verification_id": verification_id,
         "verdict": verdict,
@@ -1877,6 +2004,10 @@ async def _run_verification_pipeline(
         # ADR-042: per-source dispositions + structured warnings.
         "evidence_summary": partial_state.get("evidence_summary"),
         "evidence_warnings": partial_state.get("evidence_warnings"),
+        # Issue #340: expansion metadata (was orphaned in the response schema).
+        "expanded_paths": expansion.get("expanded_paths") or None,
+        "paths_truncated": expansion.get("paths_truncated"),
+        "expansion_warnings": expansion.get("expansion_warnings") or None,
     }
 
     # Persist result
@@ -2079,6 +2210,26 @@ async def run_verification(
                 # if the budgeter ran before timing out.
                 "evidence_summary": None,
                 "evidence_warnings": partial_state.get("evidence_warnings"),
+                # Issue #340: expansion metadata is computed in the prompt
+                # builder before the wait_for wrapper, so it's available
+                # even on timeout.
+                "expanded_paths": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("expanded_paths")
+                    or None
+                ),
+                "paths_truncated": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("paths_truncated")
+                ),
+                "expansion_warnings": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("expansion_warnings")
+                    or None
+                ),
             }
 
 
@@ -2132,6 +2283,21 @@ async def verify_endpoint(request: VerifyRequest) -> VerifyResponse:
                 "chars": e.chars,
                 "budget": e.budget,
                 "tier": request.tier,
+            },
+        )
+
+    except SnapshotResolutionError as e:
+        # Issue #340: target_paths could not be resolved at snapshot_id —
+        # do not silently fall back to a boilerplate-only review. Caller
+        # needs to know the council never saw their code.
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "snapshot_resolution_failed",
+                "message": str(e),
+                "snapshot_id": e.snapshot_id,
+                "unresolved_paths": e.unresolved_paths,
+                "expansion_warnings": e.expansion_warnings,
             },
         )
 
