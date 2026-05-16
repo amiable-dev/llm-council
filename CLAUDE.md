@@ -788,6 +788,10 @@ To prevent accidental direct pushes (even by admins), enable in GitHub:
 - **ADR-040 Constants**:
   - `VERIFICATION_TIMEOUT_MULTIPLIER = 1.5`: Global deadline = `tier_contract.deadline_ms/1000 * 1.5`
   - `TIER_MAX_CHARS`: Per-tier input size limits (quick: 15K, balanced: 30K, high/reasoning: 50K)
+- **Per-file size limits (#342)**:
+  - `_fetch_file_at_commit_async(snapshot_id, path, max_file_chars=None)` — `max_file_chars` controls per-call streaming cap; defaults to legacy `MAX_FILE_CHARS=15000` only when None.
+  - `_fetch_files_for_verification_async_with_metadata(snapshot_id, paths, tier="balanced")` — derives `per_file_budget = per_batch_budget = TIER_MAX_CHARS[tier]`. At `reasoning`/`high` tier, a single 50K file is fully readable; under the legacy hardcoded 15K cap, big ADRs were silently amputated.
+  - Per-file truncation surfaces as a structured `expansion_warnings` entry on `VerifyResponse`: `"file '<path>' truncated at N chars (<tier> tier per-file budget)"`. The previous code dropped the `truncated` boolean on the floor.
 - **VerifyResponse Fields (ADR-040)**:
   - `timeout_fired: bool`: True if global deadline was exceeded
   - `completed_stages: List[str]`: Stages completed before timeout (e.g. `["stage1", "stage2"]`)

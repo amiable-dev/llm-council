@@ -415,9 +415,14 @@ def _verdict_to_exit_code(verdict: str) -> int:
         return 2
 
 
-# Maximum characters per file to include in prompt
+# Maximum characters per file to include in prompt.
+# Issue #342: legacy default — used only when a caller does not specify a
+# tier. Tier-aware paths derive the per-file cap from TIER_MAX_CHARS so a
+# single big file (e.g. a 56K ADR at the reasoning tier) is not silently
+# amputated by a constant that pre-dates the tier system.
 MAX_FILE_CHARS = 15000
-# Maximum total characters for all files
+# Maximum total characters for all files (legacy default; tier-aware fetch
+# scales this to TIER_MAX_CHARS[tier]).
 MAX_TOTAL_CHARS = 50000
 
 # =============================================================================
@@ -1258,7 +1263,11 @@ async def _expand_target_paths(
 # =============================================================================
 
 
-async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple[str, bool]:
+async def _fetch_file_at_commit_async(
+    snapshot_id: str,
+    file_path: str,
+    max_file_chars: Optional[int] = None,
+) -> Tuple[str, bool]:
     """
     Fetch file contents from git at a specific commit (async version).
 
@@ -1269,10 +1278,17 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
     Args:
         snapshot_id: Git commit SHA
         file_path: Path to file relative to repo root
+        max_file_chars: Per-call cap on bytes read and final content length.
+            Defaults to the legacy MAX_FILE_CHARS constant when None.
+            Issue #342: the multi-file fetcher passes a tier-derived value
+            so a single big file is not silently amputated to 15K when the
+            tier budget is 50K.
 
     Returns:
         Tuple of (content, was_truncated)
     """
+    limit = MAX_FILE_CHARS if max_file_chars is None else max_file_chars
+
     # Validate file path to prevent path traversal
     if not _validate_file_path(file_path):
         return f"[Error: Invalid file path: {file_path}]", False
@@ -1304,7 +1320,7 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
                 async def read_with_limit() -> None:
                     """Read chunks until limit or EOF."""
                     nonlocal bytes_read, truncated
-                    while bytes_read < MAX_FILE_CHARS:
+                    while bytes_read < limit:
                         # Read in chunks of 8KB
                         chunk = await proc.stdout.read(8192)  # type: ignore[union-attr]
                         if not chunk:
@@ -1313,7 +1329,7 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
                         bytes_read += len(chunk)
 
                     # Check if there's more data (truncation needed)
-                    if bytes_read >= MAX_FILE_CHARS:
+                    if bytes_read >= limit:
                         extra = await proc.stdout.read(1)  # type: ignore[union-attr]
                         if extra:
                             truncated = True
@@ -1345,10 +1361,10 @@ async def _fetch_file_at_commit_async(snapshot_id: str, file_path: str) -> Tuple
             content_bytes = b"".join(chunks)
             content = content_bytes.decode("utf-8", errors="replace")
 
-            if truncated or len(content) > MAX_FILE_CHARS:
+            if truncated or len(content) > limit:
                 content = (
-                    content[:MAX_FILE_CHARS]
-                    + f"\n\n... [truncated, original file larger than {MAX_FILE_CHARS} chars]"
+                    content[:limit]
+                    + f"\n\n... [truncated, original file larger than {limit} chars]"
                 )
                 truncated = True
 
@@ -1384,6 +1400,7 @@ async def _fetch_files_for_verification_async(
 async def _fetch_files_for_verification_async_with_metadata(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
+    tier: str = "balanced",
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Fetch file contents for verification prompt with expansion metadata.
@@ -1391,9 +1408,15 @@ async def _fetch_files_for_verification_async_with_metadata(
     ADR-034 v2.6: This is the core implementation that handles directory
     expansion and returns metadata about what was expanded.
 
+    Issue #342: per-file and per-batch byte caps now scale with `tier`,
+    derived from TIER_MAX_CHARS. Per-file truncation is surfaced as a
+    structured warning in `expansion_warnings` instead of being silently
+    dropped (the original `truncated` boolean was bound and discarded).
+
     Args:
         snapshot_id: Git commit SHA
         target_paths: Optional list of specific paths (files or directories)
+        tier: Active tier name; controls per-file / per-batch char budgets
 
     Returns:
         Tuple of (formatted content string, metadata dict)
@@ -1407,12 +1430,19 @@ async def _fetch_files_for_verification_async_with_metadata(
     }
     git_root = await _get_git_root_async()
 
+    # Issue #342: derive per-file and per-batch caps from the tier so the
+    # legacy 15K per-file limit cannot silently amputate a single big file
+    # at the reasoning tier (which has 50K of headroom).
+    tier_budget = TIER_MAX_CHARS.get(tier, 50000)
+    per_file_budget = tier_budget
+    per_batch_budget = tier_budget
+
     # ADR-034 v2.6: Expand directories in target_paths
     if target_paths:
         files_to_fetch, truncated, warnings = await _expand_target_paths(snapshot_id, target_paths)
         expansion_metadata["expanded_paths"] = files_to_fetch
         expansion_metadata["paths_truncated"] = truncated
-        expansion_metadata["expansion_warnings"] = warnings
+        expansion_metadata["expansion_warnings"] = list(warnings)
     else:
         # If no target paths, get files changed in this commit
         try:
@@ -1455,21 +1485,24 @@ async def _fetch_files_for_verification_async_with_metadata(
 
     for i in range(0, len(files_to_fetch), BATCH_SIZE):
         # Check limit before fetching next batch
-        if total_chars >= MAX_TOTAL_CHARS:
+        if total_chars >= per_batch_budget:
             sections.append(
-                f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+                f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
             )
             break
 
         batch = files_to_fetch[i : i + BATCH_SIZE]
         results = await asyncio.gather(
-            *[_fetch_file_at_commit_async(snapshot_id, fp) for fp in batch]
+            *[
+                _fetch_file_at_commit_async(snapshot_id, fp, max_file_chars=per_file_budget)
+                for fp in batch
+            ]
         )
 
         for file_path, (content, truncated) in zip(batch, results):
-            if total_chars >= MAX_TOTAL_CHARS:
+            if total_chars >= per_batch_budget:
                 sections.append(
-                    f"\n... [remaining files omitted, {MAX_TOTAL_CHARS} char limit reached]"
+                    f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
                 )
                 break
 
@@ -1477,6 +1510,16 @@ async def _fetch_files_for_verification_async_with_metadata(
             files_fetched += 1
             section = f"### {file_path}\n```\n{content}\n```"
             sections.append(section)
+
+            # Issue #342: surface per-file truncation. Previously the
+            # `truncated` boolean was bound and immediately discarded so
+            # callers had no structured signal — only the inline
+            # `[truncated, ...]` marker inside the file body itself.
+            if truncated:
+                expansion_metadata["expansion_warnings"].append(
+                    f"file '{file_path}' truncated at {per_file_budget} chars "
+                    f"({tier} tier per-file budget)"
+                )
 
     return "\n\n".join(sections), expansion_metadata
 
@@ -1527,7 +1570,7 @@ async def _build_verification_prompt(
     # supplied target_paths resolved to zero files (otherwise the council
     # silently reviews a boilerplate-only prompt).
     file_contents, expansion_metadata = await _fetch_files_for_verification_async_with_metadata(
-        snapshot_id, target_paths
+        snapshot_id, target_paths, tier=tier
     )
 
     if target_paths and not expansion_metadata.get("expanded_paths"):
