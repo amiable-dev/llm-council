@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.42] - 2026-05-26
+
+### Fixed
+
+- **`consult_council` docstring no longer hides the `reasoning` tier** ([#347](https://github.com/amiable-dev/llm-council/pull/347)) — the MCP tool schema for `confidence` is plain `string` with no enum, so the docstring is the only signal an LLM caller gets about valid values. Since 4a4234d (Dec 2025, ADR-012 Section 5) the runtime has accepted `"reasoning"` and routed it to the 600s/300s tier budget, but the docstring still advertised only `"quick" / "balanced" / "high"` with stale pre-ADR-012 duration estimates (`high (~45s)` vs the actual 180s server budget). An LLM consumer of the MCP tool (e.g. a fresh Claude Code instance) reading the schema would correctly conclude reasoning wasn't an option. `verify` and the bundled `council-verify` / `council-review` skills already documented the tier correctly; only `consult_council` was out of sync. The docstring now lists all four runnable tiers (`quick` / `balanced` / `high` / `reasoning`) with their real server budgets and per-model timeouts, and explicitly notes that unknown values silently fall back to `"high"`.
+
+### Added
+
+- **MCP client timeout guidance for slow tiers** ([#347](https://github.com/amiable-dev/llm-council/pull/347)) — new "Configuring MCP Client Timeouts" section in [`docs/integrations/index.md`](docs/integrations/index.md). The council's `high` and `reasoning` tiers can take 3–10 minutes when frontier reasoning models review large inputs (e.g. multi-thousand-line ADRs). MCP clients have their own transport-layer timeout that is **independent of the server's tier budget** — Claude Code's default is around 60s. If the client times out first, callers see "MCP layer timeout" errors even though the council is still working. ADR-012 §419 explicitly chose not to fix this server-side ("We don't control client-side timeouts") and issue [#327](https://github.com/amiable-dev/llm-council/issues/327) has hard data (Stage 1 alone took 652s at high tier on a large input, killed by the client transport). The new section gives an explicit tier→`MCP_TIMEOUT` mapping (`quick` 60000ms, `balanced` 120000ms, `high` 300000ms, `reasoning` 900000ms) and a concrete `.mcp.json` env block. The `consult_council` docstring also carries an inline note pointing callers to this requirement.
+
 ## [0.24.41] - 2026-05-26
 
 ### Added
