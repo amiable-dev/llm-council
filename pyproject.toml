@@ -43,7 +43,8 @@ dependencies = [
 http = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
 # MCP server dependencies - install with: pip install "llm-council-core[mcp]"
 # Transitive on [http] because llm_council.mcp_server imports
-# llm_council.verification.api, which requires fastapi/uvicorn.
+# llm_council.verification.api, which imports fastapi; [http] also includes
+# uvicorn for running the HTTP server.
 mcp = [
     "llm-council-core[http]",
     "mcp>=1.22.0,<1.27",
