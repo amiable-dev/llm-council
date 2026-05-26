@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.41] - 2026-05-26
+
+### Added
+
+- **ADR-043: OpenRouter Pareto Router integration** ([#339](https://github.com/amiable-dev/llm-council/pull/339)) — adds `openrouter/pareto-code` as an optional council seat for coding-focused sessions. The Pareto Router auto-selects a coding model from the quality/cost frontier maintained by Artificial Analysis benchmarks. `min_coding_score` maps to council tiers: quick=0.2, balanced=0.5, high=0.8, reasoning=0.9, frontier=default. Built-in fallback cascading aligns with ADR-023. Three-phase rollout per the ADR: this release implements Phase 1 (integration); Phase 2 (observe Pareto selections + peer review scores) and Phase 3 (expand) follow. Extends ADR-022/023/028. ADR document is in Draft status pending council review; the implementation is shipped behind tier-pool configuration so it's opt-in.
+
+### Fixed
+
+- **`[mcp]` extra no longer ships a broken MCP server** ([#344](https://github.com/amiable-dev/llm-council/issues/344), [#345](https://github.com/amiable-dev/llm-council/pull/345)) — `pip install 'llm-council-core[mcp]'` previously produced a non-functional server: `mcp_server.py` transitively imports `fastapi` via `llm_council.verification.api`, but the `[mcp]` extra declared only `mcp>=1.22.0` (no fastapi / uvicorn). Fresh installs surfaced as `ModuleNotFoundError: No module named 'fastapi'`. Three related fixes: (1) `[mcp]` now transitively depends on `[http]` so fastapi / uvicorn track `[http]`'s versions (follows the existing `[all]` transitive-extras pattern); (2) `mcp` upper-pinned to `<1.27` — mcp 1.27.x has breaking API changes from 1.25.x that prevent `mcp_server.py` from importing; (3) `serve_mcp()` now surfaces the real `ImportError` in its error path so future regressions report the actual missing module instead of always blaming `[mcp]`.
+
+## [0.24.40] - 2026-05-16
+
 ### Fixed
 
 - **Verify no longer silently amputates large files to 15K chars** ([#342](https://github.com/amiable-dev/llm-council/issues/342)) — `_fetch_file_at_commit_async` clamped every single file to `MAX_FILE_CHARS = 15000` regardless of the active tier's char budget, and `_fetch_files_for_verification_async_with_metadata` then discarded the per-file `truncated` boolean without surfacing it on `VerifyResponse`. End-to-end symptom: a 56,093-char ADR reviewed at the `reasoning` tier (50K budget) reached reviewers as 15,942 chars; reviewers noticed (and said so in their text) but the caller saw `expansion_warnings: null` and a confident verdict. Two-part fix: (1) `_fetch_file_at_commit_async` now accepts a `max_file_chars` parameter and `_fetch_files_for_verification_async_with_metadata` derives it from `TIER_MAX_CHARS[tier]` — at reasoning tier, a single 50K file is now fully readable; per-batch budget scales the same way. (2) Per-file truncation produces a structured `expansion_warnings` entry (`"file '<path>' truncated at N chars (<tier> tier per-file budget)"`) so the caller has a non-textual signal that the review was partial. Backward compat: `_fetch_file_at_commit_async(snapshot_id, path)` without `max_file_chars` still defaults to the legacy 15K constant; the legacy `_fetch_files_for_verification_async` wrapper still works without specifying a tier. The bug had been latent since ADR-040 introduced `TIER_MAX_CHARS` — the per-file inner cap was sized for a multi-file world and never refactored when single-file ADR review became the common case.
+
+## [0.24.39] - 2026-05-13
+
+### Fixed
 
 - **Verify snapshot resolver no longer silently returns empty content** ([#340](https://github.com/amiable-dev/llm-council/issues/340)) — when `target_paths` couldn't be resolved at the given `snapshot_id` (e.g. commit not present in the daemon's local checkout, push-replication race, paths missing at that commit), `run_verification` previously sent a boilerplate-only prompt (~916 chars) to the council and returned UNCLEAR. Skill rules told callers to "accept and move on", making the bug undetectable end-to-end. Three compounding defects fixed: (1) `_build_verification_prompt` now uses the metadata-aware fetch variant — `expansion_warnings` / `expanded_paths` / `paths_truncated` are no longer discarded; they're surfaced on `VerifyResponse` for every call. (2) When non-empty `target_paths` resolves to zero files, the endpoint raises `SnapshotResolutionError` → HTTP 422 with `{error: "snapshot_resolution_failed", snapshot_id, unresolved_paths, expansion_warnings}` (the MCP wrapper mirrors the same shape, parallel to `BlockingEvidenceTooLarge`). Partial resolution still produces a verdict — the warnings just show up on the response. (3) `_get_git_object_type` and `_git_ls_tree_z_name_only` now log git's stderr at WARN with `snapshot_id` + `path` instead of swallowing it under bare `except Exception: pass`, so operators can diagnose missing-fetch / unknown-revision cases.
 
