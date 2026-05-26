@@ -147,7 +147,17 @@ async def consult_council(
 
     Args:
         query: The question to ask the council.
-        confidence: Response quality level - "quick" (2 models, ~10s), "balanced" (3 models, ~25s), or "high" (full council, ~45s).
+        confidence: Tier for model selection and timeout budgets. One of:
+            - "quick"     - 2 fast models, ~30s server budget (per-model 20s)
+            - "balanced"  - 3 models, ~90s server budget (per-model 45s)
+            - "high"      - full council, ~180s server budget (per-model 90s) [default]
+            - "reasoning" - full council using slow reasoning models, ~600s server budget (per-model 300s)
+            Unknown values silently fall back to "high".
+            Note: "high" and "reasoning" can exceed typical MCP client transport
+            timeouts (Claude Code default ~60s). Set MCP_TIMEOUT (milliseconds)
+            in your client config to at least the tier's server budget when
+            using these tiers — otherwise the client will cut the connection
+            before the council finishes deliberating.
         include_details: If True, includes individual model responses and rankings.
         verdict_type: Type of verdict to render (ADR-025b Jury Mode):
             - "synthesis": Default behavior, unstructured natural language synthesis
