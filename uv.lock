@@ -1429,7 +1429,9 @@ http = [
     { name = "uvicorn" },
 ]
 mcp = [
+    { name = "fastapi" },
     { name = "mcp" },
+    { name = "uvicorn" },
 ]
 ollama = [
     { name = "litellm" },
@@ -1442,11 +1444,12 @@ secure = [
 requires-dist = [
     { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.100.0" },
     { name = "fastapi", marker = "extra == 'http'", specifier = ">=0.100.0" },
+    { name = "fastapi", marker = "extra == 'mcp'", specifier = ">=0.100.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "keyring", marker = "extra == 'secure'", specifier = ">=23.0.0" },
     { name = "litellm", marker = "extra == 'ollama'", specifier = ">=1.50.0" },
-    { name = "mcp", marker = "extra == 'all'", specifier = ">=1.22.0" },
-    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.22.0" },
+    { name = "mcp", marker = "extra == 'all'", specifier = ">=1.22.0,<1.27" },
+    { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.22.0,<1.27" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -1461,6 +1464,7 @@ requires-dist = [
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0.0" },
     { name = "uvicorn", marker = "extra == 'all'", specifier = ">=0.20.0" },
     { name = "uvicorn", marker = "extra == 'http'", specifier = ">=0.20.0" },
+    { name = "uvicorn", marker = "extra == 'mcp'", specifier = ">=0.20.0" },
     { name = "vcrpy", marker = "extra == 'dev'", specifier = ">=6.0.0" },
 ]
 provides-extras = ["all", "dev", "docs", "http", "mcp", "ollama", "secure"]

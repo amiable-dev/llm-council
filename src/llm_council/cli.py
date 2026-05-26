@@ -237,8 +237,8 @@ def serve_mcp():
     """
     try:
         from llm_council.mcp_server import mcp
-    except ImportError:
-        print("Error: MCP dependencies not installed.", file=sys.stderr)
+    except ImportError as e:
+        print(f"Error importing MCP server: {e}", file=sys.stderr)
         print("\nTo use the MCP server, install with:", file=sys.stderr)
         print("    pip install 'llm-council-core[mcp]'", file=sys.stderr)
         print("\nFor library-only usage, import directly:", file=sys.stderr)

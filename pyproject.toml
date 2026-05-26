@@ -42,7 +42,13 @@ dependencies = [
 # HTTP server dependencies - install with: pip install "llm-council-core[http]"
 http = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
 # MCP server dependencies - install with: pip install "llm-council-core[mcp]"
-mcp = ["mcp>=1.22.0"]
+# Transitive on [http] because llm_council.mcp_server imports
+# llm_council.verification.api, which imports fastapi; [http] also includes
+# uvicorn for running the HTTP server.
+mcp = [
+    "llm-council-core[http]",
+    "mcp>=1.22.0,<1.27",
+]
 # Secure key storage via system keychain - install with: pip install "llm-council-core[secure]"
 secure = ["keyring>=23.0.0"]
 # Ollama local LLM support via LiteLLM - install with: pip install "llm-council-core[ollama]"
