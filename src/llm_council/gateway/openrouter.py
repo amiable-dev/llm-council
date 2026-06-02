@@ -28,6 +28,7 @@ def _get_openrouter_api_key() -> str:
 OPENROUTER_API_KEY = _get_openrouter_api_key()
 
 from .base import (
+    DEFAULT_HEALTH_CHECK_MODEL,
     BaseRouter,
     HealthStatus,
     RouterCapabilities,
@@ -350,7 +351,7 @@ class OpenRouterGateway(BaseRouter):
         """
         # Use a fast, cheap model for health check
         result = await self._query_openrouter(
-            model="google/gemini-2.0-flash-001",
+            model=DEFAULT_HEALTH_CHECK_MODEL,
             messages=[{"role": "user", "content": "ping"}],
             timeout=10.0,
         )

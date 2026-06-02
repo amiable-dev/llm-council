@@ -15,6 +15,7 @@ from typing import AsyncIterator, Dict, Any, List, Optional
 import httpx
 
 from .base import (
+    DEFAULT_HEALTH_CHECK_MODEL,
     BaseRouter,
     HealthStatus,
     RouterCapabilities,
@@ -339,7 +340,7 @@ class RequestyGateway(BaseRouter):
         """
         # Use a fast, cheap model for health check
         result = await self._query_requesty(
-            model="google/gemini-2.0-flash-001",
+            model=DEFAULT_HEALTH_CHECK_MODEL,
             messages=[{"role": "user", "content": "ping"}],
             timeout=10.0,
         )

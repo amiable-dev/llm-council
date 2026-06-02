@@ -595,9 +595,9 @@ class DirectGateway(BaseRouter):
                     provider=provider,
                     model="gpt-4o-mini"
                     if provider == "openai"
-                    else "claude-3-5-haiku-20241022"
+                    else "claude-haiku-4-5"
                     if provider == "anthropic"
-                    else "gemini-2.0-flash-001",
+                    else "gemini-2.5-flash-lite",
                     messages=[{"role": "user", "content": "ping"}],
                     timeout=10.0,
                 )

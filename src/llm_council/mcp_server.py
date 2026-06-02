@@ -40,6 +40,7 @@ from llm_council.verification.transcript import (
 from llm_council.unified_config import get_config, get_api_key
 from llm_council.tier_contract import create_tier_contract
 from llm_council.openrouter import query_model_with_status, STATUS_OK
+from llm_council.gateway.base import DEFAULT_HEALTH_CHECK_MODEL
 
 
 def _get_council_models() -> list:
@@ -346,7 +347,7 @@ async def council_health_check() -> str:
         try:
             start = time.time()
             response = await query_model_with_status(
-                "google/gemini-2.0-flash-001",  # Fast and cheap
+                DEFAULT_HEALTH_CHECK_MODEL,  # Fast, cheap, GA probe model
                 [{"role": "user", "content": "ping"}],
                 timeout=10.0,
             )
@@ -355,7 +356,7 @@ async def council_health_check() -> str:
             checks["api_connectivity"] = {
                 "status": response["status"],
                 "latency_ms": latency_ms,
-                "test_model": "google/gemini-2.0-flash-001",
+                "test_model": DEFAULT_HEALTH_CHECK_MODEL,
             }
 
             if response["status"] == STATUS_OK:

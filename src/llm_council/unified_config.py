@@ -14,7 +14,7 @@ Example YAML configuration (llm_council.yaml):
         default: high
         pools:
           quick:
-            models: [openai/gpt-4o-mini, anthropic/claude-3-5-haiku-20241022]
+            models: [openai/gpt-5-mini, anthropic/claude-haiku-4.5]
             timeout_seconds: 30
       triage:
         enabled: false
@@ -180,7 +180,7 @@ class TierConfig(BaseModel):
                 models=[
                     "openai/gpt-5-mini",
                     "anthropic/claude-haiku-4.5",
-                    "google/gemini-3.1-flash-lite-preview",
+                    "google/gemini-3.1-flash-lite",
                     "deepseek/deepseek-v3.2",
                 ],
                 timeout_seconds=30,
@@ -190,7 +190,7 @@ class TierConfig(BaseModel):
                 models=[
                     "openai/gpt-5.4-mini",
                     "anthropic/claude-sonnet-4.6",
-                    "google/gemini-3.1-flash-lite-preview",
+                    "google/gemini-3.1-flash-lite",
                     "deepseek/deepseek-v3.2",
                 ],
                 timeout_seconds=90,
@@ -198,28 +198,28 @@ class TierConfig(BaseModel):
             "high": TierPoolConfig(
                 models=[
                     "openai/gpt-5.4",
-                    "anthropic/claude-opus-4.7",
+                    "anthropic/claude-opus-4.8",
                     "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v3.2-speciale",
+                    "deepseek/deepseek-v4-pro",
                 ],
                 timeout_seconds=180,
             ),
             "reasoning": TierPoolConfig(
                 models=[
                     "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.7",
+                    "anthropic/claude-opus-4.8",
                     "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v3.2-speciale",
+                    "deepseek/deepseek-r1",
                 ],
                 timeout_seconds=600,
             ),
             # ADR-027: Frontier tier for cutting-edge/preview models
             "frontier": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.7",
+                    "openai/gpt-5.5-pro",
+                    "anthropic/claude-opus-4.8",
                     "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v3.2-speciale",
+                    "deepseek/deepseek-v4-pro",
                 ],
                 timeout_seconds=600,
             ),
@@ -722,8 +722,8 @@ class CouncilConfig(BaseModel):
         default_factory=lambda: [
             "openai/gpt-5.4",
             "google/gemini-3.1-pro-preview",
-            "anthropic/claude-opus-4.7",
-            "deepseek/deepseek-v3.2-speciale",
+            "anthropic/claude-opus-4.8",
+            "deepseek/deepseek-v4-pro",
         ],
         alias="LLM_COUNCIL_MODELS",
     )

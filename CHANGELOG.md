@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.43] - 2026-06-02
+
+### Fixed
+
+- **Health check no longer reports a spurious "error" from a retired probe model** — `council_health_check` (and the OpenRouter / Requesty / direct gateway `health_check()` methods) probed connectivity with a hardcoded `google/gemini-2.0-flash-001`, which has since been retired from OpenRouter and now 404s. The probe failure surfaced as a health-check `error` / `ready: false` even when the council itself was perfectly healthy. The probe model is now a single shared constant `DEFAULT_HEALTH_CHECK_MODEL` in `gateway/base.py` (set to the current, cheap, GA `google/gemini-2.5-flash-lite`) referenced by all four call sites, so the next retirement is a one-line update instead of five scattered literals. The direct gateway's native-API probe ids were refreshed too (`claude-3-5-haiku-20241022` → `claude-haiku-4-5`, `gemini-2.0-flash-001` → `gemini-2.5-flash-lite`).
+- **Broken model in the `high` / `reasoning` / `frontier` tier pools** — those pools (and their code-level defaults in `tier_contract.py` / `unified_config.py`) referenced `deepseek/deepseek-v3.2-speciale`, which does not exist on OpenRouter and would fail at request time. Replaced with current DeepSeek models (`deepseek-v4-pro` for high/frontier, the reasoning-specialised `deepseek-r1` for reasoning).
+
+### Changed
+
+- **Tier model pools refreshed against the live OpenRouter catalogue (2026-06-02)** — every tier pool model was cross-checked against `https://openrouter.ai/api/v1/models`; all 20 pool entries plus the health probe now resolve both in the bundled registry and live on OpenRouter. Changes: `quick`/`balanced` move from the `gemini-3.1-flash-lite-preview` preview to the GA `gemini-3.1-flash-lite`; `high`/`reasoning`/`frontier` bump Anthropic from `claude-opus-4.7` to the newest `claude-opus-4.8` (same price); `frontier` bumps OpenAI to `gpt-5.5-pro`. Tier aggregators and the default council model list were updated to match. Registry (`models/registry.yaml`) bumped to v1.3 with `gpt-5.5-pro`, `claude-opus-4.8`, `gemini-3.1-flash-lite` (GA), `gemini-2.5-flash-lite`, and `deepseek-v4-pro` added; retired `gemini-2.0-flash-001` and non-existent `deepseek-v3.2-speciale` removed; stale `claude-opus-4.7` pricing corrected to live values.
+
 ## [0.24.42] - 2026-05-26
 
 ### Fixed

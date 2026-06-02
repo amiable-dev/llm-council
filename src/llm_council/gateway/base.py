@@ -12,6 +12,12 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from .types import GatewayRequest, GatewayResponse
 
+# Default model for gateway connectivity probes (health_check). Must be a
+# current, cheap, generally-available model. Update here when it is retired —
+# a 404 from a retired probe model otherwise surfaces as a spurious health-check
+# "error" even when the council itself is healthy (ADR-012).
+DEFAULT_HEALTH_CHECK_MODEL = "google/gemini-2.5-flash-lite"
+
 
 class HealthStatus(Enum):
     """Health status for a gateway router."""
