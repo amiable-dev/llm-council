@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`council_health_check` now reports the real API-key source** — `key_source` showed `"unknown"` whenever the key came from the macOS Keychain (ADR-013), because `mcp_server._get_key_source()` only checked the `OPENROUTER_API_KEY` env var. It now delegates to `unified_config.get_key_source()`, which tracks the actual resolution path, so a keychain-resolved key reports `"keychain"` (env still reports `"environment"`). Cosmetic only — key resolution itself already worked.
+
 ## [0.24.43] - 2026-06-02
 
 ### Fixed
