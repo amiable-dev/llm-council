@@ -37,7 +37,11 @@ from llm_council.verification.transcript import (
 )
 
 # ADR-032: Migrated to unified_config
-from llm_council.unified_config import get_config, get_api_key
+from llm_council.unified_config import (
+    get_config,
+    get_api_key,
+    get_key_source as _config_get_key_source,
+)
 from llm_council.tier_contract import create_tier_contract
 from llm_council.openrouter import query_model_with_status, STATUS_OK
 from llm_council.gateway.base import DEFAULT_HEALTH_CHECK_MODEL
@@ -75,13 +79,16 @@ def _get_tier_timeout(tier: str) -> dict:
 
 
 def _get_key_source() -> str:
-    """Determine the source of the API key."""
-    import os
+    """Report where the OpenRouter API key was resolved from (ADR-013).
 
-    if os.environ.get("OPENROUTER_API_KEY"):
-        return "environment"
-    # Could add keychain detection here
-    return "unknown"
+    Delegates to unified_config's source tracking, which distinguishes
+    "environment", "keychain", "config_file", etc. — instead of only
+    detecting the env var and otherwise reporting "unknown". Re-resolving
+    here makes the reported source deterministic for the OpenRouter key
+    regardless of intervening resolutions for other providers.
+    """
+    get_api_key("openrouter")
+    return _config_get_key_source()
 
 
 # Module-level function for backwards compatibility with tests

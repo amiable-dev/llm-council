@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.44] - 2026-06-02
+
+### Fixed
+
+- **`verify` no longer crashes when the chairman synthesis is empty/None** — `extract_verdict_from_synthesis` and `extract_blocking_issues` read the synthesis via `stage3_result.get("response", "")`, but the `"response"` key is normally present with a `None` value (e.g. a reasoning-only model returning null content, or a partial/timed-out stage 3), so the `""` default never applied. `None.upper()` / `re.finditer(pattern, None)` then raised `AttributeError: 'NoneType' object has no attribute 'upper'` (surfaced to MCP callers as a generic crash), instead of degrading to an `"unclear"` verdict the way a *missing* key already did. Both extractors now coalesce a missing/None synthesis to `""`. Regression tests added in `tests/unit/verification/test_verdict_extractor.py`.
+- **`council_health_check` now reports the real API-key source** — `key_source` showed `"unknown"` whenever the key came from the macOS Keychain (ADR-013), because `mcp_server._get_key_source()` only checked the `OPENROUTER_API_KEY` env var. It now delegates to `unified_config.get_key_source()`, which tracks the actual resolution path, so a keychain-resolved key reports `"keychain"` (env still reports `"environment"`). Cosmetic only — key resolution itself already worked.
+
 ## [0.24.43] - 2026-06-02
 
 ### Fixed
