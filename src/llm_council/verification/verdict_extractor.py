@@ -48,7 +48,12 @@ def extract_verdict_from_synthesis(
         - verdict: "pass", "fail", or "unclear"
         - base_confidence: 0.0-1.0 based on signal strength
     """
-    response = stage3_result.get("response", "")
+    # Coalesce a missing/None synthesis to "" so an empty, failed, or partial
+    # stage 3 (e.g. a reasoning-only model returning null content, or a
+    # timed-out synthesis) degrades to an "unclear" verdict instead of raising
+    # AttributeError. `.get("response", "")` is insufficient: the key is usually
+    # present with a None value, so the "" default never applies.
+    response = (stage3_result or {}).get("response") or ""
     response_upper = response.upper()
 
     # Check for explicit verdict markers
@@ -267,7 +272,10 @@ def extract_blocking_issues(
     Returns:
         List of blocking issue dictionaries with severity, description, location
     """
-    response = stage3_result.get("response", "")
+    # Same None-coalescing as extract_verdict_from_synthesis: a None synthesis
+    # would otherwise make re.finditer() raise on a non-string. Treat empty/None
+    # as "no blocking issues found".
+    response = (stage3_result or {}).get("response") or ""
     issues: List[Dict[str, Any]] = []
 
     # Look for critical/major/minor issue patterns
