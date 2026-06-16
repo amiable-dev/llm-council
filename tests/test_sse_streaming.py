@@ -14,6 +14,25 @@ import pytest
 from llm_council.webhooks.types import WebhookEventType
 
 
+def _route_paths(app):
+    """All registered route paths, flattening Starlette 1.x nested routers.
+
+    Starlette 1.x wraps ``include_router`` results in an ``_IncludedRouter``
+    with no ``.path`` (its sub-routes carry the paths), so a flat
+    ``[r.path for r in app.routes]`` raises ``AttributeError`` there. Walk the
+    route tree recursively so this works on both Starlette 0.x and 1.x.
+    """
+    paths = []
+    stack = list(app.routes)
+    while stack:
+        route = stack.pop()
+        path = getattr(route, "path", None)
+        if path is not None:
+            paths.append(path)
+        stack.extend(getattr(route, "routes", None) or [])
+    return paths
+
+
 class TestCouncilRunnerEventGeneration:
     """Test that council runner yields real events during deliberation."""
 
@@ -288,7 +307,7 @@ class TestHTTPEndpoint:
         from llm_council.http_server import app
 
         # Find the route
-        routes = [route.path for route in app.routes]
+        routes = _route_paths(app)
         assert "/v1/council/stream" in routes
 
     @pytest.mark.asyncio
