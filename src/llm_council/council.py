@@ -1557,6 +1557,27 @@ STAGE 2 - Peer Rankings:
     )
 
 
+def _coerce_score(value: Any) -> float:
+    """Best-effort coercion of a model-emitted score to a float.
+
+    Model output is untrusted (Dict[str, Any]); a score may arrive as an int,
+    float, numeric string ("9", "9.5") or junk ("N/A", "", None). Numeric
+    values pass through; anything non-numeric coerces to the lowest possible
+    value so it sorts last without raising (#354).
+    """
+    if isinstance(value, bool):
+        # bool is a subclass of int; treat as non-numeric for scoring.
+        return float("-inf")
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except (ValueError, AttributeError):
+            return float("-inf")
+    return float("-inf")
+
+
 def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bool:
     """Detect if ranking order contradicts score order.
 
@@ -1580,8 +1601,12 @@ def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bo
     if len(ranked_with_scores) < 2:
         return False
 
-    # Get score-based ordering (highest score first)
-    score_order = sorted(ranked_with_scores, key=lambda x: -scores.get(x, 0))
+    # Get score-based ordering (highest score first).
+    # Scores originate from parsed model output (Dict[str, Any]); a model may
+    # emit a score as a string ("9", "N/A", "") which previously crashed the
+    # whole verification with `bad operand type for unary -: 'str'` (#354).
+    # Coerce defensively: non-numeric values sort lowest.
+    score_order = sorted(ranked_with_scores, key=lambda x: -_coerce_score(scores.get(x)))
 
     # Compare to ranking order
     return ranked_with_scores != score_order

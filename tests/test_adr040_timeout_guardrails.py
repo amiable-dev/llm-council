@@ -314,7 +314,9 @@ class TestGlobalTimeoutWrapper:
         """VERIFICATION_TIMEOUT_MULTIPLIER should be defined."""
         from llm_council.verification.api import VERIFICATION_TIMEOUT_MULTIPLIER
 
-        assert VERIFICATION_TIMEOUT_MULTIPLIER == 1.5
+        # Raised to 2.0 so the chairman synthesis stage is not starved on slow
+        # days (balanced: stage1+stage2 alone could consume the old 135s).
+        assert VERIFICATION_TIMEOUT_MULTIPLIER == 2.0
 
     @pytest.mark.asyncio
     async def test_global_deadline_uses_tier_contract(self):

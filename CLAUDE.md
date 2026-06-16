@@ -61,7 +61,7 @@ Observability & telemetry
 - `observability/` (ADR-030 metrics export — StatsD/Prometheus/NoOp), `telemetry.py` / `telemetry_client.py`, `webhooks/`.
 
 Verification (ADR-034/040/041) — `verification/api.py`
-- `run_verification()` wraps `_run_verification_pipeline()` (stages 1–3) in `asyncio.wait_for()` with a global deadline = `tier_contract.deadline_ms/1000 × 1.5` (`VERIFICATION_TIMEOUT_MULTIPLIER`).
+- `run_verification()` wraps `_run_verification_pipeline()` (stages 1–3) in `asyncio.wait_for()` with a global deadline = `tier_contract.deadline_ms/1000 × 2.0` (`VERIFICATION_TIMEOUT_MULTIPLIER`; raised from 1.5 so stage 3 isn't starved on slow days — balanced 180s, high 360s). On timeout, if stage 2 completed, the partial result salvages an advisory rubric/confidence signal (verdict stays `unclear`).
 - **Waterfall time budget (ADR-040):** stage1 = 50% of remaining, stage2 = 70% of what's left, stage3 = the rest; each capped by `tier_timeout["per_model"]`.
 - **Durable partial state:** `partial_state` is updated after each stage and survives `CancelledError`, so a timeout still returns `completed_stages`. `VerifyResponse` carries `timeout_fired`, `completed_stages`, and (ADR-041) `timing` / `input_metrics`.
 - **Per-tier input caps** `TIER_MAX_CHARS` (quick 15K, balanced 30K, high/reasoning 50K). Per-file truncation (#342) is surfaced as an `expansion_warnings` entry rather than silently dropped; `reasoning`/`high` can read a full 50K file.

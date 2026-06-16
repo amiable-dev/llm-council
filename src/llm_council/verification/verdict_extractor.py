@@ -278,11 +278,24 @@ def extract_blocking_issues(
     response = (stage3_result or {}).get("response") or ""
     issues: List[Dict[str, Any]] = []
 
-    # Look for critical/major/minor issue patterns
-    # Pattern: "CRITICAL:", "MAJOR:", "MINOR:" followed by description
-    issue_pattern = r"(?P<severity>CRITICAL|MAJOR|MINOR)[:\s]+(?P<description>[^\n]+)"
+    # Look for *genuinely marked* critical/major/minor issues only.
+    #
+    # The previous pattern `(CRITICAL|MAJOR|MINOR)[:\s]+(...)` matched the bare
+    # word anywhere in prose, so approval text like "the critical issues have
+    # been resolved" or "No blocking issues were identified" was extracted as a
+    # CRITICAL blocking issue, fabricating gate-blocking findings (#355).
+    #
+    # A real marker is the severity token at the start of a line (optionally
+    # bulleted and/or bold-wrapped) immediately followed by a colon, e.g.
+    # "- **CRITICAL**: ...", "MAJOR: ...". Mid-sentence "critical issues" (a
+    # word, not a colon, follows) no longer matches.
+    issue_pattern = (
+        r"^\s*(?:[-*]\s+)?(?:\*\*)?"
+        r"(?P<severity>CRITICAL|MAJOR|MINOR)"
+        r"(?:\*\*)?\s*:\s+(?P<description>[^\n]+)"
+    )
 
-    for match in re.finditer(issue_pattern, response, re.IGNORECASE):
+    for match in re.finditer(issue_pattern, response, re.IGNORECASE | re.MULTILINE):
         severity = match.group("severity").lower()
         description = match.group("description").strip()
 
@@ -303,11 +316,42 @@ def extract_blocking_issues(
     return issues
 
 
+def _verdict_from_structured(
+    verdict_result: Optional[Any],
+) -> Optional[Tuple[str, float]]:
+    """Map a structured BINARY ``VerdictResult`` to (verdict, confidence).
+
+    Returns ``("pass"|"fail", confidence)`` when ``verdict_result`` is a valid
+    binary verdict ("approved"/"rejected"), else ``None`` so the caller falls
+    back to prose-based extraction. Defensive against malformed objects so a
+    bad verdict object never crashes verification.
+    """
+    if verdict_result is None:
+        return None
+    raw = getattr(verdict_result, "verdict", None)
+    if not isinstance(raw, str):
+        return None
+    raw = raw.strip().lower()
+    if raw == "approved":
+        verdict = "pass"
+    elif raw == "rejected":
+        verdict = "fail"
+    else:
+        return None
+    try:
+        confidence = round(float(getattr(verdict_result, "confidence", 0.0)), 2)
+    except (TypeError, ValueError):
+        confidence = 0.0
+    confidence = max(0.0, min(1.0, confidence))
+    return verdict, confidence
+
+
 def build_verification_result(
     stage1_results: List[Dict[str, Any]],
     stage2_results: List[Dict[str, Any]],
     stage3_result: Dict[str, Any],
     confidence_threshold: float = 0.7,
+    verdict_result: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Build complete verification result from council stages.
@@ -320,25 +364,33 @@ def build_verification_result(
         stage2_results: Peer review rankings with rubric scores
         stage3_result: Chairman synthesis
         confidence_threshold: Minimum confidence for PASS verdict
+        verdict_result: Optional structured BINARY ``VerdictResult`` produced by
+            the chairman (ADR-025b). When present and valid this is authoritative
+            (#355): the council's own go/no-go decision is trusted over a fragile
+            regex over the synthesis prose, which mis-reads negated mentions
+            ("no failures", "critical issues resolved") as rejection signals.
 
     Returns:
         Verification result dictionary
     """
-    # Extract verdict from synthesis
-    verdict, base_confidence = extract_verdict_from_synthesis(stage3_result)
-
-    # Extract rubric scores from rankings
     rubric_scores = extract_rubric_scores_from_rankings(stage2_results)
 
-    # Calculate refined confidence from agreement
-    agreement_confidence = calculate_confidence_from_agreement(stage2_results, verdict)
-
-    # Final confidence is weighted average of synthesis confidence and agreement
-    confidence = round((base_confidence * 0.4) + (agreement_confidence * 0.6), 2)
-
-    # Apply confidence threshold
-    if verdict == "pass" and confidence < confidence_threshold:
-        verdict = "unclear"
+    structured_verdict = _verdict_from_structured(verdict_result)
+    if structured_verdict is not None:
+        # Trust the council's structured BINARY verdict.
+        verdict, confidence = structured_verdict
+        # An explicit approval whose self-reported confidence is below the gate
+        # threshold is the only case we soften to "unclear".
+        if verdict == "pass" and confidence < confidence_threshold:
+            verdict = "unclear"
+    else:
+        # Fallback: legacy regex extraction over the synthesis prose.
+        verdict, base_confidence = extract_verdict_from_synthesis(stage3_result)
+        agreement_confidence = calculate_confidence_from_agreement(stage2_results, verdict)
+        # Weighted average of synthesis confidence and reviewer agreement.
+        confidence = round((base_confidence * 0.4) + (agreement_confidence * 0.6), 2)
+        if verdict == "pass" and confidence < confidence_threshold:
+            verdict = "unclear"
 
     # Extract blocking issues (only for fail/unclear)
     blocking_issues = []

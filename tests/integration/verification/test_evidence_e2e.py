@@ -13,6 +13,25 @@ from fastapi.testclient import TestClient
 from llm_council.verification.api import _build_verification_prompt
 
 
+def _route_paths(app):
+    """All registered route paths, flattening Starlette 1.x nested routers.
+
+    Starlette 1.x wraps ``include_router`` results in an ``_IncludedRouter``
+    with no ``.path`` (its sub-routes carry the paths), so a flat
+    ``[r.path for r in app.routes]`` raises ``AttributeError`` there. Walk the
+    route tree recursively so this works on both Starlette 0.x and 1.x.
+    """
+    paths = []
+    stack = list(app.routes)
+    while stack:
+        route = stack.pop()
+        path = getattr(route, "path", None)
+        if path is not None:
+            paths.append(path)
+        stack.extend(getattr(route, "routes", None) or [])
+    return paths
+
+
 GOLDEN_HASHES = Path(__file__).parent / "golden_prompts"
 
 
@@ -294,7 +313,7 @@ def client():
     from llm_council.http_server import app
     from llm_council.verification.api import router as verify_router
 
-    router_paths = [route.path for route in app.routes]
+    router_paths = _route_paths(app)
     if "/v1/council/verify" not in router_paths:
         app.include_router(verify_router, prefix="/v1/council")
     return TestClient(app)
