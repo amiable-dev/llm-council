@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.45] - 2026-06-16
+
+Verify-gate robustness pass, from a real epic-loop session that "kept reporting council timeouts." Investigation of the live transcripts and `.council/logs` found the council server healthy — the pain was four distinct verify-layer defects conflated as "timeouts". All four are fixed here.
+
+### Fixed
+
+- **`verify` no longer crashes with `bad operand type for unary -: 'str'`** ([#354](https://github.com/amiable-dev/llm-council/issues/354)) — `detect_score_rank_mismatch` (`council.py`) sorted candidate labels with `key=lambda x: -scores.get(x, 0)`. `scores` is `Dict[str, Any]` populated from untrusted model output; when a model emits a score as a string (`"9"`, `"N/A"`, `""`) the unary minus raised `TypeError` and aborted the entire verification with **no verdict produced** (the intermittent, input-size-correlated "internal crash" seen in real usage). Scores are now coerced via a new `_coerce_score()` helper — numeric values pass through, non-numeric sort lowest, nothing raises.
+- **`verify` no longer reports FAIL/UNCLEAR for changes the council approved** ([#355](https://github.com/amiable-dev/llm-council/issues/355)) — two compounding bugs in the verdict layer. (1) The pipeline already obtains the chairman's **structured BINARY verdict** (`verdict_result` from `stage3_synthesize_final`, ADR-025b) but `build_verification_result` discarded it and re-derived the verdict with a naive prose regex that fires on *negated* mentions ("no **failures**", "**critical** issues resolved") — across 44 persisted real runs only 1 passed despite frequent unanimous approvals. The structured verdict is now authoritative; regex extraction is a fallback only. (2) `extract_blocking_issues` matched the bare word `CRITICAL|MAJOR|MINOR` anywhere in prose (`[:\s]+`), so approval text like "the critical issues have been resolved" and "No blocking issues were identified" was fabricated into `CRITICAL` blockers that drove false gate failures. It now requires a genuine line-anchored, colon-delimited marker (`- **CRITICAL**: …`).
+- **Timeout and input-cap verifications are now persisted to `.council/logs`** ([#356](https://github.com/amiable-dev/llm-council/issues/356)) — the input-cap and `asyncio.TimeoutError` early-return paths returned a result without ever calling `store.write_stage(..., "result", …)`, so timeouts (the dominant real-world failure mode) left **no `result.json`** and were un-investigable after the fact. Both paths now persist via a best-effort `_persist_result_safe()` (a store error never escalates a degraded result into a hard failure).
+
+### Changed
+
+- **Input-cap rejection is now a distinct, non-verdict signal** ([#357](https://github.com/amiable-dev/llm-council/issues/357)) — an over-cap payload (e.g. 31K chars at the 30K `balanced` limit) previously returned `verdict="unclear"`/`exit_code=2`, indistinguishable from a deliberated UNCLEAR. Automation that treats UNCLEAR as "accept & proceed" (e.g. epic-loop) would therefore let an **unreviewed oversized input silently pass the gate**. The result now carries `error="input_too_large"` (surfaced on `VerifyResponse`), and the formatted output renders a distinct **"INPUT TOO LARGE — the council did not run"** banner instead of a verdict.
+
 ## [0.24.44] - 2026-06-02
 
 ### Fixed

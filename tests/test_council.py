@@ -272,6 +272,34 @@ def test_detect_score_rank_mismatch():
     assert detect_score_rank_mismatch(ranking, scores) is False
 
 
+def test_detect_score_rank_mismatch_string_scores_does_not_crash():
+    """Regression (#354): a model can emit scores as strings ("9", "N/A", "").
+
+    The old sort key did ``-scores.get(x, 0)`` which raised
+    ``TypeError: bad operand type for unary -: 'str'`` and crashed the whole
+    verification with no verdict. String/None scores must be coerced safely.
+    """
+    from llm_council.council import detect_score_rank_mismatch
+
+    ranking = ["Response A", "Response B", "Response C"]
+
+    # Numeric strings: A(7) < B(9) contradicts ranking A > B -> mismatch, no crash
+    scores = {"Response A": "7", "Response B": "9", "Response C": "5"}
+    assert detect_score_rank_mismatch(ranking, scores) is True
+
+    # Numeric strings in ranking order -> no mismatch
+    scores = {"Response A": "9", "Response B": "7", "Response C": "5"}
+    assert detect_score_rank_mismatch(ranking, scores) is False
+
+    # Non-numeric / None / empty values must not raise; treated as lowest
+    scores = {"Response A": "N/A", "Response B": None, "Response C": ""}
+    assert detect_score_rank_mismatch(ranking, scores) in (True, False)
+
+    # Mixed numeric and junk: 9.5 (float str) vs "bad" vs 3
+    scores = {"Response A": "9.5", "Response B": "bad", "Response C": 3}
+    assert detect_score_rank_mismatch(ranking, scores) in (True, False)
+
+
 def test_parse_ranking_detects_mismatch():
     """Test that parse_ranking_from_text flags score/rank mismatches."""
     # Mismatched: ranking says B > A > C, but scores say A > B > C

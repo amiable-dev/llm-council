@@ -48,6 +48,28 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     """
     lines: List[str] = []
 
+    # #357: an input-cap rejection is NOT a deliberated verdict — surface it as
+    # a distinct banner so a caller (or an agent) never mistakes the resulting
+    # "unclear" for a gate the council actually evaluated.
+    if result.get("error") == "input_too_large":
+        lines.append("Council Verification Result: INPUT TOO LARGE 🚫")
+        lines.append("")
+        lines.append(
+            "> The council **did not run** — the input exceeded the tier's size "
+            "limit, so this is NOT a pass/fail/unclear verdict and must not be "
+            "treated as a passed gate. Reduce scope, split the input, or use a "
+            "higher tier."
+        )
+        lines.append("")
+        rationale = result.get("rationale", "")
+        if rationale:
+            lines.append(f"**Detail**: {rationale}")
+            lines.append("")
+        transcript = result.get("transcript_location", "")
+        if transcript:
+            lines.append(f"**Transcript**: {transcript}")
+        return "\n".join(lines)
+
     # Header with verdict and emoji
     verdict = result.get("verdict", "unclear").lower()
     emoji = VERDICT_EMOJIS.get(verdict, "❓")

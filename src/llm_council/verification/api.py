@@ -356,6 +356,12 @@ class VerifyResponse(BaseModel):
         default=False,
         description="True if result is partial (timeout/error)",
     )
+    # #357: distinguishes a non-deliberated failure (e.g. "input_too_large")
+    # from a real verdict so callers don't treat it as a passed/accepted gate.
+    error: Optional[str] = Field(
+        default=None,
+        description="Non-verdict error marker (e.g. 'input_too_large'); None for a real verdict",
+    )
     # ADR-040: Timeout guardrail fields
     timeout_fired: bool = Field(
         default=False,
@@ -413,6 +419,21 @@ def _verdict_to_exit_code(verdict: str) -> int:
         return 1
     else:  # unclear
         return 2
+
+
+def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any]) -> None:
+    """Best-effort persist of a final ``result.json`` for early-return paths.
+
+    The happy path writes the result via ``store.write_stage(..., "result", ...)``;
+    the input-cap and timeout early returns previously skipped it, so those
+    outcomes vanished from ``.council/logs`` and could not be audited (#356).
+    Persistence must never turn a degraded result into a hard failure, so any
+    store error is swallowed.
+    """
+    try:
+        store.write_stage(verification_id, "result", result)
+    except Exception:
+        logger.debug("Failed to persist partial/timeout result.json", exc_info=True)
 
 
 # Maximum characters per file to include in prompt.
@@ -1952,6 +1973,9 @@ async def _run_verification_pipeline(
         stage2_results,
         stage3_result,
         confidence_threshold=request.confidence_threshold,
+        # #355: prefer the chairman's structured BINARY verdict over a regex
+        # over the synthesis prose. ``verdict_result`` is parsed in Stage 3.
+        verdict_result=verdict_result,
     )
 
     verdict = verification_output["verdict"]
@@ -2084,23 +2108,31 @@ async def run_verification(
         # ADR-040 Step 5: Tiered input size limit check
         max_chars = TIER_MAX_CHARS.get(request.tier, 50000)
         if len(verification_query) > max_chars:
-            return {
+            # #357: this is NOT a deliberated verdict — the council never ran.
+            # Carry a distinct `error` marker so automation cannot mistake an
+            # unreviewed oversized input for a passed/accepted gate.
+            cap_result = {
                 "verification_id": verification_id,
                 "verdict": "unclear",
                 "confidence": 0.0,
                 "exit_code": 2,
+                "error": "input_too_large",
                 "rubric_scores": {},
                 "blocking_issues": [],
                 "rationale": (
                     f"Input size ({len(verification_query)} chars) exceeds "
                     f"{request.tier} tier limit ({max_chars} chars). "
-                    f"Consider reducing scope or using a higher tier."
+                    f"The council did not run. Reduce scope, split the input, "
+                    f"or use a higher tier."
                 ),
                 "transcript_location": str(transcript_dir),
                 "partial": True,
                 "timeout_fired": False,
                 "completed_stages": [],
             }
+            # #356: persist so input-cap rejections are auditable in the logs.
+            _persist_result_safe(store, verification_id, cap_result)
+            return cap_result
 
         # ADR-040 Step 6: Pre-flight info as first progress callback
         if on_progress:
@@ -2168,7 +2200,7 @@ async def run_verification(
             completed = partial_state["completed_stages"]
             stage_timings = partial_state.get("stage_timings", {})
             global_deadline_ms = int(global_deadline * 1000)
-            return {
+            timeout_result = {
                 "verification_id": verification_id,
                 "verdict": "unclear",
                 "confidence": 0.0,
@@ -2231,6 +2263,10 @@ async def run_verification(
                     or None
                 ),
             }
+            # #356: persist the partial/timeout result so timeouts (the dominant
+            # real-world failure mode) are not lost from the transcript logs.
+            _persist_result_safe(store, verification_id, timeout_result)
+            return timeout_result
 
 
 @router.post("/verify", response_model=VerifyResponse)

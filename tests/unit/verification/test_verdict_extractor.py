@@ -9,10 +9,21 @@ extractors must degrade to an "unclear"/empty result instead of raising
 
 import pytest
 
+from llm_council.verdict import VerdictResult, VerdictType
 from llm_council.verification.verdict_extractor import (
+    build_verification_result,
     extract_blocking_issues,
     extract_verdict_from_synthesis,
 )
+
+
+def _binary(verdict: str, confidence: float, rationale: str = "ok") -> VerdictResult:
+    return VerdictResult(
+        verdict_type=VerdictType.BINARY,
+        verdict=verdict,
+        confidence=confidence,
+        rationale=rationale,
+    )
 
 
 class TestExtractVerdictFromSynthesisHandlesNone:
@@ -49,3 +60,85 @@ class TestExtractBlockingIssuesHandlesNone:
         )
         assert len(issues) == 1
         assert issues[0]["severity"] == "critical"
+
+
+# ---------------------------------------------------------------------------
+# #355: blocking-issue extraction must not turn approval/resolution prose into
+# fabricated CRITICAL blockers.
+# ---------------------------------------------------------------------------
+class TestBlockingIssueMisparse:
+    @pytest.mark.parametrize(
+        "prose",
+        [
+            # Real strings observed in persisted result.json files.
+            "The previously identified critical issues (double-tap race condition "
+            "in advance() and modulo-zero crash) have been verifiably resolved.",
+            "No blocking issues were identified.",
+            "Both critical issues are fixed: advance() uses an answerRevealed guard.",
+            "The council found no critical bugs and approved the change.",
+            "This addresses a major refactor with minor cleanup throughout.",
+        ],
+    )
+    def test_approval_prose_is_not_a_blocking_issue(self, prose):
+        assert extract_blocking_issues({"response": prose}) == []
+
+    def test_genuine_marked_issue_is_extracted(self):
+        text = (
+            "Summary of findings:\n"
+            "- **CRITICAL**: SQL injection in handler.py:42\n"
+            "MAJOR: missing auth check\n"
+            "The critical issues above must be fixed."  # prose tail -> ignored
+        )
+        issues = extract_blocking_issues({"response": text})
+        sevs = sorted(i["severity"] for i in issues)
+        assert sevs == ["critical", "major"]
+
+
+# ---------------------------------------------------------------------------
+# #355: prefer the council's structured BINARY verdict over prose regex.
+# ---------------------------------------------------------------------------
+class TestStructuredVerdictPreferred:
+    def test_approved_verdict_yields_pass_despite_negation_prose(self):
+        # Prose mentions "failures"/"critical" which the legacy regex misreads
+        # as rejection; the structured verdict is authoritative.
+        stage3 = {
+            "response": (
+                "The council unanimously approved the change. The previously "
+                "identified critical issues have been verifiably resolved and "
+                "no failures remain."
+            )
+        }
+        result = build_verification_result(
+            [], [], stage3, confidence_threshold=0.7,
+            verdict_result=_binary("approved", 0.95),
+        )
+        assert result["verdict"] == "pass"
+        assert result["confidence"] == 0.95
+        assert result["blocking_issues"] == []
+
+    def test_rejected_verdict_yields_fail(self):
+        stage3 = {"response": "Rejected.\n- **CRITICAL**: data loss in sync.py:9"}
+        result = build_verification_result(
+            [], [], stage3, verdict_result=_binary("rejected", 0.9),
+        )
+        assert result["verdict"] == "fail"
+        assert any(i["severity"] == "critical" for i in result["blocking_issues"])
+
+    def test_approved_low_confidence_downgrades_to_unclear(self):
+        result = build_verification_result(
+            [], [], {"response": "approved"}, confidence_threshold=0.7,
+            verdict_result=_binary("approved", 0.5),
+        )
+        assert result["verdict"] == "unclear"
+
+    def test_no_structured_verdict_falls_back_to_regex(self):
+        # Backward compatibility: without verdict_result, the legacy regex path
+        # drives the verdict (with realistic high-scoring reviews).
+        stage2 = [
+            {"rubric_scores": {"accuracy": 9, "completeness": 9, "clarity": 9}},
+            {"rubric_scores": {"accuracy": 9, "completeness": 8, "clarity": 9}},
+        ]
+        result = build_verification_result(
+            [], stage2, {"response": "The implementation is APPROVED."},
+        )
+        assert result["verdict"] == "pass"
