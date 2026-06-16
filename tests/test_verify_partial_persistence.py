@@ -132,3 +132,54 @@ class TestTimeoutPersistence:
         assert len(writes) == 1
         assert writes[0]["timeout_fired"] is True
         assert writes[0]["partial"] is True
+
+    @pytest.mark.asyncio
+    async def test_timeout_salvages_advisory_from_completed_stage2(self):
+        """When stage 3 is starved but stage 2 finished, recover an advisory
+        signal (rubric scores + agreement confidence) instead of a bare
+        unclear/0.0 — #356 graceful degradation."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from llm_council.verification.api import run_verification, VerifyRequest
+
+        request = VerifyRequest(snapshot_id="abc1234", tier="balanced")
+
+        async def stage2_then_hang(*args, **kwargs):
+            partial_state = kwargs.get("partial_state", args[9] if len(args) > 9 else {})
+            partial_state["completed_stages"].extend(["stage1", "stage2"])
+            partial_state["stage1_results"] = [{"model": "m1", "response": "ok"}]
+            partial_state["stage2_results"] = [
+                {"rubric_scores": {"accuracy": 9, "completeness": 8, "clarity": 9}},
+                {"rubric_scores": {"accuracy": 9, "completeness": 8, "clarity": 8}},
+            ]
+            await asyncio.sleep(9999)  # stage 3 never runs
+
+        with (
+            patch("llm_council.verification.api.VerificationContextManager") as mock_ctx_mgr,
+            patch(
+                "llm_council.verification.api._build_verification_prompt",
+                new_callable=AsyncMock,
+                return_value=("short prompt", {"kept": [], "warnings": []}),
+            ),
+            patch(
+                "llm_council.verification.api._run_verification_pipeline",
+                side_effect=stage2_then_hang,
+            ),
+            patch("llm_council.verification.api.VERIFICATION_TIMEOUT_MULTIPLIER", 0.001),
+        ):
+            mock_ctx = MagicMock()
+            mock_ctx.context_id = "test-ctx"
+            mock_ctx_mgr.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            mock_ctx_mgr.return_value.__exit__ = MagicMock(return_value=False)
+
+            mock_store = MagicMock()
+            mock_store.create_verification_directory.return_value = "/tmp/test"
+
+            result = await run_verification(request, mock_store)
+
+        assert result["timeout_fired"] is True
+        assert result["verdict"] == "unclear"  # no chairman decision -> still unclear
+        # ...but salvaged: rubric scores recovered and confidence reflects agreement.
+        assert result["rubric_scores"].get("accuracy") == 9.0
+        assert result["confidence"] > 0.0
+        assert "advisory" in result["rationale"].lower()

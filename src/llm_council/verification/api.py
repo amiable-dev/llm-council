@@ -639,8 +639,13 @@ GARBAGE_FILENAMES: Set[str] = frozenset(
 # ADR-040: Timeout Guardrail Constants
 # =============================================================================
 
-# Multiplier for global deadline: tier_contract.deadline_ms * MULTIPLIER
-VERIFICATION_TIMEOUT_MULTIPLIER = 1.5
+# Multiplier for global deadline: tier_contract.deadline_ms * MULTIPLIER.
+# Raised 1.5 -> 2.0: at 1.5 a slow day on the `balanced` tier (stage1 ~62s +
+# stage2 ~73s) consumed the entire 135s deadline before stage 3 (the chairman
+# verdict) even started, so the gate timed out with no verdict. 2.0 gives
+# balanced 180s and high 360s so synthesis has room to run; the timeout path
+# additionally salvages an advisory signal from completed stages (see below).
+VERIFICATION_TIMEOUT_MULTIPLIER = 2.0
 
 # Per-tier maximum input characters (prompt size guardrails)
 TIER_MAX_CHARS: Dict[str, int] = {
@@ -2200,18 +2205,43 @@ async def run_verification(
             completed = partial_state["completed_stages"]
             stage_timings = partial_state.get("stage_timings", {})
             global_deadline_ms = int(global_deadline * 1000)
+
+            # #356 graceful degradation: if stage 2 (peer review) finished before
+            # the chairman was starved, salvage an *advisory* signal — the rubric
+            # scores and reviewer-agreement confidence — instead of a bare
+            # unclear/0.0. The verdict stays "unclear" (no chairman go/no-go was
+            # reached), but the caller gets something actionable rather than a
+            # blank gate. Best-effort: any failure falls back to the empty result.
+            salvaged_rubric: Dict[str, Any] = {}
+            salvaged_confidence = 0.0
+            advisory_note = ""
+            try:
+                stage2_results = partial_state.get("stage2_results")
+                if stage2_results:
+                    salvaged_rubric = extract_rubric_scores_from_rankings(stage2_results)
+                    salvaged_confidence = calculate_confidence_from_agreement(
+                        stage2_results, "unclear"
+                    )
+                    advisory_note = (
+                        " Advisory only: rubric scores and confidence were recovered "
+                        "from completed peer review (stage 2); the chairman synthesis "
+                        "(stage 3) did not finish, so no pass/fail verdict was rendered."
+                    )
+            except Exception:
+                logger.debug("Failed to salvage advisory signal on timeout", exc_info=True)
+
             timeout_result = {
                 "verification_id": verification_id,
                 "verdict": "unclear",
-                "confidence": 0.0,
+                "confidence": salvaged_confidence,
                 "exit_code": 2,
-                "rubric_scores": {},
+                "rubric_scores": salvaged_rubric,
                 "blocking_issues": [],
                 "rationale": (
                     f"Verification timed out after {global_deadline:.0f}s "
                     f"(tier={request.tier}, deadline={tier_contract.deadline_ms}ms "
                     f"x {VERIFICATION_TIMEOUT_MULTIPLIER} multiplier). "
-                    f"Completed stages: {completed}. "
+                    f"Completed stages: {completed}.{advisory_note} "
                     f"Consider using a faster tier or reducing input scope."
                 ),
                 "transcript_location": str(transcript_dir),
