@@ -8,8 +8,8 @@ them with zero custom mapping:
 
 - ``gen_ai.client.token.usage`` — histogram, tagged ``gen_ai.token.type``
   (input|output), ``gen_ai.request.model``, ``gen_ai.operation.name``.
-- ``llm_council.cost.usd`` — gauge (namespaced until a GenAI-standard cost
-  metric stabilizes), tagged by model.
+- ``llm_council.cost.usd`` — histogram (namespaced until a GenAI-standard cost
+  metric stabilizes; a histogram so per-run costs sum across time), tagged by model.
 
 Never raises: telemetry must not break a council run (ADR-041).
 """
@@ -44,6 +44,7 @@ def emit_usage_metrics(usage: Optional[Dict[str, Any]], adapter: Any = None) -> 
         logger.debug("emit_usage_metrics: no adapter (ignored): %s", exc)
         return
     if backend is None:
+        logger.debug("emit_usage_metrics: no metrics backend configured; skipping")
         return
 
     # Isolate per-model so one bad row never drops the rest of the batch.
@@ -70,8 +71,10 @@ def emit_usage_metrics(usage: Optional[Dict[str, Any]], adapter: Any = None) -> 
                 {**base, "gen_ai.token.type": "output"},
             )
             # Emit cost only when it was actually reported (never a phantom $0).
+            # A histogram (not a gauge) so per-run costs SUM correctly across
+            # time — a gauge would keep only the last value.
             if mu.get("cost_known") and mu.get("cost_usd") is not None:
-                backend.emit_gauge(COST_METRIC, float(mu["cost_usd"]), base)
+                backend.emit_histogram(COST_METRIC, float(mu["cost_usd"]), base)
         except Exception as exc:
             logger.debug("emit_usage_metrics: skipping model %r (ignored): %s", model, exc)
             continue

@@ -48,19 +48,18 @@ _USAGE = {
 
 def test_emits_input_and_output_token_histograms_with_otel_names():
     backend = _emit(_USAGE)
-    names = [h[0] for h in backend.histograms]
-    assert names == [TOKEN_USAGE_METRIC, TOKEN_USAGE_METRIC]
-    types = {h[2]["gen_ai.token.type"] for h in backend.histograms}
+    token_hists = [h for h in backend.histograms if h[0] == TOKEN_USAGE_METRIC]
+    types = {h[2]["gen_ai.token.type"] for h in token_hists}
     assert types == {"input", "output"}
-    # OTel GenAI tags present
-    for _, _, tags in backend.histograms:
+    for _, _, tags in token_hists:
         assert tags["gen_ai.request.model"] == "openai/gpt-4o"
         assert tags["gen_ai.operation.name"] == "chat"
 
 
-def test_emits_cost_gauge_when_known():
+def test_emits_cost_histogram_when_known():
     backend = _emit(_USAGE)
-    assert backend.gauges == [
+    cost_hists = [h for h in backend.histograms if h[0] == COST_METRIC]
+    assert cost_hists == [
         (
             COST_METRIC,
             0.0125,
@@ -71,11 +70,13 @@ def test_emits_cost_gauge_when_known():
             },
         )
     ]
+    assert backend.gauges == []  # cost is a histogram, not a gauge
 
 
-def test_no_cost_gauge_when_cost_unknown():
+def test_no_cost_metric_when_cost_unknown():
     usage = {"by_model": {"m": {"prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.0}}}
     backend = _emit(usage)  # no cost_known -> unknown
+    assert not any(h[0] == COST_METRIC for h in backend.histograms)
     assert backend.gauges == []
 
 

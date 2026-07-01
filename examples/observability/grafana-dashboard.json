@@ -27,7 +27,7 @@
       "fieldConfig": { "defaults": { "unit": "currencyUSD" } },
       "targets": [
         {
-          "expr": "sum by (gen_ai_request_model) (llm_council_cost_usd)",
+          "expr": "sum by (gen_ai_request_model) (increase(llm_council_cost_usd_sum[5m]))",
           "legendFormat": "{{gen_ai_request_model}}"
         }
       ]
@@ -38,7 +38,7 @@
       "type": "stat",
       "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
       "fieldConfig": { "defaults": { "unit": "currencyUSD" } },
-      "targets": [{ "expr": "sum(llm_council_cost_usd)" }]
+      "targets": [{ "expr": "sum(increase(llm_council_cost_usd_sum[24h]))" }]
     },
     {
       "id": 4,
