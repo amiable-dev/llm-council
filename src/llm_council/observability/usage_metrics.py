@@ -49,10 +49,14 @@ def emit_usage_metrics(usage: Optional[Dict[str, Any]], adapter: Any = None) -> 
     # Isolate per-model so one bad row never drops the rest of the batch.
     for model, mu in (usage.get("by_model") or {}).items():
         try:
+            model_str = str(model)
+            # OTel `gen_ai.system` names the GenAI provider (e.g. "openai",
+            # "anthropic"), which is the model id's prefix — not our app name.
+            provider = model_str.split("/", 1)[0] if "/" in model_str else "unknown"
             base = {
-                "gen_ai.request.model": str(model),
+                "gen_ai.request.model": model_str,
                 "gen_ai.operation.name": "chat",
-                "gen_ai.system": "llm_council",
+                "gen_ai.system": provider,
             }
             # Emit token histograms unconditionally (0 is a valid observation).
             backend.emit_histogram(

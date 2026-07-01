@@ -67,7 +67,7 @@ def test_emits_cost_gauge_when_known():
             {
                 "gen_ai.request.model": "openai/gpt-4o",
                 "gen_ai.operation.name": "chat",
-                "gen_ai.system": "llm_council",
+                "gen_ai.system": "openai",  # provider derived from model prefix
             },
         )
     ]
@@ -82,6 +82,16 @@ def test_no_cost_gauge_when_cost_unknown():
 def test_empty_or_none_usage_is_noop():
     assert _emit(None).histograms == []
     assert _emit({}).histograms == []
+
+
+def test_gen_ai_system_derived_from_model_prefix():
+    backend = _emit({"by_model": {"anthropic/claude-3-5-sonnet": {"prompt_tokens": 1}}})
+    assert backend.histograms[0][2]["gen_ai.system"] == "anthropic"
+
+
+def test_gen_ai_system_unknown_without_prefix():
+    backend = _emit({"by_model": {"baremodel": {"prompt_tokens": 1}}})
+    assert backend.histograms[0][2]["gen_ai.system"] == "unknown"
 
 
 def test_zero_tokens_still_emitted():
