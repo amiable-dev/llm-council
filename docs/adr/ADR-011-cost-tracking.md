@@ -1,6 +1,6 @@
 # ADR-011: Cost and Token Accounting
 
-**Status:** Accepted 2026-07-01
+**Status:** Implemented 2026-07-01 (Phases 1–4, v0.25.0; epic #359) — was Accepted 2026-07-01
 **Date:** 2026-07-01 (refreshed from Proposed draft 2024-12-12)
 **Decision Makers:** Chris Joseph, LLM Council
 **Related:** ADR-009 (open-core boundary), ADR-024 (L1→L4 layers), ADR-030 (metrics export), ADR-041 (verification telemetry), ADR-022/ADR-026 (tier/model selection), ADR-027 (frontier cost ceiling)

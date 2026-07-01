@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-01
+
+**Cost and token accounting (ADR-011)** — a four-phase epic ([#359](https://github.com/amiable-dev/llm-council/issues/359)) that makes LLM spend transparent and optimizable: capture & surfacing (Phase 1), OpenTelemetry-standard observability (Phase 2), cost-per-quality optimization (Phase 3), and an opt-in budget gate (Phase 4). Everything is additive and backward-compatible — new behaviour is opt-in or soft-fail, and the council never fails a request because of cost accounting.
+
 ### Added
 
 - **Opt-in budget enforcement (ADR-011, Phase 4)** — a new `budget/` module (DEFAULT OFF) adds a pre-query `CostEstimator` (low/expected/high USD estimate from per-model cost history) and a tiered `BudgetEnforcer`: `STRICT` rejects if even the high estimate exceeds the budget, `BALANCED` rejects on the expected estimate (warns on high), `PERMISSIVE` warns only. Between stages it can abort **gracefully** (returning partial results) but never aborts a completion in flight (ADR-040). Every reject/warn/abort emits an auditable `L1_BUDGET_DECISION` LayerEvent — budget never causes a silent tier change (ADR-024). Enable with `LLM_COUNCIL_BUDGET_ENFORCEMENT=true` and `LLM_COUNCIL_BUDGET_MODE=strict|balanced|permissive`.
