@@ -115,3 +115,25 @@ class TestUsageInfoCostFields:
         assert usage.cost_usd is None
         assert usage.cost_source is None
         assert usage.cached_tokens == 0
+
+
+class TestRegistryPricingLookup:
+    def test_delegates_to_metadata_provider(self, monkeypatch):
+        from llm_council.gateway.cost_resolver import registry_pricing_lookup
+
+        class _FakeProvider:
+            def get_pricing(self, model_id):
+                return {"prompt": 0.001, "completion": 0.002}
+
+        monkeypatch.setattr("llm_council.metadata.get_provider", lambda: _FakeProvider())
+        assert registry_pricing_lookup("any/model") == {"prompt": 0.001, "completion": 0.002}
+
+    def test_swallows_provider_errors(self, monkeypatch):
+        from llm_council.gateway.cost_resolver import registry_pricing_lookup
+
+        def _boom():
+            raise RuntimeError("provider unavailable")
+
+        monkeypatch.setattr("llm_council.metadata.get_provider", _boom)
+        # Never raises into the hot path; unknown pricing -> empty dict.
+        assert registry_pricing_lookup("any/model") == {}

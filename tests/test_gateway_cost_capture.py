@@ -58,3 +58,72 @@ class TestOpenRouterCostCapture:
         assert resp.usage.cost_usd is None
         assert resp.usage.cost_source is None
         assert resp.usage.cached_tokens == 0
+
+
+class TestDirectCostCapture:
+    async def test_direct_uses_registry_estimate(self, monkeypatch):
+        from llm_council.gateway import direct as direct_mod
+        from llm_council.gateway.cost_resolver import CostResolver
+        from llm_council.gateway.direct import DirectGateway
+
+        # Inject a key so complete() doesn't short-circuit with auth_error.
+        gw = DirectGateway(provider_keys={"openai": "test-key"})
+        # Deterministic pricing so the estimate is exact.
+        monkeypatch.setattr(
+            direct_mod,
+            "_COST_RESOLVER",
+            CostResolver(pricing_lookup=lambda m: {"prompt": 0.0025, "completion": 0.01}),
+        )
+        fake = {
+            "status": "ok",
+            "content": "hi",
+            "latency_ms": 5,
+            "usage": {"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500},
+        }
+        with patch.object(gw, "_query_provider", new=AsyncMock(return_value=fake)):
+            resp = await gw.complete(_req())
+
+        assert resp.usage.cost_usd == 0.0075
+        assert resp.usage.cost_source == "registry_estimate"
+
+
+class TestOllamaCostCapture:
+    async def test_ollama_is_local_zero(self):
+        from llm_council.gateway.ollama import OllamaGateway
+
+        gw = OllamaGateway()
+        fake = {
+            "status": "ok",
+            "content": "hi",
+            "latency_ms": 5,
+            "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+        }
+        with patch.object(gw, "_query_ollama", new=AsyncMock(return_value=fake)):
+            resp = await gw.complete(_req("ollama/llama3"))
+
+        assert resp.usage.cost_usd == 0.0
+        assert resp.usage.cost_source == "local_zero"
+
+
+class TestRequestyCostCapture:
+    async def test_requesty_prefers_provider_cost(self):
+        from llm_council.gateway.requesty import RequestyGateway
+
+        gw = RequestyGateway(api_key="test")
+        fake = {
+            "status": "ok",
+            "content": "hi",
+            "latency_ms": 5,
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+                "cost": 0.002,
+                "cached_tokens": 0,
+            },
+        }
+        with patch.object(gw, "_query_requesty", new=AsyncMock(return_value=fake)):
+            resp = await gw.complete(_req())
+
+        assert resp.usage.cost_usd == 0.002
+        assert resp.usage.cost_source == "provider"

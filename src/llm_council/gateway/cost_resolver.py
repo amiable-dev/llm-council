@@ -28,6 +28,21 @@ _LOCAL_GATEWAYS = frozenset({"ollama"})
 PricingLookup = Callable[[str], Dict[str, float]]
 
 
+def registry_pricing_lookup(model_id: str) -> Dict[str, float]:
+    """Default pricing lookup backed by the metadata provider (registry.yaml).
+
+    Returns a ``{"prompt": ..., "completion": ...}`` per-1K-token dict, or an
+    empty dict if pricing is unknown or the provider is unavailable. Imported
+    lazily to avoid a gateway->metadata import cycle; never raises.
+    """
+    try:
+        from ..metadata import get_provider
+
+        return get_provider().get_pricing(model_id) or {}
+    except Exception:
+        return {}
+
+
 class CostResolver:
     """Resolve ``(cost_usd, cost_source)`` for a single model call."""
 

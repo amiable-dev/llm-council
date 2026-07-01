@@ -34,6 +34,12 @@ from .types import (
 REQUESTY_API_URL = "https://router.requesty.ai/v1/chat/completions"
 
 
+# ADR-011: provider cost when Requesty reports it, else registry estimate.
+from .cost_resolver import CostResolver, registry_pricing_lookup
+
+_COST_RESOLVER = CostResolver(pricing_lookup=registry_pricing_lookup)
+
+
 class RequestyGateway(BaseRouter):
     """Requesty gateway implementing BaseRouter protocol.
 
@@ -246,6 +252,17 @@ class RequestyGateway(BaseRouter):
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),
                         "total_tokens": usage.get("total_tokens", 0),
+                        # ADR-011: capture cost if Requesty reports it (ground
+                        # truth); else the gateway falls back to a registry
+                        # estimate.
+                        "cost": usage.get("cost"),
+                        "cached_tokens": (
+                            usage.get("cached_tokens")
+                            or usage.get("prompt_tokens_details", {}).get(
+                                "cached_tokens", 0
+                            )
+                            or 0
+                        ),
                     },
                 }
 
@@ -301,6 +318,14 @@ class RequestyGateway(BaseRouter):
                 prompt_tokens=usage_data.get("prompt_tokens", 0),
                 completion_tokens=usage_data.get("completion_tokens", 0),
                 total_tokens=usage_data.get("total_tokens", 0),
+            )
+            # ADR-011: provider cost if Requesty reported it, else registry.
+            _COST_RESOLVER.apply(
+                usage,
+                gateway="requesty",
+                model_id=request.model,
+                provider_cost_usd=usage_data.get("cost"),
+                cached_tokens=usage_data.get("cached_tokens"),
             )
 
         return GatewayResponse(

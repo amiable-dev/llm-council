@@ -46,6 +46,12 @@ PROVIDER_KEY_ENV_VARS = {
 }
 
 
+# ADR-011: native provider APIs return tokens only -> registry-priced estimate.
+from .cost_resolver import CostResolver, registry_pricing_lookup
+
+_COST_RESOLVER = CostResolver(pricing_lookup=registry_pricing_lookup)
+
+
 class DirectGateway(BaseRouter):
     """Direct API gateway implementing BaseRouter protocol.
 
@@ -553,6 +559,8 @@ class DirectGateway(BaseRouter):
                 completion_tokens=usage_data.get("completion_tokens", 0),
                 total_tokens=usage_data.get("total_tokens", 0),
             )
+            # ADR-011: native provider APIs return tokens only -> registry estimate.
+            _COST_RESOLVER.apply(usage, gateway="direct", model_id=request.model)
 
         return GatewayResponse(
             content=result.get("content", ""),

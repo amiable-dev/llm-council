@@ -73,6 +73,12 @@ class QualityDegradationNotice:
     model_size_estimate: Optional[str] = None
 
 
+# ADR-011: local models have no marginal API cost, so no pricing lookup.
+from .cost_resolver import CostResolver
+
+_COST_RESOLVER = CostResolver()
+
+
 class OllamaGateway(BaseRouter):
     """Ollama gateway implementing BaseRouter protocol.
 
@@ -436,6 +442,8 @@ class OllamaGateway(BaseRouter):
                 completion_tokens=usage_data.get("completion_tokens", 0),
                 total_tokens=usage_data.get("total_tokens", 0),
             )
+            # ADR-011: local models have no marginal API cost.
+            _COST_RESOLVER.apply(usage, gateway="ollama", model_id=request.model)
 
         return GatewayResponse(
             content=result.get("content", ""),
