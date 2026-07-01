@@ -11,8 +11,13 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 
-def _fmt_tokens(n: int) -> str:
-    return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
+def _fmt_tokens(n: object) -> str:
+    try:
+        count = int(n)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return "0"
+    count = max(count, 0)
+    return f"{count / 1000:.1f}k" if count >= 1000 else str(count)
 
 
 def _fmt_cost(cost: float) -> str:
@@ -54,11 +59,11 @@ def format_cost_summary(
     if by_model:
         lines += ["", "**By model:**"]
         for model, mu in by_model.items():
-            entry = f"- {model}: {mu.get('total_tokens', 0)} tok"
+            entry = f"- {model}: {_fmt_tokens(mu.get('total_tokens', 0))} tok"
             mc = mu.get("cost_usd", 0.0) or 0.0
-            # Consistent with the one-liner: show the figure (incl. a genuine
-            # $0) when cost is known; omit only when cost is unknown.
-            if cost_known or mc > 0:
+            # Use THIS row's own provenance (not the aggregate): show the figure
+            # (incl. a genuine $0) only when this row's cost is known.
+            if bool(mu.get("cost_known", False)) or mc > 0:
                 entry += f", {_fmt_cost(mc)}"
             lines.append(entry)
 
@@ -69,9 +74,9 @@ def format_cost_summary(
             tok = su.get("total_tokens", 0)
             if not tok:
                 continue
-            entry = f"- {stage}: {tok} tok"
+            entry = f"- {stage}: {_fmt_tokens(tok)} tok"
             sc = su.get("cost_usd", 0.0) or 0.0
-            if cost_known or sc > 0:
+            if bool(su.get("cost_known", False)) or sc > 0:
                 entry += f", {_fmt_cost(sc)}"
             lines.append(entry)
 

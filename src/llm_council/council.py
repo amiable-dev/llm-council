@@ -298,6 +298,8 @@ def _add_cost_to_usage(
         bucket["total_tokens"] += usage.get("total_tokens", 0)
         bucket["cost_usd"] += cost
         bucket["cached_tokens"] += cached
+        if raw_cost is not None:
+            bucket["cost_known"] = True
 
 
 def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -315,6 +317,7 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
         "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
     }
+    numeric_keys = ("prompt_tokens", "completion_tokens", "total_tokens", "cost_usd", "cached_tokens")
     by_model: Dict[str, Dict[str, Any]] = {}
     for stage_usage in by_stage.values():
         for model_id, model_usage in stage_usage.get("by_model", {}).items():
@@ -326,10 +329,13 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
                     "total_tokens": 0,
                     "cost_usd": 0.0,
                     "cached_tokens": 0,
+                    "cost_known": False,
                 },
             )
-            for key in agg:
+            for key in numeric_keys:  # never iterate the bool cost_known
                 agg[key] += model_usage.get(key, 0)
+            if model_usage.get("cost_known"):
+                agg["cost_known"] = True
     return {"by_stage": by_stage, "by_model": by_model, "total": grand_total}
 
 

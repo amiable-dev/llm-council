@@ -64,12 +64,27 @@ def test_genuine_zero_cost_shown_when_known():
 
 
 def test_detail_lines_show_known_zero_consistently():
-    # Detail per-model/per-stage lines must not suppress a known $0 (must match
-    # the one-liner's known-vs-unknown logic).
+    # A row with its own cost_known must show a genuine $0 (not suppress it).
     usage = {
         "total": {"total_tokens": 20, "cost_usd": 0.0, "cost_known": True},
-        "by_model": {"ollama/llama3": {"total_tokens": 20, "cost_usd": 0.0}},
-        "by_stage": {"stage1": {"total_tokens": 20, "cost_usd": 0.0}},
+        "by_model": {"ollama/llama3": {"total_tokens": 20, "cost_usd": 0.0, "cost_known": True}},
+        "by_stage": {"stage1": {"total_tokens": 20, "cost_usd": 0.0, "cost_known": True}},
     }
     out = format_cost_summary(usage, include_details=True)
     assert out.count("$0.0000") >= 2  # one-liner + model + stage all show it
+
+
+def test_unknown_row_not_shown_as_zero_even_if_aggregate_known():
+    # Per-row provenance: an unknown-cost row must NOT display $0.0000 just
+    # because some other row (and thus the aggregate) has a known cost.
+    usage = {
+        "total": {"total_tokens": 20, "cost_usd": 0.01, "cost_known": True},
+        "by_model": {
+            "known/m": {"total_tokens": 10, "cost_usd": 0.01, "cost_known": True},
+            "unknown/m": {"total_tokens": 10, "cost_usd": 0.0},  # no cost_known
+        },
+    }
+    out = format_cost_summary(usage, include_details=True)
+    assert "known/m: 10 tok, $0.0100" in out
+    assert "unknown/m: 10 tok" in out
+    assert "unknown/m: 10 tok, $" not in out

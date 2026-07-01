@@ -29,6 +29,44 @@ def test_cost_known_set_even_for_reported_zero():
     assert bucket.get("cost_known") is True
 
 
+def test_per_model_cost_known_tracked():
+    bucket = {}
+    _add_cost_to_usage(bucket, {"cost": 0.0, "total_tokens": 5}, model="m")
+    assert bucket["by_model"]["m"]["cost_known"] is True
+    other = {}
+    _add_cost_to_usage(other, {"total_tokens": 5}, model="m")  # no cost reported
+    assert not other["by_model"]["m"].get("cost_known")
+
+
+def test_build_usage_summary_merges_per_model_cost_known():
+    from llm_council.council import _build_usage_summary
+
+    by_stage = {
+        "stage1": {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "cost_usd": 0.01,
+            "cached_tokens": 0,
+            "cost_known": True,
+            "by_model": {
+                "m": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 5,
+                    "total_tokens": 15,
+                    "cost_usd": 0.01,
+                    "cached_tokens": 0,
+                    "cost_known": True,
+                }
+            },
+        }
+    }
+    summary = _build_usage_summary(by_stage)
+    assert summary["by_model"]["m"]["cost_known"] is True
+    assert summary["by_model"]["m"]["total_tokens"] == 15
+    assert summary["total"]["cost_known"] is True
+
+
 def test_per_model_accumulation():
     bucket = {}
     usage = {
