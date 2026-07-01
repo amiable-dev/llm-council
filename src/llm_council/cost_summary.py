@@ -21,6 +21,10 @@ def _fmt_tokens(n: object) -> str:
 
 
 def _fmt_cost(cost: float) -> str:
+    # Costs are resolved to 8dp; a flat 4dp display would mask sub-cent costs
+    # (cheap models) as $0.0000. Widen precision for small positive amounts.
+    if 0 < cost < 0.001:
+        return f"${cost:.6f}"
     return f"${cost:.4f}"
 
 
@@ -72,11 +76,14 @@ def format_cost_summary(
         lines += ["", "**By stage:**"]
         for stage, su in by_stage.items():
             tok = su.get("total_tokens", 0)
-            if not tok:
+            sc = su.get("cost_usd", 0.0) or 0.0
+            stage_cost_known = bool(su.get("cost_known", False)) or sc > 0
+            # Skip only truly empty rows — keep a row that carries cost metadata
+            # even if its token count is zero.
+            if not tok and not stage_cost_known:
                 continue
             entry = f"- {stage}: {_fmt_tokens(tok)} tok"
-            sc = su.get("cost_usd", 0.0) or 0.0
-            if bool(su.get("cost_known", False)) or sc > 0:
+            if stage_cost_known:
                 entry += f", {_fmt_cost(sc)}"
             lines.append(entry)
 

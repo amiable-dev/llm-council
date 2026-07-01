@@ -39,6 +39,23 @@ def test_details_include_per_model_and_stage():
     assert out.splitlines()[0].startswith("Council usage:")
 
 
+def test_sub_cent_cost_not_masked_as_zero():
+    # An 8dp-resolved sub-cent cost must not display as $0.0000.
+    usage = {"total": {"total_tokens": 100, "cost_usd": 0.00005, "cost_known": True}}
+    out = format_cost_summary(usage)
+    assert "$0.0000 " not in out and not out.endswith("$0.0000")
+    assert "$0.000050" in out
+
+
+def test_stage_with_cost_but_zero_tokens_is_kept():
+    usage = {
+        "total": {"total_tokens": 0, "cost_usd": 0.01, "cost_known": True},
+        "by_stage": {"stage1": {"total_tokens": 0, "cost_usd": 0.01, "cost_known": True}},
+    }
+    out = format_cost_summary(usage, include_details=True)
+    assert "stage1: 0 tok, $0.0100" in out
+
+
 def test_none_nested_values_do_not_crash():
     # A malformed usage block with null sub-sections must not raise.
     usage = {"total": None, "by_model": None, "by_stage": None}
