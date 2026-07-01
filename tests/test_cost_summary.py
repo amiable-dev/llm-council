@@ -48,8 +48,16 @@ def test_none_nested_values_do_not_crash():
     assert out.startswith("Council usage:")
 
 
-def test_cost_omitted_when_zero_or_unknown():
+def test_cost_omitted_when_unknown():
+    # cost_usd 0.0 with no cost_known signal == unknown -> omit the cost figure.
     usage = {"total": {"total_tokens": 100, "cost_usd": 0.0}}
     out = format_cost_summary(usage)
     assert "tokens" in out
-    assert "$" not in out  # never show a $0.0000 bill when cost is unknown/free
+    assert "$" not in out
+
+
+def test_genuine_zero_cost_shown_when_known():
+    # A reported $0 (free/local) is distinguished from unknown and IS shown.
+    usage = {"total": {"total_tokens": 100, "cost_usd": 0.0, "cost_known": True}}
+    out = format_cost_summary(usage)
+    assert "$0.0000" in out

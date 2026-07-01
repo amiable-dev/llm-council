@@ -272,10 +272,16 @@ def _add_cost_to_usage(
     ``model`` is given, the same figures also accumulate under
     ``total_usage["by_model"][model]`` (reviewer-primary attribution).
     """
-    cost = usage.get("cost") or 0.0
+    raw_cost = usage.get("cost")
+    cost = raw_cost or 0.0
     cached = usage.get("cached_tokens", 0) or 0
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
+    # Track whether ANY cost was reported so the summary can tell a genuine
+    # $0 (free/local) from unknown cost (None) — a present cost, even 0.0, is
+    # "known".
+    if raw_cost is not None:
+        total_usage["cost_known"] = True
     if model is not None:
         bucket = total_usage.setdefault("by_model", {}).setdefault(
             model,
@@ -307,6 +313,7 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
         "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
         "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
+        "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
     }
     by_model: Dict[str, Dict[str, Any]] = {}
     for stage_usage in by_stage.values():

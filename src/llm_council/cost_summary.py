@@ -34,9 +34,13 @@ def format_cost_summary(
     total = usage.get("total") or {}
     total_tokens = total.get("total_tokens", 0)
     cost = total.get("cost_usd", 0.0) or 0.0
+    # Distinguish a genuine, reported $0 (free/local models) from unknown cost:
+    # show the figure when a cost was actually reported OR is positive; omit it
+    # only when cost is truly unknown.
+    cost_known = bool(total.get("cost_known", False)) or cost > 0
 
     line = f"Council usage: ~{_fmt_tokens(total_tokens)} tokens"
-    if cost:
+    if cost_known:
         line += f" · ~{_fmt_cost(cost)}"
     cached = total.get("cached_tokens", 0)
     if cached:

@@ -20,6 +20,13 @@ def test_none_cost_is_zero_contribution():
     _add_cost_to_usage(bucket, {"prompt_tokens": 10})  # no cost/cached keys
     assert bucket["cost_usd"] == 0.0
     assert bucket["cached_tokens"] == 0
+    assert not bucket.get("cost_known")  # cost genuinely unknown
+
+
+def test_cost_known_set_even_for_reported_zero():
+    bucket = {}
+    _add_cost_to_usage(bucket, {"cost": 0.0})  # a reported $0 is "known"
+    assert bucket.get("cost_known") is True
 
 
 def test_per_model_accumulation():
