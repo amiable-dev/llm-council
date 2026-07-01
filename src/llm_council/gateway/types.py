@@ -42,11 +42,23 @@ class CanonicalMessage:
 
 @dataclass
 class UsageInfo:
-    """Token usage information from an API response."""
+    """Token usage (and, when known, cost) from an API response.
+
+    Cost fields are populated by the ``CostResolver`` (ADR-011 Phase 1):
+
+        cost_usd:     USD cost for this call, or None if it could not be resolved.
+        cost_source:  provenance of ``cost_usd`` so an estimate is never mistaken
+                      for a bill — one of "provider" | "registry_estimate" |
+                      "local_zero", or None when unknown.
+        cached_tokens: prompt tokens served from a provider cache, when reported.
+    """
 
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
+    cost_usd: Optional[float] = None
+    cost_source: Optional[str] = None
+    cached_tokens: int = 0
 
 
 @dataclass

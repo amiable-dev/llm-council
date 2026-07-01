@@ -8,13 +8,17 @@ project:
   short_name: "council"
   repo: "amiable-dev/llm-council"        # EPIC=N resolves against this repo
 
-# Pre-push gates mirror the required CI checks (Test / Lint / Type Check) so a
-# red CI (state F) is caught locally first. Scoped via only_if_changed: ADR- and
-# docs-only PRs skip build/test entirely and pay nothing. `make test-fast` here
-# keeps the loop snappy; CI still runs the full `make test` suite as the backstop.
+# Pre-push gates mirror the ACTUAL blocking CI checks so a red CI (state F) is
+# caught locally first. Note: CI's type-check step is advisory
+# (`mypy … || echo "…non-blocking"`) and the repo carries pre-existing mypy
+# debt, so `make check` would wrongly block the loop on baseline errors CI
+# tolerates. We gate on ruff (the blocking Lint job) + tests; mypy stays a
+# manual due-diligence check on changed code. Scoped via only_if_changed so
+# docs/ADR-only PRs skip build/test and pay nothing. `make test-fast` keeps the
+# loop snappy; CI runs the full `make test` suite as the backstop.
 pre_push_gates:
-  - name: lint-typecheck
-    command: make check          # ruff + mypy
+  - name: lint
+    command: make lint           # ruff check src/ tests/ — the blocking CI gate
     only_if_changed:
       - "src/**"
       - "tests/**"
