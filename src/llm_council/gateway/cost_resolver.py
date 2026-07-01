@@ -19,7 +19,7 @@ without loading the metadata stack. See ADR-011 §1 and ADR-023 §5.
 from __future__ import annotations
 
 import math
-from typing import Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from .types import UsageInfo
 
@@ -27,6 +27,22 @@ from .types import UsageInfo
 _LOCAL_GATEWAYS = frozenset({"ollama"})
 
 PricingLookup = Callable[[str], Dict[str, float]]
+
+
+def _safe_price(value: Any) -> Optional[float]:
+    """Coerce a registry price to a finite, non-negative float, or None.
+
+    Registry entries can be missing, explicitly null, non-numeric, or malformed;
+    none of those must reach the cost arithmetic (a null price would raise a
+    TypeError, a negative/NaN price would corrupt the estimate).
+    """
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(price) or price < 0:
+        return None
+    return price
 
 
 def registry_pricing_lookup(model_id: str) -> Dict[str, float]:
@@ -82,12 +98,16 @@ class CostResolver:
             return 0.0, "local_zero"
 
         pricing = self._pricing_lookup(model_id) if self._pricing_lookup else {}
-        if pricing and ("prompt" in pricing or "completion" in pricing):
-            price_in = pricing.get("prompt", 0.0)
-            price_out = pricing.get("completion", 0.0)
-            cost = (prompt_tokens / 1000.0) * price_in + (
-                completion_tokens / 1000.0
-            ) * price_out
+        price_in = _safe_price(pricing.get("prompt"))
+        price_out = _safe_price(pricing.get("completion"))
+        if price_in is not None or price_out is not None:
+            # Clamp negative token counts; a bad count must not yield a negative
+            # cost. A missing/invalid side of the price contributes 0.
+            prompt = max(prompt_tokens, 0)
+            completion = max(completion_tokens, 0)
+            cost = (prompt / 1000.0) * (price_in or 0.0) + (completion / 1000.0) * (
+                price_out or 0.0
+            )
             # 8dp: sub-cent per-call costs must not round to zero.
             return round(cost, 8), "registry_estimate"
 

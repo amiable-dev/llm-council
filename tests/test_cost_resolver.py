@@ -136,6 +136,41 @@ class TestCostResolver:
             assert source == "registry_estimate", bad
             assert cost == 0.0075
 
+    def test_null_registry_price_does_not_crash(self):
+        # A present-but-null price must not reach the arithmetic (TypeError).
+        r = CostResolver(pricing_lookup=lambda m: {"prompt": None, "completion": 0.01})
+        cost, source = r.resolve(
+            gateway="direct", model_id="x/y", prompt_tokens=1000, completion_tokens=1000
+        )
+        assert source == "registry_estimate"
+        assert cost == 0.01  # prompt None -> 0; 1000/1000 * 0.01
+
+    def test_all_prices_invalid_returns_none(self):
+        r = CostResolver(pricing_lookup=lambda m: {"prompt": None, "completion": "n/a"})
+        cost, source = r.resolve(
+            gateway="direct", model_id="x/y", prompt_tokens=1000, completion_tokens=1000
+        )
+        assert cost is None and source is None
+
+    def test_negative_registry_price_ignored(self):
+        r = CostResolver(pricing_lookup=lambda m: {"prompt": -1.0, "completion": 0.01})
+        cost, source = r.resolve(
+            gateway="direct", model_id="x/y", prompt_tokens=1000, completion_tokens=1000
+        )
+        assert source == "registry_estimate"
+        assert cost == 0.01  # negative prompt price treated as 0
+
+    def test_negative_token_counts_clamped(self):
+        r = CostResolver(pricing_lookup=_pricing_lookup)
+        cost, source = r.resolve(
+            gateway="direct",
+            model_id="openai/gpt-4o",
+            prompt_tokens=-100,
+            completion_tokens=-50,
+        )
+        assert source == "registry_estimate"
+        assert cost == 0.0  # clamped, never negative
+
     def test_default_resolver_uses_registry_lookup(self, monkeypatch):
         # A bare CostResolver() defaults to the registry lookup so Direct-API
         # calls are still priced (finding: missing default fallback).
