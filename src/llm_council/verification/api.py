@@ -1880,6 +1880,17 @@ async def _run_verification_pipeline(
         },
     )
 
+    # ADR-011 Phase 3: expose a per-model usage/cost summary so the performance
+    # tracker can record cost-per-quality (soft — never break verification).
+    try:
+        from llm_council.council import _build_usage_summary
+
+        partial_state["usage"] = _build_usage_summary(
+            {"stage1": stage1_usage, "stage2": stage2_usage, "stage3": stage3_usage}
+        )
+    except Exception:  # pragma: no cover - telemetry best effort
+        pass
+
     # ADR-042: parse evidence_dispositions + emit evidence.json artefact.
     evidence_summary_payload: Optional[List[Dict[str, Any]]] = None
     evidence_warnings_payload: List[Dict[str, Any]] = []
@@ -2194,6 +2205,9 @@ async def run_verification(
                         model_statuses=model_statuses,
                         aggregate_rankings=agg_dict,
                         stage2_results=partial_state.get("stage2_results"),
+                        # ADR-011 Phase 3: per-model cost for cost-per-quality
+                        # (None until present; fully populated with #366).
+                        usage_by_model=(partial_state.get("usage") or {}).get("by_model"),
                     )
             except Exception:
                 logger.debug("ADR-041: Performance telemetry persistence failed", exc_info=True)

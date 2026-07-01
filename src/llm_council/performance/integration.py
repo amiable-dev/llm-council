@@ -97,6 +97,7 @@ def persist_session_performance_data(
     model_statuses: Dict[str, Dict[str, Any]],
     aggregate_rankings: Dict[str, Dict[str, Any]],
     stage2_results: Optional[List[Dict[str, Any]]] = None,
+    usage_by_model: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> int:
     """Persist performance metrics from a completed council session.
 
@@ -130,6 +131,14 @@ def persist_session_performance_data(
         borda_score = ranking_info.get("borda_score", 0.0)
         parse_success = _extract_parse_success(model_id, stage2_results)
 
+        # ADR-011 Phase 3: record cost only when it was actually reported
+        # (cost_known), so unknown costs stay None rather than a phantom $0.
+        cost_usd = None
+        if usage_by_model:
+            model_usage = usage_by_model.get(model_id) or {}
+            if model_usage.get("cost_known"):
+                cost_usd = model_usage.get("cost_usd")
+
         record = ModelSessionMetric(
             session_id=session_id,
             model_id=model_id,
@@ -137,6 +146,7 @@ def persist_session_performance_data(
             latency_ms=latency_ms,
             borda_score=borda_score,
             parse_success=parse_success,
+            cost_usd=cost_usd,
         )
         records.append(record)
 

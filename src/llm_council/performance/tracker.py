@@ -5,12 +5,26 @@ building an Internal Performance Index with rolling window decay.
 """
 
 import math
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
 from .store import append_performance_records, read_performance_records
 from .types import ModelPerformanceIndex, ModelSessionMetric
+
+
+def cost_aware_selection_enabled() -> bool:
+    """ADR-011 Phase 3: opt-in cost-aware selection (default OFF).
+
+    When false, selection behaves exactly as before this phase — cost never
+    influences routing. This is the single audited toggle for that behaviour.
+    """
+    return os.getenv("LLM_COUNCIL_COST_AWARE_SELECTION", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
 # Default store path
 DEFAULT_STORE_PATH = Path.home() / ".llm-council" / "performance_metrics.jsonl"
@@ -80,14 +94,21 @@ def _calculate_decay_weight(timestamp: str, decay_days: int) -> float:
     if not timestamp:
         return 1.0
 
+    if decay_days <= 0:
+        return 1.0  # no decay configured -> avoid division by zero
+
     try:
         record_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        # Treat a naive timestamp as UTC so it is comparable to an aware `now`
+        # (otherwise the subtraction raises TypeError).
+        if record_time.tzinfo is None:
+            record_time = record_time.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         days_ago = (now - record_time).total_seconds() / (24 * 3600)
 
         # Exponential decay: e^(-days_ago / decay_days)
         return math.exp(-days_ago / decay_days)
-    except ValueError:
+    except (ValueError, TypeError):
         # If timestamp parsing fails, give full weight
         return 1.0
 
@@ -167,6 +188,10 @@ class InternalPerformanceTracker:
         weighted_borda_sum = 0.0
         parse_success_count = 0
         latencies: List[int] = []
+        # ADR-011 Phase 3: weighted cost, averaged only over records that
+        # actually recorded a cost (None costs are excluded, not treated as 0).
+        weighted_cost_sum = 0.0
+        cost_weight = 0.0
 
         for record in records:
             weight = _calculate_decay_weight(record.timestamp, self.decay_days)
@@ -175,6 +200,9 @@ class InternalPerformanceTracker:
             if record.parse_success:
                 parse_success_count += 1
             latencies.append(record.latency_ms)
+            if record.cost_usd is not None:
+                weighted_cost_sum += record.cost_usd * weight
+                cost_weight += weight
 
         sample_size = len(records)
 
@@ -191,6 +219,9 @@ class InternalPerformanceTracker:
         # Confidence level
         confidence = _determine_confidence_level(sample_size)
 
+        # Weighted mean cost (None if no record carried a cost)
+        mean_cost = (weighted_cost_sum / cost_weight) if cost_weight > 0 else None
+
         return ModelPerformanceIndex(
             model_id=model_id,
             sample_size=sample_size,
@@ -199,6 +230,7 @@ class InternalPerformanceTracker:
             p95_latency_ms=p95_latency,
             parse_success_rate=parse_success_rate,
             confidence_level=confidence,
+            mean_cost_usd=mean_cost,
         )
 
     def get_quality_score(self, model_id: str) -> float:
@@ -220,6 +252,48 @@ class InternalPerformanceTracker:
 
         # Convert 0-1 Borda score to 0-100 scale
         return index.mean_borda_score * 100.0
+
+    def get_cost_per_quality(self, model_id: str) -> Optional[float]:
+        """Borda-per-dollar for a model (ADR-011 Phase 3), or None if unknown."""
+        return self.get_model_index(model_id).quality_per_cost
+
+    def get_all_cost_aware_scores(self) -> dict[str, float]:
+        """Quality scores, optionally cost-adjusted (ADR-011 Phase 3).
+
+        DISABLED by default: returns exactly ``get_all_model_scores()`` — the
+        only behavioural change is opt-in via ``LLM_COUNCIL_COST_AWARE_SELECTION``.
+        This is the SOLE path by which cost may influence selection (audited);
+        no other selection code reads cost.
+
+        When enabled, models with a known quality-per-cost are re-scored by that
+        value min-max-normalized onto the same 0–1 scale ``get_all_model_scores``
+        uses; models with unknown cost keep their quality score (neither rewarded
+        nor punished for missing data).
+        """
+        quality = self.get_all_model_scores()
+        if not cost_aware_selection_enabled():
+            return quality
+
+        qpc = {}
+        for model_id in quality:
+            value = self.get_model_index(model_id).quality_per_cost
+            if value is not None and value > 0:
+                qpc[model_id] = value
+        if not qpc:
+            return quality
+
+        low, high = min(qpc.values()), max(qpc.values())
+        if high == low:
+            # One cost-known model, or all with identical value-for-money: no
+            # differentiation is possible, so keep quality scores rather than
+            # collapsing everyone to 0.0.
+            return quality
+        span = high - low
+        result = dict(quality)
+        for model_id, value in qpc.items():
+            # Same 0–1 scale as the plain quality scores.
+            result[model_id] = (value - low) / span
+        return result
 
     def get_all_model_scores(self) -> dict[str, float]:
         """Get quality scores for all tracked models with sufficient data.

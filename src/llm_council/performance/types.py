@@ -34,6 +34,7 @@ class ModelSessionMetric:
     borda_score: float = 0.0
     parse_success: bool = True
     reasoning_tokens_used: Optional[int] = None
+    cost_usd: Optional[float] = None  # ADR-011 Phase 3: per-session cost (None if unknown)
 
     def to_jsonl_line(self) -> str:
         """Serialize to single JSONL line.
@@ -64,6 +65,7 @@ class ModelSessionMetric:
             borda_score=data.get("borda_score", 0.0),
             parse_success=data.get("parse_success", True),
             reasoning_tokens_used=data.get("reasoning_tokens_used"),
+            cost_usd=data.get("cost_usd"),  # ADR-011: absent in older records
         )
 
 
@@ -94,3 +96,17 @@ class ModelPerformanceIndex:
     p95_latency_ms: int
     parse_success_rate: float
     confidence_level: str  # INSUFFICIENT, PRELIMINARY, MODERATE, HIGH
+    # ADR-011 Phase 3: weighted mean USD cost per session (None until any
+    # session recorded a known cost).
+    mean_cost_usd: Optional[float] = None
+
+    @property
+    def quality_per_cost(self) -> Optional[float]:
+        """Borda-per-dollar: quality earned per USD (higher is better value).
+
+        Returns None when cost is unknown or zero (no meaningful ratio) — callers
+        must treat None as "no cost-value signal", not as best or worst.
+        """
+        if self.mean_cost_usd is None or self.mean_cost_usd <= 0:
+            return None
+        return self.mean_borda_score / self.mean_cost_usd
