@@ -42,6 +42,10 @@ class TestEstimator:
         est = CostEstimator(tracker=_FakeTracker({"free": 0.0, "paid": 0.02}))
         assert est.estimate(["free", "paid"]).expected == 0.02
 
+    def test_negative_cost_clamped(self):
+        est = CostEstimator(tracker=_FakeTracker({"a": -0.5, "b": 0.02}))
+        assert est.estimate(["a", "b"]).expected == 0.02  # negative clamped to 0
+
     def test_tracker_failure_is_tolerated(self):
         class _Boom:
             def get_model_index(self, _):

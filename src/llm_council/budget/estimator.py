@@ -5,6 +5,11 @@ history in the performance index (ADR-011 Phase 3). Returns a low/expected/high
 range so the enforcer can choose a risk posture. When no cost history exists
 (cold start) the estimate is zero — an honest "unknown", which the enforcer
 treats as "allow" rather than guessing.
+
+Posture: estimation is **best-effort and fail-open** — if the tracker is
+unavailable the estimate is 0 and the (opt-in) gate allows the query rather than
+blocking all traffic. This is deliberate for an opt-in guard; a hard
+fail-closed budget gate belongs to a future enforcement tier, not this default.
 """
 
 from __future__ import annotations
@@ -51,8 +56,9 @@ class CostEstimator:
                 logger.debug("cost estimate: %r lookup failed (ignored): %s", model_id, exc)
                 mean_cost = None
             # A known $0 (free/local) contributes 0 but is NOT "unknown".
+            # Clamp defensively: a cost must never be negative.
             if mean_cost is not None:
-                expected += mean_cost
+                expected += max(mean_cost, 0.0)
         return CostEstimate(
             low=round(expected * _LOW_FACTOR, 8),
             expected=round(expected, 8),
