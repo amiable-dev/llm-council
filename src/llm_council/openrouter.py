@@ -148,6 +148,15 @@ async def query_model_with_status(
                     "prompt_tokens": usage.get("prompt_tokens", 0),
                     "completion_tokens": usage.get("completion_tokens", 0),
                     "total_tokens": usage.get("total_tokens", 0),
+                    # ADR-011: OpenRouter returns the authoritative billed cost
+                    # inline; capture it (previously discarded) so the council
+                    # can account cost, not just tokens.
+                    "cost": usage.get("cost"),
+                    "cached_tokens": (
+                        usage.get("cached_tokens")
+                        or usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                        or 0
+                    ),
                 },
             }
 

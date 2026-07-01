@@ -262,6 +262,38 @@ MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
+def _add_cost_to_usage(
+    total_usage: Dict[str, Any], usage: Dict[str, Any], model: Optional[str] = None
+) -> None:
+    """ADR-011: accumulate cost_usd, cached_tokens, and optional per-model spend.
+
+    Additive to the existing token aggregation. ``usage["cost"]`` may be None
+    (provider didn't report it) and is treated as a 0 contribution. When
+    ``model`` is given, the same figures also accumulate under
+    ``total_usage["by_model"][model]`` (reviewer-primary attribution).
+    """
+    cost = usage.get("cost") or 0.0
+    cached = usage.get("cached_tokens", 0) or 0
+    total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
+    total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
+    if model is not None:
+        bucket = total_usage.setdefault("by_model", {}).setdefault(
+            model,
+            {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+                "cost_usd": 0.0,
+                "cached_tokens": 0,
+            },
+        )
+        bucket["prompt_tokens"] += usage.get("prompt_tokens", 0)
+        bucket["completion_tokens"] += usage.get("completion_tokens", 0)
+        bucket["total_tokens"] += usage.get("total_tokens", 0)
+        bucket["cost_usd"] += cost
+        bucket["cached_tokens"] += cached
+
+
 async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -289,6 +321,7 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
             total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
             total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
             total_usage["total_tokens"] += usage.get("total_tokens", 0)
+            _add_cost_to_usage(total_usage, usage, model=model)
 
     return stage1_results, total_usage
 
@@ -364,6 +397,7 @@ async def stage1_collect_responses_with_status(
             total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
             total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
             total_usage["total_tokens"] += usage.get("total_tokens", 0)
+            _add_cost_to_usage(total_usage, usage, model=model)
 
     return stage1_results, total_usage, model_statuses
 
@@ -1074,6 +1108,7 @@ Rewritten text:"""
             total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
             total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
             total_usage["total_tokens"] += usage.get("total_tokens", 0)
+            _add_cost_to_usage(total_usage, usage, model=result["model"])
         else:
             # If normalization fails, use original
             normalized_results.append(
@@ -1359,6 +1394,7 @@ Now provide your evaluation and ranking:"""
             total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
             total_usage["completion_tokens"] += usage.get("completion_tokens", 0)
             total_usage["total_tokens"] += usage.get("total_tokens", 0)
+            _add_cost_to_usage(total_usage, usage, model=model)
 
     return stage2_results, label_to_model, total_usage
 
@@ -1514,6 +1550,7 @@ STAGE 2 - Peer Rankings:
     total_usage["prompt_tokens"] = usage.get("prompt_tokens", 0)
     total_usage["completion_tokens"] = usage.get("completion_tokens", 0)
     total_usage["total_tokens"] = usage.get("total_tokens", 0)
+    _add_cost_to_usage(total_usage, usage, model=_get_chairman_model())
 
     response_content = response.get("content", "")
 
@@ -2205,7 +2242,26 @@ async def run_full_council(
         "prompt_tokens": sum(s["prompt_tokens"] for s in total_usage.values()),
         "completion_tokens": sum(s["completion_tokens"] for s in total_usage.values()),
         "total_tokens": sum(s["total_tokens"] for s in total_usage.values()),
+        # ADR-011: cost + cache totals (0 when no provider cost was reported).
+        "cost_usd": sum(s.get("cost_usd", 0.0) for s in total_usage.values()),
+        "cached_tokens": sum(s.get("cached_tokens", 0) for s in total_usage.values()),
     }
+    # ADR-011: merge per-model spend across stages (reviewer-primary attribution).
+    by_model: Dict[str, Dict[str, Any]] = {}
+    for stage_usage in total_usage.values():
+        for m, mu in stage_usage.get("by_model", {}).items():
+            agg = by_model.setdefault(
+                m,
+                {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost_usd": 0.0,
+                    "cached_tokens": 0,
+                },
+            )
+            for key in agg:
+                agg[key] += mu.get(key, 0)
 
     # Collect abstention info and score/rank mismatches from Stage 2
     abstentions = []
@@ -2241,7 +2297,7 @@ async def run_full_council(
             "deadlock_detected": deadlock_detected,  # ADR-025b: True if escalated to TIE_BREAKER
             "include_dissent": include_dissent,  # ADR-025b: Dissent extraction enabled
         },
-        "usage": {"by_stage": total_usage, "total": grand_total},
+        "usage": {"by_stage": total_usage, "by_model": by_model, "total": grand_total},
     }
 
     # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
