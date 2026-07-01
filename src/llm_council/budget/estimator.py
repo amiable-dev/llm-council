@@ -9,9 +9,12 @@ treats as "allow" rather than guessing.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, List, Optional
 
 from .types import CostEstimate
+
+logger = logging.getLogger(__name__)
 
 # ADR-011 §5: spread around the expected estimate (≈ p25 low / p95 high buffers).
 _LOW_FACTOR = 0.6
@@ -42,9 +45,13 @@ class CostEstimator:
         for model_id in models:
             try:
                 mean_cost: Optional[float] = tracker.get_model_index(model_id).mean_cost_usd
-            except Exception:
+            except Exception as exc:
+                # Estimation is best-effort; a tracker failure must not crash it,
+                # but it is logged rather than silently swallowed.
+                logger.debug("cost estimate: %r lookup failed (ignored): %s", model_id, exc)
                 mean_cost = None
-            if mean_cost:
+            # A known $0 (free/local) contributes 0 but is NOT "unknown".
+            if mean_cost is not None:
                 expected += mean_cost
         return CostEstimate(
             low=round(expected * _LOW_FACTOR, 8),

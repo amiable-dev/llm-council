@@ -37,6 +37,18 @@ class TestEstimator:
         est = CostEstimator(tracker=_FakeTracker({}))
         assert est.estimate(["a"]).expected == 0.0
 
+    def test_known_zero_cost_model_included(self):
+        # A genuine $0 model is "known" (contributes 0), not dropped as unknown.
+        est = CostEstimator(tracker=_FakeTracker({"free": 0.0, "paid": 0.02}))
+        assert est.estimate(["free", "paid"]).expected == 0.02
+
+    def test_tracker_failure_is_tolerated(self):
+        class _Boom:
+            def get_model_index(self, _):
+                raise RuntimeError("store unavailable")
+
+        assert CostEstimator(tracker=_Boom()).estimate(["a"]).expected == 0.0
+
 
 _EST = CostEstimate(low=0.6, expected=1.0, high=1.5)
 
