@@ -86,6 +86,9 @@ class LayerEventType(Enum):
     L1_TIER_SELECTED = "l1_tier_selected"
     L1_TIER_ESCALATION = "l1_tier_escalation"
     L1_TIER_DEESCALATION = "l1_tier_deescalation"
+    # ADR-011 Phase 4: opt-in budget enforcement decision (auditable; never a
+    # silent tier change).
+    L1_BUDGET_DECISION = "l1_budget_decision"
 
     # L2 Events (Query Triage)
     L2_TRIAGE_COMPLETE = "l2_triage_complete"
