@@ -56,7 +56,9 @@ def format_cost_summary(
         for model, mu in by_model.items():
             entry = f"- {model}: {mu.get('total_tokens', 0)} tok"
             mc = mu.get("cost_usd", 0.0) or 0.0
-            if mc:
+            # Consistent with the one-liner: show the figure (incl. a genuine
+            # $0) when cost is known; omit only when cost is unknown.
+            if cost_known or mc > 0:
                 entry += f", {_fmt_cost(mc)}"
             lines.append(entry)
 
@@ -69,7 +71,7 @@ def format_cost_summary(
                 continue
             entry = f"- {stage}: {tok} tok"
             sc = su.get("cost_usd", 0.0) or 0.0
-            if sc:
+            if cost_known or sc > 0:
                 entry += f", {_fmt_cost(sc)}"
             lines.append(entry)
 

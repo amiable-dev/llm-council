@@ -61,3 +61,15 @@ def test_genuine_zero_cost_shown_when_known():
     usage = {"total": {"total_tokens": 100, "cost_usd": 0.0, "cost_known": True}}
     out = format_cost_summary(usage)
     assert "$0.0000" in out
+
+
+def test_detail_lines_show_known_zero_consistently():
+    # Detail per-model/per-stage lines must not suppress a known $0 (must match
+    # the one-liner's known-vs-unknown logic).
+    usage = {
+        "total": {"total_tokens": 20, "cost_usd": 0.0, "cost_known": True},
+        "by_model": {"ollama/llama3": {"total_tokens": 20, "cost_usd": 0.0}},
+        "by_stage": {"stage1": {"total_tokens": 20, "cost_usd": 0.0}},
+    }
+    out = format_cost_summary(usage, include_details=True)
+    assert out.count("$0.0000") >= 2  # one-liner + model + stage all show it
