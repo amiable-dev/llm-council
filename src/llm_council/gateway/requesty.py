@@ -258,7 +258,7 @@ class RequestyGateway(BaseRouter):
                         "cost": usage.get("cost"),
                         "cached_tokens": (
                             usage.get("cached_tokens")
-                            or usage.get("prompt_tokens_details", {}).get(
+                            or (usage.get("prompt_tokens_details") or {}).get(
                                 "cached_tokens", 0
                             )
                             or 0

@@ -63,3 +63,28 @@ async def test_cost_absent_is_none_not_error():
     assert result is not None
     assert result["usage"]["cost"] is None
     assert result["usage"]["cached_tokens"] == 0
+
+
+@pytest.mark.asyncio
+async def test_null_prompt_tokens_details_does_not_crash():
+    # OpenRouter may send "prompt_tokens_details": null; .get(...,{}) returns
+    # None for a present-but-null key, so the chained .get must be guarded.
+    from llm_council.openrouter import STATUS_OK, query_model_with_status
+
+    usage = {
+        "prompt_tokens": 100,
+        "completion_tokens": 50,
+        "total_tokens": 150,
+        "prompt_tokens_details": None,
+    }
+    with (
+        patch("llm_council.openrouter.OPENROUTER_API_KEY", "test-key"),
+        patch("httpx.AsyncClient") as mock_client,
+    ):
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            return_value=_ok_response(usage)
+        )
+        result = await query_model_with_status("m", [{"role": "user", "content": "x"}])
+
+    assert result["status"] == STATUS_OK
+    assert result["usage"]["cached_tokens"] == 0

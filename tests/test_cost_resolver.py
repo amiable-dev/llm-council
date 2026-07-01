@@ -96,17 +96,47 @@ class TestCostResolver:
         assert usage.cost_source == "provider"
         assert usage.cached_tokens == 200
 
-    def test_missing_pricing_lookup_falls_back_to_none(self):
-        # No lookup injected: only provider/local paths can produce a cost.
-        r = CostResolver()
+    def test_unknown_pricing_returns_none_with_empty_lookup(self):
+        # An explicit empty lookup models "pricing unknown".
+        r = CostResolver(pricing_lookup=lambda m: {})
         cost, source = r.resolve(
             gateway="direct",
-            model_id="openai/gpt-4o",
+            model_id="unpriced/model",
             prompt_tokens=1000,
             completion_tokens=1000,
         )
         assert cost is None
         assert source is None
+
+    def test_non_numeric_provider_cost_falls_through(self):
+        # A malformed provider cost must not crash; fall back to a registry estimate.
+        r = CostResolver(pricing_lookup=_pricing_lookup)
+        cost, source = r.resolve(
+            gateway="direct",
+            model_id="openai/gpt-4o",
+            prompt_tokens=1000,
+            completion_tokens=500,
+            provider_cost_usd="not-a-number",
+        )
+        assert source == "registry_estimate"
+        assert cost == 0.0075
+
+    def test_default_resolver_uses_registry_lookup(self, monkeypatch):
+        # A bare CostResolver() defaults to the registry lookup so Direct-API
+        # calls are still priced (finding: missing default fallback).
+        monkeypatch.setattr(
+            "llm_council.gateway.cost_resolver.registry_pricing_lookup",
+            lambda m: {"prompt": 0.001, "completion": 0.002},
+        )
+        r = CostResolver()
+        cost, source = r.resolve(
+            gateway="direct",
+            model_id="x/y",
+            prompt_tokens=1000,
+            completion_tokens=1000,
+        )
+        assert source == "registry_estimate"
+        assert cost == 0.003
 
 
 class TestUsageInfoCostFields:

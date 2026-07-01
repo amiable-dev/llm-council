@@ -47,7 +47,10 @@ class CostResolver:
     """Resolve ``(cost_usd, cost_source)`` for a single model call."""
 
     def __init__(self, pricing_lookup: Optional[PricingLookup] = None) -> None:
-        self._pricing_lookup = pricing_lookup
+        # Default to the registry-backed lookup so a bare CostResolver() can
+        # still price Direct-API calls; local gateways short-circuit before it.
+        # Pass an explicit lookup (e.g. in tests) to override.
+        self._pricing_lookup = pricing_lookup or registry_pricing_lookup
 
     def resolve(
         self,
@@ -64,7 +67,12 @@ class CostResolver:
         gateways are free; anything unpriced resolves to ``(None, None)``.
         """
         if provider_cost_usd is not None:
-            return float(provider_cost_usd), "provider"
+            try:
+                return float(provider_cost_usd), "provider"
+            except (TypeError, ValueError):
+                # A malformed provider cost is not ground truth; fall through
+                # to a registry estimate rather than crashing.
+                pass
 
         if gateway in _LOCAL_GATEWAYS:
             return 0.0, "local_zero"

@@ -41,9 +41,10 @@ class TestOpenRouterCostCapture:
         assert resp.usage.cost_source == "provider"
         assert resp.usage.cached_tokens == 20
 
-    async def test_no_provider_cost_leaves_cost_unknown(self):
-        # If OpenRouter omits cost, there's no ground truth and (without a
-        # pricing lookup wired at this layer) cost stays unresolved.
+    async def test_no_provider_cost_unknown_model_stays_unknown(self):
+        # No provider cost AND a model absent from the registry -> unresolved.
+        # (A known model would instead get a registry_estimate via the default
+        # lookup — the layered fallback from ADR-011 §1.)
         gw = OpenRouterGateway()
         fake = {
             "status": "ok",
@@ -52,12 +53,39 @@ class TestOpenRouterCostCapture:
             "usage": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
         }
         with patch.object(gw, "_query_openrouter", new=AsyncMock(return_value=fake)):
-            resp = await gw.complete(_req())
+            resp = await gw.complete(_req("zzz/nonexistent-model-xyz"))
 
         assert resp.usage is not None
         assert resp.usage.cost_usd is None
         assert resp.usage.cost_source is None
         assert resp.usage.cached_tokens == 0
+
+
+class TestReasoningParamsForwarding:
+    async def test_complete_forwards_reasoning_params(self):
+        # ADR-026: the gateway path previously dropped reasoning_params.
+        from llm_council.gateway.openrouter import OpenRouterGateway
+        from llm_council.gateway.types import ReasoningParams
+
+        gw = OpenRouterGateway()
+        rp = ReasoningParams(effort="high", max_tokens=1000)
+        captured = {}
+
+        async def _fake_query(**kwargs):
+            captured.update(kwargs)
+            return {
+                "status": "ok",
+                "content": "hi",
+                "latency_ms": 1,
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            }
+
+        with patch.object(gw, "_query_openrouter", new=_fake_query):
+            req = _req()
+            req.reasoning_params = rp
+            await gw.complete(req)
+
+        assert captured.get("reasoning_params") is rp
 
 
 class TestDirectCostCapture:
