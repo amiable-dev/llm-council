@@ -18,6 +18,7 @@ without loading the metadata stack. See ADR-011 §1 and ADR-023 §5.
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Dict, Optional, Tuple
 
 from .types import UsageInfo
@@ -68,11 +69,14 @@ class CostResolver:
         """
         if provider_cost_usd is not None:
             try:
-                return float(provider_cost_usd), "provider"
+                cost = float(provider_cost_usd)
             except (TypeError, ValueError):
-                # A malformed provider cost is not ground truth; fall through
-                # to a registry estimate rather than crashing.
-                pass
+                cost = None
+            # Only a finite, non-negative number is valid ground truth; NaN,
+            # infinity, negatives, or malformed values fall through to an
+            # estimate rather than corrupting accounting metrics.
+            if cost is not None and math.isfinite(cost) and cost >= 0:
+                return cost, "provider"
 
         if gateway in _LOCAL_GATEWAYS:
             return 0.0, "local_zero"

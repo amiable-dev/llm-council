@@ -121,6 +121,21 @@ class TestCostResolver:
         assert source == "registry_estimate"
         assert cost == 0.0075
 
+    def test_invalid_provider_costs_fall_through(self):
+        # NaN / infinity / negative are not valid ground truth; they must not
+        # corrupt accounting — fall through to a registry estimate instead.
+        r = CostResolver(pricing_lookup=_pricing_lookup)
+        for bad in (float("nan"), float("inf"), float("-inf"), -0.01):
+            cost, source = r.resolve(
+                gateway="direct",
+                model_id="openai/gpt-4o",
+                prompt_tokens=1000,
+                completion_tokens=500,
+                provider_cost_usd=bad,
+            )
+            assert source == "registry_estimate", bad
+            assert cost == 0.0075
+
     def test_default_resolver_uses_registry_lookup(self, monkeypatch):
         # A bare CostResolver() defaults to the registry lookup so Direct-API
         # calls are still priced (finding: missing default fallback).
