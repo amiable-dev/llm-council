@@ -1,0 +1,53 @@
+{
+  "title": "LLM Council — Cost & Tokens (ADR-011)",
+  "uid": "llm-council-cost",
+  "tags": ["llm-council", "genai", "cost"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Tokens by model (input/output)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (gen_ai_request_model, gen_ai_token_type) (rate(gen_ai_client_token_usage_sum[5m]))",
+          "legendFormat": "{{gen_ai_request_model}} / {{gen_ai_token_type}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Cost (USD) by model",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } },
+      "targets": [
+        {
+          "expr": "sum by (gen_ai_request_model) (llm_council_cost_usd)",
+          "legendFormat": "{{gen_ai_request_model}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Total cost (USD, 24h)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" } },
+      "targets": [{ "expr": "sum(llm_council_cost_usd)" }]
+    },
+    {
+      "id": 4,
+      "title": "Total tokens (24h)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "sum(increase(gen_ai_client_token_usage_sum[24h]))" }
+      ]
+    }
+  ]
+}

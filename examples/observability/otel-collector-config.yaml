@@ -1,0 +1,34 @@
+# OTel Collector: scrape the council's Prometheus endpoint and fan the
+# gen_ai.* metrics out over OTLP to PostHog + Datadog (ADR-011 §8, Phase 2).
+receivers:
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: llm-council
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["llm-council:9464"]
+
+processors:
+  batch: {}
+
+exporters:
+  # Local Prometheus/Grafana (pull) — the collector also exposes a scrape endpoint.
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+  # PostHog LLM Analytics (OTLP/HTTP, Bearer auth). Auto-converts gen_ai.* to $ai_generation.
+  otlphttp/posthog:
+    endpoint: "${POSTHOG_OTLP_ENDPOINT}"
+    headers:
+      Authorization: "Bearer ${POSTHOG_API_KEY}"
+  # Datadog / any OTLP backend — uncomment and set endpoint.
+  # otlp/datadog:
+  #   endpoint: "https://otlp.datadoghq.com"
+  #   headers: { "dd-api-key": "${DD_API_KEY}" }
+
+service:
+  pipelines:
+    metrics:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters: [prometheus, otlphttp/posthog]

@@ -1,0 +1,40 @@
+# Observability overlay (ADR-011 Phase 2). Compose alongside the base file:
+#   docker compose -f docker-compose.yml -f examples/observability/docker-compose.observability.yml up
+#
+# Emits OTel GenAI metrics (gen_ai.client.token.usage, llm_council.cost.usd)
+# from the council's Prometheus endpoint; the collector re-exports OTLP to
+# PostHog/Datadog. Dashboards are BYO-backend (open-core boundary, ADR-009).
+services:
+  llm-council:
+    environment:
+      LLM_COUNCIL_METRICS_ENABLED: "true"
+      LLM_COUNCIL_METRICS_BACKEND: "prometheus"
+      LLM_COUNCIL_PROMETHEUS_PORT: "9464"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./examples/observability/otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    environment:
+      POSTHOG_API_KEY: "${POSTHOG_API_KEY:-}"
+      POSTHOG_OTLP_ENDPOINT: "${POSTHOG_OTLP_ENDPOINT:-https://us.i.posthog.com}"
+    depends_on:
+      - llm-council
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./examples/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    depends_on:
+      - prometheus

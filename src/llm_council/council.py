@@ -132,6 +132,7 @@ from llm_council.bias_audit import (
     BiasAuditResult,
 )
 from llm_council.bias_persistence import persist_session_bias_data
+from llm_council.observability.usage_metrics import emit_usage_metrics
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
 from llm_council.dissent import extract_dissent_from_stage2
 from llm_council.layer_contracts import (
@@ -852,6 +853,8 @@ async def run_council_with_fallback(
                 "stage3": stage3_usage,
             }
         )
+        # ADR-011 Phase 2: emit OTel GenAI token/cost metrics (soft-fail).
+        emit_usage_metrics(result["metadata"]["usage"])
 
         # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
         if verdict_result is not None:
@@ -2296,6 +2299,8 @@ async def run_full_council(
 
     # ADR-011: assemble the usage summary (tokens + cost + per-model).
     usage_summary = _build_usage_summary(total_usage)
+    # ADR-011 Phase 2: emit OTel GenAI token/cost metrics (soft-fail).
+    emit_usage_metrics(usage_summary)
 
     # Collect abstention info and score/rank mismatches from Stage 2
     abstentions = []
