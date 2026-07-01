@@ -166,7 +166,11 @@ async def consult_council(
             in your client config to at least the tier's server budget when
             using these tiers — otherwise the client will cut the connection
             before the council finishes deliberating.
-        include_details: If True, includes individual model responses and rankings.
+        include_details: If True, includes individual model responses, rankings,
+            and the full per-model/per-stage Cost & Tokens breakdown. When False
+            (default) only a one-line cost/token summary is returned. Leave it
+            False unless the user explicitly wants the detail — the breakdown is
+            verbose and consumes context; do not echo it to the user unprompted.
         verdict_type: Type of verdict to render (ADR-025b Jury Mode):
             - "synthesis": Default behavior, unstructured natural language synthesis
             - "binary": Go/no-go decision (approved/rejected) with confidence score

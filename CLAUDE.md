@@ -53,6 +53,11 @@ Evaluation & scoring
 - `evaluation.py`, `quality/`, `verdict.py`, `dissent.py` — additional evaluation/quality surfaces.
 - `gateway/` (ADR-030) — `EnhancedCircuitBreaker` (sliding-window failure rate, default 25% over 10-min window, 30-min cooldown, half-open probes) + per-model registry that emits `L4_CIRCUIT_BREAKER_OPEN/CLOSE`. `scoring.py` — cost-scoring algorithms (linear/log_ratio/exponential).
 
+Cost & token accounting (ADR-011, Phase 1)
+- `gateway/cost_resolver.py` — `CostResolver` stamps `cost_usd` + `cost_source` on each call: **provider** ground-truth for OpenRouter/Requesty (inline `usage.cost`, previously discarded), **registry_estimate** for Direct APIs (`registry.yaml` pricing × tokens), **local_zero** for Ollama. `registry_pricing_lookup` bridges to `metadata.get_provider().get_pricing`.
+- `openrouter.py` `query_model` now captures `cost`/`cached_tokens`; `council.py` aggregates per-stage **and** per-model (`_add_cost_to_usage` → `_build_usage_summary`, shared by both entry points) into `metadata["usage"] = {by_stage, by_model, total}` — each carries `cost_usd`/`cached_tokens`. **Never presents an estimate as a bill** (`cost_source` distinguishes). Cost accounting never fails a run (soft-fail).
+- `cost_summary.py` `format_cost_summary` renders usage with **progressive disclosure**: one dense line by default, full per-model/per-stage breakdown only under `include_details`. Surfaced in MCP `consult_council` ("Cost & Tokens") and as a typed `usage` field on the HTTP `CouncilResponse`. Releases: one version bump per epic, not per PR (git-tag/setuptools-scm; `publish.yml` triggers on tag only).
+
 Bias (ADR-015/018)
 - `bias_audit.py` (ADR-015) — per-session indicators: length↔score correlation (pure-Python Pearson), reviewer calibration, position bias. **These are anomaly indicators, not statistically robust proof** — with N=4–5 models there are only 4–5 data points (≥30 needed for significance), and a single ordering can't separate position effects from quality.
 - `bias_persistence.py` (ADR-018 P1) — JSONL store, `ConsentLevel` (OFF→RESEARCH). `bias_aggregation.py` (ADR-018 P2-3) — cross-session pooled correlation w/ CIs (Fisher-z), confidence tiers, temporal trends, anomaly flagging. Surfaced via `llm-council bias-report`.

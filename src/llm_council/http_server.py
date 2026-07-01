@@ -130,6 +130,21 @@ class CouncilRequest(BaseModel):
     )
 
 
+class UsageSummary(BaseModel):
+    """ADR-011 cost/token accounting for a council run.
+
+    ``total`` and each ``by_stage`` / ``by_model`` entry carry
+    ``prompt_tokens``, ``completion_tokens``, ``total_tokens``, ``cost_usd``
+    (USD; 0 when no provider cost was reported), and ``cached_tokens``.
+    """
+
+    by_stage: Dict[str, Any] = Field(default_factory=dict, description="Usage per stage")
+    by_model: Dict[str, Any] = Field(
+        default_factory=dict, description="Usage per model (reviewer-primary attribution)"
+    )
+    total: Dict[str, Any] = Field(default_factory=dict, description="Grand total across stages")
+
+
 class CouncilResponse(BaseModel):
     """Response from council deliberation."""
 
@@ -137,6 +152,9 @@ class CouncilResponse(BaseModel):
     stage2: List[Dict[str, Any]] = Field(..., description="Peer review rankings")
     stage3: Dict[str, Any] = Field(..., description="Final synthesis")
     metadata: Dict[str, Any] = Field(..., description="Aggregate rankings and config")
+    usage: Optional[UsageSummary] = Field(
+        None, description="ADR-011 cost/token accounting (also present under metadata.usage)"
+    )
 
 
 class HealthResponse(BaseModel):
@@ -217,6 +235,7 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
             stage2=stage2,
             stage3=stage3,
             metadata=metadata,
+            usage=metadata.get("usage"),  # ADR-011: typed, OpenAPI-documented
         )
     except HTTPException:
         raise

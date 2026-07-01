@@ -317,7 +317,10 @@ llm-council
 
 ### `consult_council`
 
-Ask the LLM council a question and get synthesized guidance.
+Ask the LLM council a question and get synthesized guidance. Every response
+includes a one-line **Cost & Tokens** summary (total tokens, plus USD cost when
+the provider reports it); pass `include_details=true` for the full
+per-model/per-stage breakdown.
 
 **Arguments:**
 - `query` (string, required): The question to ask the council
@@ -326,7 +329,7 @@ Ask the LLM council a question and get synthesized guidance.
   - `"balanced"`: Mid-tier models (GPT-4o, Sonnet), ~90 seconds - good balance of speed and quality
   - `"high"`: Full council (Opus, GPT-4o), ~180 seconds - comprehensive deliberation
   - `"reasoning"`: Deep thinking models (GPT-5.2, o1, DeepSeek-R1), ~600 seconds - complex reasoning
-- `include_details` (boolean, optional): Include individual model responses and rankings (default: false)
+- `include_details` (boolean, optional): Include individual model responses, rankings, and the full per-model/per-stage **Cost & Tokens** breakdown (default: false)
 - `verdict_type` (string, optional): Type of verdict to render (default: "synthesis")
   - `"synthesis"`: Free-form natural language synthesis
   - `"binary"`: Go/no-go decision (approved/rejected) with confidence score

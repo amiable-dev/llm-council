@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cost and token accounting (ADR-011, Phase 1)** — the council now captures and reports USD cost alongside tokens. A per-gateway `CostResolver` (`gateway/cost_resolver.py`) stamps `cost_usd` + a `cost_source` provenance tag onto every call — `provider` ground-truth for OpenRouter/Requesty (capturing the previously-discarded inline `usage.cost`), `registry_estimate` from `registry.yaml` pricing for Direct APIs, and `local_zero` for Ollama — so an estimate is never presented as a bill. `metadata["usage"]` now carries `{by_stage, by_model, total}` with `cost_usd`/`cached_tokens` (per-model uses reviewer-primary attribution), exposed as a typed, OpenAPI-documented `usage` field on the HTTP `CouncilResponse` and as a progressive-disclosure **Cost & Tokens** summary in MCP `consult_council` (one line by default; full per-model/per-stage breakdown only under `include_details`). The MCP fallback path (`run_council_with_fallback`) now aggregates usage into metadata too (previously absent — the MCP surface had no token data). Cost accounting is soft-fail and never breaks a council run. Surfacing token/cost in `VerifyResponse` is deferred to a follow-up (verification telemetry, ADR-041).
+
 ## [0.24.45] - 2026-06-16
 
 Verify-gate robustness pass, from a real epic-loop session that "kept reporting council timeouts." Investigation of the live transcripts and `.council/logs` found the council server healthy — the pain was four distinct verify-layer defects conflated as "timeouts". All four are fixed here.
