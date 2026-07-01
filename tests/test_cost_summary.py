@@ -39,6 +39,15 @@ def test_details_include_per_model_and_stage():
     assert out.splitlines()[0].startswith("Council usage:")
 
 
+def test_none_nested_values_do_not_crash():
+    # A malformed usage block with null sub-sections must not raise.
+    usage = {"total": None, "by_model": None, "by_stage": None}
+    assert format_cost_summary(usage) == "Council usage: ~0 tokens"
+    # include_details path must also survive nulls.
+    out = format_cost_summary(usage, include_details=True)
+    assert out.startswith("Council usage:")
+
+
 def test_cost_omitted_when_zero_or_unknown():
     usage = {"total": {"total_tokens": 100, "cost_usd": 0.0}}
     out = format_cost_summary(usage)

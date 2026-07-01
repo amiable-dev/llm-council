@@ -31,7 +31,7 @@ def format_cost_summary(
     if not usage:
         return ""
 
-    total = usage.get("total", {})
+    total = usage.get("total") or {}
     total_tokens = total.get("total_tokens", 0)
     cost = total.get("cost_usd", 0.0) or 0.0
 
@@ -46,7 +46,7 @@ def format_cost_summary(
         return line
 
     lines = [line]
-    by_model = usage.get("by_model", {})
+    by_model = usage.get("by_model") or {}
     if by_model:
         lines += ["", "**By model:**"]
         for model, mu in by_model.items():
@@ -56,7 +56,7 @@ def format_cost_summary(
                 entry += f", {_fmt_cost(mc)}"
             lines.append(entry)
 
-    by_stage = usage.get("by_stage", {})
+    by_stage = usage.get("by_stage") or {}
     if by_stage:
         lines += ["", "**By stage:**"]
         for stage, su in by_stage.items():
