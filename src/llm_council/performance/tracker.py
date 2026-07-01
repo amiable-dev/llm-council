@@ -94,14 +94,21 @@ def _calculate_decay_weight(timestamp: str, decay_days: int) -> float:
     if not timestamp:
         return 1.0
 
+    if decay_days <= 0:
+        return 1.0  # no decay configured -> avoid division by zero
+
     try:
         record_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        # Treat a naive timestamp as UTC so it is comparable to an aware `now`
+        # (otherwise the subtraction raises TypeError).
+        if record_time.tzinfo is None:
+            record_time = record_time.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         days_ago = (now - record_time).total_seconds() / (24 * 3600)
 
         # Exponential decay: e^(-days_ago / decay_days)
         return math.exp(-days_ago / decay_days)
-    except ValueError:
+    except (ValueError, TypeError):
         # If timestamp parsing fails, give full weight
         return 1.0
 
@@ -276,7 +283,12 @@ class InternalPerformanceTracker:
             return quality
 
         low, high = min(qpc.values()), max(qpc.values())
-        span = (high - low) or 1.0
+        if high == low:
+            # One cost-known model, or all with identical value-for-money: no
+            # differentiation is possible, so keep quality scores rather than
+            # collapsing everyone to 0.0.
+            return quality
+        span = high - low
         result = dict(quality)
         for model_id, value in qpc.items():
             # Same 0–1 scale as the plain quality scores.

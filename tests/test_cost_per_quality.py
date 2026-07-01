@@ -99,6 +99,30 @@ class TestCostAwareScores:
         assert scores["cheap/m"] > scores["pricey/m"]
 
 
+class TestEdgeCases:
+    def test_single_cost_model_not_punished(self, tmp_path, monkeypatch):
+        # Only one model has cost data -> no differentiation possible; it must
+        # keep its quality score, not be normalized to 0.0.
+        monkeypatch.setenv("LLM_COUNCIL_COST_AWARE_SELECTION", "true")
+        t = InternalPerformanceTracker(store_path=tmp_path / "perf.jsonl")
+        for i in range(12):
+            t.record_session(f"a{i}", [_metric("has_cost/m", 0.6, 0.01, f"a{i}")])
+            t.record_session(f"b{i}", [_metric("no_cost/m", 0.7, None, f"b{i}")])
+        scores = t.get_all_cost_aware_scores()
+        assert scores["has_cost/m"] > 0.4  # not collapsed to 0.0
+
+    def test_naive_timestamp_does_not_crash(self):
+        from llm_council.performance.tracker import _calculate_decay_weight
+
+        w = _calculate_decay_weight("2026-01-01T00:00:00", 30)  # naive, no tz
+        assert 0.0 <= w <= 1.0
+
+    def test_decay_days_zero_does_not_crash(self):
+        from llm_council.performance.tracker import _calculate_decay_weight
+
+        assert _calculate_decay_weight("2026-01-01T00:00:00Z", 0) == 1.0
+
+
 class TestPersistWiring:
     def test_persist_records_cost_from_usage_by_model(self, tmp_path, monkeypatch):
         import llm_council.performance.integration as integ
