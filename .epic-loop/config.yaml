@@ -50,6 +50,12 @@ council:
 # straight to the mandatory Council gate. Flip to `copilot` if that changes.
 review: none
 
+# Raised to 5/hr (from 2) for autonomous multi-phase execution of epic #359.
+# Safe here because child merges never publish: setuptools-scm derives the
+# version from git tags and publish.yml triggers on tag push only, so merging
+# phase PRs to master does NOT release. Versioning is deferred to ONE release
+# at epic completion (minor, or major if breaking), per the impact of the whole
+# epic — see epic #359 and [[council-release-once-per-epic]].
 cadence_floor:
-  max_merges_per_hour: 2
+  max_merges_per_hour: 5
   scope: closes_clause

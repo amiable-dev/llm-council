@@ -16,6 +16,12 @@ import httpx
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_api_key
 
+# ADR-011: per-gateway cost resolution. OpenRouter returns authoritative cost,
+# so no pricing lookup is needed here (provider path).
+from .cost_resolver import CostResolver
+
+_COST_RESOLVER = CostResolver()
+
 # Default constants
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -261,6 +267,16 @@ class OpenRouterGateway(BaseRouter):
                         "prompt_tokens": usage.get("prompt_tokens", 0),
                         "completion_tokens": usage.get("completion_tokens", 0),
                         "total_tokens": usage.get("total_tokens", 0),
+                        # ADR-011: OpenRouter returns the authoritative billed
+                        # cost inline; capture it (previously discarded).
+                        "cost": usage.get("cost"),
+                        "cached_tokens": (
+                            usage.get("cached_tokens")
+                            or usage.get("prompt_tokens_details", {}).get(
+                                "cached_tokens", 0
+                            )
+                            or 0
+                        ),
                     },
                 }
 
@@ -312,6 +328,14 @@ class OpenRouterGateway(BaseRouter):
                 prompt_tokens=usage_data.get("prompt_tokens", 0),
                 completion_tokens=usage_data.get("completion_tokens", 0),
                 total_tokens=usage_data.get("total_tokens", 0),
+            )
+            # ADR-011: stamp cost_usd + cost_source (provider ground-truth).
+            _COST_RESOLVER.apply(
+                usage,
+                gateway="openrouter",
+                model_id=request.model,
+                provider_cost_usd=usage_data.get("cost"),
+                cached_tokens=usage_data.get("cached_tokens"),
             )
 
         return GatewayResponse(
