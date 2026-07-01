@@ -1,0 +1,51 @@
+# .epic-loop/config.yaml — per-repo bindings for /epic-loop and /adr-epic.
+# Schema: .claude/skills/epic-loop/references/config-schema.md
+# Tuned for llm-council (Python package: CLI + HTTP + MCP server).
+version: 1
+
+project:
+  name: "llm-council"
+  short_name: "council"
+  repo: "amiable-dev/llm-council"        # EPIC=N resolves against this repo
+
+# Pre-push gates mirror the required CI checks (Test / Lint / Type Check) so a
+# red CI (state F) is caught locally first. Scoped via only_if_changed: ADR- and
+# docs-only PRs skip build/test entirely and pay nothing. `make test-fast` here
+# keeps the loop snappy; CI still runs the full `make test` suite as the backstop.
+pre_push_gates:
+  - name: lint-typecheck
+    command: make check          # ruff + mypy
+    only_if_changed:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+  - name: tests-fast
+    command: make test-fast
+    only_if_changed:
+      - "src/**"
+      - "tests/**"
+
+language_test_guards: []
+gui_paths: []
+
+# slop-detector (already installed, pinned) runs collect-only over src/ and is
+# fed to Council as informational evidence — not a hard gate.
+quality_signals:
+  enabled: true
+  scan_target: "src"
+  trigger_paths:
+    - "src/**"
+  scanner_version_pin: "3.7.3"
+
+council:
+  default_tier: balanced
+  confidence_threshold: 0.7
+  on_budget_exceeded: manual_coverage
+
+# No Copilot reviewer authors PRs in this repo → skip the B0–B3 ladder and go
+# straight to the mandatory Council gate. Flip to `copilot` if that changes.
+review: none
+
+cadence_floor:
+  max_merges_per_hour: 2
+  scope: closes_clause

@@ -866,6 +866,8 @@ class UnifiedCostRecord:
 
 **Key insight**: Prefer router-reported costs when available, fall back to calculated costs using a maintained pricing table, always record both for reconciliation.
 
+> **Amendment (2026-07-01):** This cost-tracking gap is now addressed by [ADR-011: Cost and Token Accounting](./ADR-011-cost-tracking.md). ADR-011 realizes the reconciliation model described here: a per-gateway `CostResolver` at L4 stamps each `UsageInfo` with `cost_usd` and a `cost_source` (`provider` | `registry_estimate` | `local_zero`) — the same intent as `UnifiedCostRecord.pricing_source` above. OpenRouter and Requesty supply router-reported ground truth (`usage.cost`); Direct-API providers (Anthropic/OpenAI/Google) fall back to the `models/registry.yaml` pricing table; Ollama is local-zero. Where both a router-reported and a calculated figure exist, ADR-011 logs the delta to tune the pricing table. No changes to this ADR's gateway or BYOK design are required — the resolver sits on top of the existing L4 contracts.
+
 ---
 
 ### Critical Risks Identified (Question 6)

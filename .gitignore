@@ -65,3 +65,9 @@ site/
 .mcp.json
 .council/
 .council/
+
+# slop-detector: governance config (contains codebase complexity surface — keep private)
+.epic-loop/*
+!.epic-loop/config.yaml
+.slopconfig.yaml
+.clawpatch/
