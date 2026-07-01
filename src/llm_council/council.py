@@ -294,6 +294,38 @@ def _add_cost_to_usage(
         bucket["cached_tokens"] += cached
 
 
+def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """ADR-011: assemble the ``metadata["usage"]`` block from per-stage buckets.
+
+    Produces ``{"by_stage", "by_model", "total"}`` where ``total`` sums tokens +
+    cost + cached across stages and ``by_model`` merges per-model spend. Shared
+    by both council entry points so the HTTP and MCP paths report identically.
+    """
+    grand_total = {
+        "prompt_tokens": sum(s.get("prompt_tokens", 0) for s in by_stage.values()),
+        "completion_tokens": sum(s.get("completion_tokens", 0) for s in by_stage.values()),
+        "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
+        "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
+        "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
+    }
+    by_model: Dict[str, Dict[str, Any]] = {}
+    for stage_usage in by_stage.values():
+        for model_id, model_usage in stage_usage.get("by_model", {}).items():
+            agg = by_model.setdefault(
+                model_id,
+                {
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "total_tokens": 0,
+                    "cost_usd": 0.0,
+                    "cached_tokens": 0,
+                },
+            )
+            for key in agg:
+                agg[key] += model_usage.get(key, 0)
+    return {"by_stage": by_stage, "by_model": by_model, "total": grand_total}
+
+
 async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -795,6 +827,18 @@ async def run_council_with_fallback(
         result["metadata"]["verdict_type"] = verdict_type.value
         result["metadata"]["effective_verdict_type"] = effective_verdict_type.value
         result["metadata"]["deadlock_detected"] = deadlock_detected
+
+        # ADR-011: aggregate usage into metadata so the MCP path reports cost +
+        # tokens (previously absent on this fallback path — parity with
+        # run_full_council).
+        result["metadata"]["usage"] = _build_usage_summary(
+            {
+                "stage1": stage1_usage,
+                "stage1_5": stage1_5_usage,
+                "stage2": stage2_usage,
+                "stage3": stage3_usage,
+            }
+        )
 
         # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
         if verdict_result is not None:
@@ -2237,31 +2281,8 @@ async def run_full_council(
         if dissent_text and verdict_result is not None:
             verdict_result.dissent = dissent_text
 
-    # Calculate grand total
-    grand_total = {
-        "prompt_tokens": sum(s["prompt_tokens"] for s in total_usage.values()),
-        "completion_tokens": sum(s["completion_tokens"] for s in total_usage.values()),
-        "total_tokens": sum(s["total_tokens"] for s in total_usage.values()),
-        # ADR-011: cost + cache totals (0 when no provider cost was reported).
-        "cost_usd": sum(s.get("cost_usd", 0.0) for s in total_usage.values()),
-        "cached_tokens": sum(s.get("cached_tokens", 0) for s in total_usage.values()),
-    }
-    # ADR-011: merge per-model spend across stages (reviewer-primary attribution).
-    by_model: Dict[str, Dict[str, Any]] = {}
-    for stage_usage in total_usage.values():
-        for m, mu in stage_usage.get("by_model", {}).items():
-            agg = by_model.setdefault(
-                m,
-                {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0,
-                    "cost_usd": 0.0,
-                    "cached_tokens": 0,
-                },
-            )
-            for key in agg:
-                agg[key] += mu.get(key, 0)
+    # ADR-011: assemble the usage summary (tokens + cost + per-model).
+    usage_summary = _build_usage_summary(total_usage)
 
     # Collect abstention info and score/rank mismatches from Stage 2
     abstentions = []
@@ -2297,7 +2318,7 @@ async def run_full_council(
             "deadlock_detected": deadlock_detected,  # ADR-025b: True if escalated to TIE_BREAKER
             "include_dissent": include_dissent,  # ADR-025b: Dissent extraction enabled
         },
-        "usage": {"by_stage": total_usage, "by_model": by_model, "total": grand_total},
+        "usage": usage_summary,
     }
 
     # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes

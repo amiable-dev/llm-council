@@ -292,6 +292,16 @@ async def consult_council(
         if alerts:
             result += f"\n**Alerts**: {', '.join(alerts)}\n"
 
+    # ADR-011: cost/token summary. One dense line by default; full per-model /
+    # per-stage breakdown only under include_details (progressive disclosure).
+    from .cost_summary import format_cost_summary
+
+    usage_summary = format_cost_summary(
+        metadata.get("usage"), include_details=include_details
+    )
+    if usage_summary:
+        result += "\n### Cost & Tokens\n" + usage_summary + "\n"
+
     if include_details:
         result += "\n\n### Council Details\n"
 
