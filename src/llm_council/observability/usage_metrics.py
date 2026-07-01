@@ -32,40 +32,42 @@ def emit_usage_metrics(usage: Optional[Dict[str, Any]], adapter: Any = None) -> 
         usage: the ``metadata["usage"]`` dict (``by_stage``/``by_model``/``total``).
         adapter: a MetricsAdapter (defaults to the global one). Injectable for tests.
     """
+    if not usage:
+        return
     try:
-        if not usage:
-            return
         if adapter is None:
             from .metrics_adapter import get_metrics_adapter
 
             adapter = get_metrics_adapter()
         backend = getattr(adapter, "backend", None)
-        if backend is None:
-            return
+    except Exception as exc:  # telemetry must never break a run
+        logger.debug("emit_usage_metrics: no adapter (ignored): %s", exc)
+        return
+    if backend is None:
+        return
 
-        by_model = usage.get("by_model") or {}
-        for model, mu in by_model.items():
+    # Isolate per-model so one bad row never drops the rest of the batch.
+    for model, mu in (usage.get("by_model") or {}).items():
+        try:
             base = {
                 "gen_ai.request.model": str(model),
                 "gen_ai.operation.name": "chat",
                 "gen_ai.system": "llm_council",
             }
-            prompt_tokens = mu.get("prompt_tokens", 0) or 0
-            completion_tokens = mu.get("completion_tokens", 0) or 0
-            if prompt_tokens:
-                backend.emit_histogram(
-                    TOKEN_USAGE_METRIC,
-                    float(prompt_tokens),
-                    {**base, "gen_ai.token.type": "input"},
-                )
-            if completion_tokens:
-                backend.emit_histogram(
-                    TOKEN_USAGE_METRIC,
-                    float(completion_tokens),
-                    {**base, "gen_ai.token.type": "output"},
-                )
-            # Only emit cost when it was actually reported (never a phantom $0).
+            # Emit token histograms unconditionally (0 is a valid observation).
+            backend.emit_histogram(
+                TOKEN_USAGE_METRIC,
+                float(mu.get("prompt_tokens", 0) or 0),
+                {**base, "gen_ai.token.type": "input"},
+            )
+            backend.emit_histogram(
+                TOKEN_USAGE_METRIC,
+                float(mu.get("completion_tokens", 0) or 0),
+                {**base, "gen_ai.token.type": "output"},
+            )
+            # Emit cost only when it was actually reported (never a phantom $0).
             if mu.get("cost_known") and mu.get("cost_usd") is not None:
                 backend.emit_gauge(COST_METRIC, float(mu["cost_usd"]), base)
-    except Exception as exc:  # telemetry must never break a run
-        logger.debug("emit_usage_metrics failed (ignored): %s", exc)
+        except Exception as exc:
+            logger.debug("emit_usage_metrics: skipping model %r (ignored): %s", model, exc)
+            continue

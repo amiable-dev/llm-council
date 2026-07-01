@@ -84,6 +84,34 @@ def test_empty_or_none_usage_is_noop():
     assert _emit({}).histograms == []
 
 
+def test_zero_tokens_still_emitted():
+    # 0 is a valid histogram observation; both input and output are emitted.
+    usage = {"by_model": {"m": {"prompt_tokens": 0, "completion_tokens": 0}}}
+    backend = _emit(usage)
+    assert len(backend.histograms) == 2
+    assert all(h[1] == 0.0 for h in backend.histograms)
+
+
+def test_per_model_failure_isolated():
+    # One model raising must not drop metrics for the others in the batch.
+    class _PartialBackend(_RecordingBackend):
+        def emit_histogram(self, name, value, tags):
+            if tags["gen_ai.request.model"] == "bad/m":
+                raise RuntimeError("boom")
+            super().emit_histogram(name, value, tags)
+
+    backend = _PartialBackend()
+    usage = {
+        "by_model": {
+            "bad/m": {"prompt_tokens": 1, "completion_tokens": 1},
+            "good/m": {"prompt_tokens": 2, "completion_tokens": 2},
+        }
+    }
+    emit_usage_metrics(usage, adapter=_Adapter(backend))
+    emitted = {h[2]["gen_ai.request.model"] for h in backend.histograms}
+    assert "good/m" in emitted  # survived the bad model's failure
+
+
 def test_never_raises_on_bad_backend():
     class _BadBackend:
         def emit_histogram(self, *a):
