@@ -806,6 +806,27 @@ def _build_evidence_section(
     )
 
 
+def _usage_input_metrics(usage: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """ADR-011 (#366): per-run token/cost totals for VerifyResponse.input_metrics.
+
+    Reads the council usage summary's grand total (from ``partial_state["usage"]``).
+    Returns an empty dict when usage is unavailable, so the field is simply
+    absent rather than reporting phantom zeros. ``cost_known`` distinguishes a
+    genuine $0 from unknown cost.
+    """
+    total = (usage or {}).get("total") or {}
+    if not total:
+        return {}
+    return {
+        "prompt_tokens": total.get("prompt_tokens", 0),
+        "completion_tokens": total.get("completion_tokens", 0),
+        "total_tokens": total.get("total_tokens", 0),
+        "cost_usd": total.get("cost_usd", 0.0),
+        "cost_known": bool(total.get("cost_known", False)),
+        "cached_tokens": total.get("cached_tokens", 0),
+    }
+
+
 def _evidence_input_metrics(
     request_evidence: Optional[List[EvidenceItem]],
     render_info: Optional[Dict[str, Any]],
@@ -2015,6 +2036,8 @@ async def _run_verification_pipeline(
         "num_models": num_models,
         "num_reviewers": num_models,
         "tier": request.tier,
+        # ADR-011 (#366): per-run token/cost totals (absent if usage unavailable).
+        **_usage_input_metrics(partial_state.get("usage")),
         # ADR-042: evidence-specific input metrics.
         **_evidence_input_metrics(
             request.evidence,
