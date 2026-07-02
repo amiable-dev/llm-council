@@ -295,15 +295,13 @@ class InternalPerformanceTracker:
         uses; models with unknown cost keep their quality score (neither rewarded
         nor punished for missing data).
         """
-        quality = self.get_all_model_scores()
         if not cost_aware_selection_enabled():
-            return quality
+            return self.get_all_model_scores()
 
-        # #384: read the store ONCE and group by model — one consistent
-        # snapshot, instead of a re-read per model (1+N reads).
-        grouped: dict[str, List[ModelSessionMetric]] = {}
-        for record in read_performance_records(self.store_path):
-            grouped.setdefault(record.model_id, []).append(record)
+        # #384: read the store ONCE — the quality pass and the quality-per-cost
+        # pass share a single consistent snapshot (was 1+N reads, then 2).
+        grouped = self._read_grouped()
+        quality = self._scores_from_grouped(grouped)
 
         qpc = {}
         for model_id in quality:
@@ -341,18 +339,22 @@ class InternalPerformanceTracker:
         Returns:
             Dict mapping model_id to mean Borda score (0-1)
         """
-        all_records = read_performance_records(self.store_path)
+        grouped = self._read_grouped()
+        return self._scores_from_grouped(grouped)
 
-        # Group by model_id
-        model_records: dict[str, List[ModelSessionMetric]] = {}
-        for record in all_records:
-            if record.model_id not in model_records:
-                model_records[record.model_id] = []
-            model_records[record.model_id].append(record)
+    def _read_grouped(self) -> dict[str, List[ModelSessionMetric]]:
+        """Read the store ONCE and group records by model (#384)."""
+        grouped: dict[str, List[ModelSessionMetric]] = {}
+        for record in read_performance_records(self.store_path):
+            grouped.setdefault(record.model_id, []).append(record)
+        return grouped
 
-        # Calculate mean Borda for models with sufficient data
+    def _scores_from_grouped(
+        self, grouped: dict[str, List[ModelSessionMetric]]
+    ) -> dict[str, float]:
+        """Mean Borda (0-1) per model with >=10 samples, from a loaded snapshot."""
         scores: dict[str, float] = {}
-        for model_id, records in model_records.items():
+        for model_id, records in grouped.items():
             if len(records) < 10:  # Need PRELIMINARY confidence
                 continue
 

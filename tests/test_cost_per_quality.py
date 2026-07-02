@@ -176,4 +176,5 @@ class TestSingleStoreRead:
         monkeypatch.setattr(tracker_mod, "read_performance_records", counting)
         scores = t.get_all_cost_aware_scores()
         assert len(scores) == 3
-        assert calls["n"] <= 2, f"expected bounded store reads, got {calls['n']}"
+        # One read: quality + qpc passes share a single consistent snapshot.
+        assert calls["n"] == 1, f"expected exactly 1 store read, got {calls['n']}"
