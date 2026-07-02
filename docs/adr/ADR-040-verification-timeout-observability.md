@@ -7,6 +7,8 @@
 
 ---
 
+> **Update (2026-07-03):** Options E/F (tiered Stage 2 / early consensus termination) are now delivered by [ADR-044](./ADR-044-compute-optimal-deliberation.md) — Option F shipped as `early_consensus.py` (shadow-first) in epic #394.
+
 ## Context
 
 Users of the `verify` and `review` MCP tools (invoked via council-verify and council-review skills) frequently experience excessively long execution times. A recent high-tier verification ran for **57 minutes** before being manually cancelled. Users regularly wait 10+ minutes with minimal feedback before killing the process. This leads to poor UX, resource waste, and trust erosion in the tool.

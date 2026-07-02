@@ -1,6 +1,6 @@
 # ADR-044: Compute-Optimal Deliberation
 
-**Status:** Draft 2026-07-02
+**Status:** Implemented 2026-07-03 (Phases 1–3, epic #394) — was Draft 2026-07-02
 **Date:** 2026-07-02
 **Decision Makers:** Chris Joseph, LLM Council
 **Related:** ADR-026 (Phase 3 — the index this wires in), ADR-011 (Phase 3 — cost-per-quality), ADR-040 (Options E/F), ADR-020 (Tier-1 fast path), ADR-024 (layer sovereignty), ADR-036 (CSS)

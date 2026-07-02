@@ -1,6 +1,6 @@
 # ADR-043: OpenRouter Pareto Router Integration
 
-**Status:** Draft <2026-05-12>
+**Status:** Superseded by [ADR-044](./ADR-044-compute-optimal-deliberation.md) 2026-07-03 — was Draft 2026-05-12. `openrouter/pareto-code` remains usable as an ordinary pool entry; the routing intelligence this ADR sought now comes from the in-house index (ADR-044).
 **Date:** 2026-05-12
 **Decision Makers:** @amiable-dev, LLM Council (Proposed)
 **Extends:** ADR-022 (Tiered Model Selection), ADR-023 (Multi-Router Gateway), ADR-028 (Dynamic Candidate Discovery)
