@@ -20,11 +20,15 @@ Example usage:
     )
 """
 
+import logging
+import os
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from ..tier_contract import _get_tier_model_pools
 from .types import QualityTier
+
+logger = logging.getLogger(__name__)  # (re-bound identically further down)
 
 if TYPE_CHECKING:
     from .protocol import MetadataProvider
@@ -378,6 +382,55 @@ def _is_preview_model(model_id: str) -> bool:
     return any(indicator in model_lower for indicator in preview_indicators)
 
 
+# ---------------------------------------------------------------------------
+# ADR-044 Phase 1: performance-aware selection blending (default OFF)
+# ---------------------------------------------------------------------------
+
+# Blend weight of the LIVE index per confidence tier; static metadata always
+# keeps >= 20% influence (cap 0.8). INSUFFICIENT (<10 samples) -> static only.
+_PERF_BLEND_WEIGHTS: Dict[str, float] = {
+    "PRELIMINARY": 0.3,
+    "MODERATE": 0.6,
+    "HIGH": 0.8,
+}
+
+
+def performance_selection_enabled() -> bool:
+    """ADR-044 P1: opt-in performance-aware selection (default OFF)."""
+    return os.getenv("LLM_COUNCIL_PERFORMANCE_SELECTION", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+
+def _get_perf_tracker() -> Any:
+    """Lazy tracker accessor (injectable in tests; avoids import cycles)."""
+    from ..performance.integration import get_tracker
+
+    return get_tracker()
+
+
+def _blend_quality_with_performance(model_id: str, static_score: float) -> float:
+    """Blend the live performance index into a static quality estimate.
+
+    ``w * live + (1 - w) * static`` where ``w`` steps by the index's
+    confidence tier (see _PERF_BLEND_WEIGHTS). Cold start (INSUFFICIENT) and
+    any tracker failure return the static score unchanged — blending must
+    never break or destabilize selection (ADR-044 soft-fail rule).
+    """
+    try:
+        index = _get_perf_tracker().get_model_index(model_id)
+        weight = _PERF_BLEND_WEIGHTS.get(str(index.confidence_level), 0.0)
+        if weight <= 0.0:
+            return static_score
+        live = float(index.mean_borda_score)
+        return weight * live + (1.0 - weight) * static_score
+    except Exception as exc:
+        logger.debug("performance blend failed for %r (ignored): %s", model_id, exc)
+        return static_score
+
+
 def select_tier_models(
     tier: str,
     task_domain: Optional[str] = None,
@@ -449,8 +502,46 @@ def select_tier_models(
         score = calculate_model_score(candidate, tier)
         scored.append((candidate.model_id, score))
 
-    # Select with diversity enforcement
-    return select_with_diversity(scored, count=count, min_providers=2)
+    # Select with diversity enforcement (static baseline)
+    static_selection = select_with_diversity(scored, count=count, min_providers=2)
+
+    # ADR-044 P1: opt-in performance-aware blending. Re-score with the live
+    # index blended into quality; if (and only if) the selected set changes,
+    # emit an auditable route receipt and use the blended selection.
+    if performance_selection_enabled():
+        from dataclasses import replace as _dc_replace
+
+        blended_scored: List[Tuple[str, float]] = []
+        for candidate in candidates:
+            blended_quality = _blend_quality_with_performance(
+                candidate.model_id, candidate.quality_score
+            )
+            blended_candidate = _dc_replace(candidate, quality_score=blended_quality)
+            blended_scored.append(
+                (candidate.model_id, calculate_model_score(blended_candidate, tier))
+            )
+        blended_selection = select_with_diversity(
+            blended_scored, count=count, min_providers=2
+        )
+        if blended_selection != static_selection:
+            try:
+                from ..layer_contracts import LayerEventType, emit_layer_event
+
+                emit_layer_event(
+                    LayerEventType.L2_PERFORMANCE_SELECTION_APPLIED,
+                    {
+                        "tier": tier,
+                        "static_selection": static_selection,
+                        "blended_selection": blended_selection,
+                    },
+                    layer_from="L2",
+                    layer_to="L2",
+                )
+            except Exception as exc:  # observability never breaks selection
+                logger.debug("route-receipt emit failed (ignored): %s", exc)
+        return blended_selection
+
+    return static_selection
 
 
 def _create_candidates_from_pool(pool: List[str], tier: str) -> List[ModelCandidate]:

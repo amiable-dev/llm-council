@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Performance-aware model selection (ADR-044 Phase 1, #390)** — the internal performance index (ADR-026 P3, previously write-only) now optionally blends into candidate quality scores during tier selection: `w·live + (1−w)·static` with `w` stepped by the index's confidence tier (0.3/0.6/0.8; cold start stays fully static). **Default OFF** (`LLM_COUNCIL_PERFORMANCE_SELECTION`); flag-off behaviour is byte-identical. When blending changes the selected model set, an auditable `L2_PERFORMANCE_SELECTION_APPLIED` LayerEvent records the static vs blended selections (route receipt). Soft-fail: tracker errors never affect selection.
+
 ## [0.27.1] - 2026-07-02
 
 Tech-debt cleanup, part 2 (epic #382): internal perf + a scoring fix for the opt-in cost-aware ranking, and the `verification/api.py` module split — no public API changes.

@@ -53,6 +53,9 @@ Evaluation & scoring
 - `evaluation.py`, `quality/`, `verdict.py`, `dissent.py` — additional evaluation/quality surfaces.
 - `gateway/` (ADR-030) — `EnhancedCircuitBreaker` (sliding-window failure rate, default 25% over 10-min window, 30-min cooldown, half-open probes) + per-model registry that emits `L4_CIRCUIT_BREAKER_OPEN/CLOSE`. `scoring.py` — cost-scoring algorithms (linear/log_ratio/exponential).
 
+Compute-optimal deliberation (ADR-044, Phase 1)
+- `metadata/selection.py` `_blend_quality_with_performance` — opt-in (`LLM_COUNCIL_PERFORMANCE_SELECTION`) blend of the live index (`mean_borda_score`) into static quality, weighted by confidence tier (PRELIMINARY 0.3 / MODERATE 0.6 / HIGH 0.8, cap 0.8; INSUFFICIENT→static). `select_tier_models` compares static vs blended selections and emits `L2_PERFORMANCE_SELECTION_APPLIED` only when the set changed (route receipt). Soft-fail; flag-off is byte-identical.
+
 Cost & token accounting (ADR-011, Phase 1–4)
 - `budget/` (Phase 4) — **opt-in** budget enforcement, DEFAULT OFF. `CostEstimator` pre-query estimate (low/expected/high) from per-model cost history; `BudgetEnforcer` tiered `pre_query_check` (STRICT/BALANCED/PERMISSIVE) + `mid_query_check` (abort *gracefully* between stages, never mid-completion). Every reject/warn/abort emits an auditable `L1_BUDGET_DECISION` LayerEvent — budget never causes a silent tier change (ADR-024). Enable via `LLM_COUNCIL_BUDGET_ENFORCEMENT=true` + `LLM_COUNCIL_BUDGET_MODE`; wire at the L1 entry (module + hook, not in the hot path by default).
 - `performance/` (Phase 3) — `ModelSessionMetric.cost_usd` + `ModelPerformanceIndex.mean_cost_usd`/`.quality_per_cost` (Borda-per-dollar). `tracker.get_cost_per_quality` and `get_all_cost_aware_scores` provide an **opt-in** cost-aware ranking — `get_all_cost_aware_scores` is identical to `get_all_model_scores` unless `LLM_COUNCIL_COST_AWARE_SELECTION=true`, and is the SOLE path by which cost may influence selection (audited). `persist_session_performance_data` records per-model cost from the council's `usage.by_model` (only when `cost_known`).
@@ -98,6 +101,7 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 | Var | Effect |
 |---|---|
 | `LLM_COUNCIL_MODELS` | Override council members |
+| `LLM_COUNCIL_PERFORMANCE_SELECTION` | ADR-044 P1: blend the live performance index into model selection (default off; auditable route receipt on change) |
 | `LLM_COUNCIL_MODEL_INTELLIGENCE=true` | Enable dynamic model selection (ADR-026) |
 | `LLM_COUNCIL_OFFLINE=true` | Force offline / static provider |
 | `LLM_COUNCIL_DISCOVERY_ENABLED` / `_INTERVAL` (300) / `_MIN_CANDIDATES` (3) | Background discovery (ADR-028) |

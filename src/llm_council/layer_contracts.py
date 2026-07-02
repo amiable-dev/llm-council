@@ -95,6 +95,9 @@ class LayerEventType(Enum):
     L2_WILDCARD_SELECTED = "l2_wildcard_selected"
     L2_DELIBERATION_ESCALATION = "l2_deliberation_escalation"
     L2_FAST_PATH_TRIGGERED = "l2_fast_path_triggered"
+    # ADR-044 P1: performance-index blending changed the selected model set
+    # (auditable route receipt; emitted only on an actual outcome change).
+    L2_PERFORMANCE_SELECTION_APPLIED = "l2_performance_selection_applied"
 
     # L3 Events (Council Execution)
     L3_COUNCIL_START = "l3_council_start"
