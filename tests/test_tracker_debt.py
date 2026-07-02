@@ -46,3 +46,15 @@ class TestSessionIdStamping:
         t.record_session("authoritative-id", [m])
         recs = read_performance_records(tmp_path / "perf.jsonl", model_id="x")
         assert recs[0].session_id == "authoritative-id"
+        # The caller's original object must NOT be mutated (no side effects).
+        assert m.session_id == "stale-or-unset"
+
+
+class TestFutureTimestamp:
+    def test_future_timestamp_weight_not_over_one(self):
+        from datetime import datetime, timedelta, timezone
+
+        from llm_council.performance.tracker import _calculate_decay_weight
+
+        future = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        assert _calculate_decay_weight(future, 30) <= 1.0

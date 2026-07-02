@@ -6,6 +6,7 @@ building an Internal Performance Index with rolling window decay.
 
 import math
 import os
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -107,7 +108,10 @@ def _calculate_decay_weight(timestamp: str, decay_days: int) -> float:
         if record_time.tzinfo is None:
             record_time = record_time.replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
-        days_ago = (now - record_time).total_seconds() / (24 * 3600)
+        # Clamp to >= 0: a future timestamp (clock skew) would otherwise give a
+        # negative age and a weight > 1, over-weighting the record. Treat future
+        # records as "now" (weight 1.0).
+        days_ago = max((now - record_time).total_seconds() / (24 * 3600), 0.0)
 
         # Exponential decay: e^(-days_ago / decay_days)
         return math.exp(-days_ago / decay_days)
@@ -159,9 +163,10 @@ class InternalPerformanceTracker:
         Returns:
             Number of records written
         """
-        for metric in metrics:
-            metric.session_id = session_id
-        return append_performance_records(metrics, self.store_path)
+        # Stamp the authoritative session_id WITHOUT mutating the caller's
+        # objects (record_session must have no side effects on its inputs).
+        stamped = [replace(metric, session_id=session_id) for metric in metrics]
+        return append_performance_records(stamped, self.store_path)
 
     def get_model_index(self, model_id: str) -> ModelPerformanceIndex:
         """Get aggregated performance index for a model.
