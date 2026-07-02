@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-02
+
+Follow-up & tech-debt cleanup from the ADR-011 cost-accounting epic (batched as [#373](https://github.com/amiable-dev/llm-council/issues/373)): one additive enhancement (token/cost in `VerifyResponse`) plus correctness fixes to the OpenRouter gateway, the performance tracker, and the reasoning path.
+
 ### Added
 
 - **Token/cost in `VerifyResponse` (ADR-011 Phase 2 follow-up, #366)** — `verify` now surfaces per-run token and cost totals (`prompt_tokens`, `completion_tokens`, `total_tokens`, `cost_usd`, `cost_known`, `cached_tokens`) under `input_metrics`, sourced from the council usage summary. `cost_known` distinguishes a genuine $0 from unknown cost; the fields are omitted entirely when usage is unavailable.
