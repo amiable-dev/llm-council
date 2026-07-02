@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-07-03
+
+**Compute-Optimal Deliberation (ADR-044)** — epic [#394](https://github.com/amiable-dev/llm-council/issues/394). The write-only performance index (ADR-026 P3) and cost-per-quality signals (ADR-011 P3) now power adaptive routing: performance-aware selection, early consensus termination, and a graduated deliberation-depth cascade. Everything is **default-OFF**, flag-gated, and LayerEvent-audited (route receipts); flag-off behaviour is byte-identical. Supersedes draft ADRs 039 (LLMRouter) and 043 (Pareto Router).
+
 ### Added
 
 - **Graduated deliberation depth (ADR-044 Phase 3, #392)** — a new `graduated_depth` module (default **OFF**, `LLM_COUNCIL_GRADUATED_DEPTH`) provides the compute-optimal cascade: a depth ladder single → mini-council(3) → full council with prefix-superset model sets, so shallow-pass responses are always reused and escalation only *adds* models. Escalation is gated on known-low consensus signals (CSS / verdict confidence; unknown signals never escalate), priced via the ADR-011 estimator, optionally vetoed by the opt-in `BudgetEnforcer` (auditable, never a silent downgrade), and emits `L2_DELIBERATION_ESCALATION`. Includes `merge_usage_summaries` for correct cost accounting across rungs. Shipped as a bounded decision engine + documented hook (`plan_escalation`) rather than hot-path rewiring.
