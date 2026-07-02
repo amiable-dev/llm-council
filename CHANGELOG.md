@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Token/cost in `VerifyResponse` (ADR-011 Phase 2 follow-up, #366)** — `verify` now surfaces per-run token and cost totals (`prompt_tokens`, `completion_tokens`, `total_tokens`, `cost_usd`, `cost_known`, `cached_tokens`) under `input_metrics`, sourced from the council usage summary. `cost_known` distinguishes a genuine $0 from unknown cost; the fields are omitted entirely when usage is unavailable.
+
 ### Fixed
 
 - **`reasoning_params` no longer dropped in `query_models_with_progress` (#365)** — the progress-callback query path (used by the council) now threads `reasoning_params` through to each model call, matching `query_models_parallel` and the gateway path (ADR-026). Reasoning-effort injection was previously silently lost on this path.
