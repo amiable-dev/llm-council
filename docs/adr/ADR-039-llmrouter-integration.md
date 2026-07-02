@@ -1,6 +1,6 @@
 # ADR-038: One-Click Deployment Strategy
 
-**Status:** Draft <2025-12-30>
+**Status:** Superseded by [ADR-044](./ADR-044-compute-optimal-deliberation.md) 2026-07-03 — was Draft 2025-12-30. The in-house performance index (ADR-026 P3, wired by ADR-044 P1) provides the routing signal this ADR outsourced to NVIDIA LLMRouter.
 **Date:** 2025-12-30
 **Decision Makers:** @amiable-dev, LLM Council (High Tier)
 **Supersedes:** -

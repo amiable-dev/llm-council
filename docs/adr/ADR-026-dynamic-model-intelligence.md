@@ -9,6 +9,8 @@
 
 ---
 
+> **Update (2026-07-03):** the Phase-3 performance index is no longer write-only — [ADR-044](./ADR-044-compute-optimal-deliberation.md) P1 wires it into tier selection (opt-in blending, `LLM_COUNCIL_PERFORMANCE_SELECTION`).
+
 ## ⚠️ CRITICAL: Strategic Council Review - Vendor Dependency Risk
 
 ### Verdict: CONDITIONAL APPROVAL

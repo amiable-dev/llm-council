@@ -4,7 +4,7 @@ Five highest-value deliverables, identified 2026-07-02 by (a) a reverse-order AD
 sweep for unimplemented items and (b) a survey of the July-2026 GenAI landscape.
 Ordered by value; #1 is in flight (ADR-044).
 
-## 1. Compute-Optimal Deliberation — ADR-044 (in flight)
+## 1. Compute-Optimal Deliberation — ADR-044 (✅ shipped, epic #394)
 
 **What:** Wire the internal performance index (ADR-026 P3, currently write-only)
 and the cost-per-quality scores (ADR-011 P3, currently unconsumed) into model
