@@ -7,12 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-07-02
+
+Tech-debt cleanup, part 2 (epic #382): internal perf + a scoring fix for the opt-in cost-aware ranking, and the `verification/api.py` module split — no public API changes.
+
 ### Changed
 
 - **`verification/api.py` split into submodules (#380)** — the ~90K module now delegates to `verification/constants.py` (tier caps, extension whitelists, timeouts), `verification/schemas.py` (request/response models + validation patterns), `verification/evidence_render.py` (ADR-042 evidence budgeting/rendering + input-metrics helpers), and `verification/file_ops.py` (git snapshot + file-fetching operations). All moved names are re-exported from `verification.api` verbatim for backward compatibility; behaviour is unchanged (verbatim moves, full suite green). `api.py` drops to ~39K — back under the Council review cap, so future changes to the verify pipeline are reviewable whole.
 
 ### Fixed
 
+- **Cost data no longer penalizes ranking (#384 review)** — in the opt-in cost-aware scoring, a raw min-max normalization sent the lowest value-for-money model to 0.0 while unknown-cost models kept their raw quality (having cost data acted as a penalty). Quality-per-cost is now rescaled onto the cost-known cohort's own quality range: value-for-money reorders models within their cohort's span and never drops one below its quality floor.
 - **Cost-aware scoring no longer does N+1 store reads (#384)** — `get_all_cost_aware_scores` (opt-in, ADR-011 Phase 3) read the JSONL performance store once per model via `get_model_index`; it now reads the store once and groups records by model — bounded reads and a single consistent snapshot for the quality-per-cost pass. New `_index_from_records` helper aggregates from already-loaded records; `get_model_index` behaviour unchanged.
 
 ## [0.27.0] - 2026-07-02
