@@ -151,3 +151,29 @@ class TestPersistWiring:
         )
         t = InternalPerformanceTracker(store_path=tmp_path / "perf.jsonl")
         assert t.get_model_index("m").mean_cost_usd is None
+
+
+class TestSingleStoreRead:
+    def test_cost_aware_scores_reads_store_bounded_times(self, tmp_path, monkeypatch):
+        # #384: was 1 + N reads (one per model via get_model_index). Must be
+        # bounded (<= 2) regardless of model count, and use ONE snapshot for
+        # the qpc pass.
+        import llm_council.performance.tracker as tracker_mod
+
+        monkeypatch.setenv("LLM_COUNCIL_COST_AWARE_SELECTION", "true")
+        t = InternalPerformanceTracker(store_path=tmp_path / "perf.jsonl")
+        for i in range(12):
+            for m, cost in (("a/m", 0.001), ("b/m", 0.01), ("c/m", 0.05)):
+                t.record_session(f"s{i}{m}", [_metric(m, 0.6, cost, f"s{i}{m}")])
+
+        calls = {"n": 0}
+        real = tracker_mod.read_performance_records
+
+        def counting(*args, **kwargs):
+            calls["n"] += 1
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(tracker_mod, "read_performance_records", counting)
+        scores = t.get_all_cost_aware_scores()
+        assert len(scores) == 3
+        assert calls["n"] <= 2, f"expected bounded store reads, got {calls['n']}"

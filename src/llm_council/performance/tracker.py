@@ -182,7 +182,13 @@ class InternalPerformanceTracker:
         """
         # Read all records for this model
         records = read_performance_records(self.store_path, model_id=model_id)
+        return self._index_from_records(model_id, records)
 
+    def _index_from_records(
+        self, model_id: str, records: List[ModelSessionMetric]
+    ) -> ModelPerformanceIndex:
+        """Aggregate an index from already-loaded records (#384: lets callers
+        read the store once and group, instead of one read per model)."""
         if not records:
             # Cold start: return neutral defaults
             return ModelPerformanceIndex(
@@ -293,9 +299,16 @@ class InternalPerformanceTracker:
         if not cost_aware_selection_enabled():
             return quality
 
+        # #384: read the store ONCE and group by model — one consistent
+        # snapshot, instead of a re-read per model (1+N reads).
+        grouped: dict[str, List[ModelSessionMetric]] = {}
+        for record in read_performance_records(self.store_path):
+            grouped.setdefault(record.model_id, []).append(record)
+
         qpc = {}
         for model_id in quality:
-            value = self.get_model_index(model_id).quality_per_cost
+            index = self._index_from_records(model_id, grouped.get(model_id, []))
+            value = index.quality_per_cost
             if value is not None and value > 0:
                 qpc[model_id] = value
         if not qpc:
