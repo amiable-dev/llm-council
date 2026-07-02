@@ -227,6 +227,7 @@ async def query_models_with_progress(
     on_progress: Optional[ProgressCallback] = None,
     timeout: float = 25.0,
     disable_tools: bool = False,
+    reasoning_params: Optional["ReasoningParams"] = None,
     shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
@@ -238,6 +239,8 @@ async def query_models_with_progress(
         on_progress: Async callback(completed, total, message) for progress updates
         timeout: Per-model timeout in seconds (default 25s per ADR-012)
         disable_tools: If True, disable tool/function calling for all queries
+        reasoning_params: Optional reasoning parameters for reasoning models
+            (ADR-026) — previously dropped on this path (#365)
         shared_results: Optional dict to populate incrementally. If provided, results
             are written here as each model completes, preserving state even if the
             function is cancelled by an outer timeout. This fixes ADR-012 diagnostic
@@ -258,7 +261,11 @@ async def query_models_with_progress(
     # Create tasks with model tracking
     async def query_with_tracking(model: str) -> tuple[str, Dict[str, Any]]:
         result = await query_model_with_status(
-            model, messages, timeout=timeout, disable_tools=disable_tools
+            model,
+            messages,
+            timeout=timeout,
+            disable_tools=disable_tools,
+            reasoning_params=reasoning_params,
         )
         return model, result
 

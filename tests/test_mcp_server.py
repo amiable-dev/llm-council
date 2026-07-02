@@ -386,7 +386,7 @@ async def test_shared_results_populated_incrementally():
     """Test that query_models_with_progress populates shared_results as models complete."""
     from llm_council.openrouter import STATUS_OK, query_models_with_progress
 
-    async def mock_query(model, messages, timeout=None, disable_tools=False):
+    async def mock_query(model, messages, timeout=None, disable_tools=False, reasoning_params=None):
         return {
             "status": STATUS_OK,
             "content": f"Response from {model}",
