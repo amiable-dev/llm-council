@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **OpenRouter gateway correctness (#367)** — (1) the API key is no longer frozen at import: `OpenRouterGateway` resolves it per-request via the ADR-013 chain, so a request-scoped BYOK key is honored (was silently bypassed); (2) null response `content` (e.g. a tool-call-only turn) is coerced to `""` so downstream never sees `None`; (3) `tool_calls`/`tool_call_id` are now propagated in message conversion instead of being silently dropped.
+
 ## [0.25.0] - 2026-07-01
 
 **Cost and token accounting (ADR-011)** — a four-phase epic ([#359](https://github.com/amiable-dev/llm-council/issues/359)) that makes LLM spend transparent and optimizable: capture & surfacing (Phase 1), OpenTelemetry-standard observability (Phase 2), cost-per-quality optimization (Phase 3), and an opt-in budget gate (Phase 4). Everything is additive and backward-compatible — new behaviour is opt-in or soft-fail, and the council never fails a request because of cost accounting.

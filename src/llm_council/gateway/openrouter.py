@@ -121,7 +121,10 @@ class OpenRouterGateway(BaseRouter):
             base_url: Base URL for OpenRouter API. If None, uses OPENROUTER_API_URL.
             default_timeout: Default request timeout in seconds.
         """
-        self._api_key = api_key or OPENROUTER_API_KEY
+        # Store only an EXPLICIT key here; when none is given, resolve
+        # per-request in _query_openrouter so a request-scoped BYOK key
+        # (ADR-013 ContextVar) is honored instead of a value frozen at import.
+        self._api_key = api_key
         self._base_url = base_url or OPENROUTER_API_URL
         self._default_timeout = default_timeout
         self._capabilities = RouterCapabilities(
@@ -155,6 +158,7 @@ class OpenRouterGateway(BaseRouter):
         # Check if we have any image content
         has_images = any(block.type == "image" for block in msg.content)
 
+        message: Dict[str, Any]
         if has_images:
             # Multi-part content for vision models
             content_parts = []
@@ -165,13 +169,21 @@ class OpenRouterGateway(BaseRouter):
                     content_parts.append(
                         {"type": "image_url", "image_url": {"url": block.image_url}}
                     )
-            return {"role": msg.role, "content": content_parts}
+            message = {"role": msg.role, "content": content_parts}
         else:
             # Simple text content
             text_content = " ".join(
                 block.text for block in msg.content if block.type == "text" and block.text
             )
-            return {"role": msg.role, "content": text_content}
+            message = {"role": msg.role, "content": text_content}
+
+        # Preserve tool-calling fields (OpenRouter/OpenAI carry these on the
+        # message, not in content blocks) — previously silently dropped.
+        if msg.tool_calls:
+            message["tool_calls"] = msg.tool_calls
+        if msg.tool_call_id:
+            message["tool_call_id"] = msg.tool_call_id
+        return message
 
     def _convert_messages(self, messages: List[CanonicalMessage]) -> List[Dict[str, Any]]:
         """Convert list of CanonicalMessages to OpenRouter format."""
@@ -202,8 +214,11 @@ class OpenRouterGateway(BaseRouter):
         Returns:
             Structured result dict with status, content, latency_ms, etc.
         """
+        # Resolve the key at request time (ADR-013 chain: request ContextVar →
+        # env → keychain → config) unless an explicit key was injected.
+        api_key = self._api_key or get_api_key("openrouter") or ""
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
 
@@ -258,7 +273,9 @@ class OpenRouterGateway(BaseRouter):
 
                 return {
                     "status": "ok",
-                    "content": message.get("content"),
+                    # Content may be null (e.g. a tool-call-only assistant turn);
+                    # coerce to "" so downstream str handling never sees None.
+                    "content": message.get("content") or "",
                     "reasoning_details": message.get("reasoning_details"),
                     "latency_ms": latency_ms,
                     "usage": {
