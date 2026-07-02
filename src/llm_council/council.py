@@ -132,7 +132,17 @@ from llm_council.bias_audit import (
     BiasAuditResult,
 )
 from llm_council.bias_persistence import persist_session_bias_data
+import logging
+
+from llm_council.early_consensus import (
+    borda_update,
+    early_consensus_enabled,
+    estimate_reviewers_cost,
+    unassailable_leader,
+)
 from llm_council.observability.usage_metrics import emit_usage_metrics
+
+logger = logging.getLogger(__name__)
 from llm_council.cache import get_cache_key, get_cached_response, save_to_cache
 from llm_council.dissent import extract_dissent_from_stage2
 from llm_council.layer_contracts import (
@@ -1358,7 +1368,10 @@ Now provide your evaluation and ranking:"""
     # Get rankings from reviewer models in parallel
     # Disable tools to prevent prompt injection via tool invocation
     # ADR-040: Pass timeout parameter instead of relying on default 120s
-    if on_progress is not None:
+    # ADR-044 P2: the incremental path is also used (without progress) when
+    # early-consensus termination is enabled, since cancellation requires
+    # observing completions one at a time.
+    if on_progress is not None or early_consensus_enabled():
         # ADR-040 Option D: Use asyncio.as_completed for per-model progress reporting
         # This ensures one slow reviewer doesn't block progress for completed ones
         tasks = {
@@ -1369,28 +1382,83 @@ Now provide your evaluation and ranking:"""
         }
         responses: Dict[str, Any] = {}
         completed_count = 0
+        # ADR-044 P2: running Borda tally for early-consensus detection.
+        # Non-authoritative (the formatting loop below re-parses); soft-fail.
+        ec_points: Dict[str, float] = {}
+        ec_num_candidates = len(shuffled_results)
+        ec_shadow_logged = False
+        ec_terminated = False
         for coro in asyncio.as_completed(list(tasks.keys())):
-            result = await coro
+            try:
+                result = await coro
+            except asyncio.CancelledError:
+                continue  # a reviewer we cancelled after early consensus
             # Find which model this task belonged to
             for task, model in tasks.items():
-                if task.done() and model not in responses:
+                if task.done() and not task.cancelled() and model not in responses:
                     try:
                         task_result = task.result()
                         if task_result is result:
                             responses[model] = result
                             completed_count += 1
                             model_short = model.split("/")[-1] if "/" in model else model
-                            try:
-                                await on_progress(
-                                    completed_count,
-                                    len(reviewers),
-                                    f"{model_short} reviewed ({completed_count}/{len(reviewers)})",
-                                )
-                            except Exception:
-                                pass
+                            if on_progress is not None:
+                                try:
+                                    await on_progress(
+                                        completed_count,
+                                        len(reviewers),
+                                        f"{model_short} reviewed ({completed_count}/{len(reviewers)})",
+                                    )
+                                except Exception:
+                                    pass
                             break
                     except Exception:
                         pass
+
+            # ADR-044 P2: check for a mathematically decided ranking.
+            if ec_terminated or ec_shadow_logged or result is None:
+                continue
+            try:
+                parsed = parse_ranking_from_text(result.get("content", ""))
+                borda_update(ec_points, parsed.get("ranking", []), ec_num_candidates)
+                remaining = [m for t, m in tasks.items() if not t.done()]
+                leader = unassailable_leader(ec_points, len(remaining), ec_num_candidates)
+                if leader is None:
+                    continue
+                saved_cost = estimate_reviewers_cost(remaining)
+                if early_consensus_enabled():
+                    for task, model in tasks.items():
+                        if not task.done():
+                            task.cancel()
+                    ec_terminated = True
+                    try:
+                        emit_layer_event(
+                            LayerEventType.L3_EARLY_CONSENSUS_TERMINATION,
+                            {
+                                "leader": leader,
+                                "votes_saved": len(remaining),
+                                "reviewers_cancelled": remaining,
+                                "est_cost_saved_usd": saved_cost,
+                            },
+                            layer_from="L3",
+                            layer_to="L3",
+                        )
+                    except Exception:
+                        pass  # observability never blocks the council
+                else:
+                    # Shadow mode (default): measure, don't act.
+                    ec_shadow_logged = True
+                    logger.info(
+                        "early-consensus (shadow): ranking decided for %s with %d "
+                        "reviewer(s) outstanding (~$%.6f would be saved)",
+                        leader,
+                        len(remaining),
+                        saved_cost,
+                    )
+            except Exception:
+                pass  # detection is best-effort; never disturb collection
+            if ec_terminated:
+                break
     else:
         # Backward-compatible path: use query_models_parallel when no progress needed
         responses = await query_models_parallel(

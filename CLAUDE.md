@@ -53,7 +53,8 @@ Evaluation & scoring
 - `evaluation.py`, `quality/`, `verdict.py`, `dissent.py` — additional evaluation/quality surfaces.
 - `gateway/` (ADR-030) — `EnhancedCircuitBreaker` (sliding-window failure rate, default 25% over 10-min window, 30-min cooldown, half-open probes) + per-model registry that emits `L4_CIRCUIT_BREAKER_OPEN/CLOSE`. `scoring.py` — cost-scoring algorithms (linear/log_ratio/exponential).
 
-Compute-optimal deliberation (ADR-044, Phase 1)
+Compute-optimal deliberation (ADR-044, Phase 1–2)
+- `early_consensus.py` (P2) — `unassailable_leader` (strict Borda-margin math: decided iff leader > best rival + remaining×(n−1)) + `borda_update` + `estimate_reviewers_cost` (ADR-011 history). Stage 2 checks per completion on the incremental path; flag ON cancels outstanding reviewers cooperatively and emits `L3_EARLY_CONSENSUS_TERMINATION` (votes/cost saved); flag OFF (default) is **shadow mode** — logs the would-have-terminated point so savings are measurable before enabling. Detection is non-authoritative and soft-fail; dissent extraction still runs on collected reviews.
 - `metadata/selection.py` `_blend_quality_with_performance` — opt-in (`LLM_COUNCIL_PERFORMANCE_SELECTION`) blend of the live index (`mean_borda_score`) into static quality, weighted by confidence tier (PRELIMINARY 0.3 / MODERATE 0.6 / HIGH 0.8, cap 0.8; INSUFFICIENT→static). `select_tier_models` compares static vs blended selections and emits `L2_PERFORMANCE_SELECTION_APPLIED` only when the set changed (route receipt). Soft-fail; flag-off is byte-identical.
 
 Cost & token accounting (ADR-011, Phase 1–4)
@@ -102,6 +103,7 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 |---|---|
 | `LLM_COUNCIL_MODELS` | Override council members |
 | `LLM_COUNCIL_PERFORMANCE_SELECTION` | ADR-044 P1: blend the live performance index into model selection (default off; auditable route receipt on change) |
+| `LLM_COUNCIL_EARLY_CONSENSUS` | ADR-044 P2: cancel remaining Stage-2 reviewers once the Borda leader is mathematically unassailable (default off = shadow mode, which only logs would-have-saved) |
 | `LLM_COUNCIL_MODEL_INTELLIGENCE=true` | Enable dynamic model selection (ADR-026) |
 | `LLM_COUNCIL_OFFLINE=true` | Force offline / static provider |
 | `LLM_COUNCIL_DISCOVERY_ENABLED` / `_INTERVAL` (300) / `_MIN_CANDIDATES` (3) | Background discovery (ADR-028) |

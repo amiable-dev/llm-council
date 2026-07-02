@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Early consensus termination (ADR-044 Phase 2, #391)** — during Stage-2 peer review, once the leading response's Borda margin is mathematically unassailable given the reviewers still outstanding, the remaining reviewer calls can be cancelled (flag `LLM_COUNCIL_EARLY_CONSENSUS`, default **OFF**). Off = **shadow mode**: the would-have-terminated point and estimated cost saved (from ADR-011 history) are logged so savings are measurable before enabling. Active terminations emit an auditable `L3_EARLY_CONSENSUS_TERMINATION` LayerEvent (votes saved, reviewers cancelled, est. cost saved); usage aggregation for completed reviewers is unaffected and dissent extraction still runs.
 - **Performance-aware model selection (ADR-044 Phase 1, #390)** — the internal performance index (ADR-026 P3, previously write-only) now optionally blends into candidate quality scores during tier selection: `w·live + (1−w)·static` with `w` stepped by the index's confidence tier (0.3/0.6/0.8; cold start stays fully static). **Default OFF** (`LLM_COUNCIL_PERFORMANCE_SELECTION`); flag-off behaviour is byte-identical. When blending changes the selected model set, an auditable `L2_PERFORMANCE_SELECTION_APPLIED` LayerEvent records the static vs blended selections (route receipt). Soft-fail: tracker errors never affect selection.
 
 ## [0.27.1] - 2026-07-02
