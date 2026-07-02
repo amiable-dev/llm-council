@@ -7,6 +7,7 @@ The gateway wraps the existing openrouter module functionality while
 conforming to the BaseRouter interface.
 """
 
+import json
 import time
 from datetime import datetime
 from typing import AsyncIterator, Dict, Any, List, Optional
@@ -362,26 +363,55 @@ class OpenRouterGateway(BaseRouter):
             latency_ms=result.get("latency_ms"),
             error=result.get("error"),
             retry_after=result.get("retry_after"),
+            # #375: surface the reasoning trace instead of dropping it.
+            reasoning_details=result.get("reasoning_details"),
         )
 
     async def complete_stream(self, request: GatewayRequest) -> AsyncIterator[str]:
-        """Send a streaming completion request.
+        """Send a streaming completion request, yielding content deltas.
+
+        Uses OpenRouter's SSE stream (#375): each `data:` line carries a JSON
+        chunk whose `choices[0].delta.content` is the incremental text. Malformed
+        chunks are skipped; the stream ends on `data: [DONE]`.
 
         Args:
             request: The gateway request with model and messages.
 
         Yields:
-            String chunks of the generated content.
-
-        Note:
-            Streaming is not yet fully implemented. This yields the complete
-            response as a single chunk for now.
+            Incremental string chunks of the generated content.
         """
-        # For now, just yield the complete response
-        # Full streaming implementation can be added later
-        response = await self.complete(request)
-        if response.content:
-            yield response.content
+        api_key = self._api_key or get_api_key("openrouter") or ""
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = build_openrouter_payload(
+            model=request.model,
+            messages=self._convert_messages(request.messages),
+            reasoning_params=request.reasoning_params,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+        )
+        payload["stream"] = True
+        timeout = request.timeout if request.timeout is not None else self._default_timeout
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST", self._base_url, headers=headers, json=payload
+            ) as response:
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[len("data:") :].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        delta = chunk["choices"][0]["delta"].get("content")
+                    except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                        continue
+                    if delta:
+                        yield delta
 
     async def health_check(self) -> RouterHealth:
         """Check the health of this router.
