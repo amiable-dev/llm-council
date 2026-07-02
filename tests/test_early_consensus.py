@@ -122,8 +122,11 @@ async def test_active_mode_cancels_unneeded_reviewers(monkeypatch):
         timeout=10.0,  # far below r5's 30s: proves cancellation, not waiting
     )
     # After 4 unanimous A>B>C votes: A=8, B=4, remaining=1*2 → decided; r5 cancelled.
-    assert "r5" in cancelled
+    # NOTE: don't assert on the mock's CancelledError capture — a task cancelled
+    # before its coroutine first runs never enters the mock body (CI scheduling).
+    # The wait_for(10s) above vs r5's 30s sleep IS the cancellation proof.
     assert len(results) == 4
+    assert "r5" not in [r["model"] for r in results]
     # usage aggregated for the completed four only
     assert usage["prompt_tokens"] == 40
     events = getattr(layer_contracts, "_layer_events", [])
@@ -133,6 +136,7 @@ async def test_active_mode_cancels_unneeded_reviewers(monkeypatch):
         if "early_consensus" in str(getattr(e.event_type, "value", e.event_type))
     ]
     assert new and new[-1].data["votes_saved"] == 1
+    assert new[-1].data["reviewers_cancelled"] == ["r5"]
 
 
 @pytest.mark.asyncio
