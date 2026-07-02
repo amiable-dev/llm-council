@@ -273,7 +273,7 @@ class TestExpandTargetPaths:
         """Should filter out files with binary extensions."""
         from llm_council.verification.api import _expand_target_paths, TEXT_EXTENSIONS
 
-        with patch("llm_council.verification.api._git_ls_tree_z_name_only") as mock_ls:
+        with patch("llm_council.verification.file_ops._git_ls_tree_z_name_only") as mock_ls:
             mock_ls.return_value = [
                 "docs/file.md",
                 "docs/image.png",
@@ -281,7 +281,7 @@ class TestExpandTargetPaths:
                 "docs/script.py",
             ]
 
-            with patch("llm_council.verification.api._get_git_object_type") as mock_type:
+            with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
                 files, _, _ = await _expand_target_paths("HEAD", ["docs"])
@@ -298,7 +298,7 @@ class TestExpandTargetPaths:
         """Should exclude garbage files like package-lock.json."""
         from llm_council.verification.api import _expand_target_paths, GARBAGE_FILENAMES
 
-        with patch("llm_council.verification.api._git_ls_tree_z_name_only") as mock_ls:
+        with patch("llm_council.verification.file_ops._git_ls_tree_z_name_only") as mock_ls:
             mock_ls.return_value = [
                 "src/index.js",
                 "src/package-lock.json",
@@ -306,7 +306,7 @@ class TestExpandTargetPaths:
                 "src/app.ts",
             ]
 
-            with patch("llm_council.verification.api._get_git_object_type") as mock_type:
+            with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
                 files, _, _ = await _expand_target_paths("HEAD", ["src"])
@@ -329,10 +329,10 @@ class TestExpandTargetPaths:
         # Generate more files than the limit
         many_files = [f"src/file_{i}.py" for i in range(MAX_FILES_EXPANSION + 50)]
 
-        with patch("llm_council.verification.api._git_ls_tree_z_name_only") as mock_ls:
+        with patch("llm_council.verification.file_ops._git_ls_tree_z_name_only") as mock_ls:
             mock_ls.return_value = many_files
 
-            with patch("llm_council.verification.api._get_git_object_type") as mock_type:
+            with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
                 files, truncated, warnings = await _expand_target_paths("HEAD", ["src"])
@@ -358,10 +358,10 @@ class TestExpandTargetPaths:
         """Should handle empty directories gracefully."""
         from llm_council.verification.api import _expand_target_paths
 
-        with patch("llm_council.verification.api._git_ls_tree_z_name_only") as mock_ls:
+        with patch("llm_council.verification.file_ops._git_ls_tree_z_name_only") as mock_ls:
             mock_ls.return_value = []
 
-            with patch("llm_council.verification.api._get_git_object_type") as mock_type:
+            with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
                 files, truncated, warnings = await _expand_target_paths("HEAD", ["empty_dir"])

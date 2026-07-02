@@ -100,12 +100,12 @@ class TestAsyncFileFetching:
 
         with (
             patch(
-                "llm_council.verification.api._get_git_root_async",
+                "llm_council.verification.file_ops._get_git_root_async",
                 new_callable=AsyncMock,
                 return_value="/mock/root",
             ),
             patch(
-                "llm_council.verification.api._get_git_semaphore",
+                "llm_council.verification.file_ops._get_git_semaphore",
                 new_callable=AsyncMock,
                 return_value=asyncio.Semaphore(10),
             ),
@@ -205,12 +205,12 @@ class TestAsyncTimeout:
 
         with (
             patch(
-                "llm_council.verification.api._get_git_root_async",
+                "llm_council.verification.file_ops._get_git_root_async",
                 new_callable=AsyncMock,
                 return_value="/mock/root",
             ),
             patch(
-                "llm_council.verification.api._get_git_semaphore",
+                "llm_council.verification.file_ops._get_git_semaphore",
                 new_callable=AsyncMock,
                 return_value=asyncio.Semaphore(10),
             ),
@@ -220,7 +220,7 @@ class TestAsyncTimeout:
                 return_value=mock_proc,
             ),
             # Override the timeout to a short value for testing
-            patch("llm_council.verification.api.ASYNC_SUBPROCESS_TIMEOUT", 0.1),
+            patch("llm_council.verification.file_ops.ASYNC_SUBPROCESS_TIMEOUT", 0.1),
         ):
             content, truncated = await _fetch_file_at_commit_async("HEAD", "file.txt")
 
@@ -335,12 +335,12 @@ class TestStreamingMemoryBounded:
 
         with (
             patch(
-                "llm_council.verification.api._get_git_root_async",
+                "llm_council.verification.file_ops._get_git_root_async",
                 new_callable=AsyncMock,
                 return_value="/mock/root",
             ),
             patch(
-                "llm_council.verification.api._get_git_semaphore",
+                "llm_council.verification.file_ops._get_git_semaphore",
                 new_callable=AsyncMock,
                 return_value=asyncio.Semaphore(10),
             ),
@@ -394,12 +394,12 @@ class TestStreamingMemoryBounded:
 
         with (
             patch(
-                "llm_council.verification.api._get_git_root_async",
+                "llm_council.verification.file_ops._get_git_root_async",
                 new_callable=AsyncMock,
                 return_value="/mock/root",
             ),
             patch(
-                "llm_council.verification.api._get_git_semaphore",
+                "llm_council.verification.file_ops._get_git_semaphore",
                 new_callable=AsyncMock,
                 return_value=asyncio.Semaphore(10),
             ),
@@ -461,12 +461,12 @@ class TestEventLoopNotBlocked:
         with (
             patch("asyncio.create_subprocess_exec") as mock_async,
             patch(
-                "llm_council.verification.api._get_git_root_async",
+                "llm_council.verification.file_ops._get_git_root_async",
                 new_callable=AsyncMock,
                 return_value="/mock/root",
             ),
             patch(
-                "llm_council.verification.api._get_git_semaphore",
+                "llm_council.verification.file_ops._get_git_semaphore",
                 new_callable=AsyncMock,
                 return_value=asyncio.Semaphore(10),
             ),

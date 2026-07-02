@@ -147,7 +147,7 @@ class TestFetchFilesUsesTierLimit:
 
     @pytest.mark.asyncio
     async def test_reasoning_tier_passes_50k_to_per_file_fetcher(self):
-        from llm_council.verification import api
+        from llm_council.verification import file_ops as api
 
         captured_limits: list[int] = []
 
@@ -179,7 +179,7 @@ class TestFetchFilesUsesTierLimit:
 
     @pytest.mark.asyncio
     async def test_quick_tier_passes_15k_to_per_file_fetcher(self):
-        from llm_council.verification import api
+        from llm_council.verification import file_ops as api
 
         captured_limits: list[int] = []
 
@@ -219,7 +219,7 @@ class TestPerFileTruncationSurfacesAsWarning:
 
     @pytest.mark.asyncio
     async def test_truncation_emits_expansion_warning(self):
-        from llm_council.verification import api
+        from llm_council.verification import file_ops as api
 
         async def fake_fetch(snapshot_id, file_path, max_file_chars=None):
             # Simulate a clamped fetch — the truncation flag is on.
@@ -253,7 +253,7 @@ class TestPerFileTruncationSurfacesAsWarning:
 
     @pytest.mark.asyncio
     async def test_no_truncation_no_warning(self):
-        from llm_council.verification import api
+        from llm_council.verification import file_ops as api
 
         async def fake_fetch(snapshot_id, file_path, max_file_chars=None):
             return "small", False
