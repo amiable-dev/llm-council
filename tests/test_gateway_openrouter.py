@@ -289,13 +289,15 @@ class TestOpenRouterHealthCheck:
 class TestOpenRouterGatewayConfig:
     """Test OpenRouterGateway configuration."""
 
-    def test_gateway_uses_config_api_key(self):
-        """Gateway should use OPENROUTER_API_KEY from config."""
+    def test_gateway_defers_key_resolution_to_request_time(self):
+        """No explicit key must NOT be frozen at import (#367) — it is resolved
+        per-request via get_api_key so a request-scoped BYOK key is honored."""
         from llm_council.gateway.openrouter import OpenRouterGateway
 
         with patch("llm_council.gateway.openrouter.OPENROUTER_API_KEY", "test-key"):
             gateway = OpenRouterGateway()
-            assert gateway._api_key == "test-key"
+            # The import-time constant is no longer frozen into the instance.
+            assert gateway._api_key is None
 
     def test_gateway_allows_custom_api_key(self):
         """Gateway should accept custom API key."""
