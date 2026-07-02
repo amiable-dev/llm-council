@@ -23,6 +23,18 @@ def _get_openrouter_api_key() -> str:
 # Module-level alias for backwards compatibility with tests
 OPENROUTER_API_KEY = _get_openrouter_api_key()
 
+
+def _extract_cached_tokens(usage: Dict[str, Any]) -> int:
+    """Cached prompt tokens from an OpenRouter usage object (0 if absent).
+
+    Explicit None-check so a genuine reported 0 isn't discarded by a truthiness
+    short-circuit (#365 review).
+    """
+    direct = usage.get("cached_tokens")
+    if direct is not None:
+        return direct
+    return (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0
+
 if TYPE_CHECKING:
     from llm_council.gateway.types import ReasoningParams
 
@@ -152,11 +164,7 @@ async def query_model_with_status(
                     # inline; capture it (previously discarded) so the council
                     # can account cost, not just tokens.
                     "cost": usage.get("cost"),
-                    "cached_tokens": (
-                        usage.get("cached_tokens")
-                        or (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
-                        or 0
-                    ),
+                    "cached_tokens": _extract_cached_tokens(usage),
                 },
             }
 
