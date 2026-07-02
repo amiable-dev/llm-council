@@ -124,7 +124,7 @@ class InternalPerformanceTracker:
 
     Attributes:
         store_path: Path to JSONL storage file
-        decay_days: Half-life for exponential decay weighting
+        decay_days: e-folding decay time-constant in days (NOT a half-life)
     """
 
     def __init__(
@@ -137,8 +137,8 @@ class InternalPerformanceTracker:
         Args:
             store_path: Path to JSONL file for storing metrics.
                        Defaults to ~/.llm-council/performance_metrics.jsonl
-            decay_days: Half-life for decay weighting. Sessions older than
-                       decay_days have reduced weight. Default: 30 days.
+            decay_days: e-folding decay time-constant in days (NOT a half-life);
+                       a session decay_days old has weight 1/e. Default: 30 days.
         """
         self.store_path = store_path or DEFAULT_STORE_PATH
         self.decay_days = decay_days
