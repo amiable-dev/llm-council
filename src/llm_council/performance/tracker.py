@@ -82,11 +82,14 @@ def _determine_confidence_level(sample_size: int) -> str:
 def _calculate_decay_weight(timestamp: str, decay_days: int) -> float:
     """Calculate exponential decay weight based on age.
 
-    Weight = exp(-days_ago / decay_days)
+    Uses e-folding decay: ``weight = exp(-days_ago / decay_days)``, so a record
+    ``decay_days`` old has weight 1/e (~0.37). NOTE: ``decay_days`` is the decay
+    time-constant (mean lifetime), NOT a half-life — the half-life would be
+    ``decay_days * ln 2``.
 
     Args:
         timestamp: ISO 8601 timestamp string
-        decay_days: Half-life of decay in days
+        decay_days: Decay time-constant (e-folding lifetime) in days
 
     Returns:
         Weight between 0 and 1 (1 = most recent, approaching 0 = very old)
@@ -209,7 +212,9 @@ class InternalPerformanceTracker:
         # Weighted mean Borda score
         mean_borda = weighted_borda_sum / total_weight if total_weight > 0 else 0.5
 
-        # Parse success rate (unweighted - all samples count equally)
+        # Parse success rate: intentionally UNWEIGHTED (unlike decay-weighted
+        # Borda) — it is a reliability metric where every historical failure
+        # should count in full, not be discounted by age.
         parse_success_rate = parse_success_count / sample_size if sample_size > 0 else 1.0
 
         # Latency percentiles
@@ -301,6 +306,11 @@ class InternalPerformanceTracker:
         Reads all records and returns mean Borda scores for models
         with at least 10 samples (PRELIMINARY confidence).
 
+        Scale note: this returns the raw mean Borda on a **0–1** scale (used by
+        the percentile math), whereas ``get_quality_score`` returns a **0–100**
+        selection score. The two scales are intentional and must not be compared
+        directly.
+
         Returns:
             Dict mapping model_id to mean Borda score (0-1)
         """
@@ -359,9 +369,11 @@ class InternalPerformanceTracker:
         if len(all_scores) == 1:
             return 1.0
 
-        # Calculate percentile: fraction of models this model beats or ties
-        scores_list = list(all_scores.values())
-        beaten_or_tied = sum(1 for s in scores_list if target_score >= s)
-        percentile = beaten_or_tied / len(scores_list)
-
-        return percentile
+        # Percentile = fraction of OTHER models this model beats or ties.
+        # Excluding self matters: including it always adds a self-tie, inflating
+        # the rank by 1/N and biasing the ADR-029 graduation gate upward.
+        others = [score for other_id, score in all_scores.items() if other_id != model_id]
+        if not others:
+            return 1.0
+        beaten_or_tied = sum(1 for s in others if target_score >= s)
+        return beaten_or_tied / len(others)
