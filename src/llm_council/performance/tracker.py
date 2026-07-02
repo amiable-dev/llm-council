@@ -318,11 +318,20 @@ class InternalPerformanceTracker:
             # differentiation is possible, so keep quality scores rather than
             # collapsing everyone to 0.0.
             return quality
+
+        # Rescale QPC onto the cost-known cohort's OWN quality range: cost data
+        # re-ORDERS those models by value-for-money within the span their
+        # quality would otherwise occupy. Having cost data must never be a
+        # penalty — a raw 0–1 min-max would send the lowest-QPC model to 0.0
+        # while an unknown-cost model kept its ~0.5 quality score.
+        cohort_q = [quality[m] for m in qpc]
+        min_q, max_q = min(cohort_q), max(cohort_q)
+        q_span = max_q - min_q
         span = high - low
         result = dict(quality)
         for model_id, value in qpc.items():
-            # Same 0–1 scale as the plain quality scores.
-            result[model_id] = (value - low) / span
+            normalized = (value - low) / span
+            result[model_id] = min_q + normalized * q_span
         return result
 
     def get_all_model_scores(self) -> dict[str, float]:

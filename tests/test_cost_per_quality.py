@@ -98,6 +98,24 @@ class TestCostAwareScores:
         # cheap/m has higher quality-per-cost (0.6/0.001 >> 0.7/0.05) -> ranks above.
         assert scores["cheap/m"] > scores["pricey/m"]
 
+    def test_cost_data_never_punishes_below_cohort_quality_floor(self, tmp_path, monkeypatch):
+        # Having cost data must not collapse a model to 0.0 (below what an
+        # unknown-cost model keeps): the lowest-QPC model lands on the
+        # cost-known cohort's own quality floor, not on 0.
+        monkeypatch.setenv("LLM_COUNCIL_COST_AWARE_SELECTION", "true")
+        t = InternalPerformanceTracker(store_path=tmp_path / "perf.jsonl")
+        for i in range(12):
+            t.record_session(f"a{i}", [_metric("good_value/m", 0.6, 0.001, f"a{i}")])
+            t.record_session(f"b{i}", [_metric("poor_value/m", 0.7, 0.05, f"b{i}")])
+            t.record_session(f"c{i}", [_metric("no_cost/m", 0.4, None, f"c{i}")])
+        scores = t.get_all_cost_aware_scores()
+        quality = t.get_all_model_scores()
+        cohort_floor = min(quality["good_value/m"], quality["poor_value/m"])
+        # Lowest-QPC (poor_value) sits on the cohort floor, not 0.0…
+        assert scores["poor_value/m"] == pytest.approx(cohort_floor, rel=1e-3)
+        # …and is NOT ranked below the unknown-cost model with lower quality.
+        assert scores["poor_value/m"] > scores["no_cost/m"]
+
 
 class TestEdgeCases:
     def test_single_cost_model_not_punished(self, tmp_path, monkeypatch):
