@@ -29,3 +29,20 @@ class TestPercentileSelfExclusion:
     def test_unknown_model_returns_none(self, tmp_path):
         t = _tracker(tmp_path, {"A": 0.9})
         assert t.get_quality_percentile("missing") is None
+
+
+class TestSessionIdStamping:
+    def test_record_session_stamps_authoritative_session_id(self, tmp_path):
+        from llm_council.performance.store import read_performance_records
+        from llm_council.performance.types import ModelSessionMetric
+
+        t = InternalPerformanceTracker(store_path=tmp_path / "perf.jsonl")
+        m = ModelSessionMetric(
+            session_id="stale-or-unset",
+            model_id="x",
+            timestamp="2026-01-01T00:00:00Z",
+            borda_score=0.5,
+        )
+        t.record_session("authoritative-id", [m])
+        recs = read_performance_records(tmp_path / "perf.jsonl", model_id="x")
+        assert recs[0].session_id == "authoritative-id"

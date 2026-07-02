@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Performance tracker minor debt (#377)** — `record_session` now stamps its `session_id` onto every metric as the authoritative id (the parameter was previously unused); clarified that `get_quality_score`'s 0–100 scale (selection-facing) vs `get_all_model_scores`' 0–1 scale (percentile math) is intentional, and that latency percentiles are intentionally unweighted.
+
 ## [0.26.0] - 2026-07-02
 
 Follow-up & tech-debt cleanup from the ADR-011 cost-accounting epic (batched as [#373](https://github.com/amiable-dev/llm-council/issues/373)): one additive enhancement (token/cost in `VerifyResponse`) plus correctness fixes to the OpenRouter gateway, the performance tracker, and the reasoning path.
