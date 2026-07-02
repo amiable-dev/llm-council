@@ -104,6 +104,9 @@ class LayerEventType(Enum):
     L3_COUNCIL_COMPLETE = "l3_council_complete"
     L3_STAGE_COMPLETE = "l3_stage_complete"
     L3_MODEL_TIMEOUT = "l3_model_timeout"
+    # ADR-044 P2: stage-2 reviews cancelled because the Borda leader was
+    # mathematically unassailable (auditable; carries votes/cost saved).
+    L3_EARLY_CONSENSUS_TERMINATION = "l3_early_consensus_termination"
 
     # L4 Events (Gateway Routing)
     L4_GATEWAY_REQUEST = "l4_gateway_request"
