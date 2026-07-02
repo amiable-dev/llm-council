@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`reasoning_params` no longer dropped in `query_models_with_progress` (#365)** — the progress-callback query path (used by the council) now threads `reasoning_params` through to each model call, matching `query_models_parallel` and the gateway path (ADR-026). Reasoning-effort injection was previously silently lost on this path.
 - **Performance tracker correctness (#370)** — (1) `get_quality_percentile` now excludes the model itself from its own ranking (self-inclusion inflated the rank by 1/N and biased the ADR-029 graduation gate); (2) `_calculate_decay_weight` docstring corrected — `decay_days` is an e-folding time-constant, not a half-life (behaviour unchanged); (3) documented the intentional 0–1 (`get_all_model_scores`) vs 0–100 (`get_quality_score`) scale split and the intentionally-unweighted parse-success rate.
 - **OpenRouter gateway correctness (#367)** — (1) the API key is no longer frozen at import: `OpenRouterGateway` resolves it per-request via the ADR-013 chain, so a request-scoped BYOK key is honored (was silently bypassed); (2) null response `content` (e.g. a tool-call-only turn) is coerced to `""` so downstream never sees `None`; (3) `tool_calls`/`tool_call_id` are now propagated in message conversion instead of being silently dropped.
 
