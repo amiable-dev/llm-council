@@ -399,6 +399,16 @@ class OpenRouterGateway(BaseRouter):
             async with client.stream(
                 "POST", self._base_url, headers=headers, json=payload
             ) as response:
+                # Surface HTTP errors instead of silently parsing an error body
+                # as SSE (which would yield nothing).
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    detail = body.decode("utf-8", "replace")[:200]
+                    raise httpx.HTTPStatusError(
+                        f"OpenRouter streaming failed ({response.status_code}): {detail}",
+                        request=response.request,
+                        response=response,
+                    )
                 async for line in response.aiter_lines():
                     if not line or not line.startswith("data:"):
                         continue

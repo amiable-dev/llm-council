@@ -2,6 +2,8 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 import llm_council.gateway.openrouter as gw_mod
 from llm_council.gateway.openrouter import OpenRouterGateway
 from llm_council.gateway.types import CanonicalMessage, ContentBlock, GatewayRequest
@@ -105,8 +107,10 @@ class TestReasoningDetailsSurfaced:
 
 
 class _FakeStream:
-    def __init__(self, lines):
+    def __init__(self, lines, status_code=200):
         self._lines = lines
+        self.status_code = status_code
+        self.request = MagicMock()
 
     async def __aenter__(self):
         return self
@@ -118,10 +122,14 @@ class _FakeStream:
         for line in self._lines:
             yield line
 
+    async def aread(self):
+        return b"error body"
+
 
 class _FakeClient:
-    def __init__(self, lines):
+    def __init__(self, lines, status_code=200):
         self._lines = lines
+        self._status_code = status_code
 
     async def __aenter__(self):
         return self
@@ -130,7 +138,7 @@ class _FakeClient:
         return False
 
     def stream(self, method, url, headers=None, json=None):
-        return _FakeStream(self._lines)
+        return _FakeStream(self._lines, self._status_code)
 
 
 class TestTrueStreaming:
@@ -158,3 +166,14 @@ class TestTrueStreaming:
         with patch("httpx.AsyncClient", return_value=_FakeClient(lines)):
             chunks = [c async for c in OpenRouterGateway().complete_stream(_req())]
         assert chunks == ["ok"]
+
+
+class TestStreamingErrorHandling:
+    async def test_http_error_raises_not_silent(self, monkeypatch):
+        import httpx
+
+        monkeypatch.setattr(gw_mod, "get_api_key", lambda p: "k")
+        with patch("httpx.AsyncClient", return_value=_FakeClient([], status_code=500)):
+            with pytest.raises(httpx.HTTPStatusError):
+                async for _ in OpenRouterGateway().complete_stream(_req()):
+                    pass
