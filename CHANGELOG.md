@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.27.0] - 2026-07-02
+
+Follow-up tech-debt cleanup (epic #382): the OpenRouter gateway now surfaces reasoning traces and streams for real, plus performance-tracker correctness fixes.
+
+### Added
 
 - **OpenRouter gateway: reasoning trace + real streaming (#375)** — `GatewayResponse` now carries `reasoning_details` (o1/o3/deepseek-r1 reasoning traces were captured but dropped on the gateway path), and `complete_stream` now performs a true SSE stream yielding incremental content deltas instead of buffering the whole response into one chunk.
-- **Performance tracker minor debt (#377)** — `record_session` now stamps its `session_id` onto every metric as the authoritative id (the parameter was previously unused); clarified that `get_quality_score`'s 0–100 scale (selection-facing) vs `get_all_model_scores`' 0–1 scale (percentile math) is intentional, and that latency percentiles are intentionally unweighted.
+
+### Fixed
+
+- **Performance tracker minor debt (#377)** — `record_session` now stamps its `session_id` onto every metric as the authoritative id (the parameter was previously unused) and no longer mutates the caller's objects; the decay weight clamps future-dated timestamps; clarified that `get_quality_score`'s 0–100 scale (selection-facing) vs `get_all_model_scores`' 0–1 scale (percentile math) is intentional, and that latency percentiles are intentionally unweighted.
 
 ## [0.26.0] - 2026-07-02
 
