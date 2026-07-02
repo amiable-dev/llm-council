@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cost-aware scoring no longer does N+1 store reads (#384)** — `get_all_cost_aware_scores` (opt-in, ADR-011 Phase 3) read the JSONL performance store once per model via `get_model_index`; it now reads the store once and groups records by model — bounded reads and a single consistent snapshot for the quality-per-cost pass. New `_index_from_records` helper aggregates from already-loaded records; `get_model_index` behaviour unchanged.
+
 ## [0.27.0] - 2026-07-02
 
 Follow-up tech-debt cleanup (epic #382): the OpenRouter gateway now surfaces reasoning traces and streams for real, plus performance-tracker correctness fixes.

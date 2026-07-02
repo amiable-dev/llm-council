@@ -182,7 +182,13 @@ class InternalPerformanceTracker:
         """
         # Read all records for this model
         records = read_performance_records(self.store_path, model_id=model_id)
+        return self._index_from_records(model_id, records)
 
+    def _index_from_records(
+        self, model_id: str, records: List[ModelSessionMetric]
+    ) -> ModelPerformanceIndex:
+        """Aggregate an index from already-loaded records (#384: lets callers
+        read the store once and group, instead of one read per model)."""
         if not records:
             # Cold start: return neutral defaults
             return ModelPerformanceIndex(
@@ -289,13 +295,18 @@ class InternalPerformanceTracker:
         uses; models with unknown cost keep their quality score (neither rewarded
         nor punished for missing data).
         """
-        quality = self.get_all_model_scores()
         if not cost_aware_selection_enabled():
-            return quality
+            return self.get_all_model_scores()
+
+        # #384: read the store ONCE — the quality pass and the quality-per-cost
+        # pass share a single consistent snapshot (was 1+N reads, then 2).
+        grouped = self._read_grouped()
+        quality = self._scores_from_grouped(grouped)
 
         qpc = {}
         for model_id in quality:
-            value = self.get_model_index(model_id).quality_per_cost
+            index = self._index_from_records(model_id, grouped.get(model_id, []))
+            value = index.quality_per_cost
             if value is not None and value > 0:
                 qpc[model_id] = value
         if not qpc:
@@ -307,11 +318,20 @@ class InternalPerformanceTracker:
             # differentiation is possible, so keep quality scores rather than
             # collapsing everyone to 0.0.
             return quality
+
+        # Rescale QPC onto the cost-known cohort's OWN quality range: cost data
+        # re-ORDERS those models by value-for-money within the span their
+        # quality would otherwise occupy. Having cost data must never be a
+        # penalty — a raw 0–1 min-max would send the lowest-QPC model to 0.0
+        # while an unknown-cost model kept its ~0.5 quality score.
+        cohort_q = [quality[m] for m in qpc]
+        min_q, max_q = min(cohort_q), max(cohort_q)
+        q_span = max_q - min_q
         span = high - low
         result = dict(quality)
         for model_id, value in qpc.items():
-            # Same 0–1 scale as the plain quality scores.
-            result[model_id] = (value - low) / span
+            normalized = (value - low) / span
+            result[model_id] = min_q + normalized * q_span
         return result
 
     def get_all_model_scores(self) -> dict[str, float]:
@@ -328,18 +348,22 @@ class InternalPerformanceTracker:
         Returns:
             Dict mapping model_id to mean Borda score (0-1)
         """
-        all_records = read_performance_records(self.store_path)
+        grouped = self._read_grouped()
+        return self._scores_from_grouped(grouped)
 
-        # Group by model_id
-        model_records: dict[str, List[ModelSessionMetric]] = {}
-        for record in all_records:
-            if record.model_id not in model_records:
-                model_records[record.model_id] = []
-            model_records[record.model_id].append(record)
+    def _read_grouped(self) -> dict[str, List[ModelSessionMetric]]:
+        """Read the store ONCE and group records by model (#384)."""
+        grouped: dict[str, List[ModelSessionMetric]] = {}
+        for record in read_performance_records(self.store_path):
+            grouped.setdefault(record.model_id, []).append(record)
+        return grouped
 
-        # Calculate mean Borda for models with sufficient data
+    def _scores_from_grouped(
+        self, grouped: dict[str, List[ModelSessionMetric]]
+    ) -> dict[str, float]:
+        """Mean Borda (0-1) per model with >=10 samples, from a loaded snapshot."""
         scores: dict[str, float] = {}
-        for model_id, records in model_records.items():
+        for model_id, records in grouped.items():
             if len(records) < 10:  # Need PRELIMINARY confidence
                 continue
 
