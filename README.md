@@ -1258,10 +1258,11 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 
 ### All Environment Variables
 
-> **Source of truth note (ADR-031):** evaluation/triage/gateway knobs migrated
-> to YAML (`llm_council.yaml`) — several previously documented `LLM_COUNCIL_*`
-> env names no longer exist and are marked below with their YAML paths. A
-> generated, drift-tested canonical reference is tracked in #448.
+> **Canonical reference:** the complete, drift-tested list lives at
+> [docs/reference/environment-variables.md](https://llm-council.dev/reference/environment-variables/)
+> — a CI test fails if code reads a variable missing there or it documents one
+> that no longer exists. The tables below are a curated subset. Some knobs are
+> YAML-only (`llm_council.yaml`, ADR-031) and marked as such.
 
 #### Gateway Configuration (ADR-023)
 
@@ -1321,8 +1322,8 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 | `LLM_COUNCIL_MODELS_REASONING` | Models for reasoning tier (ADR-022) | gpt-5.2, opus, o1-preview, deepseek-r1 |
 | `LLM_COUNCIL_WILDCARD_ENABLED` | Enable wildcard specialist selection (ADR-020) | false |
 | `LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED` | Enable per-model prompt optimization (ADR-020) | false |
-| *(YAML)* `triage.fast_path.enabled` | Confidence-gated fast path (ADR-020; no env var) | true |
-| *(YAML)* `triage.fast_path.confidence_threshold` | Fast-path confidence threshold (no env var) | 0.92 |
+| `LLM_COUNCIL_FAST_PATH_ENABLED` | Confidence-gated fast path (ADR-020) | false |
+| `LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD` | Fast-path confidence threshold | 0.92 |
 | `NOT_DIAMOND_API_KEY` | Not Diamond API key (optional) | - |
 | `LLM_COUNCIL_USE_NOT_DIAMOND` | Enable Not Diamond API integration | false |
 | `LLM_COUNCIL_NOT_DIAMOND_TIMEOUT` | Not Diamond API timeout in seconds | 5.0 |

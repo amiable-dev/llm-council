@@ -138,6 +138,8 @@ nav:
       - ADR-048 Quality Benchmark: adr/ADR-048-quality-benchmark.md
     - Roadmap 2026-H2: roadmap-2026-h2.md
     - Stateless Audit (ADR-045 P3): adr-045-p3-state-inventory.md
+  - Reference:
+    - Environment Variables: reference/environment-variables.md
   - Benchmark Results: bench-results.md
   - Blog:
     - Multi-Model Architecture: blog/01-multi-model-architecture.md
