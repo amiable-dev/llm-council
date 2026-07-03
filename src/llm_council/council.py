@@ -535,8 +535,23 @@ async def run_council_with_fallback(
 
         # Stage 2: Peer review
         await report_progress(requested_models + 1, total_steps, "Stage 2: Peer review...")
+        # ADR-046 P3: per-reviewer progress ("<model> reviewed (2/4)") reaches
+        # MCP ctx.report_progress / HTTP progress ONLY when a consumer exists —
+        # a progress wrapper passed unconditionally would flip stage 2 onto
+        # the incremental path for every run.
+        stage2_progress = None
+        if on_progress is not None:
+
+            async def stage2_progress(completed, total, msg):
+                await report_progress(
+                    requested_models + completed, total_steps, f"Stage 2: {msg}"
+                )
+
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            user_query, responses_for_review, on_review_event=on_review_event
+            user_query,
+            responses_for_review,
+            on_progress=stage2_progress,
+            on_review_event=on_review_event,
         )
 
         # ADR-027: Track shadow votes for frontier tier

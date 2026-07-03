@@ -153,6 +153,13 @@ async def consult_council(
     """
     Consult the LLM Council for guidance on a query.
 
+    Progress semantics (ADR-046 P3): while deliberating, the tool emits MCP
+    progress notifications — per-model "Stage 1: <model> responded", per-
+    reviewer "Stage 2: <model> reviewed (n/N)", then synthesis progress.
+    Clients that render progress (Claude Code, Cursor) show these live;
+    clients that ignore progress lose nothing (the notifications are
+    best-effort and never affect the result).
+
     Args:
         query: The question to ask the council.
         confidence: Tier for model selection and timeout budgets. One of:
@@ -419,6 +426,10 @@ async def verify(
     Uses multi-model consensus to verify code changes, implementations, or other
     work artifacts against quality rubrics. Returns a structured verdict with
     confidence score and rationale.
+
+    Progress semantics (ADR-046 P3): emits MCP progress notifications through
+    the verification stages (evidence expansion, council collection, ranking,
+    verdict) — best-effort, never affects the verdict.
 
     Args:
         snapshot_id: Git commit SHA to verify (7-40 hex characters).
