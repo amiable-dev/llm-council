@@ -135,8 +135,13 @@ def check_envelope(item: BenchItem, synthesis: str, score: Optional[float]) -> L
         if not any(str(opt).lower() in text for opt in options):
             failures.append(f"missing_any_of:{options}")
     min_score = item.envelope.get("min_score")
-    if min_score is not None and score is not None and score < float(min_score):
-        failures.append(f"score_below_floor({score}<{min_score})")
+    if min_score is not None:
+        if score is None:
+            # A floor with no observable score IS drift (#439 r2): the
+            # council stopped producing the signal the envelope guards.
+            failures.append("score_unavailable")
+        elif score < float(min_score):
+            failures.append(f"score_below_floor({score}<{min_score})")
     return failures
 
 
@@ -224,6 +229,7 @@ async def run_bench(
     # NOTE (by design): the cap is checked BETWEEN items, never mid-item —
     # a single item may overshoot; the abort is graceful, not mid-completion.
     cap_charged = 0.0
+    any_unknown = False
     for item in items:
         if cap_charged >= cap:
             run.aborted = (
@@ -246,6 +252,10 @@ async def run_bench(
                 )
             )
             run.items_run += 1
+            # An erroring item may already have spent (#439 r2): charge the
+            # conservative default so failures cannot bypass the cap.
+            cap_charged = round(cap_charged + bench_unknown_item_usd(), 6)
+            any_unknown = True
             continue
         latency_ms = int((time.monotonic() - started) * 1000)
         synthesis = result.get("synthesis", "")
@@ -254,7 +264,8 @@ async def run_bench(
         failures = check_envelope(item, synthesis, score)
         run.total_cost_usd = round(run.total_cost_usd + cost, 6)
         cap_charged = round(cap_charged + (cost if cost_known else bench_unknown_item_usd()), 6)
-        run.cost_known = run.cost_known or cost_known
+        if not cost_known:
+            any_unknown = True
         run.items_run += 1
         if not failures:
             run.items_passed += 1
@@ -271,6 +282,8 @@ async def run_bench(
             )
         )
 
+    # 'fully known' means EVERY executed item reported a cost (#439 r2).
+    run.cost_known = run.items_run > 0 and not any_unknown
     _persist_run(run, runs_dir)
     return run
 

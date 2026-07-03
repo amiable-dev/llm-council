@@ -77,7 +77,11 @@ class TestEnvelope:
         item = BenchItem(id="x", domain="f", prompt="p", envelope={"min_score": 0.5})
         assert check_envelope(item, "text", 0.6) == []
         assert check_envelope(item, "text", 0.4) != []
-        assert check_envelope(item, "text", None) == []  # unknown score never fails
+        # #439 r2: a floor with NO observable score is itself drift — the
+        # council stopped producing the signal the envelope guards.
+        assert check_envelope(item, "text", None) == ["score_unavailable"]
+        no_floor = BenchItem(id="y", domain="f", prompt="p", envelope={})
+        assert check_envelope(no_floor, "text", None) == []
 
 
 class TestRun:
@@ -262,3 +266,48 @@ class TestCouncilRound1:
         )
         cmp = compare_to_baseline(run, bp)
         assert cmp == {"baseline": None}
+
+
+class TestCouncilRound2:
+    @pytest.mark.asyncio
+    async def test_error_items_still_charge_the_cap(self, tmp_path, monkeypatch):
+        # #439 r2: an item that raises may already have spent (stage 1 ran,
+        # stage 3 raised) — errors must charge the conservative default, not
+        # bypass cap accounting.
+        monkeypatch.setenv("LLM_COUNCIL_BENCH_UNKNOWN_ITEM_USD", "0.50")
+        d = tmp_path / "ds"
+        d.mkdir()
+        for i in range(4):
+            _write_item(d, f"i{i}")
+
+        async def runner(prompt):
+            raise RuntimeError("mid-run failure")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.00,
+        )
+        assert run.exit_code == 2  # cap abort after 2 error charges
+        assert run.items_run == 2
+
+    @pytest.mark.asyncio
+    async def test_cost_known_means_all_items_known(self, tmp_path):
+        # #439 r2: OR-accumulation flipped 'fully known' on the FIRST known
+        # item; the report claims 'not fully known' semantics.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+        calls = {"n": 0}
+
+        async def runner(prompt):
+            calls["n"] += 1
+            r = _fake_result("hello")
+            if calls["n"] == 2:
+                r["metadata"]["usage"]["total"] = {"cost_usd": 0.0}  # unknown
+            return r
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
+        assert run.cost_known is False  # one unknown item => NOT fully known
