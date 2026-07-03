@@ -181,6 +181,11 @@ class EventBridge:
         # Parse subscribed events from config
         if self.webhook_config is not None:
             self._subscribed_events = set(self.webhook_config.events)
+        elif self.on_event is not None:
+            # A local callback with no webhook config subscribes to every
+            # mapped event — an empty set here silently suppressed ALL
+            # events for on_event-only consumers (#430 review).
+            self._subscribed_events = {e.value for e in WebhookEventType}
 
     @property
     def is_running(self) -> bool:

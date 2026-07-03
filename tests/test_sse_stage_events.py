@@ -281,3 +281,60 @@ class TestOrchestratorWiring:
         assert len(s2) == 2, captured
         assert len(s3) == 1, captured
         assert max(s1) < min(s2) < max(s2) < s3[0]
+
+
+class TestCouncilRound1:
+    @pytest.mark.asyncio
+    async def test_client_disconnect_promptly_closes_inner_generator(self):
+        # #430 r1: the envelope wrapper must explicitly aclose() the inner
+        # generator on teardown — bare `async for` delegation defers inner
+        # cleanup (council-task cancel on client disconnect) to GC.
+        from llm_council.webhooks import _council_runner
+
+        cancelled = asyncio.Event()
+
+        async def fake_council(prompt, **kwargs):
+            # Deliver one bridge event so the outer generator suspends at a
+            # yield AFTER the council task is running, then hang.
+            kwargs["on_event"](mock.Mock(event="stage1.response", data={}))
+            try:
+                await asyncio.sleep(100)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            return {}
+
+        with patch.object(
+            _council_runner, "run_council_with_fallback", side_effect=fake_council
+        ):
+            gen = _council_runner.run_council("q")
+            first = await gen.__anext__()  # deliberation_start (pre-task)
+            assert first["event"] == "council.deliberation_start"
+            second = await gen.__anext__()  # bridge event (task running)
+            assert second["event"] == "stage1.response"
+            await gen.aclose()  # simulate client disconnect at a yield point
+            # Inner cleanup (council-task cancel) must have run NOW, not at
+            # GC time — bare `async for` delegation would defer it.
+            assert cancelled.is_set()
+
+    @pytest.mark.asyncio
+    async def test_on_event_only_bridge_receives_all_mapped_events(self):
+        # #430 r1: an on_event-only EventBridge had an EMPTY subscription set,
+        # silently suppressing every event. Without a webhook_config, the
+        # local callback subscribes to everything.
+        from llm_council.layer_contracts import LayerEvent, LayerEventType
+        from llm_council.webhooks.event_bridge import EventBridge
+
+        seen = []
+        bridge = EventBridge(on_event=lambda p: seen.append(p.event))
+        await bridge.start()
+        try:
+            await bridge.emit(
+                LayerEvent(
+                    event_type=LayerEventType.L3_STAGE1_RESPONSE,
+                    data={"model": "m/a"},
+                )
+            )
+        finally:
+            await bridge.shutdown()
+        assert seen == ["stage1.response"]

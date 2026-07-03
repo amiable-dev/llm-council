@@ -36,15 +36,22 @@ async def run_council(
     """
     request_id = str(uuid.uuid4())
     seq = 0
-    async for event in _run_council_events(prompt, models, api_key, request_id):
-        seq += 1
-        yield {
-            "v": 1,
-            "session_id": request_id,
-            "ts": time.time(),
-            "seq": seq,
-            **event,
-        }
+    inner = _run_council_events(prompt, models, api_key, request_id)
+    try:
+        async for event in inner:
+            seq += 1
+            yield {
+                "v": 1,
+                "session_id": request_id,
+                "ts": time.time(),
+                "seq": seq,
+                **event,
+            }
+    finally:
+        # Close the inner generator NOW (not at GC time) so its
+        # client-disconnect cleanup — cancelling the council task to stop
+        # wasted LLM calls — runs promptly (#430 review).
+        await inner.aclose()
 
 
 async def _run_council_events(
