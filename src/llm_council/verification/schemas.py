@@ -311,6 +311,17 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Non-verdict error marker (e.g. 'input_too_large'); None for a real verdict",
     )
+    # ADR-047 P3 (#415): screening-judge audit trail. None when screening is
+    # off (default). When the ACTIVE screen short-circuited, verdict is
+    # "pass" and screening.acted is True — the full council did not run.
+    screening: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Screening-judge decision (mode, eligible, reasons, scores,"
+            " acted). Present only when LLM_COUNCIL_SCREENING is shadow or"
+            " active; acted=true means the screen short-circuited to PASS."
+        ),
+    )
     # ADR-047 P2 (#414): calibrated confidence — raw stays in `confidence`.
     confidence_calibrated: Optional[float] = Field(
         default=None,

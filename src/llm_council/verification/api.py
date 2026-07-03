@@ -48,6 +48,14 @@ from llm_council.verification.calibration import (
     calibrated_confidence_enabled,
     load_mapping,
 )
+from llm_council.verification.screening import (
+    ScreenDecision,
+    log_decision,
+    run_screen,
+    screen_eligibility,
+    screen_passes,
+    screening_mode,
+)
 from llm_council.verification.verdict_extractor import (
     build_verification_result,
     extract_rubric_scores_from_rankings,
@@ -758,6 +766,71 @@ async def run_verification(
             _persist_result_safe(store, verification_id, cap_result)
             return cap_result
 
+        # ADR-047 P3 (#415): opt-in lightweight screening pre-gate.
+        # off (default) = no screen call, byte-identical. shadow = screen +
+        # log only. active = short-circuit on a unanimous screen pass.
+        # Blocking-capable requests are NEVER screened (invariant in
+        # screen_eligibility). Soft-fail: any screen error => full council.
+        screening_info: Optional[Dict[str, Any]] = None
+        mode = screening_mode()
+        if mode != "off":
+            reasons = screen_eligibility(
+                content_chars=len(verification_query),
+                target_paths=request.target_paths,
+                rubric_focus=request.rubric_focus,
+                evidence=request.evidence,
+            )
+            decision = ScreenDecision(
+                verification_id=verification_id,
+                mode=mode,
+                eligible=not reasons,
+                reasons=reasons,
+            )
+            if decision.eligible:
+                decision.scores = await run_screen(verification_id, verification_query)
+                decision.screen_pass = screen_passes(decision.scores)
+            if mode == "active" and decision.screen_pass and decision.scores:
+                decision.acted = True
+                log_decision(decision)
+                screen_confidence = round(min(decision.scores.values()) / 10.0, 2)
+                screen_result = {
+                    "verification_id": verification_id,
+                    "verdict": "pass",
+                    "confidence": screen_confidence,
+                    "exit_code": 0,
+                    "rubric_scores": decision.scores,
+                    "blocking_issues": [],
+                    "rationale": (
+                        "PASS via screening judge (ADR-047 P3): a single "
+                        "quick-tier model scored every rubric dimension at or "
+                        "above the screen minimum, the input was small, and "
+                        "the request was not blocking-capable. AUDIT NOTE: the "
+                        "full council did not deliberate; decision logged to "
+                        ".council/screening/decisions.jsonl."
+                    ),
+                    "transcript_location": str(transcript_dir),
+                    "partial": False,
+                    "timeout_fired": False,
+                    "completed_stages": [],
+                    "screening": {
+                        "mode": mode,
+                        "eligible": True,
+                        "scores": decision.scores,
+                        "acted": True,
+                    },
+                }
+                _persist_result_safe(store, verification_id, screen_result)
+                return screen_result
+            log_decision(decision)
+            screening_info = {
+                "mode": mode,
+                "eligible": decision.eligible,
+                "reasons": decision.reasons,
+                "scores": decision.scores,
+                "screen_pass": decision.screen_pass,
+                "acted": False,
+            }
+
         # ADR-040 Step 6: Pre-flight info as first progress callback
         if on_progress:
             preflight_msg = _build_preflight_info(
@@ -819,6 +892,10 @@ async def run_verification(
                     )
             except Exception:
                 logger.debug("ADR-041: Performance telemetry persistence failed", exc_info=True)
+
+            # ADR-047 P3: shadow/ineligible screening audit rides on the result.
+            if screening_info is not None:
+                result["screening"] = screening_info
 
             return result
 
