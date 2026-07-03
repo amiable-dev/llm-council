@@ -323,10 +323,11 @@ llm-council
 | `stage2.review` | `reviewer`, `ranking`, `parse_ok` | each peer review, as it lands |
 | `consensus.early_termination` | `leader`, `votes_saved`, … | ADR-044 early consensus (flag-on) |
 | `stage3.start` | `chairman` | synthesis begins |
+| `synthesis.delta` | `text` | chairman tokens, live (opt-in: `&stream_tokens=true`) |
 | `council.complete` | full result | terminal |
 | `council.error` | `error` | terminal |
 
-Schema changes are additive-only within `v: 1`. Non-streaming endpoints are byte-identical — the rich events are wired only when a stream consumer is attached.
+Schema changes are additive-only within `v: 1`. Non-streaming endpoints are byte-identical — the rich events are wired only when a stream consumer is attached. Chairman token streaming (`stream_tokens=true`) assembles the identical final result object as the non-streamed path; if the stream transport fails, stage 3 silently falls back to the regular call. Streamed synthesis reports usage as *unknown* (the streaming wire protocol carries no usage data) — ADR-011 semantics, never a fabricated cost.
 
 ### Server Discovery (MCP Server Card)
 

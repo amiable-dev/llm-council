@@ -88,6 +88,7 @@ LAYER_TO_WEBHOOK_MAPPING: Dict[LayerEventType, Union[WebhookEventType, StageMapp
     LayerEventType.L3_STAGE1_RESPONSE: WebhookEventType.STAGE1_RESPONSE,
     LayerEventType.L3_STAGE2_REVIEW: WebhookEventType.STAGE2_REVIEW,
     LayerEventType.L3_STAGE3_START: WebhookEventType.STAGE3_START,
+    LayerEventType.L3_SYNTHESIS_DELTA: WebhookEventType.SYNTHESIS_DELTA,
     LayerEventType.L3_EARLY_CONSENSUS_TERMINATION: WebhookEventType.CONSENSUS_EARLY_TERMINATION,
     LayerEventType.L3_COUNCIL_COMPLETE: WebhookEventType.COMPLETE,
     LayerEventType.L3_STAGE_COMPLETE: _map_stage_complete,

@@ -22,6 +22,7 @@ from llm_council.gateway_adapter import (
     STATUS_ERROR,
     STATUS_OK,
     query_model,
+    query_model_stream_with_status,
     query_model_with_status,
     query_models_parallel,
     query_models_with_progress,
@@ -818,6 +819,7 @@ async def stage3_synthesize_final(
     verdict_type: VerdictType = VerdictType.SYNTHESIS,
     timeout: float = 120.0,
     dispositions_instruction: Optional[str] = None,
+    on_synthesis_delta: Optional[Callable[[str], Awaitable[None]]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, int], Optional[VerdictResult]]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -942,9 +944,30 @@ STAGE 2 - Peer Rankings:
     # #397: use the status-preserving variant — query_model collapses every
     # failure (billing 402, auth, rate-limit, timeout) into None, which made
     # the 2026-07-02 billing outage undiagnosable ("dead model" misdiagnosis).
-    status_response = await query_model_with_status(
-        _get_chairman_model(), messages, disable_tools=True, timeout=timeout
-    )
+    # ADR-046 P2: optional token streaming. The streamed path assembles the
+    # full text and feeds the IDENTICAL downstream flow, so the final result
+    # object is the same by construction. Transport failure falls back to the
+    # non-streaming call; cancellation always propagates (never a fallback).
+    status_response = None
+    if on_synthesis_delta is not None:
+        try:
+            status_response = await query_model_stream_with_status(
+                _get_chairman_model(),
+                messages,
+                on_delta=on_synthesis_delta,
+                timeout=timeout,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "streamed synthesis failed (%s); falling back to non-streaming", exc
+            )
+            status_response = None
+    if status_response is None:
+        status_response = await query_model_with_status(
+            _get_chairman_model(), messages, disable_tools=True, timeout=timeout
+        )
 
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 

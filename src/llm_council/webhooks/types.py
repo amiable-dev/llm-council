@@ -23,6 +23,7 @@ class WebhookEventType(str, Enum):
     STAGE2_REVIEW = "stage2.review"  # ADR-046 P1: per-reviewer stage-2 event
     CONSENSUS_EARLY_TERMINATION = "consensus.early_termination"  # ADR-044 P2 / ADR-046 P1
     STAGE3_START = "stage3.start"  # ADR-046 P1
+    SYNTHESIS_DELTA = "synthesis.delta"  # ADR-046 P2: chairman token stream
     MODEL_VOTE_CAST = "model.vote_cast"
     STAGE2_COMPLETE = "council.stage2.complete"
     CONSENSUS_REACHED = "consensus.reached"

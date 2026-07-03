@@ -273,6 +273,10 @@ async def council_stream(
     api_key: Optional[str] = Query(
         default=None, description="OpenRouter API key (or set OPENROUTER_API_KEY env)"
     ),
+    stream_tokens: bool = Query(
+        default=False,
+        description="ADR-046 P2: also stream chairman synthesis tokens as synthesis.delta events",
+    ),
 ) -> StreamingResponse:
     """Stream council deliberation events via Server-Sent Events (SSE).
 
@@ -290,6 +294,8 @@ async def council_stream(
     - `consensus.early_termination`: ADR-044 early-consensus fired
     - `council.stage2.complete`: Stage 2 rankings complete
     - `stage3.start`: Chairman synthesis starting (chairman)
+    - `synthesis.delta`: Chairman tokens as generated (opt-in via
+      `stream_tokens=true`; text) — assembles to the same final result
     - `council.complete`: Final synthesis ready (includes full result) — terminal
     - `council.error`: An error occurred — terminal
 
@@ -314,7 +320,7 @@ async def council_stream(
         )
 
     return StreamingResponse(
-        council_event_generator(prompt, models, effective_api_key),
+        council_event_generator(prompt, models, effective_api_key, stream_tokens=stream_tokens),
         media_type="text/event-stream",
         headers=get_sse_headers(),
     )

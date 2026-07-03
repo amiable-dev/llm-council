@@ -97,6 +97,7 @@ async def council_event_generator(
     models: Optional[str],
     api_key: Optional[str],
     keepalive_interval: float = 15.0,
+    stream_tokens: bool = False,
 ) -> AsyncIterator[str]:
     """Generate SSE events for council deliberation.
 
@@ -115,7 +116,7 @@ async def council_event_generator(
     # Lazy import to avoid circular dependency
     from llm_council.webhooks._council_runner import run_council
 
-    async for event in run_council(prompt, models, api_key):
+    async for event in run_council(prompt, models, api_key, stream_tokens=stream_tokens):
         yield format_sse_event(
             event=event.get("event", "message"),
             data=event.get("data", {}),

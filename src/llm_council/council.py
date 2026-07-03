@@ -280,6 +280,7 @@ async def run_council_with_fallback(
     request_id: Optional[str] = None,
     verdict_type: VerdictType = VerdictType.SYNTHESIS,
     include_dissent: bool = False,
+    stream_synthesis: bool = False,
 ) -> Dict[str, Any]:
     """
     Run the council with timeout handling and fallback synthesis (ADR-012).
@@ -437,7 +438,21 @@ async def run_council_with_fallback(
     # stay None and every stage takes its exact pre-P1 code path.
     on_model_complete = None
     on_review_event = None
+    on_synthesis_delta = None
     if on_event is not None or webhook_config is not None:
+
+        if stream_synthesis:
+
+            async def on_synthesis_delta(text: str) -> None:
+                try:
+                    await event_bridge.emit(
+                        LayerEvent(
+                            event_type=LayerEventType.L3_SYNTHESIS_DELTA,
+                            data={"text": text},
+                        )
+                    )
+                except Exception:
+                    pass
 
         async def on_model_complete(model: str, model_result: Dict[str, Any]) -> None:
             try:
@@ -598,6 +613,7 @@ async def run_council_with_fallback(
             stage2_results,
             aggregate_rankings,
             verdict_type=effective_verdict_type,
+            on_synthesis_delta=on_synthesis_delta,  # ADR-046 P2 (None unless opted in)
         )
 
         # If we escalated due to deadlock, update the verdict result

@@ -27,6 +27,7 @@ async def run_council(
     prompt: str,
     models: Optional[str] = None,
     api_key: Optional[str] = None,
+    stream_tokens: bool = False,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run deliberation, yielding events in the ADR-046 versioned envelope.
 
@@ -36,7 +37,7 @@ async def run_council(
     """
     request_id = str(uuid.uuid4())
     seq = 0
-    inner = _run_council_events(prompt, models, api_key, request_id)
+    inner = _run_council_events(prompt, models, api_key, request_id, stream_tokens)
     try:
         async for event in inner:
             seq += 1
@@ -59,6 +60,7 @@ async def _run_council_events(
     models: Optional[str] = None,
     api_key: Optional[str] = None,
     request_id: Optional[str] = None,
+    stream_tokens: bool = False,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run council deliberation and yield events in real-time.
 
@@ -133,6 +135,7 @@ async def _run_council_events(
             WebhookEventType.STAGE2_COMPLETE.value,
             WebhookEventType.CONSENSUS_EARLY_TERMINATION.value,  # ADR-044/046
             WebhookEventType.STAGE3_START.value,  # ADR-046 P1
+            WebhookEventType.SYNTHESIS_DELTA.value,  # ADR-046 P2
             WebhookEventType.ERROR.value,
         ],
     )
@@ -169,6 +172,7 @@ async def _run_council_events(
                 webhook_config=webhook_config,
                 on_event=on_event_callback,
                 request_id=request_id,  # Propagate request_id for trace continuity
+                stream_synthesis=stream_tokens,  # ADR-046 P2 opt-in
             )
         except Exception as e:
             council_error = e

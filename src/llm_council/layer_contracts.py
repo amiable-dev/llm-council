@@ -105,6 +105,7 @@ class LayerEventType(Enum):
     L3_STAGE1_RESPONSE = "l3_stage1_response"  # ADR-046 P1
     L3_STAGE2_REVIEW = "l3_stage2_review"  # ADR-046 P1
     L3_STAGE3_START = "l3_stage3_start"  # ADR-046 P1
+    L3_SYNTHESIS_DELTA = "l3_synthesis_delta"  # ADR-046 P2
     L3_COUNCIL_COMPLETE = "l3_council_complete"
     L3_STAGE_COMPLETE = "l3_stage_complete"
     L3_MODEL_TIMEOUT = "l3_model_timeout"

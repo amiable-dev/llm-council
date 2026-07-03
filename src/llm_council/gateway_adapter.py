@@ -254,6 +254,57 @@ async def query_models_parallel(
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
+async def query_model_stream_with_status(
+    model: str,
+    messages: List[Dict[str, str]],
+    on_delta: Callable[[str], Awaitable[None]],
+    timeout: float = 120.0,
+    disable_tools: bool = True,
+) -> Dict[str, Any]:
+    """Stream a single model's completion, invoking on_delta per chunk (ADR-046 P2).
+
+    Assembles the full text and returns the same result shape as
+    query_model_with_status. The streaming wire protocol carries no usage
+    data, so ``usage`` is empty — ADR-011 cost_known semantics then report
+    UNKNOWN cost rather than fabricating one. Raises on transport failure
+    (callers fall back to the non-streaming path); CancelledError always
+    propagates.
+    """
+    if not USE_GATEWAY_LAYER:
+        raise NotImplementedError("token streaming requires the gateway layer")
+    from llm_council.gateway.types import CanonicalMessage, ContentBlock, GatewayRequest
+
+    import time as _time
+
+    start = _time.monotonic()
+    request = GatewayRequest(
+        model=model,
+        messages=[
+            CanonicalMessage(
+                role=m["role"], content=[ContentBlock(type="text", text=m.get("content", ""))]
+            )
+            for m in messages
+        ],
+        timeout=timeout,
+    )
+    router = _get_gateway_router()
+    parts: List[str] = []
+    async for chunk in router.complete_stream(request):
+        parts.append(chunk)
+        try:
+            await on_delta(chunk)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass  # a broken delta consumer must not kill the synthesis
+    return {
+        "status": STATUS_OK,
+        "content": "".join(parts),
+        "latency_ms": int((_time.monotonic() - start) * 1000),
+        "usage": {},
+    }
+
+
 async def query_models_with_progress(
     models: List[str],
     messages: List[Dict[str, str]],
