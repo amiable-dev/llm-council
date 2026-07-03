@@ -7,7 +7,7 @@ repo_name: amiable-dev/llm-council
 repo_url: https://github.com/amiable-dev/llm-council
 edit_uri: edit/master/docs/
 
-copyright: Copyright &copy; 2024-2025 Amiable Dev
+copyright: Copyright &copy; 2024-2026 Amiable Dev
 
 theme:
   name: material
@@ -80,6 +80,9 @@ nav:
     - MCP Server: guides/mcp.md
     - HTTP API: guides/http-api.md
     - Python Library: guides/python.md
+    - Verification & CI Gating: guides/verify.md
+    - Streaming: guides/streaming.md
+    - Quality Benchmark: guides/bench.md
     - Agent Skills: guides/skills.md
     - Creating Skills: guides/creating-skills.md
   - Integrations:
@@ -122,6 +125,20 @@ nav:
       - ADR-036 Output Quality: adr/ADR-036-output-quality-quantification.md
       - ADR-037 n8n Integration: adr/ADR-037-n8n-workflow-integration.md
       - ADR-038 One-Click Deployment: adr/ADR-038-one-click-deployment-strategy.md
+      - ADR-039 LLMRouter Integration: adr/ADR-039-llmrouter-integration.md
+      - ADR-040 Verification Timeouts: adr/ADR-040-verification-timeout-observability.md
+      - ADR-041 Verification Telemetry: adr/ADR-041-verification-telemetry-wiring.md
+      - ADR-042 Evidence Injection: adr/ADR-042-verify-evidence-injection.md
+      - ADR-042 Implementation Spec: adr/ADR-042-implementation-spec.md
+      - ADR-043 Pareto Router: adr/ADR-043-pareto-router-integration.md
+      - ADR-044 Compute-Optimal Deliberation: adr/ADR-044-compute-optimal-deliberation.md
+      - ADR-045 MCP 2026 Adoption: adr/ADR-045-mcp-2026-adoption.md
+      - ADR-046 Streaming Deliberation: adr/ADR-046-streaming-deliberation.md
+      - ADR-047 Verifier Calibration: adr/ADR-047-verifier-calibration.md
+      - ADR-048 Quality Benchmark: adr/ADR-048-quality-benchmark.md
+    - Roadmap 2026-H2: roadmap-2026-h2.md
+    - Stateless Audit (ADR-045 P3): adr-045-p3-state-inventory.md
+  - Benchmark Results: bench-results.md
   - Blog:
     - Multi-Model Architecture: blog/01-multi-model-architecture.md
     - Fault-Tolerant Gateway: blog/02-fault-tolerant-gateway.md

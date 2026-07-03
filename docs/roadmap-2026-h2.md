@@ -2,7 +2,10 @@
 
 Five highest-value deliverables, identified 2026-07-02 by (a) a reverse-order ADR
 sweep for unimplemented items and (b) a survey of the July-2026 GenAI landscape.
-Ordered by value; #1 is in flight (ADR-044).
+Ordered by value. **Status (2026-07-03): all five shipped** — v0.28.0 (#1),
+v0.29.0 (#2), v0.30.0 (#3), v0.31.0 (#4), v0.32.0 (#5). Remaining dated
+follow-up: [#425](https://github.com/amiable-dev/llm-council/issues/425)
+(post-2026-07-28 MCP SDK pin bump + Server Card final-schema re-check).
 
 ## 1. Compute-Optimal Deliberation — ADR-044 (✅ shipped, epic #394)
 
@@ -17,7 +20,7 @@ needs it) beats fixed-depth ensembles; heterogeneous-model ensembles are cited
 as underexplored — this project is one. The telemetry needed was shipped in
 v0.25.x–v0.27.x and has no consumer yet.
 
-## 2. MCP 2026-07-28 Adoption — Tasks primitive + Server Card
+## 2. MCP 2026-07-28 Adoption — Tasks primitive + Server Card (✅ shipped, ADR-045, epic #407, v0.29.0)
 
 **What:** Adopt the MCP 2026-07-28 spec (final 2026-07-28): the **Tasks
 primitive** for long-running deliberations (submit → poll/resume; survives
@@ -29,7 +32,7 @@ high/reasoning tiers (README instructs raising `MCP_TIMEOUT`); Tasks is
 purpose-built for it. Server Cards make the council discoverable across
 19k+-server MCP registries. Extends ADR-012.
 
-## 3. Streaming Deliberation, end-to-end
+## 3. Streaming Deliberation, end-to-end (✅ shipped, ADR-046, epic #412, v0.30.0)
 
 **What:** Stream Stage-1 responses as they land, ranking events as they
 resolve, and chairman synthesis token-by-token — over the existing SSE
@@ -40,7 +43,7 @@ v0.27.1.
 a 30–600s deliberation behind a spinner is the product's felt weakness.
 Listed as the first "future enhancement" in CLAUDE.md.
 
-## 4. Verifier Calibration & Judge Reliability
+## 4. Verifier Calibration & Judge Reliability (✅ shipped, ADR-047, epic #417, v0.31.0)
 
 **What:** Calibrate `verify`'s confidence signal against observed outcomes
 (the `.council/logs` transcript corpus is training data we own); add a
@@ -54,7 +57,7 @@ operational evidence (multi-round verify asymptotes with zero blocking
 issues; confidence pinned below its own PASS threshold). Verification is the
 flagship CI-gate feature; its reliability is the product.
 
-## 5. Council Quality Benchmark + Golden-Dataset Regression
+## 5. Council Quality Benchmark + Golden-Dataset Regression (✅ shipped, ADR-048, epic #421, v0.32.0)
 
 **What:** A published benchmark answering "when does a council beat a single
 frontier model, per dollar?" (uses ADR-011 cost ground truth), plus a

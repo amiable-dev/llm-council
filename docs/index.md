@@ -23,12 +23,17 @@ Instead of asking a single LLM for answers, LLM Council:
 - **Flexible integration** - Use as MCP server, HTTP API, or Python library
 - **Confidence tiers** - Quick, balanced, high, and reasoning modes
 - **Jury mode** - Binary verdicts for go/no-go decisions
+- **Verification & CI gating** - Machine-actionable pass/fail/unclear verdicts with calibrated confidence ([guide](guides/verify.md))
+- **Cost transparency** - Real per-model/per-stage token + USD accounting on every response (ADR-011)
+- **Live streaming** - Watch the deliberation unfold: per-model SSE events and chairman token streaming ([guide](guides/streaming.md))
+- **Quality benchmark** - Golden-dataset drift regression and a quality-per-dollar matrix ([guide](guides/bench.md))
+- **MCP 2026-ready** - Server Card discovery, durable task store, stateless-deployment audit (ADR-045)
 
 ## Quick Start
 
 ```bash
 # Install
-pip install "llm-council-core[mcp]"
+pip install "llm-council-core[mcp,secure]"
 
 # Set API key
 export OPENROUTER_API_KEY="sk-or-v1-..."
