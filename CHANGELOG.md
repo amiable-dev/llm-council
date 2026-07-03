@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-07-03
+
+**Documentation Usability Overhaul** — epic [#443](https://github.com/amiable-dev/llm-council/issues/443), from the 2026-07-03 documentation review. Ships the documented-but-missing API surfaces (docs-as-spec: the `consult_council` Python facade and `gate --tier`), fixes every doc that failed when executed, surfaces the v0.25–v0.32 feature set on the published site (which had frozen at ADR-038), and adds CI drift guards so docs currency is enforced like code currency.
+
 ### Added
 
 - **Docs small-fixes batch + DoD process fix (#449)** — clean `llm_council.yaml.example` template (the root `llm_council.yaml` is the project's own dev config and was headered v0.15.0); `examples/eval_bridges/README.md` with prereqs + spend warning; the HTTP API now reports the real package version in Swagger (was hardcoded 1.0.0) with proper OpenAPI description/tags; METHODOLOGY↔GOVERNANCE cross-links + the full bench workflow in METHODOLOGY; bench/calibration `--help` text now shows the spend caps; epic DoD guidance updated to include the published docs site (the process hole that froze it at ADR-038).
