@@ -104,3 +104,35 @@ class TestStaticCard:
         generated = build_server_card()
         committed["version"] = generated["version"] = "MASKED"
         assert committed == generated
+
+
+class TestCouncilRound1:
+    def test_missing_mcp_extra_omits_tools_gracefully(self, monkeypatch):
+        # ImportError (mcp extra not installed) is the ONLY tolerated failure.
+        import builtins
+
+        real_import = builtins.__import__
+
+        def no_mcp(name, *a, **kw):
+            if name.endswith("mcp_server") or name == "llm_council.mcp_server":
+                raise ImportError("mcp extra not installed")
+            return real_import(name, *a, **kw)
+
+        monkeypatch.setattr(builtins, "__import__", no_mcp)
+        from llm_council.server_card import _get_tool_names
+
+        assert _get_tool_names() is None
+
+    def test_private_api_breakage_fails_loudly(self, monkeypatch):
+        # A FastMCP internals change must raise, not silently drop the tools
+        # entry from the card (round-1 council finding).
+        pytest.importorskip("mcp")
+        import llm_council.mcp_server as mcp_server_mod
+        from llm_council.server_card import _get_tool_names
+
+        class NoManager:
+            pass
+
+        monkeypatch.setattr(mcp_server_mod, "mcp", NoManager())
+        with pytest.raises(AttributeError):
+            _get_tool_names()

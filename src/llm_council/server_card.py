@@ -52,14 +52,16 @@ def _get_tool_names() -> Optional[List[str]]:
     """
     try:
         from .mcp_server import mcp
-
-        # FastMCP's public list_tools() is async; the tool manager holds the
-        # same registry synchronously. The drift test pins this against the
-        # public API, so a private-attr change fails loudly in CI.
-        return sorted(t.name for t in mcp._tool_manager.list_tools())
-    except Exception as exc:
-        logger.debug("mcp tool registry unavailable (%s); card omits tools", exc)
+    except ImportError as exc:
+        # The ONLY tolerated failure: [mcp] extra not installed. Anything
+        # else (e.g. a FastMCP internals change breaking the private-attr
+        # access below) must raise, not silently drop tools from the card.
+        logger.debug("mcp extra not installed (%s); card omits tools", exc)
         return None
+    # FastMCP's public list_tools() is async; the tool manager holds the same
+    # registry synchronously. Deliberately NOT wrapped in a handler — the
+    # drift test also pins this against the public API in CI.
+    return sorted(t.name for t in mcp._tool_manager.list_tools())
 
 
 def build_server_card() -> Dict[str, Any]:
