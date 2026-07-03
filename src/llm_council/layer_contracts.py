@@ -225,7 +225,12 @@ def get_layer_events() -> List[LayerEvent]:
 def clear_layer_events() -> None:
     """Clear all layer events.
 
-    Typically called at the start of a new request.
+    Typically called at the start of a new request. NOTE: this buffer is a
+    process-wide best-effort debugging window, not the observability system —
+    durable metrics flow through the ADR-030 adapters at emit time, so
+    clearing (or ring-buffer overflow) never loses exported metrics. In a
+    concurrent server, prefer reading via get_layer_events() deltas over
+    clearing.
     """
     _layer_events.clear()
 
