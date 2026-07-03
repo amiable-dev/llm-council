@@ -15,6 +15,11 @@ from .harness import BenchRun
 from .matrix import format_matrix_table
 
 
+def _cell(text: str) -> str:
+    """Escape markdown-table pipes in cell content (#441 review)."""
+    return str(text).replace("|", "\\|")
+
+
 def render_results_page(
     run: BenchRun,
     *,
@@ -48,10 +53,12 @@ def render_results_page(
         "|------|--------|--------|-------|------------|",
     ]
     for r in run.results:
-        status = "pass" if r.ok else f"FAIL ({'; '.join(r.failures)})"
+        status = "pass" if r.ok else f"FAIL ({_cell('; '.join(r.failures))})"
         score = f"{r.score:.2f}" if r.score is not None else "n/a"
         item_cost = f"{r.cost_usd:.4f}" if r.cost_known else "unknown"
-        lines.append(f"| {r.item_id} | {r.domain} | {status} | {score} | {item_cost} |")
+        lines.append(
+            f"| {_cell(r.item_id)} | {_cell(r.domain)} | {status} | {score} | {item_cost} |"
+        )
     if matrix_rows:
         lines.append("")
         lines.append(format_matrix_table(matrix_rows))
@@ -71,6 +78,7 @@ def write_results_page(
     path.write_text(
         render_results_page(
             run, dataset_version=dataset_version, matrix_rows=matrix_rows
-        )
+        ),
+        encoding="utf-8",
     )
     return path

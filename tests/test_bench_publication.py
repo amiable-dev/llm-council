@@ -78,3 +78,28 @@ class TestRagasBridge:
         assert row["answer"] == "the answer"
         # Stage-1 drafts serve as retrieved contexts; failures excluded.
         assert row["contexts"] == ["draft a", "draft b"]
+
+
+class TestCouncilRound1:
+    def test_pipes_in_failures_escaped(self):
+        # #441 r1: an unescaped '|' in a failure message splits the row.
+        run = BenchRun(
+            started_at="2026-07-03T14:00:00+00:00",
+            items_total=1, items_run=1, items_passed=0,
+            total_cost_usd=0.0, cost_known=True,
+            results=[ItemResult(
+                item_id="a", domain="coding", ok=False,
+                failures=["missing_any_of:['x|y']"],
+            )],
+        )
+        page = render_results_page(run, dataset_version="v1")
+        row = [line for line in page.splitlines() if line.startswith("| a |")][0]
+        assert row.count("|") == 6  # 5 columns, never split by content pipes
+        assert "\\|" in row
+
+    def test_written_page_is_utf8(self, tmp_path):
+        run = _run()
+        run.results[0].failures = ["café — non-ascii"]
+        out = tmp_path / "r.md"
+        write_results_page(run, out, dataset_version="v1")
+        assert "café" in out.read_text(encoding="utf-8")
