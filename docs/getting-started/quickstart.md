@@ -56,6 +56,12 @@ asyncio.run(main())
 | `high` | Full council | ~180s | Important decisions |
 | `reasoning` | Deep thinking | ~600s | Complex analysis |
 
+!!! warning "MCP client timeouts on `high`/`reasoning`"
+    These tiers exceed many MCP clients' default transport timeout (~60s).
+    Set `MCP_TIMEOUT` (milliseconds) in your client config to at least the
+    tier's budget, or the client will cut the connection while the council
+    is still deliberating.
+
 ## Next Steps
 
 - [Configuration](configuration.md) - Customize your council

@@ -59,13 +59,23 @@ Karpathy's original README stated:
 ## Installation
 
 ```bash
-pip install "llm-council-core[mcp]"
+# Recommended (isolated tool install; puts `llm-council` on PATH):
+uv tool install "llm-council-core[mcp,secure]"
+
+# Or with pip:
+pip install "llm-council-core[mcp,secure]"
 ```
 
 For core library only (no MCP server):
 ```bash
 pip install llm-council-core
 ```
+
+> **Why `[mcp,secure]` and not just `[mcp]`?** The `secure` extra provides
+> keychain support. Without it, `llm-council setup-key` is unavailable AND a
+> key already stored in your keychain is **silently ignored** — the server
+> starts but `council_health_check` reports `api_key_configured: false`.
+> Include both extras unless you only ever use environment variables.
 
 ## Setup
 
@@ -306,6 +316,11 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 > **Note**: No `env` block needed—the key is resolved from your system keychain or environment automatically.
 
+> **Client timeouts (`high`/`reasoning` tiers):** deliberation can exceed MCP
+> clients' default transport timeout (~60s). Set `MCP_TIMEOUT` (milliseconds)
+> in your client config to at least the tier budget (`high` ≈ 180000,
+> `reasoning` ≈ 600000) or the client cuts the connection mid-deliberation.
+
 ### With Other MCP Clients
 
 Any MCP client can use the server by running:
@@ -368,10 +383,14 @@ per-model/per-stage breakdown.
 **Arguments:**
 - `query` (string, required): The question to ask the council
 - `confidence` (string, optional): Response quality level (default: "high")
-  - `"quick"`: Fast models (mini/flash/haiku), ~30 seconds - fast responses for simple questions
-  - `"balanced"`: Mid-tier models (GPT-4o, Sonnet), ~90 seconds - good balance of speed and quality
-  - `"high"`: Full council (Opus, GPT-4o), ~180 seconds - comprehensive deliberation
-  - `"reasoning"`: Deep thinking models (GPT-5.2, o1, DeepSeek-R1), ~600 seconds - complex reasoning
+  - `"quick"`: fast/mini-class models, ~30s — simple questions
+  - `"balanced"`: mid-tier models, ~90s — most questions
+  - `"high"`: the full frontier council, ~180s — important decisions
+  - `"reasoning"`: deep-thinking models, ~600s — complex analysis
+
+  The concrete model pools are configured in `llm_council.yaml` (or
+  `LLM_COUNCIL_MODELS_*`) — run `council_health_check` to see exactly what
+  YOUR council runs; any list printed here would drift.
 - `include_details` (boolean, optional): Include individual model responses, rankings, and the full per-model/per-stage **Cost & Tokens** breakdown (default: false)
 - `verdict_type` (string, optional): Type of verdict to render (default: "synthesis")
   - `"synthesis"`: Free-form natural language synthesis
@@ -644,14 +663,11 @@ async def review_pull_request(pr_diff: str, pr_description: str):
         return False, f"{verdict.get('rationale')}\n\nDissent: {verdict.get('dissent', 'None')}"
 ```
 
-**Environment Variables:**
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `LLM_COUNCIL_VERDICT_TYPE` | Default verdict type | synthesis |
-| `LLM_COUNCIL_DEADLOCK_THRESHOLD` | Borda score difference for deadlock | 0.1 |
-| `LLM_COUNCIL_DISSENT_THRESHOLD` | Std deviations below median for outlier | 1.5 |
-| `LLM_COUNCIL_MIN_BORDA_SPREAD` | Minimum spread to surface dissent | 0.0 |
+**Defaults:** `verdict_type` is a **per-request parameter** (tool/API/facade),
+not an environment variable. Deadlock detection uses a fixed 0.1 Borda-spread
+threshold (`detect_deadlock`); dissent extraction thresholds are internal
+constants in `dissent.py`. (Earlier docs listed VERDICT_TYPE / DEADLOCK_THRESHOLD / DISSENT_THRESHOLD
+environment variables — those never shipped.)
 
 ### Structured Rubric Scoring (ADR-016)
 
@@ -1242,6 +1258,11 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 
 ### All Environment Variables
 
+> **Source of truth note (ADR-031):** evaluation/triage/gateway knobs migrated
+> to YAML (`llm_council.yaml`) — several previously documented `LLM_COUNCIL_*`
+> env names no longer exist and are marked below with their YAML paths. A
+> generated, drift-tested canonical reference is tracked in #448.
+
 #### Gateway Configuration (ADR-023)
 
 | Variable | Description | Default |
@@ -1252,7 +1273,7 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 | `OPENAI_API_KEY` | OpenAI API key | Required for Direct gateway (OpenAI) |
 | `GOOGLE_API_KEY` | Google API key | Required for Direct gateway (Google) |
 | `LLM_COUNCIL_DEFAULT_GATEWAY` | Default gateway (openrouter/requesty/direct) | openrouter |
-| `LLM_COUNCIL_USE_GATEWAY` | Enable gateway layer with circuit breaker | false |
+| *(YAML)* `gateways.enabled` | Enable gateway layer with circuit breaker (no env var) | false |
 
 #### Ollama Configuration (ADR-025)
 
@@ -1260,7 +1281,6 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 |----------|-------------|---------|
 | `LLM_COUNCIL_OLLAMA_BASE_URL` | Ollama API endpoint | http://localhost:11434 |
 | `LLM_COUNCIL_OLLAMA_TIMEOUT` | Timeout for Ollama requests (seconds) | 120.0 |
-| `LLM_COUNCIL_USE_LITELLM` | Enable LiteLLM wrapper for Ollama | true |
 
 #### Webhook Configuration (ADR-025)
 
@@ -1268,7 +1288,7 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 |----------|-------------|---------|
 | `LLM_COUNCIL_WEBHOOK_TIMEOUT` | Webhook POST timeout (seconds) | 5.0 |
 | `LLM_COUNCIL_WEBHOOK_RETRIES` | Max retry attempts | 3 |
-| `LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` | Require HTTPS (except localhost) | true |
+| *(YAML)* webhooks `https_only` | Require HTTPS (except localhost; no env var) | true |
 
 #### Council Configuration
 
@@ -1281,20 +1301,18 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 | `LLM_COUNCIL_STYLE_NORMALIZATION` | Enable style normalization | false |
 | `LLM_COUNCIL_NORMALIZER_MODEL` | Model for normalization | google/gemini-2.0-flash-001 |
 | `LLM_COUNCIL_MAX_REVIEWERS` | Max reviewers per response | null (all) |
-| `LLM_COUNCIL_RUBRIC_SCORING` | Enable multi-dimensional rubric scoring | false |
-| `LLM_COUNCIL_ACCURACY_CEILING` | Use accuracy as score ceiling | true |
+| `RUBRIC_SCORING_ENABLED` | Enable multi-dimensional rubric scoring (ADR-031 name) | false |
+| *(YAML)* `evaluation.rubric` accuracy ceiling | Accuracy caps the weighted score (no env var) | true |
 | `LLM_COUNCIL_WEIGHT_*` | Rubric dimension weights (ACCURACY, RELEVANCE, COMPLETENESS, CONCISENESS, CLARITY) | See above |
-| `LLM_COUNCIL_SAFETY_GATE` | Enable safety pre-check gate | false |
-| `LLM_COUNCIL_SAFETY_SCORE_CAP` | Score cap for failed safety checks | 0.0 |
-| `LLM_COUNCIL_BIAS_AUDIT` | Enable bias auditing (ADR-015) | false |
-| `LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD` | Length-score correlation threshold for bias detection | 0.3 |
-| `LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD` | Position variance threshold for bias detection | 0.5 |
-| `LLM_COUNCIL_BIAS_PERSISTENCE` | Enable cross-session bias storage (ADR-018) | false |
-| `LLM_COUNCIL_BIAS_STORE` | Path to bias metrics JSONL file | ~/.llm-council/bias_metrics.jsonl |
-| `LLM_COUNCIL_BIAS_CONSENT` | Consent level: 0=off, 1=local, 2=anonymous, 3=enhanced, 4=research | 1 |
-| `LLM_COUNCIL_BIAS_WINDOW_SESSIONS` | Rolling window: max sessions for aggregation | 100 |
-| `LLM_COUNCIL_BIAS_WINDOW_DAYS` | Rolling window: max days for aggregation | 30 |
-| `LLM_COUNCIL_MIN_BIAS_SESSIONS` | Minimum sessions for aggregation analysis | 20 |
+| `SAFETY_GATE_ENABLED` | Enable safety pre-check gate (ADR-031 name) | false |
+| *(YAML)* `evaluation.safety` score cap | Score cap for failed safety checks (no env var) | 0.0 |
+| `BIAS_AUDIT_ENABLED` | Enable bias auditing (ADR-015; ADR-031 name) | false |
+| *(YAML)* `evaluation.bias.length_correlation_threshold` | Length-score correlation threshold (no env var) | 0.3 |
+| *(YAML)* `evaluation.bias.position_variance_threshold` | Position variance threshold (no env var) | 0.5 |
+| `BIAS_PERSISTENCE_ENABLED` | Enable cross-session bias storage (ADR-018; ADR-031 name) | false |
+| *(YAML)* `evaluation.bias.store_path` | Path to bias metrics JSONL (no env var) | data/bias_metrics.jsonl |
+| *(YAML)* `evaluation.bias.consent_level` | OFF / LOCAL_ONLY / ANONYMOUS / ENHANCED / RESEARCH (no env var) | LOCAL_ONLY |
+| *(CLI)* `bias-report --max-sessions / --max-days` | Aggregation windows moved to CLI flags | 100 / 30 |
 | `LLM_COUNCIL_HASH_SECRET` | Secret for query hashing (RESEARCH consent only) | dev-secret |
 | `LLM_COUNCIL_SUPPRESS_WARNINGS` | Suppress security warnings | false |
 | `LLM_COUNCIL_MODELS_QUICK` | Models for quick tier (ADR-022) | gpt-4o-mini, haiku, gemini-flash |
@@ -1303,15 +1321,8 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 | `LLM_COUNCIL_MODELS_REASONING` | Models for reasoning tier (ADR-022) | gpt-5.2, opus, o1-preview, deepseek-r1 |
 | `LLM_COUNCIL_WILDCARD_ENABLED` | Enable wildcard specialist selection (ADR-020) | false |
 | `LLM_COUNCIL_PROMPT_OPTIMIZATION_ENABLED` | Enable per-model prompt optimization (ADR-020) | false |
-| `LLM_COUNCIL_FAST_PATH_ENABLED` | Enable confidence-gated fast path (ADR-020) | false |
-| `LLM_COUNCIL_FAST_PATH_CONFIDENCE_THRESHOLD` | Confidence threshold for fast path (0.0-1.0) | 0.92 |
-| `LLM_COUNCIL_FAST_PATH_MODEL` | Model for fast path routing | auto |
-| `LLM_COUNCIL_SHADOW_SAMPLE_RATE` | Shadow sampling rate (0.0-1.0) | 0.05 |
-| `LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD` | Disagreement threshold for shadow samples | 0.08 |
-| `LLM_COUNCIL_ROLLBACK_ENABLED` | Enable rollback metric tracking | true |
-| `LLM_COUNCIL_ROLLBACK_WINDOW` | Rolling window size for metrics | 100 |
-| `LLM_COUNCIL_ROLLBACK_DISAGREEMENT_THRESHOLD` | Shadow disagreement rollback threshold | 0.08 |
-| `LLM_COUNCIL_ROLLBACK_ESCALATION_THRESHOLD` | User escalation rollback threshold | 0.15 |
+| *(YAML)* `triage.fast_path.enabled` | Confidence-gated fast path (ADR-020; no env var) | true |
+| *(YAML)* `triage.fast_path.confidence_threshold` | Fast-path confidence threshold (no env var) | 0.92 |
 | `NOT_DIAMOND_API_KEY` | Not Diamond API key (optional) | - |
 | `LLM_COUNCIL_USE_NOT_DIAMOND` | Enable Not Diamond API integration | false |
 | `LLM_COUNCIL_NOT_DIAMOND_TIMEOUT` | Not Diamond API timeout in seconds | 5.0 |

@@ -5,7 +5,7 @@ This document describes the HTTP REST API for LLM Council. The API is available 
 ## Installation
 
 ```bash
-pip install "llm-council[http]"
+pip install "llm-council-core[http]"
 ```
 
 ## Starting the Server
@@ -56,10 +56,13 @@ POST /v1/council/run
 ```json
 {
   "prompt": "What is the best approach for implementing user authentication?",
-  "models": ["openai/gpt-4", "anthropic/claude-3-opus"],  // optional
-  "api_key": "sk-..."  // optional if OPENROUTER_API_KEY is set
+  "models": ["openai/gpt-5.4", "anthropic/claude-opus-4.8"],
+  "api_key": "sk-..."
 }
 ```
+
+`models` and `api_key` are optional — omit `api_key` when `OPENROUTER_API_KEY`
+is set on the server (preferred; see warning below).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -204,6 +207,52 @@ const response = await fetch("http://localhost:8000/v1/council/run", {
 });
 const result = await response.json();
 console.log(result.stage3.response);  // Final synthesized answer
+```
+
+### Stream Council Deliberation (SSE)
+
+Watch the deliberation live (ADR-046). Every event carries the v1 envelope
+(`v`, `session_id`, `ts`, monotonic `seq`).
+
+```
+GET /v1/council/stream?prompt=...&stream_tokens=false
+```
+
+| Event | Payload | When |
+|---|---|---|
+| `stage1.response` | `model`, `response`, `latency_ms`, `usage` | each model's answer, as it lands |
+| `stage2.review` | `reviewer`, `ranking`, `parse_ok` | each peer review |
+| `consensus.early_termination` | ADR-044 payload | early consensus (flag-on) |
+| `stage3.start` | `chairman` | synthesis begins |
+| `synthesis.delta` | `text` | chairman tokens (opt-in: `stream_tokens=true`) |
+| `council.complete` / `council.error` | full result / error | terminal |
+
+```bash
+curl -N "http://localhost:8000/v1/council/stream?prompt=What+is+AI&stream_tokens=true"
+```
+
+!!! warning "Do not pass `api_key` in the query string"
+    Query strings land in server/proxy logs and browser history. Prefer the
+    `OPENROUTER_API_KEY` environment variable on the server (BYOK), and keep
+    `LLM_COUNCIL_API_TOKEN` auth in headers. The `api_key` request/query
+    parameter exists for single-user local setups only.
+
+### Request Fields (POST /v1/council/run)
+
+Beyond `prompt`/`models`/`api_key`, the endpoint accepts `verdict_type`
+(`synthesis` | `binary` | `tie_breaker` — ADR-025b Jury Mode) and
+`include_dissent` (extract minority opinions). Responses include a typed
+`usage` field (ADR-011 cost transparency: per-stage, per-model, total —
+`cost_known` distinguishes real provider costs from unknowns).
+
+### MCP Server Card (Discovery)
+
+Public discovery metadata generated from the live tool registry (ADR-045,
+SEP-2127) — unauthenticated, like `/health`:
+
+```
+GET /server-card
+GET /.well-known/mcp/server-card.json
 ```
 
 ## Design Principles
