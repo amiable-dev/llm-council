@@ -50,7 +50,10 @@ class TestStage2ProgressWiring:
             s2.return_value = ([], {}, {})
             s3.return_value = ({"model": "c", "response": "s"}, {}, None)
             await council.run_council_with_fallback(
-                "q", bypass_cache=True, on_progress=on_progress
+                "q",
+                bypass_cache=True,
+                on_progress=on_progress,
+                models=["m/a", "m/b"],  # pin requested_models for offset math
             )
             assert s2.await_count == 1
             stage2_progress = s2.call_args.kwargs.get("on_progress")
