@@ -313,6 +313,21 @@ Any MCP client can use the server by running:
 llm-council
 ```
 
+### Server Discovery (MCP Server Card)
+
+The HTTP server (`llm-council serve`) publishes an [MCP Server Card](https://github.com/modelcontextprotocol/experimental-ext-server-card) — public discovery metadata generated from the live tool registry — at:
+
+- `/server-card` (SEP-2127 experimental-extension path)
+- `/.well-known/mcp/server-card.json` (SEP-1649 well-known path)
+
+A static copy for registry submission lives at [`server-card.json`](server-card.json) and is regenerated with:
+
+```bash
+llm-council server-card --output server-card.json
+```
+
+The card follows the SEP-2127 RC schema (v1); it will be re-validated against the final schema after the MCP 2026-07-28 spec release.
+
 ## Available Tools
 
 ### `consult_council`

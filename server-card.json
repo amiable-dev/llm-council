@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json",
+  "name": "io.github.amiable-dev/llm-council",
+  "title": "LLM Council",
+  "description": "Multi-model deliberation council with anonymized peer review, exposed as MCP tools.",
+  "version": "0.24.42.dev1+ga0a569b20.d20260602",
+  "websiteUrl": "https://github.com/amiable-dev/llm-council",
+  "repository": {
+    "source": "github",
+    "url": "https://github.com/amiable-dev/llm-council"
+  },
+  "_meta": {
+    "dev.amiable.llm-council": {
+      "tiers": [
+        "quick",
+        "balanced",
+        "high",
+        "reasoning",
+        "frontier"
+      ],
+      "docs": "https://github.com/amiable-dev/llm-council#readme",
+      "transport": "stdio",
+      "install": "uv tool install 'llm-council-core[mcp,secure]'",
+      "tools": [
+        "audit",
+        "consult_council",
+        "council_health_check",
+        "verify"
+      ]
+    }
+  }
+}

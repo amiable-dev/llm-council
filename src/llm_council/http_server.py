@@ -173,6 +173,21 @@ async def health() -> HealthResponse:
     return HealthResponse(status="ok", service="llm-council-local")
 
 
+@app.get("/.well-known/mcp/server-card.json", tags=["Discovery"])
+@app.get("/server-card", tags=["Discovery"])
+async def server_card() -> dict:
+    """MCP Server Card (ADR-045 P2, SEP-2127).
+
+    Public discovery metadata generated from the live tool registry — served
+    at both the experimental-extension path (/server-card) and the SEP-1649
+    well-known path. Unauthenticated by design (like /health): it describes
+    the server and exposes no session data.
+    """
+    from .server_card import build_server_card
+
+    return build_server_card()
+
+
 @app.post(
     "/v1/council/run",
     response_model=CouncilResponse,

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MCP Server Card (ADR-045 Phase 2, #405)** — public discovery metadata per SEP-2127, generated from the live FastMCP tool registry (drift-tested): served by the HTTP server at `/server-card` and `/.well-known/mcp/server-card.json`, printable via `llm-council server-card`, with a static `server-card.json` committed for registry submission. Validated against the experimental-extension RC schema; **re-check against the final schema after the MCP 2026-07-28 release**.
 - **MCP Tasks core layer (ADR-045 Phase 1, #404)** — groundwork for the MCP 2026-07-28 Tasks primitive (long-running deliberations that survive client disconnects): a durable `TaskStore` under `.council/tasks/` (24h expiry, size-capped eviction, in-memory fallback), 128-bit capability task ids with no enumeration API, a `LLM_COUNCIL_MCP_TASKS` kill-switch, and SDK feature-detection. The MCP wiring itself is **blocked pending the stable SDK v2** (targeted 2026-07-28 alongside the spec; the current pin is `mcp<1.27`) — synchronous tool behaviour is byte-identical until then.
 
 ### Fixed

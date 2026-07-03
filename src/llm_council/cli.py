@@ -139,6 +139,18 @@ def main():
         help="List available skills without installing",
     )
 
+    # Server Card generation (ADR-045 P2)
+    card_parser = subparsers.add_parser(
+        "server-card",
+        help="Print the MCP Server Card JSON (generated from the tool registry)",
+    )
+    card_parser.add_argument(
+        "--output",
+        type=str,
+        default="-",
+        help="Write to a file instead of stdout (default: stdout)",
+    )
+
     # Gate command (CI/CD quality gate)
     gate_parser = subparsers.add_parser(
         "gate",
@@ -198,6 +210,17 @@ def main():
             force=args.force,
             list_only=args.list_only,
         )
+    elif args.command == "server-card":
+        import json as _json
+
+        from .server_card import build_server_card
+
+        card_json = _json.dumps(build_server_card(), indent=2) + "\n"
+        if args.output == "-":
+            sys.stdout.write(card_json)
+        else:
+            with open(args.output, "w") as fh:
+                fh.write(card_json)
     elif args.command == "gate":
         exit_code = run_gate(
             snapshot=args.snapshot,
