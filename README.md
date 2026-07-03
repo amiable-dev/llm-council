@@ -412,6 +412,28 @@ This approach helps surface diverse perspectives, identify consensus, and produc
 
 ## Advanced Features
 
+### Compute-Optimal Deliberation (ADR-044)
+
+Three opt-in features (all **off by default**; flag-off behaviour is unchanged)
+let the council spend deliberation compute adaptively. Every routing influence
+is audited via LayerEvents — never a silent change.
+
+```bash
+# Blend each model's live performance history (quality per ADR-026, cost per
+# ADR-011) into tier selection. Cold-start models stay on static estimates.
+export LLM_COUNCIL_PERFORMANCE_SELECTION=true
+
+# Cancel remaining Stage-2 reviewers once the leading response's Borda margin
+# is mathematically unassailable. When off (default), runs in SHADOW MODE:
+# the would-have-saved votes/cost are logged so you can measure the win first.
+export LLM_COUNCIL_EARLY_CONSENSUS=true
+
+# Graduated deliberation depth: single model → mini-council → full council,
+# escalating only on weak consensus signals; escalations can be vetoed by the
+# opt-in budget enforcer (auditable, never silent).
+export LLM_COUNCIL_GRADUATED_DEPTH=true
+```
+
 ### Self-Vote Exclusion
 
 By default, each model's vote for its own response is excluded from the aggregate rankings. This prevents self-preference bias.
