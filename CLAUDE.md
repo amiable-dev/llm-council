@@ -17,6 +17,7 @@ It is a single Python package (`src/llm_council/`) exposing a CLI, an HTTP/REST 
 - `tests/test_openrouter.py` verifies OpenRouter connectivity and that a model identifier resolves before you add it to the council.
 - **Relative imports**: modules import siblings as `from .unified_config import …`. Keep imports relative within the package.
 - ADRs live in `docs/adr/`. Most subsystems below cite the ADR that introduced them — read it for design context.
+- **Definition of Done includes the published docs site** (`docs/` + `mkdocs.yml` nav), not just README/CLAUDE.md/CHANGELOG — the site froze at ADR-038 when it was left out of epic DoDs. `tests/test_docs_drift.py` enforces the mechanical parts (env reference, ADR nav, guide snippets).
 
 ## Architecture: the L1→L4 layer model (ADR-024)
 

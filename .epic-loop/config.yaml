@@ -14,6 +14,10 @@ project:
 # debt, so `make check` would wrongly block the loop on baseline errors CI
 # tolerates. We gate on ruff (the blocking Lint job) + tests; mypy stays a
 # manual due-diligence check on changed code. Scoped via only_if_changed so
+# DoD reminder (docs epic 2026-07-03): feature children must update the
+# PUBLISHED DOCS SITE (docs/ + mkdocs.yml nav), not just README/CLAUDE.md/
+# CHANGELOG — the site froze at ADR-038 because it was never in the DoD.
+# The tests/test_docs_drift.py guards enforce the mechanical parts.
 # docs/ADR-only PRs skip build/test and pay nothing. `make test-fast` keeps the
 # loop snappy; CI runs the full `make test` suite as the backstop.
 pre_push_gates:

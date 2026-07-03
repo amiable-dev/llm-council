@@ -334,12 +334,12 @@ def main():
         "action", choices=["run", "baseline", "report", "matrix"],
         help="run: execute the dataset; baseline: snapshot last run as baseline; report: render last run",
     )
-    bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1")
-    bench_parser.add_argument("--items", type=str, default=None, help="Comma-separated item ids")
-    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd")
+    bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1", help="Dataset directory (default: bench/dataset/v1)")
+    bench_parser.add_argument("--items", type=str, default=None, help="Comma-separated item ids to run (default: all)")
+    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd", help="Per-run spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30)")
     bench_parser.add_argument("--set", action="store_true", dest="set_baseline_flag",
                               help="(baseline) write the snapshot")
-    bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format")
+    bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format", help="Report format (default: md)")
     bench_parser.add_argument(
         "--publish", type=str, default=None,
         help="(report) also regenerate the docs results page at this path",
@@ -375,7 +375,8 @@ def main():
         help="Where --fit writes the mapping",
     )
     cal_parser.add_argument(
-        "--format", choices=["text", "json"], default="text", dest="cal_format"
+        "--format", choices=["text", "json"], default="text", dest="cal_format",
+        help="Output format (default: text)",
     )
 
     # Gate command (CI/CD quality gate)

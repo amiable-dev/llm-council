@@ -1,5 +1,7 @@
 # Bench Dataset Governance (ADR-048)
 
+> Measurement definitions and result caveats: [`../METHODOLOGY.md`](../METHODOLOGY.md).
+
 The golden dataset under `bench/dataset/vN/` guards council quality against
 silent drift. Rules (per ADR-048 council feedback):
 
