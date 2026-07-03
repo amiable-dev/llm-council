@@ -98,11 +98,23 @@ class TestSdkDetection:
     def test_detection_returns_bool_and_never_raises(self):
         assert isinstance(sdk_supports_tasks(), bool)
 
-    def test_current_pin_lacks_tasks(self):
-        # Repo pins mcp <1.27; the Tasks primitive ships in SDK 2.x. If this
-        # starts returning True after the stable-v2 bump, wire the exposure
-        # (see mcp_tasks.maybe_expose_tasks note).
-        assert sdk_supports_tasks() is False
+    def test_detection_matches_installed_sdk(self):
+        # Environment-agnostic: mcp 1.26+ already ships the EXPERIMENTAL
+        # SEP-1686 Task types (CI resolves 1.26 within the <1.27 pin; older
+        # local envs may lack them), so detection must simply mirror the
+        # installed SDK — never a hardcoded expectation.
+        import mcp.types as mcp_types
+
+        expected = hasattr(mcp_types, "Task") or hasattr(mcp_types, "CreateTaskResult")
+        assert sdk_supports_tasks() is expected
+
+    def test_maybe_expose_tasks_is_noop_pending_stable_sdk(self):
+        # THE invariant: regardless of what the installed SDK advertises
+        # (experimental types in 1.26, beta 2.0.0b1, …), exposure stays a
+        # no-op until the stable-v2 pin bump wires it deliberately.
+        from llm_council.mcp_tasks import maybe_expose_tasks
+
+        assert maybe_expose_tasks(object()) is False
 
 
 class TestCouncilRound1Findings:

@@ -53,9 +53,10 @@ def new_task_id() -> str:
 def sdk_supports_tasks() -> bool:
     """Feature-detect Tasks support in the installed ``mcp`` SDK.
 
-    Tasks ships in SDK 2.x (beta 2.0.0b1 for the 2026-07-28 RC; stable v2
-    targeted for 2026-07-28). Detection is by capability, not version string,
-    so it lights up on whatever release actually carries the types. Never
+    Detection is by capability, not version string, so it lights up on
+    whatever release actually carries the types — note mcp 1.26 already ships
+    the EXPERIMENTAL SEP-1686 types (within our ``<1.27`` pin), while the
+    stable primitive lands in SDK 2.x alongside the 2026-07-28 spec. Never
     raises.
     """
     try:
@@ -255,8 +256,11 @@ def maybe_expose_tasks(server: Any) -> bool:
     if not sdk_supports_tasks():
         logger.debug("mcp SDK lacks Tasks support (pin < 2.x); sync-only mode")
         return False
-    logger.warning(
-        "mcp SDK reports Tasks support but exposure wiring is not yet "
-        "implemented (ADR-045 P1 follow-up: bump pin + wire after stable v2)"
+    # mcp 1.26 within the current pin already advertises the EXPERIMENTAL
+    # types, so this path is routine — log at info, not warning, to avoid
+    # noise on every server start.
+    logger.info(
+        "mcp SDK reports Tasks types but exposure wiring is deferred to the "
+        "stable SDK v2 pin bump (ADR-045 P1 follow-up, spec final 2026-07-28)"
     )
     return False
