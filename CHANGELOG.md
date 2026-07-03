@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`consult_council` Python facade (#444)** — the API the published quickstart always documented now exists: `from llm_council import consult_council` returns a `CouncilResult` (`.synthesis`, `.metadata`, `.model_responses`, `.raw`) with MCP-tool-parity tier semantics (confidence → tier contract → tier-sovereign timeouts; unknown confidence falls back to `high`; unknown `verdict_type` raises — it changes the output contract, so it is never silently coerced). Docs-as-spec fix from the 2026-07-03 documentation review.
+
 ## [0.32.0] - 2026-07-03
 
 **Council Quality Benchmark (ADR-048)** — epic [#421](https://github.com/amiable-dev/llm-council/issues/421). The core product claim becomes measurable: a governed golden dataset with drift regression, a quality-per-dollar configuration matrix from ADR-011 actuals ("when does deliberation pay?"), harness-regenerated results publication, and DeepEval/RAGAS bridges. Spend is capped per-run and per-month with honest unknown-cost accounting; CI never spends (mocked-council tests only; nightly workflow only).

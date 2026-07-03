@@ -1,12 +1,17 @@
 """LLM Council - Multi-LLM council system with peer review and synthesis.
 
 Usage:
+    from llm_council import consult_council
+
+    result = await consult_council(
+        "What's the best approach for error handling?", confidence="balanced"
+    )
+    print(result.synthesis)
+
+Lower-level (stage tuples):
     from llm_council import run_full_council
 
-    # Run the full 3-stage council process
-    stage1, stage2, stage3, metadata = await run_full_council(
-        "What's the best approach for error handling?"
-    )
+    stage1, stage2, stage3, metadata = await run_full_council("...")
     print(stage3["response"])
 
 For MCP server usage:
@@ -14,6 +19,7 @@ For MCP server usage:
     llm-council
 """
 
+from llm_council.facade import CouncilResult, consult_council
 from llm_council.council import (
     run_full_council,
     stage1_collect_responses,
