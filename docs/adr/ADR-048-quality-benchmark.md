@@ -1,6 +1,6 @@
 # ADR-048: Council Quality Benchmark & Golden-Dataset Regression
 
-**Status:** Draft 2026-07-03
+**Status:** Implemented 2026-07-03 (epic #421, v0.32.0)
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
 **Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: spend caps, CLI spec, dataset governance, per-phase DoD

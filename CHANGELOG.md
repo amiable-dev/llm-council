@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-07-03
+
+**Council Quality Benchmark (ADR-048)** — epic [#421](https://github.com/amiable-dev/llm-council/issues/421). The core product claim becomes measurable: a governed golden dataset with drift regression, a quality-per-dollar configuration matrix from ADR-011 actuals ("when does deliberation pay?"), harness-regenerated results publication, and DeepEval/RAGAS bridges. Spend is capped per-run and per-month with honest unknown-cost accounting; CI never spends (mocked-council tests only; nightly workflow only).
+
 ### Added
 
 - **Publication + eval bridges (ADR-048 P3, #420)** — `llm-council bench report --publish docs/bench-results.md` regenerates the results page FROM the harness output (reproducibility fields mandatory: dataset version, date, spend, methodology pointer — never hand-edited). Thin dependency-free adapters let external eval suites drive the council as a target: `make_council_eval_callable` (DeepEval-style prompt→answer) and `council_to_ragas_row` (synthesis as answer, stage-1 drafts as contexts), each with a round-trip example under `examples/eval_bridges/`.
