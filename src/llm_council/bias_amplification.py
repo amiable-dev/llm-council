@@ -72,10 +72,16 @@ def session_agreement_decomposition(
 
         # Per-model score lists across reviewers + consensus means.
         scores_by_model: Dict[str, List[float]] = {}
-        position_by_model: Dict[str, float] = {}
+        positions_by_model: Dict[str, List[float]] = {}
         for r in rows:
             scores_by_model.setdefault(r.model_id, []).append(r.score_value)
-            position_by_model[r.model_id] = float(r.position)
+            # ADR-017 randomization can show the same model at DIFFERENT
+            # positions per reviewer — average them (last-write-wins would
+            # silently drop the counterbalancing, #437 review).
+            positions_by_model.setdefault(r.model_id, []).append(float(r.position))
+        position_by_model = {
+            m: sum(ps) / len(ps) for m, ps in positions_by_model.items()
+        }
 
         all_scores = [s for scores in scores_by_model.values() for s in scores]
         n = len(all_scores)
@@ -97,10 +103,11 @@ def session_agreement_decomposition(
             [consensus[m] for m in model_order],
         )
 
+        # Earlier-is-better is the known confound, so only POSITIVE
+        # alignment counts (a negative correlation is not the threat model).
         suspect = (
             agreement_index > AGREEMENT_THRESHOLD
-            and abs(position_alignment) > POSITION_ALIGNMENT_THRESHOLD
-            and position_alignment > 0  # earlier-is-better is the known confound
+            and position_alignment > POSITION_ALIGNMENT_THRESHOLD
         )
         out.append(
             SessionDecomposition(

@@ -117,3 +117,22 @@ class TestNoGatingSideEffects:
         amplification_report(rows)
         session_agreement_decomposition(rows)
         assert list(tmp_path.iterdir()) == []  # nothing written anywhere
+
+
+class TestCouncilRound1:
+    def test_positions_averaged_across_reviewers(self):
+        # #437 r1: ADR-017 randomization can show the SAME model at different
+        # positions per reviewer — last-write-wins dropped that information.
+        # A model seen early by one reviewer and late by another has mean
+        # position; perfectly counterbalanced ordering => no alignment signal.
+        rows = [
+            _rec("s-cb", "r1", "A", 0, 9.0),
+            _rec("s-cb", "r1", "B", 1, 5.0),
+            _rec("s-cb", "r2", "A", 1, 9.0),  # A shown late to r2
+            _rec("s-cb", "r2", "B", 0, 5.0),  # B shown early to r2
+        ]
+        s = session_agreement_decomposition(rows)[0]
+        # Counterbalanced positions average out: alignment must be ~0, and
+        # the high agreement must NOT be flagged as positional.
+        assert abs(s.position_alignment) < 0.01
+        assert s.amplification_suspect is False
