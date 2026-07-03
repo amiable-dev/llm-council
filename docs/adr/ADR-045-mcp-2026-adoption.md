@@ -1,6 +1,6 @@
 # ADR-045: MCP 2026-07-28 Specification Adoption (Tasks, Server Card, Stateless Transport)
 
-**Status:** Draft 2026-07-03
+**Status:** Implemented 2026-07-03 (P1 MCP wiring blocked-pending-SDK v2 — #425)
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
 **Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: task authz, task-state persistence/expiry, phase independence, rollback semantics

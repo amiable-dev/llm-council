@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-03
+
+**MCP 2026-07-28 Adoption (ADR-045)** — epic [#407](https://github.com/amiable-dev/llm-council/issues/407). Early, correct adoption of the MCP 2026-07-28 spec cycle: a durable Tasks core (SDK wiring gated on the stable v2 SDK), SEP-2127 Server Card discovery, and a stateless-deployment audit with a two-instance smoke suite. Post-spec re-checks tracked in [#425](https://github.com/amiable-dev/llm-council/issues/425). Also ships the #397 chairman error-surfacing fix.
+
 ### Added
 
 - **Stateless-deployment audit + two-instance smoke (ADR-045 Phase 3, #406)** — full inventory of MCP-path state that outlives a request (`docs/adr-045-p3-state-inventory.md`): the durable `TaskStore` is the load-bearing cross-instance contract and is now pinned by a two-instance smoke suite (lifecycle split across instances, two-process concurrency, torn-read guard). Per-instance circuit breakers/metrics/caches are documented as deliberate (optimality, not correctness). One true defect fixed: the layer-event accumulator was unbounded in long-lived processes — now a ring buffer (`MAX_LAYER_EVENTS=1000`).
