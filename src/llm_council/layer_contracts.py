@@ -19,6 +19,7 @@ Architectural Principles (ADR-024):
 5. Observability by Default: Every layer emits metrics, logs, and traces
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -156,8 +157,11 @@ class LayerEvent:
     layer_to: Optional[str] = None
 
 
-# Global event store (in-memory for now, can be replaced with proper sink)
-_layer_events: List[LayerEvent] = []
+# Global event store — bounded ring buffer (ADR-045 P3 audit): a long-lived
+# server process must not grow this unboundedly; durable observability goes
+# through the metrics adapters (ADR-030), this buffer is a debugging window.
+MAX_LAYER_EVENTS = 1000
+_layer_events: "deque[LayerEvent]" = deque(maxlen=MAX_LAYER_EVENTS)
 
 # Logger for layer events
 logger = logging.getLogger("llm_council.layers")

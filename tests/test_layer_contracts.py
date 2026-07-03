@@ -381,3 +381,27 @@ class TestLayerSovereignty:
         assert "from_tier" in events[0].data
         assert "to_tier" in events[0].data
         assert "reason" in events[0].data
+
+
+class TestLayerEventBufferBound:
+    def test_event_buffer_is_bounded(self):
+        # ADR-045 P3 audit: the in-memory event store must not grow unbounded
+        # in a long-lived server process (only tests ever cleared it).
+        from llm_council.layer_contracts import (
+            MAX_LAYER_EVENTS,
+            LayerEventType,
+            clear_layer_events,
+            emit_layer_event,
+            get_layer_events,
+        )
+
+        clear_layer_events()
+        try:
+            for i in range(MAX_LAYER_EVENTS + 50):
+                emit_layer_event(LayerEventType.L1_TIER_SELECTED, {"i": i})
+            events = get_layer_events()
+            assert len(events) == MAX_LAYER_EVENTS
+            # Oldest were dropped; newest survive.
+            assert events[-1].data["i"] == MAX_LAYER_EVENTS + 49
+        finally:
+            clear_layer_events()

@@ -101,7 +101,7 @@ class TestPlanEscalation:
         assert plan.decision == "escalate"
         assert plan.next_rung == DepthRung.MINI
         assert plan.added_models == ["b", "c"]  # 'a' reused, never re-called
-        events = getattr(layer_contracts, "_layer_events", [])
+        events = list(getattr(layer_contracts, "_layer_events", []))
         new = [
             e
             for e in events[before:]

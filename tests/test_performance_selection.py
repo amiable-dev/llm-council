@@ -100,7 +100,7 @@ class TestSelectionIntegration:
         selected = self._run(monkeypatch, enabled=True, tracker=self._BoostMini())
         # Blended: mini = 0.8*1.0 + 0.2*0.65 = 0.93 (top); others crater to 0.2*static.
         assert "weak/mini-x" in selected  # live record flipped it in
-        events = getattr(layer_contracts, "_layer_events", [])
+        events = list(getattr(layer_contracts, "_layer_events", []))
         new = [e for e in events[before:] if "performance_selection" in str(getattr(e.event_type, "value", e.event_type))]
         assert new, "route receipt LayerEvent must be emitted when the set changed"
         payload = new[-1].data
@@ -116,6 +116,6 @@ class TestSelectionIntegration:
         before = len(getattr(layer_contracts, "_layer_events", []))
         selected = self._run(monkeypatch, enabled=True, tracker=_Uniform())
         assert selected == ["alpha/opus-1", "beta/gpt-4-z"]  # unchanged set
-        events = getattr(layer_contracts, "_layer_events", [])
+        events = list(getattr(layer_contracts, "_layer_events", []))
         new = [e for e in events[before:] if "performance_selection" in str(getattr(e.event_type, "value", e.event_type))]
         assert not new, "no event when blending did not change the selected set"

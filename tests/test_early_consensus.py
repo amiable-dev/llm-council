@@ -129,7 +129,7 @@ async def test_active_mode_cancels_unneeded_reviewers(monkeypatch):
     assert "r5" not in [r["model"] for r in results]
     # usage aggregated for the completed four only
     assert usage["prompt_tokens"] == 40
-    events = getattr(layer_contracts, "_layer_events", [])
+    events = list(getattr(layer_contracts, "_layer_events", []))
     new = [
         e
         for e in events[before:]
@@ -162,7 +162,7 @@ async def test_shadow_mode_runs_everything_and_emits_nothing(monkeypatch):
     assert cancelled == []
     assert len(results) == 5  # every reviewer ran
     assert usage["prompt_tokens"] == 50
-    events = getattr(layer_contracts, "_layer_events", [])
+    events = list(getattr(layer_contracts, "_layer_events", []))
     new = [
         e
         for e in events[before:]
