@@ -70,6 +70,9 @@ Bias (ADR-015/018)
 - `bias_audit.py` (ADR-015) — per-session indicators: length↔score correlation (pure-Python Pearson), reviewer calibration, position bias. **These are anomaly indicators, not statistically robust proof** — with N=4–5 models there are only 4–5 data points (≥30 needed for significance), and a single ordering can't separate position effects from quality.
 - `bias_persistence.py` (ADR-018 P1) — JSONL store, `ConsentLevel` (OFF→RESEARCH). `bias_aggregation.py` (ADR-018 P2-3) — cross-session pooled correlation w/ CIs (Fisher-z), confidence tiers, temporal trends, anomaly flagging. Surfaced via `llm-council bias-report`.
 
+MCP 2026-07-28 adoption (ADR-045, Phase 1 core)
+- `mcp_tasks.py` — SDK-independent Tasks layer: `TaskStore` (durable `.council/tasks/`, 24h expiry, size-capped eviction, in-memory fallback), 128-bit capability task ids (no enumeration API — the id IS the authz), `LLM_COUNCIL_MCP_TASKS` kill-switch, and `sdk_supports_tasks()` feature-detection. **Blocked-pending-SDK:** the repo pins `mcp<1.27`; Tasks ships in SDK 2.x (stable v2 targeted 2026-07-28) — `maybe_expose_tasks` is a documented no-op until the pin bump, so sync tools stay byte-identical.
+
 Observability & telemetry
 - `observability/` (ADR-030 metrics export — StatsD/Prometheus/NoOp), `telemetry.py` / `telemetry_client.py`, `webhooks/`.
 
@@ -106,6 +109,7 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 | `LLM_COUNCIL_PERFORMANCE_SELECTION` | ADR-044 P1: blend the live performance index into model selection (default off; auditable route receipt on change) |
 | `LLM_COUNCIL_EARLY_CONSENSUS` | ADR-044 P2: cancel remaining Stage-2 reviewers once the Borda leader is mathematically unassailable (default off = shadow mode, which only logs would-have-saved) |
 | `LLM_COUNCIL_GRADUATED_DEPTH` | ADR-044 P3: graduated deliberation depth ladder single→mini→full with consensus-gated escalation + budget veto (default off) |
+| `LLM_COUNCIL_MCP_TASKS` | ADR-045 P1 kill-switch: disable MCP Tasks exposure even on a task-capable SDK (default enabled-when-supported) |
 | `LLM_COUNCIL_MODEL_INTELLIGENCE=true` | Enable dynamic model selection (ADR-026) |
 | `LLM_COUNCIL_OFFLINE=true` | Force offline / static provider |
 | `LLM_COUNCIL_DISCOVERY_ENABLED` / `_INTERVAL` (300) / `_MIN_CANDIDATES` (3) | Background discovery (ADR-028) |

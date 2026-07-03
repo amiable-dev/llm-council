@@ -619,6 +619,11 @@ async def audit(
 
 def main():
     """Entry point for the llm-council command."""
+    # ADR-045 P1: feature-detected Tasks exposure — no-op on SDKs < 2.x
+    # (sync tools stay byte-identical); activates after the stable-v2 pin bump.
+    from .mcp_tasks import maybe_expose_tasks
+
+    maybe_expose_tasks(mcp)
     mcp.run()
 
 
