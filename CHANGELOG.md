@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gate --tier` + accurate bundled skills (#445)** — `llm-council gate` gains `--tier {quick,balanced,high,reasoning}` (tier-sovereign models/timeouts/input caps, matching the verify tool); `unclear_reason` and `confidence_calibrated` flow through both gate output formats via the shared formatter. All three bundled SKILL.md files now execute against the shipped CLI (invocations corrected to `llm-council gate`, phantom `--timeout` flag removed, version claims fixed) and council-verify documents the ADR-047 UNCLEAR routing table.
 - **`consult_council` Python facade (#444)** — the API the published quickstart always documented now exists: `from llm_council import consult_council` returns a `CouncilResult` (`.synthesis`, `.metadata`, `.model_responses`, `.raw`) with MCP-tool-parity tier semantics (confidence → tier contract → tier-sovereign timeouts; unknown confidence falls back to `high`; unknown `verdict_type` raises — it changes the output contract, so it is never silently coerced). Docs-as-spec fix from the 2026-07-03 documentation review.
 
 ## [0.32.0] - 2026-07-03

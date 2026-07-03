@@ -404,6 +404,12 @@ def main():
         help="Minimum confidence to pass (0.0-1.0, default: 0.7)",
     )
     gate_parser.add_argument(
+        "--tier",
+        choices=["quick", "balanced", "high", "reasoning"],
+        default="balanced",
+        help="Verification tier: models + timeouts + input cap (default: balanced)",
+    )
+    gate_parser.add_argument(
         "--rubric-focus",
         type=str,
         dest="rubric_focus",
@@ -477,6 +483,7 @@ def main():
             confidence_threshold=args.confidence_threshold,
             rubric_focus=args.rubric_focus,
             output_format=args.output_format,
+            tier=args.tier,
         )
         sys.exit(exit_code)
     else:
@@ -736,6 +743,7 @@ def run_gate(
     confidence_threshold: float = 0.7,
     rubric_focus: str = None,
     output_format: str = "text",
+    tier: str = "balanced",
 ) -> int:
     """Run quality gate verification for CI/CD.
 
@@ -775,6 +783,7 @@ def run_gate(
             target_paths=file_paths,
             rubric_focus=rubric_focus,
             confidence_threshold=confidence_threshold,
+            tier=tier,
         )
         store = create_transcript_store()
         return await run_verification(request, store)

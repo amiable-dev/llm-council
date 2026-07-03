@@ -6,11 +6,11 @@ description: |
   Keywords: verify, check, validate, review, approve, pass/fail, consensus, multi-model
 
 license: Apache-2.0
-compatibility: "llm-council >= 2.1, mcp >= 1.0"
+compatibility: "llm-council-core >= 0.33, mcp >= 1.0"
 metadata:
   category: verification
   domain: ai-governance
-  council-version: "2.0"
+  council-version: "0.33"
   author: amiable-dev
   repository: https://github.com/amiable-dev/llm-council
 
@@ -30,10 +30,10 @@ Use LLM Council's multi-model deliberation to verify work with structured, machi
 
 ## Workflow
 
-1. **Capture Snapshot**: Capture current git diff or file state (snapshot pinning for reproducibility)
-2. **Invoke Verification**: Call `mcp:llm-council/verify` with isolated context
-3. **Receive Verdict**: Get structured JSON with verdict, confidence, and blocking issues
-4. **Audit Trail**: Persist transcript via `mcp:llm-council/audit`
+1. **Snapshot**: pin the git commit SHA (reproducibility)
+2. **Verify**: call `mcp:llm-council/verify` (isolated context)
+3. **Act on the verdict** (structured JSON below)
+4. **Audit**: transcript via `mcp:llm-council/audit`
 
 ## Parameters
 
@@ -65,6 +65,8 @@ Pass pre-computed analysis from upstream tools (linters, slop detectors) via `ev
 {
   "verdict": "pass|fail|unclear",
   "confidence": 0.85,
+  "confidence_calibrated": 0.62,
+  "unclear_reason": null,
   "rubric_scores": { "accuracy": 8.5, "completeness": 7.0, "...": "..." },
   "blocking_issues": [...],
   "rationale": "Chairman synthesis...",
@@ -81,6 +83,8 @@ Pass pre-computed analysis from upstream tools (linters, slop detectors) via `ev
 
 If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stages` for progress. `timing.budget_utilization` shows time used vs deadline (1.0 on timeout). See ADR-040 for full timeout semantics.
 
+On UNCLEAR, route on `unclear_reason`: infra_failure → check gateway + RETRY; low_confidence → accept-and-audit if no blocking issues; timeout → re-tier. Details: `references/unclear-routing.md`.
+
 ## Rules
 
 1. **One call at a time.** Never fire multiple verify calls concurrently or in rapid succession. Wait for each to complete before deciding next steps.
@@ -93,5 +97,4 @@ If `timeout_fired: true`, the tier deadline was exceeded. Check `completed_stage
 
 ## Related Skills
 
-- `council-review`: Code review with structured feedback
-- `council-gate`: CI/CD quality gate
+`council-review` (code review), `council-gate` (CI/CD gate)

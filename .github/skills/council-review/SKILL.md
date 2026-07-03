@@ -6,11 +6,11 @@ description: |
   Keywords: code review, PR, pull request, quality check, peer review, feedback
 
 license: Apache-2.0
-compatibility: "llm-council >= 2.0, mcp >= 1.0"
+compatibility: "llm-council-core >= 0.33, mcp >= 1.0"
 metadata:
   category: code-review
   domain: software-engineering
-  council-version: "2.0"
+  council-version: "0.33"
   author: amiable-dev
   repository: https://github.com/amiable-dev/llm-council
 
@@ -106,16 +106,16 @@ If `timeout_fired: true`, the review timed out. Check `completed_stages` to see 
 
 ```bash
 # Review specific files
-council-review --file-paths "src/main.py,src/utils.py" --snapshot abc123
+llm-council gate --snapshot abc123 --file-paths src/main.py src/utils.py
 
 # Review git diff
-council-review --git-diff "$(git diff HEAD~1)" --snapshot $(git rev-parse HEAD)
+llm-council gate --snapshot $(git rev-parse HEAD)  # reviews the snapshot; pass --file-paths to scope
 
 # Review with custom focus
-council-review --rubric-focus Security --file-paths "src/auth.py"
+llm-council gate --snapshot $(git rev-parse HEAD) --rubric-focus Security --file-paths src/auth.py
 
 # Deep reasoning review for complex changes
-council-review --snapshot $(git rev-parse HEAD) --tier reasoning --rubric-focus Security
+llm-council gate --snapshot $(git rev-parse HEAD) --tier reasoning --rubric-focus Security
 ```
 
 ## Progressive Disclosure

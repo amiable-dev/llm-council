@@ -6,11 +6,11 @@ description: |
   Keywords: gate, CI, CD, pipeline, automated approval, quality gate, GitHub Actions
 
 license: Apache-2.0
-compatibility: "llm-council >= 2.0, mcp >= 1.0, github-actions >= 2.0"
+compatibility: "llm-council-core >= 0.33, mcp >= 1.0, github-actions >= 2.0"
 metadata:
   category: ci-cd
   domain: devops
-  council-version: "2.0"
+  council-version: "0.33"
   author: amiable-dev
   repository: https://github.com/amiable-dev/llm-council
 
@@ -113,19 +113,19 @@ jobs:
 
 ### Timeout Handling (ADR-040)
 
-If `timeout_fired: true`, the gate timed out before completing all stages. This returns exit code `2` (UNCLEAR), pausing the pipeline for human review. Check `completed_stages` to see how far it got. Consider using `--tier quick` for faster gate checks.
+If `timeout_fired: true`, the gate timed out before completing all stages. This returns exit code `2` (UNCLEAR), pausing the pipeline for human review. Check `completed_stages` to see how far it got. Consider using `--tier quick` for faster gate checks (the tier sets the timeout budget; there is no separate --timeout flag).
 
 ## Example Usage
 
 ```bash
 # Basic gate check
-council-gate --snapshot $(git rev-parse HEAD)
+llm-council gate --snapshot $(git rev-parse HEAD)
 
 # Security-focused gate
-council-gate --rubric-focus Security --confidence-threshold 0.9
+llm-council gate --snapshot $(git rev-parse HEAD) --rubric-focus Security --confidence-threshold 0.9
 
 # Quick tier for faster feedback
-council-gate --tier quick --timeout 60
+llm-council gate --snapshot $(git rev-parse HEAD) --tier quick
 ```
 
 ## Progressive Disclosure
