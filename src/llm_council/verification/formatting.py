@@ -88,6 +88,11 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     confidence = result.get("confidence", 0.0)
     lines.append(f"| Confidence | {confidence:.2f} |")
 
+    # ADR-047 P2 (#414): show calibrated confidence when it diverges from raw
+    confidence_calibrated = result.get("confidence_calibrated")
+    if confidence_calibrated is not None and confidence_calibrated != confidence:
+        lines.append(f"| Confidence (calibrated) | {confidence_calibrated:.2f} |")
+
     # ADR-047 P1 (#413): machine-readable UNCLEAR cause
     unclear_reason = result.get("unclear_reason")
     if unclear_reason:

@@ -37,6 +37,55 @@ def _is_fail_backend() -> bool:
         return True
 
 
+def calibration_report(
+    logs: str,
+    fit: bool,
+    dispositions: str,
+    output: str,
+    output_format: str,
+) -> None:
+    """ADR-047 P2: reproducible confidence-calibration analysis + optional fit."""
+    import json as _json
+    from pathlib import Path
+
+    from .verification.calibration import (
+        analyze_corpus,
+        fit_from_dispositions,
+        load_corpus,
+        load_dispositions,
+    )
+
+    records = load_corpus(Path(logs))
+    summary = analyze_corpus(records)
+    disp = load_dispositions(Path(dispositions))
+    summary["dispositions_recorded"] = len(disp)
+
+    if fit:
+        mapping = fit_from_dispositions(records, disp)
+        if mapping.is_identity:
+            summary["fit"] = "skipped — no (confidence, disposition) pairs"
+        else:
+            out_path = Path(output)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(mapping.to_json())
+            summary["fit"] = f"mapping with {len(mapping.points)} points -> {out_path}"
+
+    if output_format == "json":
+        sys.stdout.write(_json.dumps(summary, indent=2) + "\n")
+        return
+    sys.stdout.write(f"Calibration corpus: {summary['n']} results from {logs}\n")
+    sys.stdout.write(f"Verdicts: {summary.get('verdicts')}\n")
+    sys.stdout.write(f"Mean confidence by verdict: {summary.get('mean_confidence')}\n")
+    zb = summary.get("zero_blocking_fail_rate")
+    sys.stdout.write(
+        f"Zero-blocking FAIL rate: {zb} ({summary.get('zero_blocking_fails')} results) "
+        "- FAILs with no blocking issue are the over-confidence anomaly (ADR-047)\n"
+    )
+    sys.stdout.write(f"Human dispositions recorded: {summary['dispositions_recorded']}\n")
+    if "fit" in summary:
+        sys.stdout.write(f"Fit: {summary['fit']}\n")
+
+
 def main():
     """Main CLI entry point - dispatches to MCP or HTTP server."""
     parser = argparse.ArgumentParser(
@@ -151,6 +200,35 @@ def main():
         help="Write to a file instead of stdout (default: stdout)",
     )
 
+    # Calibration report (ADR-047 P2)
+    cal_parser = subparsers.add_parser(
+        "calibration-report",
+        help="Analyze verify-confidence calibration from .council/logs (ADR-047 P2)",
+    )
+    cal_parser.add_argument(
+        "--logs", type=str, default=".council/logs", help="Transcript logs directory"
+    )
+    cal_parser.add_argument(
+        "--fit",
+        action="store_true",
+        help="Fit a monotonic mapping from recorded dispositions and write it",
+    )
+    cal_parser.add_argument(
+        "--dispositions",
+        type=str,
+        default=".council/calibration/dispositions.jsonl",
+        help="JSONL of {verification_id, upheld} human dispositions",
+    )
+    cal_parser.add_argument(
+        "--output",
+        type=str,
+        default=".council/calibration/mapping.json",
+        help="Where --fit writes the mapping",
+    )
+    cal_parser.add_argument(
+        "--format", choices=["text", "json"], default="text", dest="cal_format"
+    )
+
     # Gate command (CI/CD quality gate)
     gate_parser = subparsers.add_parser(
         "gate",
@@ -209,6 +287,14 @@ def main():
             target=args.target,
             force=args.force,
             list_only=args.list_only,
+        )
+    elif args.command == "calibration-report":
+        calibration_report(
+            logs=args.logs,
+            fit=args.fit,
+            dispositions=args.dispositions,
+            output=args.output,
+            output_format=args.cal_format,
         )
     elif args.command == "server-card":
         import json as _json

@@ -89,6 +89,7 @@ Verification (ADR-034/040/041) — `verification/api.py`
 - **Durable partial state:** `partial_state` is updated after each stage and survives `CancelledError`, so a timeout still returns `completed_stages`. `VerifyResponse` carries `timeout_fired`, `completed_stages`, and (ADR-041) `timing` / `input_metrics`.
 - **Per-tier input caps** `TIER_MAX_CHARS` (quick 15K, balanced 30K, high/reasoning 50K). Per-file truncation (#342) is surfaced as an `expansion_warnings` entry rather than silently dropped; `reasoning`/`high` can read a full 50K file.
 - Performance tracker is wired on success only, wrapped in try/except so telemetry never fails verification.
+- **Confidence calibration (ADR-047 P2, #414):** `verification/calibration.py` — corpus loader/analyzer over `.council/logs`, PAV isotonic fit against human dispositions (`.council/calibration/dispositions.jsonl` → `mapping.json`), piecewise-linear `CalibrationMapping` (identity fallback, monotonicity enforced on load). `confidence_calibrated` reported on every response; PASS threshold uses it ONLY behind `LLM_COUNCIL_CALIBRATED_CONFIDENCE` (default off). CLI: `llm-council calibration-report [--fit]`.
 - **UNCLEAR disambiguation (ADR-047 P1, #413):** `unclear_reason ∈ {infra_failure, low_confidence, timeout}` on every unclear verdict (`derive_unclear_reason` in `verdict_extractor.py`; timeout checked first, then #403 `error_status`, else low_confidence). Exit code stays 2 — automation routes on the reason: retry infra, accept-and-audit low confidence, re-tier timeouts. None when `error` marker is set (non-deliberated cap results).
 
 ## Key design decisions
@@ -117,6 +118,7 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 | `LLM_COUNCIL_PERFORMANCE_SELECTION` | ADR-044 P1: blend the live performance index into model selection (default off; auditable route receipt on change) |
 | `LLM_COUNCIL_EARLY_CONSENSUS` | ADR-044 P2: cancel remaining Stage-2 reviewers once the Borda leader is mathematically unassailable (default off = shadow mode, which only logs would-have-saved) |
 | `LLM_COUNCIL_GRADUATED_DEPTH` | ADR-044 P3: graduated deliberation depth ladder single→mini→full with consensus-gated escalation + budget veto (default off) |
+| `LLM_COUNCIL_CALIBRATED_CONFIDENCE` | ADR-047 P2: PASS threshold uses calibrated confidence from the fitted mapping (default off; calibrated value always reported) |
 | `LLM_COUNCIL_MCP_TASKS` | ADR-045 P1 kill-switch: disable MCP Tasks exposure even on a task-capable SDK (default enabled-when-supported) |
 | `LLM_COUNCIL_MODEL_INTELLIGENCE=true` | Enable dynamic model selection (ADR-026) |
 | `LLM_COUNCIL_OFFLINE=true` | Force offline / static provider |

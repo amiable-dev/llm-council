@@ -44,6 +44,10 @@ from llm_council.verification.transcript import (
     TranscriptStore,
     create_transcript_store,
 )
+from llm_council.verification.calibration import (
+    calibrated_confidence_enabled,
+    load_mapping,
+)
 from llm_council.verification.verdict_extractor import (
     build_verification_result,
     extract_rubric_scores_from_rankings,
@@ -568,7 +572,11 @@ async def _run_verification_pipeline(
 
     await report_progress("Finalizing verification result...")
 
-    # Extract verdict and scores from council output
+    # Extract verdict and scores from council output.
+    # ADR-047 P2 (#414): load the persisted calibration mapping (identity when
+    # none fitted). The threshold consumes it only behind the flag; the
+    # calibrated value is REPORTED either way.
+    calibration_mapping = load_mapping()
     verification_output = build_verification_result(
         stage1_results,
         stage2_results,
@@ -577,10 +585,19 @@ async def _run_verification_pipeline(
         # #355: prefer the chairman's structured BINARY verdict over a regex
         # over the synthesis prose. ``verdict_result`` is parsed in Stage 3.
         verdict_result=verdict_result,
+        calibrate=(
+            calibration_mapping.calibrate if calibrated_confidence_enabled() else None
+        ),
     )
 
     verdict = verification_output["verdict"]
     confidence = verification_output["confidence"]
+    confidence_calibrated = verification_output.get("confidence_calibrated")
+    if confidence_calibrated is None:
+        try:
+            confidence_calibrated = calibration_mapping.calibrate(confidence)
+        except Exception:
+            confidence_calibrated = None  # calibration never fails a run
     exit_code = _verdict_to_exit_code(verdict)
     # ADR-047 P1 (#413): disambiguate UNCLEAR for automation.
     unclear_reason = derive_unclear_reason(verdict, stage3_result)
@@ -620,6 +637,7 @@ async def _run_verification_pipeline(
         "verification_id": verification_id,
         "verdict": verdict,
         "confidence": confidence,
+        "confidence_calibrated": confidence_calibrated,
         "exit_code": exit_code,
         "unclear_reason": unclear_reason,
         "rubric_scores": verification_output["rubric_scores"],

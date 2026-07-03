@@ -352,6 +352,7 @@ def build_verification_result(
     stage3_result: Dict[str, Any],
     confidence_threshold: float = 0.7,
     verdict_result: Optional[Any] = None,
+    calibrate: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Build complete verification result from council stages.
@@ -381,7 +382,10 @@ def build_verification_result(
         verdict, confidence = structured_verdict
         # An explicit approval whose self-reported confidence is below the gate
         # threshold is the only case we soften to "unclear".
-        if verdict == "pass" and confidence < confidence_threshold:
+        # ADR-047 P2 (#414): behind the flag, the gate compares the CALIBRATED
+        # confidence (raw is always reported alongside).
+        effective = calibrate(confidence) if calibrate is not None else confidence
+        if verdict == "pass" and effective < confidence_threshold:
             verdict = "unclear"
     else:
         # Fallback: legacy regex extraction over the synthesis prose.
@@ -389,7 +393,8 @@ def build_verification_result(
         agreement_confidence = calculate_confidence_from_agreement(stage2_results, verdict)
         # Weighted average of synthesis confidence and reviewer agreement.
         confidence = round((base_confidence * 0.4) + (agreement_confidence * 0.6), 2)
-        if verdict == "pass" and confidence < confidence_threshold:
+        effective = calibrate(confidence) if calibrate is not None else confidence
+        if verdict == "pass" and effective < confidence_threshold:
             verdict = "unclear"
 
     # Extract blocking issues (only for fail/unclear)
@@ -404,6 +409,9 @@ def build_verification_result(
     return {
         "verdict": verdict,
         "confidence": confidence,
+        # ADR-047 P2: None when no calibrator was applied here — the API
+        # layer fills it from the persisted mapping for reporting either way.
+        "confidence_calibrated": calibrate(confidence) if calibrate is not None else None,
         "rubric_scores": rubric_scores,
         "blocking_issues": blocking_issues,
         "rationale": rationale,

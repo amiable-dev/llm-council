@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Confidence calibration (ADR-047 P2, #414)** — `llm-council calibration-report` reproducibly analyzes the verify transcript corpus (`.council/logs`): the current corpus shows the anomaly the ADR predicted — 42/42 FAIL verdicts carry ZERO blocking issues at mean confidence 0.965. `--fit` fits a monotonic (isotonic/PAV) mapping from human dispositions (`.council/calibration/dispositions.jsonl`) and persists it; every VerifyResponse now carries `confidence_calibrated` alongside raw `confidence` (identity mapping until fitted). The PASS threshold consumes the calibrated value only behind `LLM_COUNCIL_CALIBRATED_CONFIDENCE` (default off — flag-off byte-identical, test-pinned).
 - **UNCLEAR disambiguation (ADR-047 P1, #413)** — `VerifyResponse.unclear_reason` splits exit-code-2 into machine-readable causes: `infra_failure` (chairman call errored per #403 `error_status` — retry after checking billing/auth), `low_confidence` (deliberation completed below threshold — accept-and-audit per policy), `timeout` (ADR-040 global deadline — re-tier or reduce scope). Exit code stays 2 (compat, additive field); surfaced in the MCP verify output table with routing hints; `None` on pass/fail and on non-deliberated cap results (where the `error` marker governs).
 
 ## [0.30.0] - 2026-07-03

@@ -311,6 +311,19 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Non-verdict error marker (e.g. 'input_too_large'); None for a real verdict",
     )
+    # ADR-047 P2 (#414): calibrated confidence — raw stays in `confidence`.
+    confidence_calibrated: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "Confidence after the persisted monotonic calibration mapping"
+            " (.council/calibration/mapping.json; identity when absent, so it"
+            " equals the raw value until a mapping is fitted). The PASS"
+            " threshold uses this ONLY when LLM_COUNCIL_CALIBRATED_CONFIDENCE"
+            " is enabled (default off)."
+        ),
+    )
     # ADR-047 P1 (#413): machine-readable UNCLEAR cause. None unless
     # verdict == "unclear" (and None on non-deliberated cap results, where
     # the `error` marker governs). Values: infra_failure | low_confidence
