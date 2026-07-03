@@ -1,0 +1,15 @@
+{
+  "id": "reason-anchoring",
+  "domain": "reasoning",
+  "prompt": "A store marks a jacket 'was $400, now $200'. Name the cognitive bias this exploits and describe it in one sentence.",
+  "envelope": {
+    "must_contain": [
+      [
+        "anchor"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical reasoning task with an unambiguous expected core"
+}

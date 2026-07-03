@@ -1,0 +1,20 @@
+{
+  "id": "reason-monty-hall",
+  "domain": "reasoning",
+  "prompt": "In the Monty Hall problem, should you switch doors after the host reveals a goat, and what is the probability of winning if you do?",
+  "envelope": {
+    "must_contain": [
+      [
+        "switch"
+      ],
+      [
+        "2/3",
+        "two-thirds",
+        "66"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical reasoning task with an unambiguous expected core"
+}

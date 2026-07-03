@@ -1,0 +1,21 @@
+{
+  "id": "fact-tls-purpose",
+  "domain": "factual",
+  "prompt": "What two core guarantees does TLS provide to an HTTP connection? One short sentence each.",
+  "envelope": {
+    "must_contain": [
+      [
+        "encrypt",
+        "confidential"
+      ],
+      [
+        "authent",
+        "integrity",
+        "identity"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical factual task with an unambiguous expected core"
+}

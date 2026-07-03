@@ -1,0 +1,18 @@
+{
+  "id": "fact-http-verbs",
+  "domain": "factual",
+  "prompt": "Which HTTP method is defined as idempotent but not safe: GET, POST, PUT, or PATCH? Explain the distinction briefly.",
+  "envelope": {
+    "must_contain": [
+      [
+        "PUT"
+      ],
+      [
+        "idempotent"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical factual task with an unambiguous expected core"
+}

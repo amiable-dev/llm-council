@@ -1,0 +1,19 @@
+{
+  "id": "code-race-condition",
+  "domain": "coding",
+  "prompt": "Two asyncio tasks increment a shared counter 1000 times each without a lock. Explain whether the final count is deterministic in CPython asyncio and why.",
+  "envelope": {
+    "must_contain": [
+      [
+        "await",
+        "yield",
+        "suspension",
+        "context switch",
+        "atomic"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical coding task with an unambiguous expected core"
+}

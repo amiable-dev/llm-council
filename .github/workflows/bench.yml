@@ -1,0 +1,40 @@
+# ADR-048: nightly quality benchmark — NEVER per-PR (each run costs real
+# API spend). Explicit caps per council feedback; monthly guard enforced
+# by the harness from persisted run artefacts.
+name: Nightly Bench
+on:
+  schedule:
+    - cron: "17 3 * * *"  # 03:17 UTC nightly
+  workflow_dispatch: {}
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    # Guard against fork surprises; secrets gate the spend anyway.
+    if: github.repository == 'amiable-dev/llm-council'
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      LLM_COUNCIL_BENCH_MAX_USD: "2.00"
+      LLM_COUNCIL_BENCH_MONTHLY_USD: "30.00"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Restore bench spend ledger
+        uses: actions/cache@v4
+        with:
+          path: .council/bench/runs
+          key: bench-runs-${{ github.run_id }}
+          restore-keys: bench-runs-
+      - run: pip install -e .
+      - name: Run bench (capped)
+        run: llm-council bench run --format md | tee bench-report.md
+      - name: Upload report + run artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-report
+          path: |
+            bench-report.md
+            .council/bench/runs/

@@ -1,0 +1,15 @@
+{
+  "id": "fact-semver",
+  "domain": "factual",
+  "prompt": "Under semantic versioning, which version component must change for a backwards-incompatible API change?",
+  "envelope": {
+    "must_contain": [
+      [
+        "major"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical factual task with an unambiguous expected core"
+}

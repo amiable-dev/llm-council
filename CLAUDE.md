@@ -66,6 +66,9 @@ Cost & token accounting (ADR-011, Phase 1–4)
 - `openrouter.py` `query_model` now captures `cost`/`cached_tokens`; `council.py` aggregates per-stage **and** per-model (`_add_cost_to_usage` → `_build_usage_summary`, shared by both entry points) into `metadata["usage"] = {by_stage, by_model, total}` — each carries `cost_usd`/`cached_tokens`. **Never presents an estimate as a bill** (`cost_source` distinguishes). Cost accounting never fails a run (soft-fail).
 - `cost_summary.py` `format_cost_summary` renders usage with **progressive disclosure**: one dense line by default, full per-model/per-stage breakdown only under `include_details`. Surfaced in MCP `consult_council` ("Cost & Tokens") and as a typed `usage` field on the HTTP `CouncilResponse`. Releases: one version bump per epic, not per PR (git-tag/setuptools-scm; `publish.yml` triggers on tag only).
 
+Bench (ADR-048)
+- `bench/harness.py` (P1, #418) — golden-dataset drift regression: `bench/dataset/v1/` (20 items, envelopes = any-of `must_contain` groups + `min_score` consensus floor; governance in `bench/dataset/GOVERNANCE.md`), per-run cap enforced against ACTUALS with graceful partial abort (exit 2), monthly guard summed from `.council/bench/runs/*.json`, baseline snapshot + regression compare (exit 1 on drift). `council_runner` is injectable — CI tests never spend. Nightly workflow `.github/workflows/bench.yml`; NEVER per-PR.
+
 Bias (ADR-015/018, ADR-047 P4)
 - `bias_audit.py` (ADR-015) — per-session indicators: length↔score correlation (pure-Python Pearson), reviewer calibration, position bias. **These are anomaly indicators, not statistically robust proof** — with N=4–5 models there are only 4–5 data points (≥30 needed for significance), and a single ordering can't separate position effects from quality.
 - `bias_amplification.py` (ADR-047 P4, #416) — reviewer-agreement decomposition: `agreement_index` × `position_alignment` per session; high agreement that tracks display order = amplification suspect (multi-agent judges can AMPLIFY shared bias, not cancel it). Report-only by contract (pure, no writes — test-pinned); surfaced via `llm-council bias-report --amplification`.
@@ -120,6 +123,7 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 | `LLM_COUNCIL_PERFORMANCE_SELECTION` | ADR-044 P1: blend the live performance index into model selection (default off; auditable route receipt on change) |
 | `LLM_COUNCIL_EARLY_CONSENSUS` | ADR-044 P2: cancel remaining Stage-2 reviewers once the Borda leader is mathematically unassailable (default off = shadow mode, which only logs would-have-saved) |
 | `LLM_COUNCIL_GRADUATED_DEPTH` | ADR-044 P3: graduated deliberation depth ladder single→mini→full with consensus-gated escalation + budget veto (default off) |
+| `LLM_COUNCIL_BENCH_MAX_USD` (2.00) / `_BENCH_MONTHLY_USD` (30.00) | ADR-048 bench spend caps (per-run graceful abort; month-to-date refusal) |
 | `LLM_COUNCIL_SCREENING` (off\|shadow\|active) / `_SCREEN_MAX_CHARS` (5000) / `_SCREEN_MIN_SCORE` (9) | ADR-047 P3 screening pre-gate (default off; shadow logs only; active short-circuits unanimous passes — never blocking-capable requests) |
 | `LLM_COUNCIL_CALIBRATED_CONFIDENCE` | ADR-047 P2: PASS threshold uses calibrated confidence from the fitted mapping (default off; calibrated value always reported) |
 | `LLM_COUNCIL_MCP_TASKS` | ADR-045 P1 kill-switch: disable MCP Tasks exposure even on a task-capable SDK (default enabled-when-supported) |

@@ -1,0 +1,17 @@
+{
+  "id": "reason-bat-ball",
+  "domain": "reasoning",
+  "prompt": "A bat and a ball cost $1.10 together. The bat costs $1.00 more than the ball. How much does the ball cost? Show the algebra.",
+  "envelope": {
+    "must_contain": [
+      [
+        "0.05",
+        "5 cents",
+        "five cents"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical reasoning task with an unambiguous expected core"
+}

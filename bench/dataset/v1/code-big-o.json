@@ -1,0 +1,19 @@
+{
+  "id": "code-big-o",
+  "domain": "coding",
+  "prompt": "What is the time complexity of checking membership in a Python list vs a set, and why does the difference matter for a 10-million-item lookup loop?",
+  "envelope": {
+    "must_contain": [
+      [
+        "O(n)"
+      ],
+      [
+        "O(1)",
+        "hash"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical coding task with an unambiguous expected core"
+}

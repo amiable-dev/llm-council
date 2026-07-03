@@ -1,0 +1,18 @@
+{
+  "id": "code-off-by-one",
+  "domain": "coding",
+  "prompt": "This Python loop is meant to sum the first n positive integers but returns the wrong value: `total=0`\nfor i in range(n): total += i`. Identify the bug and give the corrected loop.",
+  "envelope": {
+    "must_contain": [
+      [
+        "range(1, n + 1)",
+        "range(1,n+1)",
+        "n + 1",
+        "i + 1"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical coding task with an unambiguous expected core"
+}

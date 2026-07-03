@@ -1,0 +1,24 @@
+{
+  "id": "judge-oncall-alert",
+  "domain": "judgment",
+  "prompt": "An alert fires nightly at 3am and has been a false positive for 30 consecutive nights. What should the on-call team do and why is silencing-without-fixing dangerous?",
+  "envelope": {
+    "must_contain": [
+      [
+        "threshold",
+        "fix",
+        "tune",
+        "root cause"
+      ],
+      [
+        "alert fatigue",
+        "desensit",
+        "real incident",
+        "miss"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical judgment task with an unambiguous expected core"
+}

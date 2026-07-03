@@ -1,0 +1,19 @@
+{
+  "id": "code-sql-injection",
+  "domain": "coding",
+  "prompt": "Explain why building SQL with f-strings from user input is dangerous in Python, and show the parameterized-query alternative using sqlite3.",
+  "envelope": {
+    "must_contain": [
+      [
+        "injection"
+      ],
+      [
+        "?",
+        "parameter"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical coding task with an unambiguous expected core"
+}

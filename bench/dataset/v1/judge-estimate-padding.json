@@ -1,0 +1,21 @@
+{
+  "id": "judge-estimate-padding",
+  "domain": "judgment",
+  "prompt": "Your team consistently delivers at 2x its estimates. Should management simply double all estimates? Give the strongest argument against.",
+  "envelope": {
+    "must_contain": [
+      [
+        "incentive",
+        "pad",
+        "goodhart",
+        "parkinson",
+        "behaviour",
+        "behavior",
+        "trust"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical judgment task with an unambiguous expected core"
+}

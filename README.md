@@ -313,6 +313,18 @@ Any MCP client can use the server by running:
 llm-council
 ```
 
+### Quality Benchmark (`llm-council bench`)
+
+A golden dataset (`bench/dataset/v1/`, 20 items across coding/reasoning/factual/judgment) guards council quality against drift (ADR-048). **Every run costs real API spend** — it runs nightly/on-demand, never per-PR:
+
+```bash
+llm-council bench run [--items id1,id2] [--max-usd 2.00]   # exit 0 ok / 1 drift / 2 aborted-partial
+llm-council bench baseline --set                            # snapshot the last run as baseline
+llm-council bench report [--format md|json]                 # render the last run + baseline deltas
+```
+
+Caps: `LLM_COUNCIL_BENCH_MAX_USD` per run (default $2.00, enforced against actuals mid-run with graceful partial abort) and `LLM_COUNCIL_BENCH_MONTHLY_USD` month-to-date guard (default $30, from run artefacts under `.council/bench/runs/`). Dataset governance: [`bench/dataset/GOVERNANCE.md`](bench/dataset/GOVERNANCE.md).
+
 ### Streaming Deliberation (SSE)
 
 `GET /v1/council/stream?prompt=...` streams the deliberation live (ADR-046). Beyond the coarse stage events, the stream now emits **rich per-model events**, each wrapped in a versioned envelope (`v: 1`, `session_id`, `ts`, monotonic `seq`):

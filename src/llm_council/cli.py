@@ -37,6 +37,83 @@ def _is_fail_backend() -> bool:
         return True
 
 
+def bench_command(
+    action: str,
+    dataset: str,
+    items: str,
+    max_usd,
+    set_flag: bool,
+    output_format: str,
+) -> int:
+    """ADR-048 bench CLI. Returns the process exit code (0/1/2)."""
+    import asyncio
+    import json as _json
+    from pathlib import Path
+
+    from .bench import harness
+
+    runs_dir = harness.DEFAULT_RUNS_DIR
+
+    def _latest_run():
+        artefacts = sorted(runs_dir.glob("run-*.json"))
+        if not artefacts:
+            sys.stdout.write("No bench runs recorded yet — run `llm-council bench run` first.\n")
+            return None
+        return _json.loads(artefacts[-1].read_text())
+
+    if action == "run":
+        items_filter = [i.strip() for i in items.split(",")] if items else None
+        run = asyncio.run(
+            harness.run_bench(
+                dataset_dir=Path(dataset),
+                items_filter=items_filter,
+                max_usd=max_usd,
+            )
+        )
+        comparison = harness.compare_to_baseline(run)
+        sys.stdout.write(harness.format_report(run, comparison, output_format) + "\n")
+        return run.exit_code
+
+    if action == "baseline":
+        data = _latest_run()
+        if data is None:
+            return 2
+        if not set_flag:
+            sys.stdout.write("Pass --set to snapshot the latest run as baseline.\n")
+            return 0
+        run = harness.BenchRun(
+            started_at=data["started_at"],
+            items_total=data["items_total"],
+            items_run=data["items_run"],
+            items_passed=data["items_passed"],
+            total_cost_usd=data["total_cost_usd"],
+            cost_known=data["cost_known"],
+            aborted=data.get("aborted"),
+            results=[harness.ItemResult(**r) for r in data.get("results", [])],
+        )
+        path = harness.set_baseline(run)
+        sys.stdout.write(f"Baseline written to {path}\n")
+        return 0
+
+    # report
+    data = _latest_run()
+    if data is None:
+        return 2
+    run = harness.BenchRun(
+        started_at=data["started_at"],
+        items_total=data["items_total"],
+        items_run=data["items_run"],
+        items_passed=data["items_passed"],
+        total_cost_usd=data["total_cost_usd"],
+        cost_known=data["cost_known"],
+        aborted=data.get("aborted"),
+        results=[harness.ItemResult(**r) for r in data.get("results", [])],
+    )
+    comparison = harness.compare_to_baseline(run)
+    sys.stdout.write(harness.format_report(run, comparison, output_format) + "\n")
+    return run.exit_code
+
+
 def calibration_report(
     logs: str,
     fit: bool,
@@ -205,6 +282,22 @@ def main():
         help="Write to a file instead of stdout (default: stdout)",
     )
 
+    # Bench harness (ADR-048)
+    bench_parser = subparsers.add_parser(
+        "bench",
+        help="Golden-dataset quality benchmark (ADR-048) — costs real API spend",
+    )
+    bench_parser.add_argument(
+        "action", choices=["run", "baseline", "report"],
+        help="run: execute the dataset; baseline: snapshot last run as baseline; report: render last run",
+    )
+    bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1")
+    bench_parser.add_argument("--items", type=str, default=None, help="Comma-separated item ids")
+    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd")
+    bench_parser.add_argument("--set", action="store_true", dest="set_baseline_flag",
+                              help="(baseline) write the snapshot")
+    bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format")
+
     # Calibration report (ADR-047 P2)
     cal_parser = subparsers.add_parser(
         "calibration-report",
@@ -293,6 +386,17 @@ def main():
             target=args.target,
             force=args.force,
             list_only=args.list_only,
+        )
+    elif args.command == "bench":
+        raise SystemExit(
+            bench_command(
+                action=args.action,
+                dataset=args.dataset,
+                items=args.items,
+                max_usd=args.max_usd,
+                set_flag=args.set_baseline_flag,
+                output_format=args.bench_format,
+            )
         )
     elif args.command == "calibration-report":
         calibration_report(

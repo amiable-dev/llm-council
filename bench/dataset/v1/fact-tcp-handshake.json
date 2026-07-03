@@ -1,0 +1,23 @@
+{
+  "id": "fact-tcp-handshake",
+  "domain": "factual",
+  "prompt": "Name the three messages of the TCP three-way handshake in order.",
+  "envelope": {
+    "must_contain": [
+      [
+        "SYN"
+      ],
+      [
+        "SYN-ACK",
+        "SYN/ACK",
+        "SYN ACK"
+      ],
+      [
+        "ACK"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical factual task with an unambiguous expected core"
+}

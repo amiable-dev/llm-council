@@ -1,0 +1,20 @@
+{
+  "id": "judge-rewrite-vs-refactor",
+  "domain": "judgment",
+  "prompt": "A 100K-line legacy service has 60% test coverage and steady feature demand. Argue briefly for refactor-in-place over a big-bang rewrite, naming the two biggest risks of the rewrite.",
+  "envelope": {
+    "must_contain": [
+      [
+        "risk"
+      ],
+      [
+        "incremental",
+        "refactor",
+        "strangler"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical judgment task with an unambiguous expected core"
+}

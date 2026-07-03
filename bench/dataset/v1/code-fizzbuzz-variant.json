@@ -1,0 +1,19 @@
+{
+  "id": "code-fizzbuzz-variant",
+  "domain": "coding",
+  "prompt": "Write a Python function `classify(n)` that returns 'fizz' for multiples of 3, 'buzz' for multiples of 5, 'fizzbuzz' for both, and the number as a string otherwise. Include edge case behaviour for 0 and negatives in a short docstring.",
+  "envelope": {
+    "must_contain": [
+      [
+        "fizzbuzz"
+      ],
+      [
+        "def classify",
+        "classify(n)"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical coding task with an unambiguous expected core"
+}

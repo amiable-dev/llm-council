@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Golden-dataset drift harness (ADR-048 P1, #418)** — `llm-council bench run|baseline|report` executes the versioned dataset (`bench/dataset/v1/`, 20 original items across four domains, governance doc included) against the council and checks expected-quality envelopes (any-of key-content groups + consensus score floors, never exact-string). Hard per-run spend cap (`LLM_COUNCIL_BENCH_MAX_USD`, $2 default) with graceful partial abort, month-to-date guard (`LLM_COUNCIL_BENCH_MONTHLY_USD`, $30 default) from persisted run artefacts, committed-baseline regression detection, exit codes 0/1/2, and a nightly (never per-PR) workflow with explicit caps. Harness fully unit-tested with mocked councils — zero live spend in CI.
+
 ## [0.31.0] - 2026-07-03
 
 **Verifier Calibration & Judge Reliability (ADR-047)** — epic [#417](https://github.com/amiable-dev/llm-council/issues/417). The verify gate becomes trustworthy: UNCLEAR verdicts carry machine-readable causes, confidence is calibrated against observed outcomes (both values surfaced), a shadow-first screening judge cuts gate cost for easy changes, and reviewer agreement is decomposed for position-confound amplification. Everything additive; all behavior changes flag-gated default-off.

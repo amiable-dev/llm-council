@@ -1,0 +1,24 @@
+{
+  "id": "judge-feature-flag-debt",
+  "domain": "judgment",
+  "prompt": "A codebase has 200 stale feature flags. Describe the main risk this creates and a policy to prevent recurrence.",
+  "envelope": {
+    "must_contain": [
+      [
+        "complexity",
+        "dead code",
+        "interaction",
+        "risk"
+      ],
+      [
+        "expiry",
+        "owner",
+        "cleanup",
+        "remove"
+      ]
+    ],
+    "min_score": 0.3
+  },
+  "provenance": "original, authored for llm-council bench v1 (2026-07-03)",
+  "rationale": "canonical judgment task with an unambiguous expected core"
+}
