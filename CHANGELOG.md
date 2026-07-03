@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-07-03
+
+**Streaming Deliberation (ADR-046)** — epic [#412](https://github.com/amiable-dev/llm-council/issues/412). The 30–600s spinner becomes a live deliberation view: rich per-model SSE events in a versioned envelope, opt-in chairman token streaming that assembles the identical final result, per-reviewer MCP progress, and the enabling `council.py` split (101K→44K, below the Council review cap). Non-streaming paths are byte-identical throughout.
+
 ### Added
 
 - **MCP progress surface (ADR-046 P3, #411)** — per-reviewer stage-2 progress ("<model> reviewed (n/N)") now reaches MCP `ctx.report_progress` (and the HTTP progress channel), wired only when a progress consumer exists — consumer-less runs stay byte-identical (test-pinned). `consult_council` and `verify` tool descriptions document the progress semantics.

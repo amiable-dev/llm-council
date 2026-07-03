@@ -3,7 +3,7 @@
   "name": "io.github.amiable-dev/llm-council",
   "title": "LLM Council",
   "description": "Multi-model deliberation council with anonymized peer review, exposed as MCP tools.",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "websiteUrl": "https://github.com/amiable-dev/llm-council",
   "repository": {
     "source": "github",

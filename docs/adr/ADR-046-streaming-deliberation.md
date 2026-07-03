@@ -1,6 +1,6 @@
 # ADR-046: Streaming Deliberation
 
-**Status:** Draft 2026-07-03
+**Status:** Implemented 2026-07-03 (epic #412, v0.30.0)
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
 **Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: event schemas, per-phase DoD, ADR-045 fallback
