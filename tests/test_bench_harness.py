@@ -311,3 +311,41 @@ class TestCouncilRound2:
             dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
         )
         assert run.cost_known is False  # one unknown item => NOT fully known
+
+
+class TestCouncilRound3:
+    @pytest.mark.asyncio
+    async def test_monthly_ledger_counts_charged_not_just_actuals(self, tmp_path, monkeypatch):
+        # #439 r3: unknown-cost runs recorded $0 actuals, silently eroding
+        # the monthly guard; the ledger now sums the cap-charged figure.
+        monkeypatch.setenv("LLM_COUNCIL_BENCH_UNKNOWN_ITEM_USD", "0.50")
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def runner(prompt):
+            r = _fake_result("hello")
+            r["metadata"]["usage"]["total"] = {}  # unknown cost
+            return r
+
+        runs = tmp_path / "runs"
+        await run_bench(dataset_dir=d, runs_dir=runs, council_runner=runner)
+        assert month_to_date_spend(runs) == pytest.approx(0.50)
+
+    @pytest.mark.asyncio
+    async def test_baseline_refuses_aborted_run(self, tmp_path):
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        async def runner(prompt):
+            return _fake_result("hello", cost=2.0)
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.0,
+        )
+        assert run.aborted
+        with pytest.raises(ValueError, match="aborted"):
+            set_baseline(run, tmp_path / "baseline.json")

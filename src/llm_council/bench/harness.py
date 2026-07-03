@@ -91,6 +91,10 @@ class BenchRun:
     items_passed: int
     total_cost_usd: float
     cost_known: bool
+    # Cap-accounting figure: actuals + conservative unknown-cost charges.
+    # The monthly guard sums THIS, not raw actuals (#439 r3) — unknown-cost
+    # runs must not erode the guard.
+    cap_charged_usd: float = 0.0
     aborted: Optional[str] = None  # reason string when partial
     results: List[ItemResult] = field(default_factory=list)
 
@@ -155,7 +159,10 @@ def month_to_date_spend(runs_dir: Optional[Path] = None) -> float:
             try:
                 data = json.loads(f.read_text())
                 if str(data.get("started_at", "")).startswith(prefix):
-                    total += float(data.get("total_cost_usd", 0.0))
+                    total += max(
+                        float(data.get("total_cost_usd", 0.0)),
+                        float(data.get("cap_charged_usd", 0.0)),
+                    )
             except Exception:
                 continue
     except OSError:
@@ -284,6 +291,7 @@ async def run_bench(
 
     # 'fully known' means EVERY executed item reported a cost (#439 r2).
     run.cost_known = run.items_run > 0 and not any_unknown
+    run.cap_charged_usd = cap_charged
     _persist_run(run, runs_dir)
     return run
 
@@ -302,7 +310,13 @@ def _persist_run(run: BenchRun, runs_dir: Optional[Path] = None) -> None:
 
 
 def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
-    """Snapshot the run as the committed baseline."""
+    """Snapshot the run as the committed baseline.
+
+    Refuses aborted/partial runs (#439 r3): a truncated run would bake an
+    artificially narrow item set into the drift reference.
+    """
+    if run.aborted:
+        raise ValueError(f"refusing to baseline an aborted run: {run.aborted}")
     path = baseline_path if baseline_path is not None else DEFAULT_BASELINE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
