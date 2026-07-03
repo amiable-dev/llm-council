@@ -19,7 +19,7 @@
         "frontier"
       ],
       "docs": "https://github.com/amiable-dev/llm-council#readme",
-      "transport": "stdio",
+      "mcpTransport": "stdio",
       "install": "uv tool install 'llm-council-core[mcp,secure]'",
       "tools": [
         "audit",

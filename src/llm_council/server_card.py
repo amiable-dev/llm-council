@@ -69,7 +69,10 @@ def build_server_card() -> Dict[str, Any]:
     meta: Dict[str, Any] = {
         "tiers": list(_TIERS),
         "docs": f"{_REPO_URL}#readme",
-        "transport": "stdio",
+        # The MCP server itself runs over stdio (local install); the HTTP
+        # service that SERVES this card is a REST API, not an MCP transport —
+        # hence no top-level `remotes`. Key named to make that unambiguous.
+        "mcpTransport": "stdio",
         "install": "uv tool install 'llm-council-core[mcp,secure]'",
     }
     tools = _get_tool_names()
