@@ -36,11 +36,11 @@ _TIERS = ["quick", "balanced", "high", "reasoning", "frontier"]
 
 
 def _get_version() -> str:
-    try:
-        from importlib.metadata import version
+    from importlib.metadata import PackageNotFoundError, version
 
+    try:
         return version("llm-council-core")
-    except Exception:  # pragma: no cover - not installed (e.g. raw checkout)
+    except PackageNotFoundError:  # pragma: no cover - raw checkout, no install
         return "0.0.0"
 
 
