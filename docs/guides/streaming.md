@@ -31,11 +31,13 @@ curl -N "http://localhost:8000/v1/council/stream?prompt=...&stream_tokens=true"
 ```
 
 `synthesis.delta` events carry the chairman's tokens as generated. The
-streamed path assembles the **identical final result object** as the
-non-streamed path; transport failure silently falls back to the regular
-call. Streamed synthesis reports usage as *unknown* (the stream wire
-protocol carries no usage data) — ADR-011 semantics, never a fabricated
-cost.
+streamed path assembles the **same synthesis text and result structure** as
+the non-streamed path (equality-tested); transport failure silently falls
+back to the regular call. One deliberate difference: the SSE wire protocol
+carries no usage data, so a token-streamed stage 3 reports its usage as
+*unknown* (`cost_known: false`) rather than fabricating a number — ADR-011
+semantics. If you need exact stage-3 cost accounting, run without
+`stream_tokens`.
 
 ## MCP progress
 

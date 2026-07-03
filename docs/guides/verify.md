@@ -31,8 +31,10 @@ Exit codes: `0` PASS · `1` FAIL · `2` UNCLEAR.
 
 ## Reading an UNCLEAR verdict (ADR-047)
 
-The exit code stays `2` for every UNCLEAR — `unclear_reason` is the routing
-signal:
+The exit code stays `2` for **every** UNCLEAR cause — that is a deliberate
+compatibility contract (ADR-047): existing automation keying on exit codes
+keeps working, and `unclear_reason` is the routing signal you layer policies
+on top of:
 
 - **`infra_failure`** — the chairman call itself errored (billing, auth,
   rate limit). Check your gateway/billing, then **retry**; never treat it as
