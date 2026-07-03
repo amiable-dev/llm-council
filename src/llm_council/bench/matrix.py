@@ -74,11 +74,22 @@ def _default_runner(config: MatrixConfig) -> Callable[..., Any]:  # pragma: no c
     async def council_runner(prompt: str) -> Dict[str, Any]:
         import os
 
-        from llm_council.council import run_council_with_fallback
+        import llm_council.council as council_mod
 
-        if config.kind == "graduated":
-            os.environ["LLM_COUNCIL_GRADUATED_DEPTH"] = "true"
-        return await run_council_with_fallback(prompt, bypass_cache=True)
+        if config.kind != "graduated":
+            return await council_mod.run_council_with_fallback(prompt, bypass_cache=True)
+        # Set the ADR-044 flag for THIS call only and always restore it —
+        # leaking it would silently turn every later matrix config into a
+        # graduated run, invalidating the comparison (#440 review).
+        previous = os.environ.get("LLM_COUNCIL_GRADUATED_DEPTH")
+        os.environ["LLM_COUNCIL_GRADUATED_DEPTH"] = "true"
+        try:
+            return await council_mod.run_council_with_fallback(prompt, bypass_cache=True)
+        finally:
+            if previous is None:
+                os.environ.pop("LLM_COUNCIL_GRADUATED_DEPTH", None)
+            else:
+                os.environ["LLM_COUNCIL_GRADUATED_DEPTH"] = previous
 
     return council_runner
 

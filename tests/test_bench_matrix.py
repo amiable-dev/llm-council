@@ -100,3 +100,34 @@ class TestMatrix:
         by_name = {r["config"]: r for r in rows}
         assert by_name["bad"]["pass_rate"] == 0.0
         assert by_name["council"]["pass_rate"] == 1.0
+
+
+class TestCouncilRound1:
+    @pytest.mark.asyncio
+    async def test_graduated_flag_never_leaks_to_next_config(self, monkeypatch, tmp_path):
+        # #440 r1: the graduated runner set LLM_COUNCIL_GRADUATED_DEPTH and
+        # never reverted — a 'council' config running AFTER 'graduated' would
+        # silently run graduated too, invalidating the comparison.
+        import os
+
+        from llm_council.bench.matrix import _default_runner
+
+        monkeypatch.delenv("LLM_COUNCIL_GRADUATED_DEPTH", raising=False)
+        observed = {}
+
+        async def fake_council(prompt, **kwargs):
+            observed["flag_during_call"] = os.environ.get("LLM_COUNCIL_GRADUATED_DEPTH")
+            return {"synthesis": "x", "metadata": {}}
+
+        import llm_council.council as council_mod
+
+        monkeypatch.setattr(council_mod, "run_council_with_fallback", fake_council)
+
+        graduated = _default_runner(MatrixConfig(name="graduated", kind="graduated"))
+        await graduated("q")
+        assert observed["flag_during_call"] == "true"  # on DURING the call
+        assert "LLM_COUNCIL_GRADUATED_DEPTH" not in os.environ  # restored after
+
+        plain = _default_runner(MatrixConfig(name="council", kind="council"))
+        await plain("q")
+        assert observed["flag_during_call"] is None  # plain config unaffected
