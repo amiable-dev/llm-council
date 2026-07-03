@@ -67,7 +67,9 @@ def load_corpus(logs_dir: Optional[Path] = None) -> List[CalibrationRecord]:
             records.append(
                 CalibrationRecord(
                     verification_id=data.get("verification_id", result_file.parent.name),
-                    verdict=data.get("verdict", "unclear"),
+                    # Normalize case defensively — the pipeline always writes
+                    # lowercase, but the anomaly stats key on exact match.
+                    verdict=str(data.get("verdict", "unclear")).lower(),
                     confidence=data.get("confidence"),
                     blocking_count=len(data.get("blocking_issues") or []),
                     timeout_fired=bool(data.get("timeout_fired")),
@@ -198,6 +200,14 @@ def fit_from_dispositions(
         if r.confidence is None or r.verification_id not in dispositions:
             continue
         pairs.append((r.confidence, 1.0 if dispositions[r.verification_id] else 0.0))
+    if 0 < len(pairs) < 10:
+        # ADR-047: modest-N observational data — the mapping is still fitted
+        # (flag-gated adoption is the guard), but operators should know.
+        logger.warning(
+            "calibration fitted from only %d disposition pairs; treat as "
+            "PRELIMINARY (ADR-047 validates before flag-on)",
+            len(pairs),
+        )
     return CalibrationMapping(points=pav_fit(pairs))
 
 
