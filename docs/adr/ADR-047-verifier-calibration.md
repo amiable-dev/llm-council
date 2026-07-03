@@ -1,6 +1,6 @@
 # ADR-047: Verifier Calibration & Judge Reliability
 
-**Status:** Draft 2026-07-03
+**Status:** Implemented 2026-07-03 (epic #417, v0.31.0)
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
 **Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: screening thresholds defined, blocking-path invariant operationalized, DoD covers P3/P4, reference consistency

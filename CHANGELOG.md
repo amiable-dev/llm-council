@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-07-03
+
+**Verifier Calibration & Judge Reliability (ADR-047)** — epic [#417](https://github.com/amiable-dev/llm-council/issues/417). The verify gate becomes trustworthy: UNCLEAR verdicts carry machine-readable causes, confidence is calibrated against observed outcomes (both values surfaced), a shadow-first screening judge cuts gate cost for easy changes, and reviewer agreement is decomposed for position-confound amplification. Everything additive; all behavior changes flag-gated default-off.
+
 ### Added
 
 - **Reviewer-agreement decomposition (ADR-047 P4, #416)** — `llm-council bias-report --amplification` decomposes each session's reviewer agreement over the ADR-015/018 store: an `agreement_index` (share of score variance between models vs between reviewers) crossed with `position_alignment` (does the consensus track display order?). High agreement WITH high position alignment flags an amplification suspect — the council converged along the position confound, not quality. Strictly report-only (pure functions, no writes, no gating — test-pinned); ADR-015 small-N caveats apply.
