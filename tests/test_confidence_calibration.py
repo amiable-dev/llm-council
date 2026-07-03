@@ -183,3 +183,30 @@ class TestSchemaField:
             confidence_calibrated=0.62,
         )
         assert resp.confidence_calibrated == 0.62
+
+
+class TestCouncilRound1:
+    def test_string_false_disposition_not_coerced_to_true(self, tmp_path):
+        # #435 r1: bool("false") is True — a string disposition would be
+        # silently INVERTED. Non-boolean values must be skipped, not coerced.
+        from llm_council.verification.calibration import load_dispositions
+
+        p = tmp_path / "d.jsonl"
+        p.write_text(
+            '{"verification_id": "v1", "upheld": "false"}\n'
+            '{"verification_id": "v2", "upheld": false}\n'
+            '{"verification_id": "v3", "upheld": true}\n'
+        )
+        d = load_dispositions(p)
+        assert "v1" not in d  # string skipped, never inverted
+        assert d == {"v2": False, "v3": True}
+
+    def test_verdict_counts_include_confidence_less_records(self):
+        # #435 r1: the verdict histogram counted only records WITH a
+        # confidence — a null-confidence result vanished from the counts.
+        rec = [
+            CalibrationRecord("v1", "unclear", None, 0, True),
+            CalibrationRecord("v2", "fail", 0.9, 1, False),
+        ]
+        summary = analyze_corpus(rec)
+        assert summary["verdicts"] == {"unclear": 1, "fail": 1}

@@ -81,16 +81,21 @@ def load_corpus(logs_dir: Optional[Path] = None) -> List[CalibrationRecord]:
 def analyze_corpus(records: List[CalibrationRecord]) -> Dict[str, Any]:
     """Reproducible corpus summary — the ADR-036 P2 calibration-report slice."""
     by_verdict: Dict[str, List[float]] = {}
+    verdict_counts: Dict[str, int] = {}
     zero_blocking_fails = 0
     for r in records:
+        # Count EVERY record's verdict — a null-confidence result must not
+        # vanish from the histogram (#435 review); confidence stats
+        # separately use only records that carry one.
+        verdict_counts[r.verdict] = verdict_counts.get(r.verdict, 0) + 1
         if r.confidence is not None:
             by_verdict.setdefault(r.verdict, []).append(r.confidence)
         if r.verdict == "fail" and r.blocking_count == 0:
             zero_blocking_fails += 1
-    fails = sum(1 for r in records if r.verdict == "fail")
+    fails = verdict_counts.get("fail", 0)
     summary: Dict[str, Any] = {
         "n": len(records),
-        "verdicts": {v: len(cs) for v, cs in by_verdict.items()},
+        "verdicts": verdict_counts,
         "mean_confidence": {
             v: round(sum(cs) / len(cs), 3) for v, cs in by_verdict.items() if cs
         },
@@ -201,7 +206,17 @@ def load_dispositions(path: Optional[Path] = None) -> Dict[str, bool]:
                 continue
             try:
                 row = json.loads(line)
-                out[str(row["verification_id"])] = bool(row["upheld"])
+                upheld = row["upheld"]
+                # Strict boolean only: bool("false") is True — coercing a
+                # string would silently INVERT the disposition (#435 review).
+                if not isinstance(upheld, bool):
+                    logger.warning(
+                        "disposition for %s has non-boolean upheld=%r; skipped",
+                        row.get("verification_id"),
+                        upheld,
+                    )
+                    continue
+                out[str(row["verification_id"])] = upheld
             except Exception:
                 continue
     except OSError:
