@@ -1,0 +1,102 @@
+"""ADR-048 P2: quality-per-dollar config matrix (#419). Mocked — no spend."""
+
+import json
+
+import pytest
+
+from llm_council.bench.matrix import (
+    MatrixConfig,
+    format_matrix_table,
+    quality_per_dollar,
+    run_matrix,
+)
+
+
+def _write_item(d, iid):
+    (d / f"{iid}.json").write_text(
+        json.dumps(
+            {
+                "id": iid,
+                "domain": "factual",
+                "prompt": "say hello",
+                "envelope": {"must_contain": [["hello"]], "min_score": 0.3},
+            }
+        )
+    )
+
+
+def _result(text, score=0.8, cost=0.02, known=True):
+    return {
+        "synthesis": text,
+        "metadata": {
+            "aggregate_rankings": [{"model": "m", "average_score": score}],
+            "usage": {"total": {"cost_usd": cost, "cost_known": known}},
+        },
+    }
+
+
+class TestQualityPerDollar:
+    def test_basic_math(self):
+        assert quality_per_dollar(pass_rate=1.0, cost_usd=0.50, cost_known=True) == 2.0
+
+    def test_unknown_cost_is_none(self):
+        assert quality_per_dollar(pass_rate=1.0, cost_usd=0.0, cost_known=False) is None
+
+    def test_zero_cost_known_is_none_not_infinity(self):
+        assert quality_per_dollar(pass_rate=1.0, cost_usd=0.0, cost_known=True) is None
+
+
+class TestMatrix:
+    @pytest.mark.asyncio
+    async def test_runs_each_config_and_tables(self, tmp_path):
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def council(prompt):
+            return _result("hello from council", cost=0.10)
+
+        async def solo(prompt):
+            # Solo runs produce NO consensus score — floors must not apply.
+            r = _result("hello from solo", cost=0.01)
+            r["metadata"]["aggregate_rankings"] = []
+            return r
+
+        configs = [
+            MatrixConfig(name="solo:m/a", kind="solo", runner=solo),
+            MatrixConfig(name="council", kind="council", runner=council),
+        ]
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
+        by_name = {r["config"]: r for r in rows}
+        assert by_name["solo:m/a"]["pass_rate"] == 1.0  # floor skipped for solo
+        assert by_name["council"]["pass_rate"] == 1.0
+        assert by_name["solo:m/a"]["quality_per_dollar"] > by_name["council"]["quality_per_dollar"]
+        table = format_matrix_table(rows)
+        assert "quality/$" in table and "council" in table
+
+    @pytest.mark.asyncio
+    async def test_config_error_reported_not_fatal(self, tmp_path):
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def broken(prompt):
+            raise RuntimeError("boom")
+
+        async def council(prompt):
+            return _result("hello", cost=0.10)
+
+        rows = await run_matrix(
+            [
+                MatrixConfig(name="bad", kind="solo", runner=broken),
+                MatrixConfig(name="council", kind="council", runner=council),
+            ],
+            dataset_dir=d,
+            runs_dir=tmp_path / "runs",
+            max_usd=2.0,
+        )
+        by_name = {r["config"]: r for r in rows}
+        assert by_name["bad"]["pass_rate"] == 0.0
+        assert by_name["council"]["pass_rate"] == 1.0

@@ -130,7 +130,12 @@ def load_dataset(dataset_dir: Optional[Path] = None) -> List[BenchItem]:
     return items
 
 
-def check_envelope(item: BenchItem, synthesis: str, score: Optional[float]) -> List[str]:
+def check_envelope(
+    item: BenchItem,
+    synthesis: str,
+    score: Optional[float],
+    apply_score_floor: bool = True,
+) -> List[str]:
     """Return envelope violations (empty == within envelope)."""
     failures: List[str] = []
     text = (synthesis or "").lower()
@@ -139,7 +144,7 @@ def check_envelope(item: BenchItem, synthesis: str, score: Optional[float]) -> L
         if not any(str(opt).lower() in text for opt in options):
             failures.append(f"missing_any_of:{options}")
     min_score = item.envelope.get("min_score")
-    if min_score is not None:
+    if min_score is not None and apply_score_floor:
         if score is None:
             # A floor with no observable score IS drift (#439 r2): the
             # council stopped producing the signal the envelope guards.
@@ -197,6 +202,7 @@ async def run_bench(
     max_usd: Optional[float] = None,
     runs_dir: Optional[Path] = None,
     council_runner: Any = None,
+    ignore_score_floor: bool = False,
 ) -> BenchRun:
     """Execute the bench. ``council_runner`` is injectable for tests
     (async callable prompt -> council result dict); the default runs the
@@ -268,7 +274,11 @@ async def run_bench(
         synthesis = result.get("synthesis", "")
         score = _extract_score(result)
         cost, cost_known = _extract_cost(result)
-        failures = check_envelope(item, synthesis, score)
+        # Solo matrix configs (ADR-048 P2) have no council consensus signal;
+        # min_score floors are skipped for them by explicit opt-in.
+        failures = check_envelope(
+            item, synthesis, score, apply_score_floor=not ignore_score_floor
+        )
         run.total_cost_usd = round(run.total_cost_usd + cost, 6)
         cap_charged = round(cap_charged + (cost if cost_known else bench_unknown_item_usd()), 6)
         if not cost_known:

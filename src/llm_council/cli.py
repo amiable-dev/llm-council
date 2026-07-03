@@ -44,6 +44,7 @@ def bench_command(
     max_usd,
     set_flag: bool,
     output_format: str,
+    configs: str = "council",
 ) -> int:
     """ADR-048 bench CLI. Returns the process exit code (0/1/2)."""
     import asyncio
@@ -60,6 +61,42 @@ def bench_command(
             sys.stdout.write("No bench runs recorded yet — run `llm-council bench run` first.\n")
             return None
         return _json.loads(artefacts[-1].read_text())
+
+    if action == "matrix":
+        import json as _json2
+
+        from .bench.matrix import MatrixConfig, format_matrix_table, run_matrix
+
+        matrix_configs = []
+        for name in [c.strip() for c in configs.split(",") if c.strip()]:
+            if name == "solo-members":
+                from .council import _get_council_models
+
+                for model in _get_council_models():
+                    matrix_configs.append(
+                        MatrixConfig(name=f"solo:{model}", kind="solo")
+                    )
+            elif name.startswith("solo:"):
+                matrix_configs.append(MatrixConfig(name=name, kind="solo"))
+            elif name in ("council", "graduated"):
+                matrix_configs.append(MatrixConfig(name=name, kind=name))
+            else:
+                sys.stdout.write(f"Unknown matrix config: {name}\n")
+                return 2
+        items_filter = [i.strip() for i in items.split(",")] if items else None
+        rows = asyncio.run(
+            run_matrix(
+                matrix_configs,
+                dataset_dir=Path(dataset),
+                max_usd=max_usd,
+                items_filter=items_filter,
+            )
+        )
+        if output_format == "json":
+            sys.stdout.write(_json2.dumps(rows, indent=2) + "\n")
+        else:
+            sys.stdout.write(format_matrix_table(rows) + "\n")
+        return 0 if all(not r.get("aborted") for r in rows) else 2
 
     if action == "run":
         items_filter = [i.strip() for i in items.split(",")] if items else None
@@ -288,7 +325,7 @@ def main():
         help="Golden-dataset quality benchmark (ADR-048) — costs real API spend",
     )
     bench_parser.add_argument(
-        "action", choices=["run", "baseline", "report"],
+        "action", choices=["run", "baseline", "report", "matrix"],
         help="run: execute the dataset; baseline: snapshot last run as baseline; report: render last run",
     )
     bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1")
@@ -297,6 +334,10 @@ def main():
     bench_parser.add_argument("--set", action="store_true", dest="set_baseline_flag",
                               help="(baseline) write the snapshot")
     bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format")
+    bench_parser.add_argument(
+        "--configs", type=str, default="council",
+        help="(matrix) comma list: council, graduated, solo:<model>, solo-members",
+    )
 
     # Calibration report (ADR-047 P2)
     cal_parser = subparsers.add_parser(
@@ -396,6 +437,7 @@ def main():
                 max_usd=args.max_usd,
                 set_flag=args.set_baseline_flag,
                 output_format=args.bench_format,
+                configs=args.configs,
             )
         )
     elif args.command == "calibration-report":
