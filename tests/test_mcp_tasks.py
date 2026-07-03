@@ -59,11 +59,12 @@ class TestTaskStore:
         store = TaskStore(base_dir=tmp_path, ttl_seconds=1)
         tid = store.create(kind="verify")
         store.complete(tid, {"ok": True})
-        # Backdate the file well past the TTL.
+        # Backdate created_at well past the TTL (round-2: TTL is measured
+        # from created_at, not file mtime).
         f = next(tmp_path.glob("*.json"))
-        old = time.time() - 10
-        import os
-        os.utime(f, (old, old))
+        data = json.loads(f.read_text())
+        data["created_at"] = time.time() - 10
+        f.write_text(json.dumps(data))
         assert store.get(tid) is None  # expired
         assert not f.exists()  # reaped on access
 
@@ -116,12 +117,12 @@ class TestCouncilRound1Findings:
         assert list(tmp_path.glob("*.json")) == []
 
     def test_expired_task_cannot_be_resurrected(self, tmp_path):
-        import os
         store = TaskStore(base_dir=tmp_path, ttl_seconds=1)
         tid = store.create(kind="k")
         f = next(tmp_path.glob("*.json"))
-        old = time.time() - 10
-        os.utime(f, (old, old))
+        data = json.loads(f.read_text())
+        data["created_at"] = time.time() - 10
+        f.write_text(json.dumps(data))
         store.complete(tid, {"late": True})  # arrives after expiry
         assert store.get(tid) is None
 
@@ -143,3 +144,31 @@ class TestCouncilRound1Findings:
         monkeypatch.undo()
         task = store.get(tid)
         assert task["status"] == "complete"  # memory (newer) wins over stale disk
+
+
+class TestCouncilRound2Findings:
+    def test_memory_tasks_expire_too(self, tmp_path):
+        target = tmp_path / "blocked"
+        target.write_text("not a dir")  # force memory mode
+        store = TaskStore(base_dir=target, ttl_seconds=1)
+        tid = store.create(kind="k")
+        # Backdate the in-memory created_at past the TTL.
+        store._memory[tid]["created_at"] = time.time() - 10
+        assert store.get(tid) is None
+
+    def test_ttl_measured_from_created_at_not_mtime(self, tmp_path):
+        # Frequent progress writes must not immortalize a task.
+        store = TaskStore(base_dir=tmp_path, ttl_seconds=1)
+        tid = store.create(kind="k")
+        f = next(tmp_path.glob("*.json"))
+        data = json.loads(f.read_text())
+        data["created_at"] = time.time() - 10  # created long ago
+        f.write_text(json.dumps(data))  # fresh mtime, stale created_at
+        assert store.get(tid) is None
+
+    def test_progress_cannot_revert_completed_task(self, tmp_path):
+        store = TaskStore(base_dir=tmp_path)
+        tid = store.create(kind="k")
+        store.complete(tid, {"ok": 1})
+        store.set_progress(tid, {"stage": 2})  # late progress after completion
+        assert store.get(tid)["status"] == "complete"

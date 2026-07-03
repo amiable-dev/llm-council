@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -84,6 +85,8 @@ class TaskStore:
         self._max_tasks = max_tasks
         self._memory: Dict[str, Dict[str, Any]] = {}
         self._dir: Optional[Path] = None
+        # Reentrant: state transitions call get() internally while holding it.
+        self._lock = threading.RLock()
         try:
             directory = base_dir if base_dir is not None else Path(".council") / "tasks"
             directory.mkdir(parents=True, exist_ok=True)
@@ -109,13 +112,26 @@ class TaskStore:
             self._memory[task_id] = task
             return
         try:
-            path.write_text(json.dumps(task))
+            # Atomic write (round-2): tmp + os.replace so a concurrent reader
+            # never sees a torn/partial JSON file.
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_text(json.dumps(task))
+            os.replace(tmp, path)
             # A successful disk write is authoritative: drop any memory copy
             # so reads can never see a stale divergent state (no split-brain).
             self._memory.pop(task_id, None)
         except Exception as exc:
             logger.debug("task write failed (%s); using memory", exc)
             self._memory[task_id] = task
+
+    def _expired(self, task: Dict[str, Any]) -> bool:
+        # TTL is measured from created_at (round-2): frequent progress writes
+        # must not immortalize a task the way an mtime-based check would.
+        # A record with no parseable created_at is treated as expired.
+        created = task.get("created_at")
+        if not isinstance(created, (int, float)):
+            return True
+        return time.time() - created > self._ttl
 
     def _evict(self) -> None:
         if self._dir is None:
@@ -134,41 +150,50 @@ class TaskStore:
     def create(self, kind: str) -> str:
         """Create a pending task; returns its capability id."""
         task_id = new_task_id()
-        self._write(
-            task_id,
-            {"kind": kind, "status": "pending", "created_at": time.time()},
-        )
-        self._evict()
+        with self._lock:
+            self._write(
+                task_id,
+                {"kind": kind, "status": "pending", "created_at": time.time()},
+            )
+            self._evict()
         return task_id
 
     def set_progress(self, task_id: str, progress: Dict[str, Any]) -> None:
-        task = self.get(task_id)
-        if task is None:
-            return
-        task["status"] = "running"
-        task["progress"] = progress
-        self._write(task_id, task)
+        with self._lock:
+            task = self.get(task_id)
+            if task is None:
+                return
+            if task.get("status") in ("complete", "failed"):
+                # Terminal states are final (round-2): late progress (e.g.
+                # racing a cancellation) must not revert them to "running".
+                logger.debug("set_progress() on terminal task %s ignored", task_id)
+                return
+            task["status"] = "running"
+            task["progress"] = progress
+            self._write(task_id, task)
 
     def complete(self, task_id: str, result: Dict[str, Any]) -> None:
-        task = self.get(task_id)
-        if task is None:
-            # Never create/resurrect a task for an unknown or expired id —
-            # capability ids must not be forgeable via state-transition calls.
-            logger.debug("complete() for unknown/expired task %s ignored", task_id)
-            return
-        task["status"] = "complete"
-        task["result"] = result
-        self._write(task_id, task)
+        with self._lock:
+            task = self.get(task_id)
+            if task is None:
+                # Never create/resurrect a task for an unknown or expired id —
+                # capability ids must not be forgeable via state-transition calls.
+                logger.debug("complete() for unknown/expired task %s ignored", task_id)
+                return
+            task["status"] = "complete"
+            task["result"] = result
+            self._write(task_id, task)
 
     def fail(self, task_id: str, error_status: str, error_detail: str) -> None:
-        task = self.get(task_id)
-        if task is None:
-            logger.debug("fail() for unknown/expired task %s ignored", task_id)
-            return
-        task["status"] = "failed"
-        task["error_status"] = error_status
-        task["error_detail"] = error_detail
-        self._write(task_id, task)
+        with self._lock:
+            task = self.get(task_id)
+            if task is None:
+                logger.debug("fail() for unknown/expired task %s ignored", task_id)
+                return
+            task["status"] = "failed"
+            task["error_status"] = error_status
+            task["error_detail"] = error_detail
+            self._write(task_id, task)
 
     def get(self, task_id: str) -> Optional[Dict[str, Any]]:
         """Retrieve by capability id; expired tasks are reaped on access.
@@ -177,21 +202,27 @@ class TaskStore:
         failed, so a memory entry is by construction newer than any disk copy
         (split-brain prevention — successful disk writes purge it).
         """
-        if task_id in self._memory:
-            return self._memory[task_id]
-        path = self._path(task_id)
-        if path is None:
-            return None
-        try:
-            if not path.exists():
+        with self._lock:
+            if task_id in self._memory:
+                task = self._memory[task_id]
+                if self._expired(task):
+                    self._memory.pop(task_id, None)
+                    return None
+                return task
+            path = self._path(task_id)
+            if path is None:
                 return None
-            if time.time() - path.stat().st_mtime > self._ttl:
-                path.unlink(missing_ok=True)
+            try:
+                if not path.exists():
+                    return None
+                task = json.loads(path.read_text())
+                if self._expired(task):
+                    path.unlink(missing_ok=True)
+                    return None
+                return task
+            except Exception as exc:
+                logger.debug("task read failed (%s)", exc)
                 return None
-            return json.loads(path.read_text())
-        except Exception as exc:
-            logger.debug("task read failed (%s)", exc)
-            return None
 
 
 def maybe_expose_tasks(server: Any) -> bool:
