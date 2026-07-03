@@ -1,7 +1,9 @@
 # UNCLEAR Routing (ADR-047)
 
-On an `unclear` verdict (exit code 2), `unclear_reason` says why. Route on it
-instead of treating every UNCLEAR alike:
+On an `unclear` verdict, `unclear_reason` says why. The exit code stays `2`
+for all three causes — that is the ADR-047 compatibility contract; the REASON
+field, not the exit code, is the routing signal ("accept-and-audit" etc. are
+caller policies applied on top of exit 2, never different exit codes):
 
 | unclear_reason | Meaning | Action |
 |---|---|---|
