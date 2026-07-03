@@ -164,6 +164,11 @@ def main():
         action="store_true",
         help="Include detailed reviewer profiles",
     )
+    bias_parser.add_argument(
+        "--amplification",
+        action="store_true",
+        help="Append the reviewer-agreement decomposition (ADR-047 P4, report-only)",
+    )
 
     # Install skills command
     install_parser = subparsers.add_parser(
@@ -281,6 +286,7 @@ def main():
             max_days=args.max_days,
             output_format=args.output_format,
             verbose=args.verbose,
+            amplification=args.amplification,
         )
     elif args.command == "install-skills":
         install_skills(
@@ -413,6 +419,7 @@ def bias_report(
     max_days: int = None,
     output_format: str = "text",
     verbose: bool = False,
+    amplification: bool = False,
 ):
     """Generate cross-session bias analysis report (ADR-018).
 
@@ -452,6 +459,28 @@ def bias_report(
             max_days=max_days,
             verbose=verbose,
         )
+
+    # ADR-047 P4 (#416): append the reviewer-agreement decomposition.
+    # Report-only — pure analysis over the same store, no gating.
+    if amplification:
+        import json as _json
+
+        from llm_council.bias_amplification import (
+            amplification_report,
+            format_amplification_report,
+        )
+        from llm_council.bias_persistence import read_bias_records
+
+        records = read_bias_records(
+            store_path=store_path, max_sessions=max_sessions, max_days=max_days
+        )
+        report = amplification_report(records)
+        if output_format == "json":
+            output = output.rstrip() + "\n" + _json.dumps(
+                {"amplification": report}, indent=2
+            )
+        else:
+            output = output.rstrip() + "\n\n" + format_amplification_report(report)
 
     print(output)
 
