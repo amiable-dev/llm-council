@@ -44,6 +44,12 @@ Ask the LLM council a question.
 |----------|------|---------|-------------|
 | `query` | string | required | Question to ask |
 | `confidence` | string | `"high"` | `quick`, `balanced`, `high`, `reasoning` |
+
+!!! warning "Set MCP_TIMEOUT for `high`/`reasoning`"
+    These tiers exceed many clients' default transport timeout (~60s). Set
+    `MCP_TIMEOUT` (milliseconds) in your client config — e.g. 180000 for
+    `high`, 600000 for `reasoning` — or the client will drop the connection
+    while the council deliberates.
 | `verdict_type` | string | `"synthesis"` | `synthesis`, `binary`, `tie_breaker` |
 | `include_details` | boolean | `false` | Include individual responses |
 | `include_dissent` | boolean | `false` | Include minority opinions |

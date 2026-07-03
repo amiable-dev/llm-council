@@ -26,7 +26,12 @@ asyncio.run(main())
 
 ## Full Council Access
 
+For stage-level detail, `run_full_council` returns the raw stage tuples
+(`stage1_results` is a **list** of `{model, response}` dicts; `stage3_result`
+is the chairman's `{model, response}` dict):
+
 ```python
+import asyncio
 from llm_council.council import run_full_council
 
 async def detailed_query():
@@ -34,36 +39,42 @@ async def detailed_query():
         "Compare microservices vs monolith architecture"
     )
 
-    # Individual model responses
-    for model, response in stage1.items():
-        print(f"{model}: {response[:100]}...")
+    # Individual model responses (a list, in completion order)
+    for entry in stage1:
+        print(f"{entry['model']}: {entry['response'][:100]}...")
 
-    # Rankings
+    # Borda-aggregated rankings (best first)
     print(f"Top response: {metadata['aggregate_rankings'][0]}")
 
-    # Synthesis
-    print(f"Final: {stage3}")
+    # Chairman synthesis
+    print(f"Final: {stage3['response']}")
+
+    # ADR-011 cost transparency
+    print(f"Cost: {metadata['usage']['total']}")
 
 asyncio.run(detailed_query())
 ```
 
+The simpler `consult_council` facade above wraps this and is the right
+choice unless you need the per-stage tuples.
+
 ## Jury Mode
 
 ```python
-from llm_council.council import run_full_council
+from llm_council import consult_council
 from llm_council.verdict import VerdictType
 
 async def review_pr(diff: str):
-    _, _, _, metadata = await run_full_council(
+    result = await consult_council(
         f"Should this PR be approved?\n\n{diff}",
-        verdict_type=VerdictType.BINARY,
-        include_dissent=True
+        verdict_type="binary",   # or VerdictType.BINARY
+        include_dissent=True,
     )
 
-    verdict = metadata["verdict"]
+    verdict = result.metadata["verdict"]
     if verdict["verdict"] == "approved" and verdict["confidence"] >= 0.7:
         return True, verdict["rationale"]
-    return False, verdict.get("dissent", "No dissent")
+    return False, verdict.get("dissent") or "No dissent recorded"
 
 asyncio.run(review_pr("..."))
 ```
