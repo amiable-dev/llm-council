@@ -44,8 +44,19 @@ def quality_per_dollar(
     return round(pass_rate / cost_usd, 3)
 
 
-def _default_runner(config: MatrixConfig) -> Callable[..., Any]:  # pragma: no cover
-    """Build the real runner for a config — REAL SPEND."""
+def _default_runner(config: MatrixConfig) -> Callable[..., Any]:
+    """Build the real runner for a config — REAL SPEND.
+
+    Unknown kinds raise (#440 r2): a typo must never silently fall through
+    to the full-council runner and spend money on the wrong configuration.
+
+    Concurrency note: run_matrix executes configs strictly SEQUENTIALLY, so
+    the per-call env swap in the graduated runner has no concurrent reader;
+    running matrix configs concurrently would require threading the ADR-044
+    flag as a parameter instead.
+    """
+    if config.kind not in ("solo", "council", "graduated"):
+        raise ValueError(f"unknown matrix kind: {config.kind!r}")
     if config.kind == "solo":
         model = config.name.split(":", 1)[1]
 

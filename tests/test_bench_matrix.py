@@ -131,3 +131,11 @@ class TestCouncilRound1:
         plain = _default_runner(MatrixConfig(name="council", kind="council"))
         await plain("q")
         assert observed["flag_during_call"] is None  # plain config unaffected
+
+    def test_unknown_kind_raises_never_spends(self):
+        # #440 r2: an unknown kind fell through to the FULL COUNCIL runner —
+        # a typo could silently spend real money.
+        from llm_council.bench.matrix import _default_runner
+
+        with pytest.raises(ValueError, match="unknown matrix kind"):
+            _default_runner(MatrixConfig(name="oops", kind="banana"))
