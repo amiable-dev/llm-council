@@ -49,11 +49,8 @@ from llm_council.verification.calibration import (
     load_mapping,
 )
 from llm_council.verification.screening import (
-    ScreenDecision,
+    evaluate_screen,
     log_decision,
-    run_screen,
-    screen_eligibility,
-    screen_passes,
     screening_mode,
 )
 from llm_council.verification.verdict_extractor import (
@@ -774,21 +771,15 @@ async def run_verification(
         screening_info: Optional[Dict[str, Any]] = None
         mode = screening_mode()
         if mode != "off":
-            reasons = screen_eligibility(
+            decision = await evaluate_screen(
+                verification_id=verification_id,
+                verification_query=verification_query,
+                mode=mode,
                 content_chars=len(verification_query),
                 target_paths=request.target_paths,
                 rubric_focus=request.rubric_focus,
                 evidence=request.evidence,
             )
-            decision = ScreenDecision(
-                verification_id=verification_id,
-                mode=mode,
-                eligible=not reasons,
-                reasons=reasons,
-            )
-            if decision.eligible:
-                decision.scores = await run_screen(verification_id, verification_query)
-                decision.screen_pass = screen_passes(decision.scores)
             if mode == "active" and decision.screen_pass and decision.scores:
                 decision.acted = True
                 log_decision(decision)

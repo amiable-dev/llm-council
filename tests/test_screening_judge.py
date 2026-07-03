@@ -151,7 +151,8 @@ class TestWiring:
                 side_effect=instant_pipeline,
             ),
             patch(
-                "llm_council.verification.api.run_screen", new_callable=AsyncMock
+                "llm_council.verification.screening.run_screen",
+                new_callable=AsyncMock,
             ) as screen,
         ):
             mock_ctx = MagicMock()
@@ -201,7 +202,7 @@ class TestWiring:
                 side_effect=instant_pipeline,
             ),
             patch(
-                "llm_council.verification.api.run_screen",
+                "llm_council.verification.screening.run_screen",
                 new_callable=AsyncMock,
                 return_value=perfect,
             ),
@@ -247,7 +248,7 @@ class TestWiring:
                 "llm_council.verification.api._run_verification_pipeline", pipeline
             ),
             patch(
-                "llm_council.verification.api.run_screen",
+                "llm_council.verification.screening.run_screen",
                 new_callable=AsyncMock,
                 return_value=perfect,
             ),
@@ -308,7 +309,7 @@ class TestWiring:
                 "llm_council.verification.api._run_verification_pipeline",
                 side_effect=instant_pipeline,
             ),
-            patch("llm_council.verification.api.run_screen", screen),
+            patch("llm_council.verification.screening.run_screen", screen),
             patch("llm_council.verification.api.log_decision"),
         ):
             mock_ctx = MagicMock()
@@ -324,3 +325,50 @@ class TestWiring:
         assert result["verdict"] == "fail"  # full council verdict stands
         assert result["screening"]["eligible"] is False
         assert "blocking_evidence" in result["screening"]["reasons"]
+
+
+class TestCouncilRound1:
+    @pytest.mark.asyncio
+    async def test_evaluate_screen_enforces_eligibility_internally(self, monkeypatch):
+        # #436 r1: eligibility must be enforced INSIDE the module entry point,
+        # not left to the caller — an ineligible request never reaches the
+        # screen model even if the caller forgets to check.
+        from unittest.mock import AsyncMock, patch
+
+        from llm_council.verification import screening as sm
+
+        with patch.object(sm, "run_screen", new_callable=AsyncMock) as screen:
+            decision = await sm.evaluate_screen(
+                verification_id="v1",
+                verification_query="q",
+                mode="active",
+                content_chars=100,
+                target_paths=None,
+                rubric_focus="security",  # blocking-capable
+                evidence=None,
+            )
+        screen.assert_not_awaited()
+        assert decision.eligible is False
+        assert decision.screen_pass is False
+
+    @pytest.mark.asyncio
+    async def test_evaluate_screen_runs_when_eligible(self, monkeypatch):
+        from unittest.mock import AsyncMock, patch
+
+        from llm_council.verification import screening as sm
+
+        perfect = {d: 10.0 for d in sm.SCREEN_DIMENSIONS}
+        with patch.object(
+            sm, "run_screen", new_callable=AsyncMock, return_value=perfect
+        ):
+            decision = await sm.evaluate_screen(
+                verification_id="v1",
+                verification_query="q",
+                mode="shadow",
+                content_chars=100,
+                target_paths=["docs/x.md"],
+                rubric_focus=None,
+                evidence=None,
+            )
+        assert decision.eligible is True
+        assert decision.screen_pass is True

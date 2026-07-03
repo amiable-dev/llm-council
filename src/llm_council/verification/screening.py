@@ -175,6 +175,40 @@ async def run_screen(
         return None
 
 
+async def evaluate_screen(
+    *,
+    verification_id: str,
+    verification_query: str,
+    mode: str,
+    content_chars: int,
+    target_paths: Optional[List[str]],
+    rubric_focus: Optional[str],
+    evidence: Optional[List[Dict[str, Any]]],
+) -> ScreenDecision:
+    """The single module entry point: eligibility is enforced HERE (#436 r1).
+
+    An ineligible (e.g. blocking-capable) request never reaches the screen
+    model regardless of what the caller checked — the invariant cannot be
+    bypassed by skipping screen_eligibility().
+    """
+    reasons = screen_eligibility(
+        content_chars=content_chars,
+        target_paths=target_paths,
+        rubric_focus=rubric_focus,
+        evidence=evidence,
+    )
+    decision = ScreenDecision(
+        verification_id=verification_id,
+        mode=mode,
+        eligible=not reasons,
+        reasons=reasons,
+    )
+    if decision.eligible:
+        decision.scores = await run_screen(verification_id, verification_query)
+        decision.screen_pass = screen_passes(decision.scores)
+    return decision
+
+
 def log_decision(decision: ScreenDecision, path: Optional[Path] = None) -> None:
     """Append the decision to the JSONL log. Soft-fail."""
     p = path if path is not None else DEFAULT_DECISIONS_PATH
