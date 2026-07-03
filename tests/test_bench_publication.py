@@ -106,3 +106,12 @@ class TestCouncilRound1:
         out = tmp_path / "r.md"
         write_results_page(run, out, dataset_version="v1")
         assert "café" in out.read_text(encoding="utf-8")
+
+    @pytest.mark.asyncio
+    async def test_sync_runner_accepted(self):
+        # #441 r2: eval harnesses may inject a plain function.
+        def sync_runner(prompt):
+            return {"synthesis": "sync answer"}
+
+        generate = make_council_eval_callable(council_runner=sync_runner)
+        assert await generate("q") == "sync answer"

@@ -13,6 +13,7 @@ under ``examples/eval_bridges/`` show framework-side wiring):
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Callable, Dict, Optional
 
 
@@ -32,7 +33,10 @@ def make_council_eval_callable(
             return await run_council_with_fallback(prompt, bypass_cache=True)
 
     async def generate(prompt: str) -> str:
-        result = await council_runner(prompt)
+        # Eval harnesses may inject sync callables (#441 r2) — accept both.
+        result = council_runner(prompt)
+        if inspect.isawaitable(result):
+            result = await result
         return result.get("synthesis", "")
 
     return generate
