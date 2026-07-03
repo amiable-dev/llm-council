@@ -3,7 +3,8 @@
 **Status:** Draft 2026-07-03
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
-**Related:** ADR-036 (Phase 2 calibration report — this implements that slice), ADR-034 (verify), ADR-015/017 (bias), ADR-022 (tiers), #397/#403 (error surfacing)
+**Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: screening thresholds defined, blocking-path invariant operationalized, DoD covers P3/P4, reference consistency
+**Related:** ADR-036 (Phase 2 calibration report — this implements that slice), ADR-034 (verify), ADR-015/017/018 (bias & randomization), ADR-022 (tiers), #397/#403 (error surfacing)
 
 ---
 
@@ -51,11 +52,17 @@ confidence — behind a flag, default off, until the mapping is validated
 
 ### Phase 3 — Lightweight screening judge
 An opt-in pre-gate: a single quick-tier model scores the change against the
-rubric in seconds; unambiguous outcomes (screen says clean AND diff is small/
-low-risk) short-circuit to a cheap PASS-with-audit-note, everything else
-proceeds to the full council unchanged. Default OFF; every screen decision is
-logged with the screen's score so its own calibration can be measured before
-trusting it (shadow-first, like ADR-044 P2).
+rubric in seconds; unambiguous outcomes short-circuit to a cheap
+PASS-with-audit-note, everything else proceeds to the full council unchanged.
+**Concrete gates (council feedback; initial values, env-tunable):** a change
+may be screen-passed only if ALL hold — screen rubric score ≥ 9/10 on every
+dimension; diff < 5,000 chars; no changed file matches a risk glob
+(`**/auth*`, `**/security*`, `**/crypto*`, `**/*payment*`); and the request
+is not blocking-capable. **Blocking-capable (operationalized):** any request
+carrying `evidence` items with `strength=blocking`, or `rubric_focus` in
+{security}, is NEVER screened — full council always runs. Default OFF;
+shadow-first: every screen decision is logged with its score so the screen's
+own precision is measured before trusting it (like ADR-044 P2).
 
 ### Phase 4 — Bias-amplification check (report only)
 Extend the ADR-015/018 bias pipeline with a reviewer-agreement decomposition
@@ -76,10 +83,17 @@ decisions; never screens BLOCKING-capable paths silently); changing PASS
 semantics affects automation (mitigation: compat exit codes + additive fields
 only).
 
-## Definition of Done (per phase)
-Code + tests; docs (README verify section, CLAUDE.md, CHANGELOG); LLM-facing
-verify tool description documents `unclear_reason` and calibrated confidence;
-epic-loop guidance updated to consume the new fields.
+## Definition of Done (per phase — council feedback: all phases covered)
+- **P1:** `unclear_reason` on every UNCLEAR response + tests for all three
+  causes; verify tool description documents it.
+- **P2:** calibration analysis reproducible from `.council/logs`; raw AND
+  calibrated confidence on responses; flag-off behaviour unchanged (test).
+- **P3:** screen decisions logged with scores; blocking-capable invariant
+  enforced by test; flag-off byte-identical.
+- **P4:** report renders from existing bias store; no gating side-effects
+  (test).
+- All phases: README verify section, CLAUDE.md, CHANGELOG; epic-loop guidance
+  updated to consume new fields.
 
 ## References
 - `docs/roadmap-2026-h2.md` item 4 (sources: agent-as-judge survey, bias

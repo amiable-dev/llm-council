@@ -3,6 +3,7 @@
 **Status:** Draft 2026-07-03
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
+**Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: task authz, task-state persistence/expiry, phase independence, rollback semantics
 **Related:** ADR-012 (MCP reliability — this extends it), ADR-040 (timeouts), ADR-046 (streaming — complementary)
 
 ---
@@ -43,6 +44,22 @@ clients keep today's synchronous tools unchanged.
 - SDK dependency: bump the `mcp` Python SDK to the first release with
   2026-07-28 support; if task lifecycle gaps remain (retry semantics/expiry
   are known open items in the RC), constrain to the stable subset and document.
+- **Task state & persistence (council feedback):** task results are stored in
+  a bounded on-disk store under `.council/tasks/` (same durability class as
+  transcripts), keyed by an unguessable task id; default expiry 24h with
+  size-capped eviction; in-memory fallback when the store is unavailable
+  (degrades to sync semantics, never crashes).
+- **Authorization (council feedback):** the task id is a capability — 128-bit
+  random, returned only to the creating client; retrieval requires it. Where
+  the HTTP surface exposes tasks, `LLM_COUNCIL_API_TOKEN` (ADR-038) gates
+  access exactly as for synchronous endpoints. No cross-client enumeration
+  (no task listing without auth).
+- **Rollback (council feedback):** the synchronous path IS the rollback — task
+  exposure is capability-negotiated per client and additionally kill-switched
+  by `LLM_COUNCIL_MCP_TASKS=false`.
+
+Phases 2 and 3 are independent of Phase 1 and of each other (council
+feedback): any subset may ship alone.
 
 ### Phase 2 — Server Card
 - Serve a Server Card at `.well-known` from the HTTP server, and ship a static

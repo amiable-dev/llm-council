@@ -3,6 +3,7 @@
 **Status:** Draft 2026-07-03
 **Date:** 2026-07-03
 **Decision Makers:** Chris Joseph, LLM Council
+**Council Review:** 2026-07-03 (4 models, balanced) — feedback incorporated: event schemas, per-phase DoD, ADR-045 fallback
 **Related:** ADR-045 (MCP Tasks/progress — complementary), ADR-023 (gateway SSE, v0.27.1), ADR-012 (progress callbacks), ADR-044 (early consensus — event source)
 
 ---
@@ -46,6 +47,20 @@ usage/cost per ADR-011). Non-stream fallback identical to today.
 ### Phase 3 — MCP surface
 Map the same event stream onto MCP progress notifications (and Task progress
 when ADR-045 P1 lands) so Claude Code/Cursor users see live deliberation.
+**ADR-045 fallback (council feedback):** P3 does not depend on ADR-045 —
+plain MCP progress notifications carry the coarse events today; Task-based
+delivery is an upgrade when available.
+
+### Event schema (council feedback)
+All SSE events are `{"event": <name>, "data": {…}}` with a shared envelope
+(`session_id`, `ts`, `seq`). Payloads:
+- `stage1.response`: `{model, response, latency_ms, usage}`
+- `stage2.review`: `{reviewer, ranking: [labels], parse_ok}`
+- `consensus.early_termination`: the ADR-044 P2 event payload verbatim
+- `stage3.start`: `{chairman}` · `synthesis.delta`: `{text}`
+- `result`: the full CouncilResponse (incl. ADR-011 `usage`) — terminal
+- `error`: `{stage, error_status, error_detail}` (#403 semantics) — terminal
+Schema is versioned (`v` field); additive changes only.
 
 ## Consequences
 
@@ -60,9 +75,16 @@ its own anonymized prompt — but tests must pin this); token streams + partial
 usage require the ADR-011 accounting to stay correct on cancelled/failed
 streams (gateway already raises on stream HTTP errors, #375).
 
-## Definition of Done (per phase)
-Code + tests (incl. non-stream byte-identical); docs (README streaming section,
-CLAUDE.md, CHANGELOG); LLM-facing MCP tool text for progress semantics.
+## Definition of Done (per phase — council feedback: concrete)
+- **P0:** every extracted module < 50K chars; back-compat re-exports; suite
+  count identical; ruff clean.
+- **P1:** SSE emits all Phase-1 events with the schema above; non-stream
+  responses byte-identical (test); event-order invariants tested.
+- **P2:** streamed synthesis assembles to the SAME final result object as the
+  non-streamed path (equality test); usage/cost correct on cancelled streams.
+- **P3:** MCP progress visible in a real client session; tool descriptions
+  document progress semantics.
+- All phases: README streaming section, CLAUDE.md, CHANGELOG.
 
 ## References
 - `docs/roadmap-2026-h2.md` item 3; gateway SSE (v0.27.1, #375); #380 split playbook
