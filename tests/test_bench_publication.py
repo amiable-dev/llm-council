@@ -92,14 +92,17 @@ class TestCouncilRound1:
                 failures=["missing_any_of:['x|y']"],
             )],
         )
+        import re
+
         page = render_results_page(run, dataset_version="v1")
         row = [line for line in page.splitlines() if line.startswith("| a |")][0]
-        assert row.count("|") == 6  # 5 columns, never split by content pipes
-        assert "\\|" in row
+        # 5 columns => exactly 6 UNESCAPED pipes; the content pipe is escaped.
+        assert len(re.findall(r"(?<!\\)\|", row)) == 6
+        assert "x\\|y" in row
 
     def test_written_page_is_utf8(self, tmp_path):
         run = _run()
-        run.results[0].failures = ["café — non-ascii"]
+        run.results[1].failures = ["café — non-ascii"]  # the FAILING item renders failures
         out = tmp_path / "r.md"
         write_results_page(run, out, dataset_version="v1")
         assert "café" in out.read_text(encoding="utf-8")
