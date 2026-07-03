@@ -89,13 +89,26 @@ from llm_council.webhooks.types import WebhookConfig
 from llm_council.verdict import VerdictType
 
 # FastAPI app instance
+from llm_council import __version__ as _package_version
+
 app = FastAPI(
     title="LLM Council",
-    description="Local development server for LLM Council deliberations",
-    version="1.0.0",
+    description=(
+        "Multi-LLM deliberation over HTTP: 3-stage council runs "
+        "(POST /v1/council/run), live SSE streaming with per-model events and "
+        "opt-in chairman token streaming (GET /v1/council/stream), and MCP "
+        "Server Card discovery. Stateless, single-tenant, BYOK (ADR-009): "
+        "keys come from the request or server environment."
+    ),
+    version=_package_version,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    openapi_tags=[
+        {"name": "Council", "description": "Run and stream 3-stage deliberations"},
+        {"name": "Health", "description": "Liveness for load balancers"},
+        {"name": "Discovery", "description": "MCP Server Card (ADR-045 / SEP-2127)"},
+    ],
 )
 
 

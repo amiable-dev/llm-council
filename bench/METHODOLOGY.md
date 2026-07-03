@@ -35,5 +35,14 @@
 ## Reproducing
 
 ```bash
+# Drift regression against the committed baseline (exit 0/1/2):
+llm-council bench run
+llm-council bench baseline --set          # snapshot a COMPLETE run as baseline
+llm-council bench report [--format json] [--publish docs/bench-results.md]
+
+# Quality-per-dollar matrix:
 llm-council bench matrix --configs solo-members,council,graduated --max-usd 2.00
 ```
+
+Dataset authoring rules (provenance, envelope changes, domain balance):
+[`dataset/GOVERNANCE.md`](dataset/GOVERNANCE.md).
