@@ -56,10 +56,13 @@ POST /v1/council/run
 ```json
 {
   "prompt": "What is the best approach for implementing user authentication?",
-  "models": ["openai/gpt-4", "anthropic/claude-3-opus"],  // optional
-  "api_key": "sk-..."  // optional if OPENROUTER_API_KEY is set
+  "models": ["openai/gpt-5.4", "anthropic/claude-opus-4.8"],
+  "api_key": "sk-..."
 }
 ```
+
+`models` and `api_key` are optional — omit `api_key` when `OPENROUTER_API_KEY`
+is set on the server (preferred; see warning below).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -227,6 +230,12 @@ GET /v1/council/stream?prompt=...&stream_tokens=false
 ```bash
 curl -N "http://localhost:8000/v1/council/stream?prompt=What+is+AI&stream_tokens=true"
 ```
+
+!!! warning "Do not pass `api_key` in the query string"
+    Query strings land in server/proxy logs and browser history. Prefer the
+    `OPENROUTER_API_KEY` environment variable on the server (BYOK), and keep
+    `LLM_COUNCIL_API_TOKEN` auth in headers. The `api_key` request/query
+    parameter exists for single-user local setups only.
 
 ### Request Fields (POST /v1/council/run)
 

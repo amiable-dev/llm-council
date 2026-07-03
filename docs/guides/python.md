@@ -49,8 +49,9 @@ async def detailed_query():
     # Chairman synthesis
     print(f"Final: {stage3['response']}")
 
-    # ADR-011 cost transparency
-    print(f"Cost: {metadata['usage']['total']}")
+    # ADR-011 cost transparency (usage is soft-fail: use .get)
+    usage = metadata.get("usage", {}).get("total", {})
+    print(f"Cost: {usage}")
 
 asyncio.run(detailed_query())
 ```
@@ -71,6 +72,8 @@ async def review_pr(diff: str):
         include_dissent=True,
     )
 
+    # verdict dict keys: verdict, confidence, rationale, dissent,
+    # deadlocked, borda_spread (VerdictResult.to_dict)
     verdict = result.metadata["verdict"]
     if verdict["verdict"] == "approved" and verdict["confidence"] >= 0.7:
         return True, verdict["rationale"]
