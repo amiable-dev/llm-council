@@ -84,6 +84,16 @@ class TestTierContractValidation:
         with pytest.raises(ValueError, match="(?i)tier|none"):
             validate_tier_contract(None)
 
+    def test_frontier_tier_contract_validates(self):
+        """frontier is a valid tier (ADR-022/027) — validation must accept it.
+
+        Pre-existing bug caught by the #406 council review: the validator's
+        tier whitelist omitted 'frontier' while create_tier_contract and the
+        rest of the tier system accept it.
+        """
+        contract = create_tier_contract("frontier")
+        assert validate_tier_contract(contract) is True
+
     def test_tier_contract_has_allowed_models(self):
         """TierContract must have at least one allowed model."""
         contract = create_tier_contract("high")

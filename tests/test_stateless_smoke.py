@@ -40,7 +40,10 @@ class TestTwoInstanceTaskStore:
         tid = a.create(kind="k")
         a.complete(tid, {"ok": 1})
         b.fail(tid, "late", "must not overwrite")  # racing instance
+        # BOTH instances must agree on the terminal state — asserting only
+        # the writer would miss a split-brain (#426 council review).
         assert a.get(tid)["status"] == "complete"
+        assert b.get(tid)["status"] == "complete"
 
 
 class TestTwoProcessSmoke:

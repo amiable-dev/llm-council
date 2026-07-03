@@ -253,7 +253,9 @@ def validate_tier_contract(contract: TierContract) -> bool:
     if not isinstance(contract, TierContract):
         raise ValueError(f"Expected TierContract, got {type(contract)}")
 
-    if contract.tier not in ("quick", "balanced", "high", "reasoning"):
+    # Keep in sync with tier_contract.py — frontier is a valid tier
+    # (ADR-022/027); its omission here rejected valid L1 contracts.
+    if contract.tier not in ("quick", "balanced", "high", "reasoning", "frontier"):
         raise ValueError(f"Invalid tier: {contract.tier}")
 
     if not contract.allowed_models or len(contract.allowed_models) == 0:
