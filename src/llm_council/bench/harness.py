@@ -45,6 +45,17 @@ def bench_max_usd() -> float:
         return 2.00
 
 
+def bench_unknown_item_usd() -> float:
+    """Conservative cap charge for items whose provider reported no cost
+    (#439 review): counting unknown as $0 would make worst-case spend
+    unbounded. Charged against CAP ACCOUNTING only — reported spend stays
+    actuals, never fabricated (ADR-011)."""
+    try:
+        return float(os.getenv("LLM_COUNCIL_BENCH_UNKNOWN_ITEM_USD", "0.10"))
+    except ValueError:
+        return 0.10
+
+
 def bench_monthly_usd() -> float:
     try:
         return float(os.getenv("LLM_COUNCIL_BENCH_MONTHLY_USD", "30.00"))
@@ -209,11 +220,16 @@ async def run_bench(
         async def council_runner(prompt: str) -> Dict[str, Any]:  # pragma: no cover
             return await run_council_with_fallback(prompt, bypass_cache=True)
 
+    # Cap accounting = actuals + conservative charges for unknown-cost items.
+    # NOTE (by design): the cap is checked BETWEEN items, never mid-item —
+    # a single item may overshoot; the abort is graceful, not mid-completion.
+    cap_charged = 0.0
     for item in items:
-        if run.total_cost_usd >= cap:
+        if cap_charged >= cap:
             run.aborted = (
-                f"per_run_cap: actual spend ${run.total_cost_usd:.2f} >= "
-                f"${cap:.2f} (LLM_COUNCIL_BENCH_MAX_USD) after "
+                f"per_run_cap: charged spend ${cap_charged:.2f} >= "
+                f"${cap:.2f} (LLM_COUNCIL_BENCH_MAX_USD; actuals "
+                f"${run.total_cost_usd:.2f} + unknown-cost charges) after "
                 f"{run.items_run}/{run.items_total} items"
             )
             break
@@ -237,6 +253,7 @@ async def run_bench(
         cost, cost_known = _extract_cost(result)
         failures = check_envelope(item, synthesis, score)
         run.total_cost_usd = round(run.total_cost_usd + cost, 6)
+        cap_charged = round(cap_charged + (cost if cost_known else bench_unknown_item_usd()), 6)
         run.cost_known = run.cost_known or cost_known
         run.items_run += 1
         if not failures:
@@ -295,7 +312,8 @@ def compare_to_baseline(
     path = baseline_path if baseline_path is not None else DEFAULT_BASELINE_PATH
     try:
         baseline = json.loads(path.read_text())
-    except OSError:
+    except (OSError, json.JSONDecodeError):
+        # Absent OR corrupt baseline (#439 review): report, never crash.
         return {"baseline": None}
     regressions = []
     for r in run.results:

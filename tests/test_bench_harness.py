@@ -222,3 +222,43 @@ class TestBaseline:
         cmp = compare_to_baseline(run, tmp_path / "missing.json")
         assert cmp == {"baseline": None}
         assert "No committed baseline" in format_report(run, cmp)
+
+
+class TestCouncilRound1:
+    @pytest.mark.asyncio
+    async def test_unknown_cost_items_charge_the_cap_conservatively(self, tmp_path, monkeypatch):
+        # #439 r1: items whose cost the provider didn't report counted $0
+        # against the cap — unbounded worst-case spend. Unknown-cost items
+        # now charge a conservative default against CAP ACCOUNTING ONLY
+        # (reported spend stays actuals — never fabricated).
+        monkeypatch.setenv("LLM_COUNCIL_BENCH_UNKNOWN_ITEM_USD", "0.50")
+        d = tmp_path / "ds"
+        d.mkdir()
+        for i in range(4):
+            _write_item(d, f"i{i}")
+
+        async def runner(prompt):
+            r = _fake_result("hello")
+            r["metadata"]["usage"]["total"] = {}  # no cost reported
+            return r
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.00,
+        )
+        # 2 x $0.50 conservative charges reach the $1 cap => abort partial.
+        assert run.exit_code == 2
+        assert run.items_run == 2
+        assert run.total_cost_usd == 0.0  # actuals never fabricated
+
+    def test_corrupt_baseline_reported_not_crash(self, tmp_path):
+        from llm_council.bench.harness import BenchRun
+
+        bp = tmp_path / "baseline.json"
+        bp.write_text("{corrupt")
+        run = BenchRun(
+            started_at="t", items_total=0, items_run=0,
+            items_passed=0, total_cost_usd=0.0, cost_known=False,
+        )
+        cmp = compare_to_baseline(run, bp)
+        assert cmp == {"baseline": None}
