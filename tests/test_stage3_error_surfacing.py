@@ -31,18 +31,25 @@ def _ok_status(content="SYNTHESIS: all good"):
     return fake
 
 
-_STAGE1 = [{"model": "m1", "response": "a"}, {"model": "m2", "response": "b"}]
-_STAGE2 = [
-    {"model": "m1", "ranking": "1. Response A", "parsed_ranking": {"ranking": ["Response A"]}}
-]
-_AGG = [{"model": "m1", "borda_score": 1.0, "rank": 1, "vote_count": 1}]
+def _stage1():
+    return [{"model": "m1", "response": "a"}, {"model": "m2", "response": "b"}]
+
+
+def _stage2():
+    return [
+        {"model": "m1", "ranking": "1. Response A", "parsed_ranking": {"ranking": ["Response A"]}}
+    ]
+
+
+def _agg():
+    return [{"model": "m1", "borda_score": 1.0, "rank": 1, "vote_count": 1}]
 
 
 @pytest.mark.asyncio
 async def test_failure_surfaces_status_and_detail(monkeypatch):
     monkeypatch.setattr(council_mod, "query_model_with_status", _failure_status())
     result, usage, verdict = await council_mod.stage3_synthesize_final(
-        "q", _STAGE1, _STAGE2, _AGG
+        "q", _stage1(), _stage2(), _agg()
     )
     text = result["response"]
     # Backward-compatible prefix retained…
@@ -63,17 +70,18 @@ async def test_timeout_failure_names_timeout(monkeypatch):
         _failure_status(status="timeout", error="Timeout after 90.0s"),
     )
     result, usage, verdict = await council_mod.stage3_synthesize_final(
-        "q", _STAGE1, _STAGE2, _AGG
+        "q", _stage1(), _stage2(), _agg()
     )
     assert result["error_status"] == "timeout"
     assert "Timeout" in result["response"]
+    assert result["error_detail"] == "Timeout after 90.0s"
 
 
 @pytest.mark.asyncio
 async def test_success_path_unchanged(monkeypatch):
     monkeypatch.setattr(council_mod, "query_model_with_status", _ok_status())
     result, usage, verdict = await council_mod.stage3_synthesize_final(
-        "q", _STAGE1, _STAGE2, _AGG
+        "q", _stage1(), _stage2(), _agg()
     )
     assert result["response"] == "SYNTHESIS: all good"
     assert "error_status" not in result
