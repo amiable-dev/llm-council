@@ -134,11 +134,18 @@ class TaskStore:
         return time.time() - created > self._ttl
 
     def _evict(self) -> None:
+        # Memory entries are capped unconditionally (round-3): even with a
+        # usable directory, per-write disk failures fall back to memory and
+        # must not accumulate unbounded.
+        while len(self._memory) > self._max_tasks:
+            self._memory.pop(next(iter(self._memory)))
         if self._dir is None:
-            while len(self._memory) > self._max_tasks:
-                self._memory.pop(next(iter(self._memory)))
             return
         try:
+            # Size-cap eviction deliberately orders by mtime (least recently
+            # UPDATED goes first) — distinct from TTL, which is absolute from
+            # created_at. An active long-running task should survive the size
+            # cap; the TTL still bounds its total lifetime.
             files = sorted(self._dir.glob("*.json"), key=lambda f: f.stat().st_mtime)
             for f in files[: max(0, len(files) - self._max_tasks)]:
                 f.unlink(missing_ok=True)
@@ -180,6 +187,10 @@ class TaskStore:
                 # capability ids must not be forgeable via state-transition calls.
                 logger.debug("complete() for unknown/expired task %s ignored", task_id)
                 return
+            if task.get("status") in ("complete", "failed"):
+                # Terminal states are first-writer-wins (round-3).
+                logger.debug("complete() on terminal task %s ignored", task_id)
+                return
             task["status"] = "complete"
             task["result"] = result
             self._write(task_id, task)
@@ -189,6 +200,9 @@ class TaskStore:
             task = self.get(task_id)
             if task is None:
                 logger.debug("fail() for unknown/expired task %s ignored", task_id)
+                return
+            if task.get("status") in ("complete", "failed"):
+                logger.debug("fail() on terminal task %s ignored", task_id)
                 return
             task["status"] = "failed"
             task["error_status"] = error_status

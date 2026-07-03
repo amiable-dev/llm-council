@@ -3,6 +3,7 @@
 import json
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -172,3 +173,32 @@ class TestCouncilRound2Findings:
         store.complete(tid, {"ok": 1})
         store.set_progress(tid, {"stage": 2})  # late progress after completion
         assert store.get(tid)["status"] == "complete"
+
+
+class TestCouncilRound3Findings:
+    def test_terminal_states_are_first_writer_wins(self, tmp_path):
+        store = TaskStore(base_dir=tmp_path)
+        tid = store.create(kind="k")
+        store.fail(tid, "timeout", "deadline exceeded")
+        store.complete(tid, {"late": True})  # must not overwrite failed
+        assert store.get(tid)["status"] == "failed"
+        tid2 = store.create(kind="k")
+        store.complete(tid2, {"ok": 1})
+        store.fail(tid2, "late", "ignored")  # must not overwrite complete
+        assert store.get(tid2)["status"] == "complete"
+
+    def test_memory_fallback_entries_are_capped_even_with_dir_set(self, tmp_path):
+        # Per-write disk failures fall back to memory while _dir is set;
+        # those entries must still respect max_tasks.
+        store = TaskStore(base_dir=tmp_path, max_tasks=3)
+        real_write_text = Path.write_text
+
+        def failing_write(self, *a, **kw):
+            if self.parent == tmp_path and self.name.endswith(".tmp"):
+                raise OSError("disk full")
+            return real_write_text(self, *a, **kw)
+
+        with mock.patch.object(Path, "write_text", failing_write):
+            for _ in range(6):
+                store.create(kind="k")
+        assert len(store._memory) <= 3
