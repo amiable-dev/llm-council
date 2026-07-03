@@ -16,9 +16,11 @@ class TestStage2ProgressWiring:
         from llm_council import council
 
         messages = []
+        steps = []
 
         async def on_progress(step, total, msg):
             messages.append(msg)
+            steps.append((step, total))
 
         async def fake_stage1(*a, **kw):
             return (
@@ -57,6 +59,10 @@ class TestStage2ProgressWiring:
             # offset into the overall step budget.
             await stage2_progress(1, 2, "m/a reviewed (1/2)")
             assert any("Stage 2: m/a reviewed (1/2)" in m for m in messages)
+            # Offset math: stage-2 completions land AFTER the stage-1 block
+            # (requested_models + completed) within the overall step budget.
+            requested_models, total_steps = 2, 2 * 2 + 3
+            assert (requested_models + 1, total_steps) in steps
 
     @pytest.mark.asyncio
     async def test_stage2_gets_no_progress_without_consumer(self):
