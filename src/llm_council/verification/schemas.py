@@ -311,6 +311,20 @@ class VerifyResponse(BaseModel):
         default=None,
         description="Non-verdict error marker (e.g. 'input_too_large'); None for a real verdict",
     )
+    # ADR-047 P1 (#413): machine-readable UNCLEAR cause. None unless
+    # verdict == "unclear" (and None on non-deliberated cap results, where
+    # the `error` marker governs). Values: infra_failure | low_confidence
+    # | timeout. Exit code stays 2 for compat — this field is additive.
+    unclear_reason: Optional[str] = Field(
+        default=None,
+        description=(
+            "Why the verdict is unclear: infra_failure (chairman call errored"
+            " — retry after checking billing/auth), low_confidence"
+            " (deliberation completed below threshold — accept-and-audit per"
+            " policy), timeout (global deadline — re-tier or reduce scope)."
+            " None for pass/fail."
+        ),
+    )
     # ADR-040: Timeout guardrail fields
     timeout_fired: bool = Field(
         default=False,

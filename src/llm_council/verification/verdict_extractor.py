@@ -407,3 +407,30 @@ def build_verification_result(
         "blocking_issues": blocking_issues,
         "rationale": rationale,
     }
+
+
+def derive_unclear_reason(
+    verdict: str,
+    stage3_result: Any,
+    timeout_fired: bool = False,
+) -> Optional[str]:
+    """ADR-047 P1: machine-readable cause for an UNCLEAR verdict (#413).
+
+    Returns one of {"infra_failure", "low_confidence", "timeout"} when the
+    verdict is "unclear", else None. Lets automation apply distinct policies
+    (retry infra, accept-and-audit low confidence, re-tier timeouts) instead
+    of treating every exit-code-2 identically.
+
+    - timeout: the ADR-040 global deadline fired (checked first — a starved
+      chairman is a scheduling problem, not an infra one)
+    - infra_failure: the chairman call itself errored (#403 error_status —
+      billing/auth/rate-limit/transport)
+    - low_confidence: deliberation completed; confidence below threshold
+    """
+    if verdict != "unclear":
+        return None
+    if timeout_fired:
+        return "timeout"
+    if isinstance(stage3_result, dict) and stage3_result.get("error_status"):
+        return "infra_failure"
+    return "low_confidence"

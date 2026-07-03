@@ -89,6 +89,7 @@ Verification (ADR-034/040/041) — `verification/api.py`
 - **Durable partial state:** `partial_state` is updated after each stage and survives `CancelledError`, so a timeout still returns `completed_stages`. `VerifyResponse` carries `timeout_fired`, `completed_stages`, and (ADR-041) `timing` / `input_metrics`.
 - **Per-tier input caps** `TIER_MAX_CHARS` (quick 15K, balanced 30K, high/reasoning 50K). Per-file truncation (#342) is surfaced as an `expansion_warnings` entry rather than silently dropped; `reasoning`/`high` can read a full 50K file.
 - Performance tracker is wired on success only, wrapped in try/except so telemetry never fails verification.
+- **UNCLEAR disambiguation (ADR-047 P1, #413):** `unclear_reason ∈ {infra_failure, low_confidence, timeout}` on every unclear verdict (`derive_unclear_reason` in `verdict_extractor.py`; timeout checked first, then #403 `error_status`, else low_confidence). Exit code stays 2 — automation routes on the reason: retry infra, accept-and-audit low confidence, re-tier timeouts. None when `error` marker is set (non-deliberated cap results).
 
 ## Key design decisions
 

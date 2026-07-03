@@ -47,6 +47,7 @@ from llm_council.verification.transcript import (
 from llm_council.verification.verdict_extractor import (
     build_verification_result,
     extract_rubric_scores_from_rankings,
+    derive_unclear_reason,
     extract_verdict_from_synthesis,
     calculate_confidence_from_agreement,
 )
@@ -581,6 +582,8 @@ async def _run_verification_pipeline(
     verdict = verification_output["verdict"]
     confidence = verification_output["confidence"]
     exit_code = _verdict_to_exit_code(verdict)
+    # ADR-047 P1 (#413): disambiguate UNCLEAR for automation.
+    unclear_reason = derive_unclear_reason(verdict, stage3_result)
 
     # ADR-041: Build timing summary
     total_elapsed_ms = int((time.monotonic() - pipeline_start) * 1000)
@@ -618,6 +621,7 @@ async def _run_verification_pipeline(
         "verdict": verdict,
         "confidence": confidence,
         "exit_code": exit_code,
+        "unclear_reason": unclear_reason,
         "rubric_scores": verification_output["rubric_scores"],
         "blocking_issues": verification_output["blocking_issues"],
         "rationale": verification_output["rationale"],
@@ -835,6 +839,7 @@ async def run_verification(
                 "verdict": "unclear",
                 "confidence": salvaged_confidence,
                 "exit_code": 2,
+                "unclear_reason": "timeout",  # ADR-047 P1 (#413)
                 "rubric_scores": salvaged_rubric,
                 "blocking_issues": [],
                 "rationale": (

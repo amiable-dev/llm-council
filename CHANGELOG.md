@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **UNCLEAR disambiguation (ADR-047 P1, #413)** — `VerifyResponse.unclear_reason` splits exit-code-2 into machine-readable causes: `infra_failure` (chairman call errored per #403 `error_status` — retry after checking billing/auth), `low_confidence` (deliberation completed below threshold — accept-and-audit per policy), `timeout` (ADR-040 global deadline — re-tier or reduce scope). Exit code stays 2 (compat, additive field); surfaced in the MCP verify output table with routing hints; `None` on pass/fail and on non-deliberated cap results (where the `error` marker governs).
+
 ## [0.30.0] - 2026-07-03
 
 **Streaming Deliberation (ADR-046)** — epic [#412](https://github.com/amiable-dev/llm-council/issues/412). The 30–600s spinner becomes a live deliberation view: rich per-model SSE events in a versioned envelope, opt-in chairman token streaming that assembles the identical final result, per-reviewer MCP progress, and the enabling `council.py` split (101K→44K, below the Council review cap). Non-streaming paths are byte-identical throughout.

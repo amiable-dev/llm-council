@@ -431,6 +431,13 @@ async def verify(
     the verification stages (evidence expansion, council collection, ranking,
     verdict) — best-effort, never affects the verdict.
 
+    UNCLEAR disambiguation (ADR-047 P1): an unclear verdict carries
+    `unclear_reason` — infra_failure (chairman call errored: check
+    billing/auth then RETRY, do not treat as a review), low_confidence
+    (deliberation completed below threshold: accept-and-audit per policy
+    when blocking issues are empty), or timeout (re-tier or reduce scope).
+    Exit code stays 2 for all three; the reason is the routing signal.
+
     Args:
         snapshot_id: Git commit SHA to verify (7-40 hex characters).
         target_paths: Optional list of specific file paths to verify.

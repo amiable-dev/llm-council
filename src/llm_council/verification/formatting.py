@@ -88,6 +88,17 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     confidence = result.get("confidence", 0.0)
     lines.append(f"| Confidence | {confidence:.2f} |")
 
+    # ADR-047 P1 (#413): machine-readable UNCLEAR cause
+    unclear_reason = result.get("unclear_reason")
+    if unclear_reason:
+        hints = {
+            "infra_failure": "chairman call errored — check billing/auth, then retry",
+            "low_confidence": "deliberation completed below threshold — accept-and-audit per policy",
+            "timeout": "global deadline fired — re-tier or reduce scope",
+        }
+        hint = hints.get(unclear_reason, "")
+        lines.append(f"| Unclear reason | {unclear_reason} ({hint}) |")
+
     # Rubric scores
     rubric_scores = result.get("rubric_scores", {})
     for key, display_name in RUBRIC_DIMENSIONS:
