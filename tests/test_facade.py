@@ -117,3 +117,24 @@ class TestDocumentedQuickstartShape:
         assert result.synthesis == "ok"
         assert "synthesis_deadline" not in run.call_args.kwargs
         assert "per_model_timeout" not in run.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_verdict_type_enum_instance_accepted(self):
+        # #450 r2: a public API should take the enum directly, not only str.
+        from llm_council import consult_council
+        from llm_council.verdict import VerdictType
+
+        with patch(
+            "llm_council.facade.run_council_with_fallback",
+            new_callable=AsyncMock,
+            return_value={"synthesis": "", "metadata": {}, "model_responses": {}},
+        ) as run:
+            await consult_council("q", verdict_type=VerdictType.BINARY)
+        assert run.call_args.kwargs["verdict_type"] == VerdictType.BINARY
+
+    @pytest.mark.asyncio
+    async def test_non_string_verdict_type_raises_valueerror_not_attributeerror(self):
+        from llm_council import consult_council
+
+        with pytest.raises(ValueError, match="verdict_type"):
+            await consult_council("q", verdict_type=42)

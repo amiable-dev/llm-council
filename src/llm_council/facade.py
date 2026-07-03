@@ -70,13 +70,18 @@ async def consult_council(
             a bad verdict type changes the OUTPUT CONTRACT, so it must not
             be silently coerced).
     """
-    try:
-        verdict = VerdictType(verdict_type.lower())
-    except ValueError:
-        valid = ", ".join(v.value for v in VerdictType)
-        raise ValueError(
-            f"unknown verdict_type {verdict_type!r}; expected one of: {valid}"
-        ) from None
+    # Accept the enum directly or its string value (#450 review) — any other
+    # type is a ValueError, never an AttributeError.
+    if isinstance(verdict_type, VerdictType):
+        verdict = verdict_type
+    else:
+        try:
+            verdict = VerdictType(str(verdict_type).lower())
+        except ValueError:
+            valid = ", ".join(v.value for v in VerdictType)
+            raise ValueError(
+                f"unknown verdict_type {verdict_type!r}; expected one of: {valid}"
+            ) from None
 
     tier = confidence if confidence in TIER_MODEL_POOLS else "high"
     tier_contract = create_tier_contract(tier)
