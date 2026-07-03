@@ -45,6 +45,7 @@ def bench_command(
     set_flag: bool,
     output_format: str,
     configs: str = "council",
+    publish: str = None,
 ) -> int:
     """ADR-048 bench CLI. Returns the process exit code (0/1/2)."""
     import asyncio
@@ -148,6 +149,11 @@ def bench_command(
     )
     comparison = harness.compare_to_baseline(run)
     sys.stdout.write(harness.format_report(run, comparison, output_format) + "\n")
+    if publish:
+        from .bench.publication import write_results_page
+
+        page = write_results_page(run, Path(publish), dataset_version=Path(dataset).name)
+        sys.stdout.write(f"Results page regenerated at {page}\n")
     return run.exit_code
 
 
@@ -335,6 +341,10 @@ def main():
                               help="(baseline) write the snapshot")
     bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format")
     bench_parser.add_argument(
+        "--publish", type=str, default=None,
+        help="(report) also regenerate the docs results page at this path",
+    )
+    bench_parser.add_argument(
         "--configs", type=str, default="council",
         help="(matrix) comma list: council, graduated, solo:<model>, solo-members",
     )
@@ -438,6 +448,7 @@ def main():
                 set_flag=args.set_baseline_flag,
                 output_format=args.bench_format,
                 configs=args.configs,
+                publish=args.publish,
             )
         )
     elif args.command == "calibration-report":
