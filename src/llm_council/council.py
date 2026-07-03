@@ -432,6 +432,41 @@ async def run_council_with_fallback(
     total_steps = requested_models * 2 + 3  # stage1 + stage2 + synthesis + finalize
     await report_progress(0, total_steps, "Starting council...")
 
+    # ADR-046 P1: rich per-model stream events. Wired ONLY when a stream
+    # consumer exists (SSE on_event or webhooks) — otherwise the callbacks
+    # stay None and every stage takes its exact pre-P1 code path.
+    on_model_complete = None
+    on_review_event = None
+    if on_event is not None or webhook_config is not None:
+
+        async def on_model_complete(model: str, model_result: Dict[str, Any]) -> None:
+            try:
+                await event_bridge.emit(
+                    LayerEvent(
+                        event_type=LayerEventType.L3_STAGE1_RESPONSE,
+                        data={
+                            "model": model,
+                            "response": model_result.get("content"),
+                            "status": model_result.get("status"),
+                            "latency_ms": model_result.get("latency_ms"),
+                            "usage": model_result.get("usage"),
+                        },
+                    )
+                )
+            except Exception:
+                pass  # streaming is best-effort, never blocks deliberation
+
+        async def on_review_event(kind: str, data: Dict[str, Any]) -> None:
+            try:
+                event_type = (
+                    LayerEventType.L3_EARLY_CONSENSUS_TERMINATION
+                    if kind == "early_termination"
+                    else LayerEventType.L3_STAGE2_REVIEW
+                )
+                await event_bridge.emit(LayerEvent(event_type=event_type, data=data))
+            except Exception:
+                pass
+
     # Generate session_id early to share between bias persistence and telemetry
     session_id = str(uuid.uuid4())
 
@@ -447,6 +482,7 @@ async def run_council_with_fallback(
             user_query,
             timeout=per_model_timeout,  # ADR-012 Section 5: Tier-sovereign timeout
             on_progress=stage1_progress,
+            on_model_complete=on_model_complete,  # ADR-046 P1
             shared_raw_responses=shared_raw_responses,  # Preserve state on timeout
             models=council_models,  # ADR-022: Use tier-appropriate models
         )
@@ -485,7 +521,7 @@ async def run_council_with_fallback(
         # Stage 2: Peer review
         await report_progress(requested_models + 1, total_steps, "Stage 2: Peer review...")
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
-            user_query, responses_for_review
+            user_query, responses_for_review, on_review_event=on_review_event
         )
 
         # ADR-027: Track shadow votes for frontier tier
@@ -542,6 +578,18 @@ async def run_council_with_fallback(
                 logging.getLogger(__name__).info(
                     "Deadlock detected. Escalating from BINARY to TIE_BREAKER."
                 )
+
+        # ADR-046 P1: announce synthesis start to stream consumers
+        if on_event is not None or webhook_config is not None:
+            try:
+                await event_bridge.emit(
+                    LayerEvent(
+                        event_type=LayerEventType.L3_STAGE3_START,
+                        data={"chairman": _get_chairman_model()},
+                    )
+                )
+            except Exception:
+                pass
 
         # Stage 3: Full synthesis (with verdict type support)
         stage3_result, stage3_usage, verdict_result = await stage3_synthesize_final(

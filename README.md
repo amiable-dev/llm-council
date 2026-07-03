@@ -313,6 +313,21 @@ Any MCP client can use the server by running:
 llm-council
 ```
 
+### Streaming Deliberation (SSE)
+
+`GET /v1/council/stream?prompt=...` streams the deliberation live (ADR-046). Beyond the coarse stage events, the stream now emits **rich per-model events**, each wrapped in a versioned envelope (`v: 1`, `session_id`, `ts`, monotonic `seq`):
+
+| Event | Payload | When |
+|---|---|---|
+| `stage1.response` | `model`, `response`, `latency_ms`, `usage` | each model's answer, as it lands |
+| `stage2.review` | `reviewer`, `ranking`, `parse_ok` | each peer review, as it lands |
+| `consensus.early_termination` | `leader`, `votes_saved`, … | ADR-044 early consensus (flag-on) |
+| `stage3.start` | `chairman` | synthesis begins |
+| `council.complete` | full result | terminal |
+| `council.error` | `error` | terminal |
+
+Schema changes are additive-only within `v: 1`. Non-streaming endpoints are byte-identical — the rich events are wired only when a stream consumer is attached.
+
 ### Server Discovery (MCP Server Card)
 
 The HTTP server (`llm-council serve`) publishes an [MCP Server Card](https://github.com/modelcontextprotocol/experimental-ext-server-card) — public discovery metadata generated from the live tool registry — at:

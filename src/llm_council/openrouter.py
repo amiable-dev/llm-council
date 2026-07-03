@@ -237,6 +237,7 @@ async def query_models_with_progress(
     disable_tools: bool = False,
     reasoning_params: Optional["ReasoningParams"] = None,
     shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
+    on_model_complete: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Query multiple models with progress callbacks and structured status (ADR-012).
@@ -284,6 +285,13 @@ async def query_models_with_progress(
         model, result = await coro
         results[model] = result  # Write to shared dict immediately
         completed += 1
+
+        # ADR-046 P1: per-model completion hook (soft-fail, streaming only)
+        if on_model_complete is not None:
+            try:
+                await on_model_complete(model, result)
+            except Exception:
+                pass
 
         if on_progress:
             status_emoji = "✓" if result["status"] == STATUS_OK else "✗"

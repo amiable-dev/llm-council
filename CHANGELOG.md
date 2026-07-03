@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Rich SSE stage events (ADR-046 P1, #409)** — the `/v1/council/stream` endpoint now emits per-model events as deliberation progresses: `stage1.response` (each model's answer as it lands), `stage2.review` (each peer review, with parsed ranking + `parse_ok`), `consensus.early_termination` (ADR-044), and `stage3.start` — every event wrapped in a versioned envelope (`v: 1`, `session_id`, `ts`, monotonic `seq`; additive-only). Terminal events keep their ADR-025 names (`council.complete`/`council.error`) for consumer compat. Non-streaming paths are byte-identical: the callbacks are wired only when a stream consumer is attached (test-pinned batch path). Also fixes a latent bug where the non-gateway query path passed `shared_results` positionally into `reasoning_params`.
+
 ### Changed
 
 - **council.py split below the Council review cap (ADR-046 P0, #408)** — verbatim moves into `council_stages.py` (stage functions, 40K), `council_rankings.py` (ranking parse/Borda/shadow votes, 17K), and `council_usage.py` (shared constants + ADR-011 usage accounting, 4K), leaving `council.py` at 44K (was 101K). Full back-compat: `council.py` re-exports every moved name; patched-attr config semantics preserved; suite count identical. Unblocks self-review of ADR-046 streaming changes.

@@ -261,6 +261,7 @@ async def query_models_with_progress(
     timeout: float = 25.0,
     disable_tools: bool = False,
     shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
+    on_model_complete: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Query multiple models with progress callbacks and structured status (ADR-012).
@@ -319,6 +320,13 @@ async def query_models_with_progress(
             results[model] = result
             completed += 1
 
+            # ADR-046 P1: per-model completion hook (soft-fail, streaming only)
+            if on_model_complete is not None:
+                try:
+                    await on_model_complete(model, result)
+                except Exception:
+                    pass
+
             if on_progress:
                 status_emoji = "✓" if result["status"] == STATUS_OK else "✗"
                 model_short = model.split("/")[-1]
@@ -334,5 +342,11 @@ async def query_models_with_progress(
         return results
     else:
         return await _direct_query_models_with_progress(
-            models, messages, on_progress, timeout, disable_tools, shared_results
+            models,
+            messages,
+            on_progress,
+            timeout,
+            disable_tools,
+            shared_results=shared_results,
+            on_model_complete=on_model_complete,
         )

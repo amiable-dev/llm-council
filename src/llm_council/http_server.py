@@ -279,12 +279,19 @@ async def council_stream(
     This endpoint streams real-time events as the council progresses
     through its deliberation stages. Events are sent in SSE format.
 
-    **Event Types:**
+    **Event Types** (every event carries the ADR-046 v1 envelope:
+    `v`, `session_id`, `ts`, `seq`):
     - `council.deliberation_start`: Council execution starting
+    - `stage1.response`: A model's stage-1 answer landed (model, response,
+      latency_ms, usage) — one per model, as each completes
     - `council.stage1.complete`: Stage 1 responses collected
+    - `stage2.review`: A reviewer's ranking landed (reviewer, ranking,
+      parse_ok) — one per reviewer
+    - `consensus.early_termination`: ADR-044 early-consensus fired
     - `council.stage2.complete`: Stage 2 rankings complete
-    - `council.complete`: Final synthesis ready (includes full result)
-    - `council.error`: An error occurred
+    - `stage3.start`: Chairman synthesis starting (chairman)
+    - `council.complete`: Final synthesis ready (includes full result) — terminal
+    - `council.error`: An error occurred — terminal
 
     **Example Client (JavaScript):**
     ```javascript

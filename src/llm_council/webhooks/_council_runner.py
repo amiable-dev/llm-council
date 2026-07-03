@@ -14,6 +14,7 @@ Usage:
 """
 
 import asyncio
+import time
 import uuid
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -26,6 +27,31 @@ async def run_council(
     prompt: str,
     models: Optional[str] = None,
     api_key: Optional[str] = None,
+) -> AsyncIterator[Dict[str, Any]]:
+    """Run deliberation, yielding events in the ADR-046 versioned envelope.
+
+    Every event carries ``v`` (schema version, additive changes only),
+    ``session_id``, ``ts`` (epoch seconds), and a strictly increasing ``seq``
+    alongside the existing ``{"event", "data"}`` shape.
+    """
+    request_id = str(uuid.uuid4())
+    seq = 0
+    async for event in _run_council_events(prompt, models, api_key, request_id):
+        seq += 1
+        yield {
+            "v": 1,
+            "session_id": request_id,
+            "ts": time.time(),
+            "seq": seq,
+            **event,
+        }
+
+
+async def _run_council_events(
+    prompt: str,
+    models: Optional[str] = None,
+    api_key: Optional[str] = None,
+    request_id: Optional[str] = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """Run council deliberation and yield events in real-time.
 
@@ -45,7 +71,8 @@ async def run_council(
         - council.complete: Final synthesis ready (includes full result)
         - council.error: An error occurred
     """
-    request_id = str(uuid.uuid4())
+    if request_id is None:
+        request_id = str(uuid.uuid4())
 
     # Get the current event loop for thread-safe callback scheduling
     loop = asyncio.get_running_loop()
@@ -93,8 +120,12 @@ async def run_council(
     webhook_config = WebhookConfig(
         url="internal://sse-capture",  # Special marker URL (not dispatched)
         events=[
+            WebhookEventType.STAGE1_RESPONSE.value,  # ADR-046 P1
             WebhookEventType.STAGE1_COMPLETE.value,
+            WebhookEventType.STAGE2_REVIEW.value,  # ADR-046 P1
             WebhookEventType.STAGE2_COMPLETE.value,
+            WebhookEventType.CONSENSUS_EARLY_TERMINATION.value,  # ADR-044/046
+            WebhookEventType.STAGE3_START.value,  # ADR-046 P1
             WebhookEventType.ERROR.value,
         ],
     )

@@ -62,6 +62,12 @@ All SSE events are `{"event": <name>, "data": {…}}` with a shared envelope
 - `error`: `{stage, error_status, error_detail}` (#403 semantics) — terminal
 Schema is versioned (`v` field); additive changes only.
 
+**P1 implementation note (2026-07-03):** the terminal events keep their
+existing ADR-025 wire names `council.complete` / `council.error` — renaming
+to `result`/`error` would break existing SSE consumers, violating this ADR's
+own additive-only rule. The envelope (`v`/`session_id`/`ts`/`seq`) and all
+new per-model events ship exactly as specified above.
+
 ## Consequences
 
 **Positive:** the spinner becomes a live deliberation view; ecosystem

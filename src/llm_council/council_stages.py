@@ -135,6 +135,7 @@ async def stage1_collect_responses_with_status(
     on_progress: Optional[ProgressCallback] = None,
     shared_raw_responses: Optional[Dict[str, Dict[str, Any]]] = None,
     models: Optional[List[str]] = None,
+    on_model_complete: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int], Dict[str, Dict[str, Any]]]:
     """
     Stage 1: Collect individual responses with per-model status tracking (ADR-012).
@@ -170,6 +171,7 @@ async def stage1_collect_responses_with_status(
         on_progress=on_progress,
         timeout=timeout,
         shared_results=shared_raw_responses,
+        on_model_complete=on_model_complete,  # ADR-046 P1: per-model stream event
     )
 
     # Format results and aggregate usage
@@ -448,6 +450,7 @@ async def stage2_collect_rankings(
     timeout: float = 120.0,
     models: Optional[List[str]] = None,
     on_progress: Optional[Callable[[int, int, str], Awaitable[None]]] = None,
+    on_review_event: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str], Dict[str, int]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -621,7 +624,7 @@ Now provide your evaluation and ranking:"""
     # ADR-044 P2: the incremental path is also used (without progress) when
     # early-consensus termination is enabled, since cancellation requires
     # observing completions one at a time.
-    if on_progress is not None or early_consensus_enabled():
+    if on_progress is not None or on_review_event is not None or early_consensus_enabled():
         # ADR-040 Option D: Use asyncio.as_completed for per-model progress reporting
         # This ensures one slow reviewer doesn't block progress for completed ones
         tasks = {
@@ -651,6 +654,23 @@ Now provide your evaluation and ranking:"""
                         if task_result is result:
                             responses[model] = result
                             completed_count += 1
+                            # ADR-046 P1: per-reviewer stream event (soft-fail)
+                            if on_review_event is not None and result is not None:
+                                try:
+                                    _rev_parsed = parse_ranking_from_text(
+                                        result.get("content", "")
+                                    )
+                                    await on_review_event(
+                                        "review",
+                                        {
+                                            "reviewer": model,
+                                            "ranking": _rev_parsed.get("ranking", []),
+                                            "parse_ok": bool(_rev_parsed.get("ranking"))
+                                            and not _rev_parsed.get("parse_error", False),
+                                        },
+                                    )
+                                except Exception:
+                                    pass
                             model_short = model.split("/")[-1] if "/" in model else model
                             if on_progress is not None:
                                 try:
@@ -681,6 +701,19 @@ Now provide your evaluation and ranking:"""
                         if not task.done():
                             task.cancel()
                     ec_terminated = True
+                    if on_review_event is not None:
+                        try:
+                            await on_review_event(
+                                "early_termination",
+                                {
+                                    "leader": leader,
+                                    "votes_saved": len(remaining),
+                                    "reviewers_cancelled": remaining,
+                                    "est_cost_saved_usd": saved_cost,
+                                },
+                            )
+                        except Exception:
+                            pass
                     try:
                         emit_layer_event(
                             LayerEventType.L3_EARLY_CONSENSUS_TERMINATION,
