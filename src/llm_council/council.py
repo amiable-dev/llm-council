@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Optional, Callable, Aw
 from llm_council.gateway_adapter import (
     query_models_parallel,
     query_model,
+    query_model_with_status,
     query_models_with_progress,
     STATUS_OK,
     STATUS_TIMEOUT,
@@ -1656,22 +1657,46 @@ STAGE 2 - Peer Rankings:
     # Query the chairman model
     # Disable tools to prevent prompt injection via tool invocation
     # ADR-040: Pass timeout parameter instead of relying on default 120s
-    response = await query_model(
+    # #397: use the status-preserving variant — query_model collapses every
+    # failure (billing 402, auth, rate-limit, timeout) into None, which made
+    # the 2026-07-02 billing outage undiagnosable ("dead model" misdiagnosis).
+    status_response = await query_model_with_status(
         _get_chairman_model(), messages, disable_tools=True, timeout=timeout
     )
 
     total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-    if response is None:
-        # Fallback if chairman fails
+    if status_response.get("status") != STATUS_OK:
+        # Fallback if chairman fails — SURFACE the status + underlying error
+        # so operators can tell an infra outage apart from a code defect.
+        error_status = status_response.get("status", "error")
+        error_detail = status_response.get("error", "no detail returned")
+        logger.warning(
+            "stage-3 chairman synthesis failed: %s — %s (model=%s, latency=%sms)",
+            error_status,
+            error_detail,
+            _get_chairman_model(),
+            status_response.get("latency_ms"),
+        )
         return (
             {
                 "model": _get_chairman_model(),
-                "response": "Error: Unable to generate final synthesis.",
+                "response": (
+                    "Error: Unable to generate final synthesis "
+                    f"({error_status}: {error_detail})"
+                ),
+                "error_status": error_status,
+                "error_detail": error_detail,
             },
             total_usage,
             None,
         )
+
+    response = {
+        "content": status_response.get("content"),
+        "reasoning_details": status_response.get("reasoning_details"),
+        "usage": status_response.get("usage", {}),
+    }
 
     # Capture usage
     usage = response.get("usage", {})
