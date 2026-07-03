@@ -397,8 +397,9 @@ def build_verification_result(
     if verdict in ("fail", "unclear"):
         blocking_issues = extract_blocking_issues(stage3_result)
 
-    # Get rationale from synthesis
-    rationale = stage3_result.get("response", "No synthesis available.")
+    # Get rationale from synthesis (None-coalesced like the sibling
+    # extractors — a missing/None stage3_result must not raise, #434 review)
+    rationale = (stage3_result or {}).get("response") or "No synthesis available."
 
     return {
         "verdict": verdict,

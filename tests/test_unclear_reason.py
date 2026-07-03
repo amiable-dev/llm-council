@@ -98,3 +98,17 @@ class TestTimeoutPathSetsReason:
         assert result["verdict"] == "unclear"
         assert result["unclear_reason"] == "timeout"
         assert result["exit_code"] == 2  # compat: exit code unchanged
+
+
+class TestCouncilRound1:
+    def test_build_verification_result_survives_none_stage3(self):
+        # #434 r1: rationale extraction used a bare .get on stage3_result —
+        # None (chairman never produced a dict) raised AttributeError while
+        # every sibling extractor already None-coalesces.
+        from llm_council.verification.verdict_extractor import (
+            build_verification_result,
+        )
+
+        out = build_verification_result([], [], None, confidence_threshold=0.7)
+        assert out["verdict"] == "unclear"
+        assert isinstance(out["rationale"], str)
