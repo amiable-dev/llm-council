@@ -134,7 +134,7 @@ class TestStage3TimeoutFix:
         stage1_results = [{"model": "m1", "response": "Answer"}]
         stage2_results = [{"model": "m1", "ranking": "ranked"}]
 
-        with patch("llm_council.council.query_model", new_callable=AsyncMock) as mock_qm:
+        with patch("llm_council.council.query_model_with_status", new_callable=AsyncMock) as mock_qm:
             mock_qm.return_value = {
                 "content": "Synthesis",
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},

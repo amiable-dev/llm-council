@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stage-3 chairman failures no longer swallow the underlying error (#397)** — `stage3_synthesize_final` used `query_model`, which collapses every failure (billing 402, auth, rate-limit, timeout) into `None`, so the fallback emitted only 'Error: Unable to generate final synthesis.' During the 2026-07-02 OpenRouter billing outage this made an infra failure look like a dead chairman model. Stage 3 now uses the status-preserving call and surfaces the failure class and detail in the synthesis text (`… (auth_error: Payment required (402): …)`), in structured `error_status`/`error_detail` fields, and in a warning log.
+
 ## [0.28.0] - 2026-07-03
 
 **Compute-Optimal Deliberation (ADR-044)** — epic [#394](https://github.com/amiable-dev/llm-council/issues/394). The write-only performance index (ADR-026 P3) and cost-per-quality signals (ADR-011 P3) now power adaptive routing: performance-aware selection, early consensus termination, and a graduated deliberation-depth cascade. Everything is **default-OFF**, flag-gated, and LayerEvent-audited (route receipts); flag-off behaviour is byte-identical. Supersedes draft ADRs 039 (LLMRouter) and 043 (Pareto Router).
