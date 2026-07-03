@@ -38,13 +38,25 @@ class TestStage2ProgressWiring:
             patch.object(council, "stage3_synthesize_final", new_callable=AsyncMock) as s3,
             patch.object(council, "stage1_5_normalize_styles", new_callable=AsyncMock) as s15,
         ):
-            s15.return_value = ([{"model": "m/a", "response": "A"}], {})
+            s15.return_value = (
+                [
+                    {"model": "m/a", "response": "A"},
+                    {"model": "m/b", "response": "B"},
+                ],
+                {},
+            )
             s2.return_value = ([], {}, {})
             s3.return_value = ({"model": "c", "response": "s"}, {}, None)
             await council.run_council_with_fallback(
                 "q", bypass_cache=True, on_progress=on_progress
             )
-            assert s2.call_args.kwargs.get("on_progress") is not None
+            assert s2.await_count == 1
+            stage2_progress = s2.call_args.kwargs.get("on_progress")
+            assert stage2_progress is not None
+            # The wrapper must actually deliver to the consumer, prefixed and
+            # offset into the overall step budget.
+            await stage2_progress(1, 2, "m/a reviewed (1/2)")
+            assert any("Stage 2: m/a reviewed (1/2)" in m for m in messages)
 
     @pytest.mark.asyncio
     async def test_stage2_gets_no_progress_without_consumer(self):
@@ -71,6 +83,7 @@ class TestStage2ProgressWiring:
             s2.return_value = ([], {}, {})
             s3.return_value = ({"model": "c", "response": "s"}, {}, None)
             await council.run_council_with_fallback("q", bypass_cache=True)
+            assert s2.await_count == 1
             assert s2.call_args.kwargs.get("on_progress") is None
 
 
