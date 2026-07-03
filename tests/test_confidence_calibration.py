@@ -210,3 +210,31 @@ class TestCouncilRound1:
         ]
         summary = analyze_corpus(rec)
         assert summary["verdicts"] == {"unclear": 1, "fail": 1}
+
+
+class TestCouncilRound2:
+    def test_tied_confidence_values_pool_to_mean(self):
+        # #435 r2: sorted() orders ties by y ascending, so the >-only merge
+        # never pooled tied x values — calibrate(0.9) returned the FIRST tied
+        # y (0.0) instead of the mean. Real corpora cluster at 0.95/1.0.
+        points = pav_fit([(0.9, 0.0), (0.9, 1.0)])
+        assert points == [(0.9, 0.5)]
+
+    def test_ties_then_monotonic_sequence(self):
+        points = pav_fit([(0.5, 0.0), (0.9, 1.0), (0.9, 0.0), (1.0, 1.0)])
+        xs = [x for x, _ in points]
+        ys = [y for _, y in points]
+        assert xs == sorted(xs) and len(set(xs)) == len(xs)  # unique x
+        assert ys == sorted(ys)  # monotonic
+
+    def test_unparseable_disposition_lines_logged(self, tmp_path, caplog):
+        import logging
+
+        from llm_council.verification.calibration import load_dispositions
+
+        p = tmp_path / "d.jsonl"
+        p.write_text('{broken\n{"verification_id": "v1", "upheld": true}\n')
+        with caplog.at_level(logging.WARNING, logger="llm_council.verification.calibration"):
+            d = load_dispositions(p)
+        assert d == {"v1": True}
+        assert any("disposition" in r.message for r in caplog.records)

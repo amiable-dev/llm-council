@@ -118,11 +118,17 @@ def pav_fit(pairs: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
     """
     if not pairs:
         return []
-    data = sorted(pairs)
+    # Pre-aggregate tied x values (#435 r2): sorted() orders ties by y
+    # ascending, so the strictly-greater merge below never pooled them —
+    # leaving duplicate x breakpoints whose FIRST y won at lookup time.
+    grouped: Dict[float, List[float]] = {}
+    for x, y in pairs:
+        grouped.setdefault(x, []).append(y)
+    data = sorted((x, sum(ys), len(ys)) for x, ys in grouped.items())
     # blocks: [sum_y, count, sum_x]
     blocks: List[List[float]] = []
-    for x, y in data:
-        blocks.append([y, 1, x])
+    for x, sum_y, n in data:
+        blocks.append([sum_y, n, x * n])
         # Pool while the mean of the last block is below its predecessor's.
         while len(blocks) > 1 and blocks[-2][0] / blocks[-2][1] > blocks[-1][0] / blocks[-1][1]:
             y2, n2, x2 = blocks.pop()
@@ -217,7 +223,8 @@ def load_dispositions(path: Optional[Path] = None) -> Dict[str, bool]:
                     )
                     continue
                 out[str(row["verification_id"])] = upheld
-            except Exception:
+            except Exception as exc:
+                logger.warning("unparseable disposition line skipped (%s)", exc)
                 continue
     except OSError:
         pass
