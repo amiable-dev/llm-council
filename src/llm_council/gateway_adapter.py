@@ -263,6 +263,12 @@ async def query_model_stream_with_status(
 ) -> Dict[str, Any]:
     """Stream a single model's completion, invoking on_delta per chunk (ADR-046 P2).
 
+    ``disable_tools`` is accepted for signature parity with
+    query_model_with_status but is vestigial on the gateway path:
+    GatewayRequest has no tools field and gateway requests never attach
+    tools, so there is nothing to disable (same as every other gateway-path
+    call in this module).
+
     Assembles the full text and returns the same result shape as
     query_model_with_status. The streaming wire protocol carries no usage
     data, so ``usage`` is empty — ADR-011 cost_known semantics then report
