@@ -110,6 +110,9 @@ class TaskStore:
             return
         try:
             path.write_text(json.dumps(task))
+            # A successful disk write is authoritative: drop any memory copy
+            # so reads can never see a stale divergent state (no split-brain).
+            self._memory.pop(task_id, None)
         except Exception as exc:
             logger.debug("task write failed (%s); using memory", exc)
             self._memory[task_id] = task
@@ -147,33 +150,48 @@ class TaskStore:
         self._write(task_id, task)
 
     def complete(self, task_id: str, result: Dict[str, Any]) -> None:
-        task = self.get(task_id) or {"kind": "unknown", "created_at": time.time()}
+        task = self.get(task_id)
+        if task is None:
+            # Never create/resurrect a task for an unknown or expired id —
+            # capability ids must not be forgeable via state-transition calls.
+            logger.debug("complete() for unknown/expired task %s ignored", task_id)
+            return
         task["status"] = "complete"
         task["result"] = result
         self._write(task_id, task)
 
     def fail(self, task_id: str, error_status: str, error_detail: str) -> None:
-        task = self.get(task_id) or {"kind": "unknown", "created_at": time.time()}
+        task = self.get(task_id)
+        if task is None:
+            logger.debug("fail() for unknown/expired task %s ignored", task_id)
+            return
         task["status"] = "failed"
         task["error_status"] = error_status
         task["error_detail"] = error_detail
         self._write(task_id, task)
 
     def get(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve by capability id; expired tasks are reaped on access."""
+        """Retrieve by capability id; expired tasks are reaped on access.
+
+        Memory is checked FIRST: it is only ever populated when a disk write
+        failed, so a memory entry is by construction newer than any disk copy
+        (split-brain prevention — successful disk writes purge it).
+        """
+        if task_id in self._memory:
+            return self._memory[task_id]
         path = self._path(task_id)
         if path is None:
-            return self._memory.get(task_id)
+            return None
         try:
             if not path.exists():
-                return self._memory.get(task_id)
+                return None
             if time.time() - path.stat().st_mtime > self._ttl:
                 path.unlink(missing_ok=True)
                 return None
             return json.loads(path.read_text())
         except Exception as exc:
             logger.debug("task read failed (%s)", exc)
-            return self._memory.get(task_id)
+            return None
 
 
 def maybe_expose_tasks(server: Any) -> bool:

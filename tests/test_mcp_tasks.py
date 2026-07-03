@@ -101,3 +101,45 @@ class TestSdkDetection:
         # starts returning True after the stable-v2 bump, wire the exposure
         # (see mcp_tasks.maybe_expose_tasks note).
         assert sdk_supports_tasks() is False
+
+
+class TestCouncilRound1Findings:
+    def test_complete_on_unknown_id_is_noop_no_phantom(self, tmp_path):
+        # #423 round-1: complete()/fail() must NOT create/resurrect a task for
+        # an unknown or expired id (the capability id would become forgeable).
+        store = TaskStore(base_dir=tmp_path)
+        ghost = "f" * 32
+        store.complete(ghost, {"ok": 1})
+        assert store.get(ghost) is None
+        store.fail(ghost, "error", "detail")
+        assert store.get(ghost) is None
+        assert list(tmp_path.glob("*.json")) == []
+
+    def test_expired_task_cannot_be_resurrected(self, tmp_path):
+        import os
+        store = TaskStore(base_dir=tmp_path, ttl_seconds=1)
+        tid = store.create(kind="k")
+        f = next(tmp_path.glob("*.json"))
+        old = time.time() - 10
+        os.utime(f, (old, old))
+        store.complete(tid, {"late": True})  # arrives after expiry
+        assert store.get(tid) is None
+
+    def test_no_split_brain_memory_wins_after_disk_failure(self, tmp_path, monkeypatch):
+        # #423 round-1: if a mid-lifecycle disk write fails and falls back to
+        # memory, subsequent reads must see the NEWER memory state, not the
+        # stale disk copy.
+        store = TaskStore(base_dir=tmp_path)
+        tid = store.create(kind="k")  # lands on disk as 'pending'
+        original_write_text = Path.write_text
+
+        def failing_write(self, *a, **kw):
+            if self.parent == tmp_path and self.suffix == ".json":
+                raise OSError("disk full")
+            return original_write_text(self, *a, **kw)
+
+        monkeypatch.setattr(Path, "write_text", failing_write)
+        store.complete(tid, {"ok": 1})  # disk write fails -> memory fallback
+        monkeypatch.undo()
+        task = store.get(tid)
+        assert task["status"] == "complete"  # memory (newer) wins over stale disk
