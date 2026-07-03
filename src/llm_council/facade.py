@@ -81,15 +81,23 @@ async def consult_council(
     tier = confidence if confidence in TIER_MODEL_POOLS else "high"
     tier_contract = create_tier_contract(tier)
 
+    # Public-API hardening (#450 review): a misconfigured tier could carry
+    # None timeouts; omit the kwargs and let the orchestrator's defaults
+    # apply rather than crashing on arithmetic.
+    timeout_kwargs = {}
+    if tier_contract.deadline_ms:
+        timeout_kwargs["synthesis_deadline"] = tier_contract.deadline_ms / 1000
+    if tier_contract.per_model_timeout_ms:
+        timeout_kwargs["per_model_timeout"] = tier_contract.per_model_timeout_ms / 1000
+
     raw = await run_council_with_fallback(
         query,
         models=models,
         bypass_cache=bypass_cache,
         tier_contract=tier_contract,
-        synthesis_deadline=tier_contract.deadline_ms / 1000,
-        per_model_timeout=tier_contract.per_model_timeout_ms / 1000,
         verdict_type=verdict,
         include_dissent=include_dissent,
+        **timeout_kwargs,
     )
     return CouncilResult(
         synthesis=raw.get("synthesis", ""),

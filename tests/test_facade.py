@@ -86,12 +86,34 @@ class TestDocumentedQuickstartShape:
         assert kwargs["include_dissent"] is True
         assert kwargs["models"] == ["m/a"]
 
-    def test_invalid_verdict_type_raises_clearly(self):
-        import asyncio
-
+    @pytest.mark.asyncio
+    async def test_invalid_verdict_type_raises_clearly(self):
         from llm_council import consult_council
 
         with pytest.raises(ValueError, match="verdict_type"):
-            asyncio.get_event_loop_policy().new_event_loop().run_until_complete(
-                consult_council("q", verdict_type="banana")
-            )
+            await consult_council("q", verdict_type="banana")
+
+    @pytest.mark.asyncio
+    async def test_none_tier_timeouts_omitted_not_crashed(self, monkeypatch):
+        # #450 review: a misconfigured tier contract with None timeouts must
+        # fall through to orchestrator defaults, never crash on arithmetic.
+        from types import SimpleNamespace
+
+        from llm_council import facade
+
+        monkeypatch.setattr(
+            facade,
+            "create_tier_contract",
+            lambda tier: SimpleNamespace(
+                tier=tier, deadline_ms=None, per_model_timeout_ms=None
+            ),
+        )
+        with patch(
+            "llm_council.facade.run_council_with_fallback",
+            new_callable=AsyncMock,
+            return_value={"synthesis": "ok", "metadata": {}, "model_responses": {}},
+        ) as run:
+            result = await facade.consult_council("q", confidence="high")
+        assert result.synthesis == "ok"
+        assert "synthesis_deadline" not in run.call_args.kwargs
+        assert "per_model_timeout" not in run.call_args.kwargs
