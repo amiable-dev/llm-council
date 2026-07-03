@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MCP Tasks core layer (ADR-045 Phase 1, #404)** — groundwork for the MCP 2026-07-28 Tasks primitive (long-running deliberations that survive client disconnects): a durable `TaskStore` under `.council/tasks/` (24h expiry, size-capped eviction, in-memory fallback), 128-bit capability task ids with no enumeration API, a `LLM_COUNCIL_MCP_TASKS` kill-switch, and SDK feature-detection. The MCP wiring itself is **blocked pending the stable SDK v2** (targeted 2026-07-28 alongside the spec; the current pin is `mcp<1.27`) — synchronous tool behaviour is byte-identical until then.
+
 ### Fixed
 
 - **Stage-3 chairman failures no longer swallow the underlying error (#397)** — `stage3_synthesize_final` used `query_model`, which collapses every failure (billing 402, auth, rate-limit, timeout) into `None`, so the fallback emitted only 'Error: Unable to generate final synthesis.' During the 2026-07-02 OpenRouter billing outage this made an infra failure look like a dead chairman model. Stage 3 now uses the status-preserving call and surfaces the failure class and detail in the synthesis text (`… (auth_error: Payment required (402): …)`), in structured `error_status`/`error_detail` fields, and in a warning log.
