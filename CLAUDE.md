@@ -32,7 +32,7 @@ Requests flow through four layers with formal boundary contracts in `layer_contr
 ## Module map (`src/llm_council/`)
 
 Council core
-- `council.py` — `stage1_collect_responses`, `stage2_collect_rankings` (anonymizes → `label_to_model`, parses rankings), `calculate_aggregate_rankings` (Borda), `stage3_synthesize_final`. Shadow-vote integration for frontier tier (ADR-027).
+- `council.py` — the two orchestrators (`run_council_with_fallback`, `run_full_council`), config helpers with patched-attr test semantics, deprecated-constant `__getattr__`. Split below the review cap (ADR-046 P0, #408): stage functions live in `council_stages.py` (`stage1_collect_responses[_with_status]`, `stage1_5_normalize_styles`, `stage2_collect_rankings`, `stage3_synthesize_final`, `quick_synthesis`), ranking/Borda/shadow-votes in `council_rankings.py` (`parse_ranking_from_text`, `calculate_aggregate_rankings`), shared constants + ADR-011 usage accounting in `council_usage.py`. **council.py re-exports every moved name**, so `llm_council.council.X` imports and patches keep working; patches on names CONSUMED inside stage functions (e.g. `query_models_parallel`) must target `llm_council.council_stages.*`. Moved code reads config helpers through the council module at call time, preserving `patch("llm_council.council.CHAIRMAN_MODEL", …)`.
 - `openrouter.py` — `query_model` / `query_models_parallel`; returns `{content, reasoning_details?}`; returns `None` on failure (graceful degradation).
 - `http_server.py`, `mcp_server.py`, `cli.py` — the three entry surfaces. `skills/` — bundled skills (`install-skills`).
 

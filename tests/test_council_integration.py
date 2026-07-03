@@ -59,12 +59,12 @@ async def test_integration_persistence_enabled(temp_bias_store):
     mock_normalize_response = {"content": "Normalized", "usage": {}}
 
     with patch(
-        "llm_council.council.query_models_with_progress", new_callable=AsyncMock
+        "llm_council.council_stages.query_models_with_progress", new_callable=AsyncMock
     ) as mock_query_all:
         mock_query_all.return_value = mock_stage1_responses
 
         with patch(
-            "llm_council.council.query_models_parallel", new_callable=AsyncMock
+            "llm_council.council_stages.query_models_parallel", new_callable=AsyncMock
         ) as mock_query_parallel:
             # Stage 2 uses query_models_parallel
             # It returns a dict {model: response_dict}
@@ -82,7 +82,7 @@ async def test_integration_persistence_enabled(temp_bias_store):
             }
 
             with patch(
-                "llm_council.council.query_model", new_callable=AsyncMock
+                "llm_council.council_stages.query_model", new_callable=AsyncMock
             ) as mock_query_single:
                 # Side effect for query_model to handle different calls
                 async def side_effect(model, messages, **kwargs):
@@ -145,11 +145,11 @@ async def test_integration_persistence_disabled(temp_bias_store):
     }
 
     with patch(
-        "llm_council.council.query_models_with_progress", new_callable=AsyncMock
+        "llm_council.council_stages.query_models_with_progress", new_callable=AsyncMock
     ) as mock_query_all:
         mock_query_all.return_value = mock_stage1_responses
         with patch(
-            "llm_council.council.query_models_parallel", new_callable=AsyncMock
+            "llm_council.council_stages.query_models_parallel", new_callable=AsyncMock
         ) as mock_query_parallel:
             mock_query_parallel.return_value = {
                 "model1": {
@@ -159,7 +159,7 @@ async def test_integration_persistence_disabled(temp_bias_store):
                 },
             }
             with patch(
-                "llm_council.council.query_model", new_callable=AsyncMock
+                "llm_council.council_stages.query_model", new_callable=AsyncMock
             ) as mock_query_single:
                 mock_query_single.return_value = {"content": "Synthesis", "usage": {}}
 

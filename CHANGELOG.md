@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **council.py split below the Council review cap (ADR-046 P0, #408)** — verbatim moves into `council_stages.py` (stage functions, 40K), `council_rankings.py` (ranking parse/Borda/shadow votes, 17K), and `council_usage.py` (shared constants + ADR-011 usage accounting, 4K), leaving `council.py` at 44K (was 101K). Full back-compat: `council.py` re-exports every moved name; patched-attr config semantics preserved; suite count identical. Unblocks self-review of ADR-046 streaming changes.
+
 ## [0.29.0] - 2026-07-03
 
 **MCP 2026-07-28 Adoption (ADR-045)** — epic [#407](https://github.com/amiable-dev/llm-council/issues/407). Early, correct adoption of the MCP 2026-07-28 spec cycle: a durable Tasks core (SDK wiring gated on the stable v2 SDK), SEP-2127 Server Card discovery, and a stateless-deployment audit with a two-instance smoke suite. Post-spec re-checks tracked in [#425](https://github.com/amiable-dev/llm-council/issues/425). Also ships the #397 chairman error-surfacing fix.

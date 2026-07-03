@@ -74,7 +74,7 @@ async def test_stage1_returns_structured_results():
 
     with (
         patch("llm_council.council.COUNCIL_MODELS", ["model-a", "model-b"]),
-        patch("llm_council.council.query_models_with_progress") as mock_query,
+        patch("llm_council.council_stages.query_models_with_progress") as mock_query,
     ):
         mock_query.return_value = mock_responses
 
@@ -107,7 +107,7 @@ async def test_stage1_with_timeout_returns_partial():
 
     with (
         patch("llm_council.council.COUNCIL_MODELS", ["model-a", "model-b", "model-c", "model-d"]),
-        patch("llm_council.council.query_models_with_progress") as mock_query,
+        patch("llm_council.council_stages.query_models_with_progress") as mock_query,
     ):
         mock_query.return_value = mock_responses
 
@@ -264,7 +264,7 @@ async def test_quick_synthesis_function():
         "model-b": {"status": "ok", "response": "Response B content"},
     }
 
-    with patch("llm_council.council.query_model") as mock_query:
+    with patch("llm_council.council_stages.query_model") as mock_query:
         mock_query.return_value = {
             "content": "Synthesized from available responses",
             "usage": {"total_tokens": 50},
@@ -286,7 +286,7 @@ async def test_quick_synthesis_handles_chairman_failure():
         "model-a": {"status": "ok", "response": "Best response here"},
     }
 
-    with patch("llm_council.council.query_model") as mock_query:
+    with patch("llm_council.council_stages.query_model") as mock_query:
         mock_query.return_value = None  # Chairman fails
 
         synthesis, usage = await quick_synthesis("test query", partial_responses)

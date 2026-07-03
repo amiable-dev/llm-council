@@ -102,7 +102,7 @@ def _mock_query_model(delays, calls, cancelled):
 
 @pytest.mark.asyncio
 async def test_active_mode_cancels_unneeded_reviewers(monkeypatch):
-    from llm_council import council as council_mod
+    from llm_council import council_stages as council_mod
     from llm_council import layer_contracts
 
     monkeypatch.setenv("LLM_COUNCIL_EARLY_CONSENSUS", "true")
@@ -141,7 +141,7 @@ async def test_active_mode_cancels_unneeded_reviewers(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_shadow_mode_runs_everything_and_emits_nothing(monkeypatch):
-    from llm_council import council as council_mod
+    from llm_council import council_stages as council_mod
     from llm_council import layer_contracts
 
     monkeypatch.delenv("LLM_COUNCIL_EARLY_CONSENSUS", raising=False)

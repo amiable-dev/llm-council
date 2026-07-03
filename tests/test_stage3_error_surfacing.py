@@ -9,7 +9,7 @@ error detail on failure.
 
 import pytest
 
-from llm_council import council as council_mod
+from llm_council import council_stages as council_mod
 
 
 def _failure_status(status="auth_error", error="Payment required (402): insufficient credits"):
