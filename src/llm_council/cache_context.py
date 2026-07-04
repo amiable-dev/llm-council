@@ -8,9 +8,12 @@ OpenRouter ``session_id`` affinity key, with zero signature changes in the
 layers between.
 
 Safety properties:
-- Injection only when the outgoing prompt MATCHES the published segment map
-  (length + head-byte equality) — stage-2/3 prompts, which embed different
-  content, are a safe no-op.
+- ``cache_control`` breakpoints only when the outgoing prompt MATCHES the
+  published segment map (length + head-byte equality) — stage-2/3 prompts,
+  which embed different content, are a safe no-op. The ``session_id``
+  affinity key is DELIBERATELY session-wide (every call in the verify
+  scope): it is a routing hint, not a content marker, and same-provider
+  routing across stages and rounds is exactly the affinity ADR-049 wants.
 - Never marks a prefix below the model's minimum cacheable size (verified
   per-model table; conservative 4,096-token default for unknown models —
   below-minimum breakpoints are silently ignored AND still bill the write
@@ -79,32 +82,36 @@ class CacheContext:
     segments: List[Dict[str, Any]] = field(default_factory=list)
     session_id: Optional[str] = None
     ttl: str = "1h"  # verification default per ADR-049 §Decision.5
+    prompt_head: str = ""  # first bytes of the prompt the segments describe
 
     def matches(self, prompt: str) -> bool:
         """Does ``prompt`` correspond to this segment map?
 
-        Length equality + no stronger check needed: segments carry offsets
-        into exactly one assembled prompt, and total length collisions with
-        a DIFFERENT stage prompt of identical length are not a correctness
-        risk (breakpoints on the wrong text merely change price class, never
-        content) — but we cheaply rule the common case out anyway.
+        Length equality + head-byte equality. A mismatch is not a
+        correctness risk (breakpoints on the wrong text merely change price
+        class, never content), but the two cheap checks together make
+        accidental injection into a different stage's prompt practically
+        impossible.
         """
-        return bool(self.segments) and self.segments[-1]["end"] == len(prompt)
+        if not self.segments or self.segments[-1]["end"] != len(prompt):
+            return False
+        return prompt.startswith(self.prompt_head)
 
     def breakpoint_offsets(self, model_id: str) -> List[int]:
         """Char offsets (segment ends) eligible for a cache breakpoint.
 
         Candidates: end of evidence, end of subject. A candidate qualifies
         only when the cumulative est_tokens up to it meets the model's
-        minimum cacheable prefix.
+        minimum cacheable prefix. Segments are walked in list order (D1
+        emits them contiguous and uniquely named; walking the list keeps
+        this correct even if a name ever repeated).
         """
         minimum = anthropic_min_prefix_tokens(model_id)
-        by_name = {s["name"]: s for s in self.segments}
         offsets: List[int] = []
         cumulative = 0
-        for name in ("static_head", "evidence", "subject"):
-            seg = by_name.get(name)
-            if seg is None:
+        for seg in self.segments:
+            name = seg.get("name")
+            if name not in ("static_head", "evidence", "subject"):
                 continue
             cumulative += seg["est_tokens"]
             if name in ("evidence", "subject") and cumulative >= minimum:

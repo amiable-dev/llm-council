@@ -814,6 +814,7 @@ async def run_verification(
                 segments=evidence_render_info.get("segments") or [],
                 session_id=f"verify:{subject_key}",
                 ttl="1h",
+                prompt_head=verification_query[:64],
             )
         )
 

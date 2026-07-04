@@ -98,6 +98,28 @@ class TestInjection:
         payload = build_openrouter_payload("anthropic/claude-opus-4.8", other)
         assert payload["messages"][0]["content"] == "a completely different prompt"
 
+    def test_same_length_different_head_skips_breakpoints(self):
+        # Length collision alone must not trigger injection: head bytes differ.
+        set_cache_context(CacheContext(
+            segments=_segments(), session_id="s", prompt_head=PROMPT[:64],
+        ))
+        impostor = "X" + PROMPT[1:]  # same length, different first byte
+        payload = build_openrouter_payload(
+            "anthropic/claude-opus-4.8", [{"role": "user", "content": impostor}]
+        )
+        assert payload["messages"][0]["content"] == impostor  # plain string
+
+    def test_duplicate_segment_names_walked_in_order(self):
+        # breakpoint_offsets walks the list (no name->segment dict that would
+        # silently overwrite a repeated name): both subject ends qualify.
+        segs = [
+            {"name": "static_head", "start": 0, "end": 6000, "est_tokens": 1500},
+            {"name": "subject", "start": 6000, "end": 10000, "est_tokens": 1000},
+            {"name": "subject", "start": 10000, "end": 16000, "est_tokens": 1500},
+        ]
+        ctx = CacheContext(segments=segs)
+        assert ctx.breakpoint_offsets("anthropic/claude-opus-4.8") == [10000, 16000]
+
     def test_min_prefix_guard_skips_small_segments(self):
         # Haiku 4.5 minimum is 4096 tokens: head+evidence (~2000) is below,
         # so its breakpoint is skipped; head+evidence+subject (~4000) is also
@@ -175,6 +197,7 @@ class TestPipelinePublishesContext:
         assert ctx is not None
         assert ctx.segments == segments
         assert ctx.ttl == "1h"
+        assert ctx.prompt_head == "short prompt"  # head of the built prompt
         # Stable across rounds: same subject, DIFFERENT SHAs, same session key
         # — and the key never contains the per-round SHA.
         assert ctx.session_id.startswith("verify:")
