@@ -162,6 +162,8 @@ def _usage_input_metrics(usage: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "cost_usd": total.get("cost_usd", 0.0),
         "cost_known": bool(total.get("cost_known", False)),
         "cached_tokens": total.get("cached_tokens", 0),
+        # ADR-049 D4: cache writes (0 for pre-D4 usage blocks).
+        "cache_write_tokens": total.get("cache_write_tokens", 0),
     }
 
 

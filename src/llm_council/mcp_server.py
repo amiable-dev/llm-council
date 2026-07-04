@@ -459,6 +459,11 @@ async def verify(
         rationale, and transcript location for audit trail. When evidence is
         provided, the response also includes evidence_summary (per-source
         dispositions) and evidence_warnings (structured warnings).
+        input_metrics carries ADR-049 cache telemetry: cached_tokens (reads),
+        cache_write_tokens, and cache_session_id — grouping persisted results
+        by cache_session_id reconstructs the prompt-cache hit rate per subject
+        from .council/logs alone (zero reads across rounds = broken prefix or
+        lapsed TTL).
     """
 
     # Progress reporting bridge: MCP context <-> run_verification callback

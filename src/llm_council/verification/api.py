@@ -48,6 +48,7 @@ from llm_council.verification.transcript import (
 from llm_council.cache_context import (
     CacheContext,
     clear_cache_context,
+    get_cache_context,
     set_cache_context,
 )
 from llm_council.verification.calibration import (
@@ -662,6 +663,10 @@ async def _run_verification_pipeline(
         "num_models": num_models,
         "num_reviewers": num_models,
         "tier": request.tier,
+        # ADR-049 D4: session affinity key for log-only hit-rate grouping —
+        # stable across rounds on the same subject (published at pipeline
+        # entry, still in scope here; None when caching is disabled).
+        "cache_session_id": getattr(get_cache_context(), "session_id", None),
         # ADR-011 (#366): per-run token/cost totals (absent if usage unavailable).
         **_usage_input_metrics(partial_state.get("usage")),
         # ADR-042: evidence-specific input metrics.

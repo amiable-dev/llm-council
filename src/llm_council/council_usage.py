@@ -43,8 +43,13 @@ def _add_cost_to_usage(
     raw_cost = usage.get("cost")
     cost = raw_cost or 0.0
     cached = usage.get("cached_tokens", 0) or 0
+    # ADR-049 D4: cache-write tokens ride the same aggregation; absent => 0.
+    cache_write = usage.get("cache_write_tokens", 0) or 0
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
+    total_usage["cache_write_tokens"] = (
+        total_usage.get("cache_write_tokens", 0) + cache_write
+    )
     # Track whether ANY cost was reported so the summary can tell a genuine
     # $0 (free/local) from unknown cost (None) — a present cost, even 0.0, is
     # "known".
@@ -59,6 +64,7 @@ def _add_cost_to_usage(
                 "total_tokens": 0,
                 "cost_usd": 0.0,
                 "cached_tokens": 0,
+                "cache_write_tokens": 0,
             },
         )
         bucket["prompt_tokens"] += usage.get("prompt_tokens", 0)
@@ -66,6 +72,7 @@ def _add_cost_to_usage(
         bucket["total_tokens"] += usage.get("total_tokens", 0)
         bucket["cost_usd"] += cost
         bucket["cached_tokens"] += cached
+        bucket["cache_write_tokens"] = bucket.get("cache_write_tokens", 0) + cache_write
         if raw_cost is not None:
             bucket["cost_known"] = True
 
@@ -83,9 +90,19 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
         "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
         "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
+        "cache_write_tokens": sum(
+            s.get("cache_write_tokens", 0) for s in by_stage.values()
+        ),
         "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
     }
-    numeric_keys = ("prompt_tokens", "completion_tokens", "total_tokens", "cost_usd", "cached_tokens")
+    numeric_keys = (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cost_usd",
+        "cached_tokens",
+        "cache_write_tokens",
+    )
     by_model: Dict[str, Dict[str, Any]] = {}
     for stage_usage in by_stage.values():
         for model_id, model_usage in stage_usage.get("by_model", {}).items():
@@ -97,6 +114,7 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
                     "total_tokens": 0,
                     "cost_usd": 0.0,
                     "cached_tokens": 0,
+                    "cache_write_tokens": 0,
                     "cost_known": False,
                 },
             )

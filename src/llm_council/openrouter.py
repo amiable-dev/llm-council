@@ -35,6 +35,29 @@ def _extract_cached_tokens(usage: Dict[str, Any]) -> int:
         return direct
     return (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0
 
+
+def _extract_cache_write_tokens(usage: Dict[str, Any]) -> int:
+    """Cache-WRITE tokens from a provider usage object (ADR-049 D4; 0 if absent).
+
+    Checked in precedence order — a missing field degrades to 0 (full-price
+    accounting), never a crash or a fabricated figure:
+
+    1. Anthropic direct top-level ``cache_creation_input_tokens`` (vendor-
+       documented total; authoritative when present).
+    2. Anthropic per-TTL sub-object ``cache_creation.ephemeral_{5m,1h}_input_
+       tokens`` (summed).
+    3. OpenRouter ``prompt_tokens_details.cache_write_tokens`` (empirically
+       observed 2026-07-04, not vendor-documented — ADR-049 §Compliance
+       drift guard re-probes quarterly).
+    """
+    top_level = usage.get("cache_creation_input_tokens")
+    if top_level is not None:
+        return top_level
+    sub = usage.get("cache_creation")
+    if isinstance(sub, dict) and sub:
+        return sum(v or 0 for k, v in sub.items() if k.endswith("_input_tokens"))
+    return (usage.get("prompt_tokens_details") or {}).get("cache_write_tokens", 0) or 0
+
 if TYPE_CHECKING:
     from llm_council.gateway.types import ReasoningParams
 
@@ -75,6 +98,9 @@ async def query_model(
             "content": result.get("content"),
             "reasoning_details": result.get("reasoning_details"),
             "usage": result.get("usage", {}),
+            # ADR-049 D4: route/session attribution rides along.
+            "route": result.get("route"),
+            "session_id": result.get("session_id"),
         }
     return None
 
@@ -151,11 +177,20 @@ async def query_model_with_status(
             message = data["choices"][0]["message"]
             usage = data.get("usage", {})
 
+            # ADR-049 D4: route + session attribution per call, so hit-rate
+            # is reconstructable from logs alone. Lazy import (house pattern
+            # from the gateway payload builder) keeps startup order safe.
+            from .cache_context import get_cache_context
+
+            cache_ctx = get_cache_context()
+
             return {
                 "status": STATUS_OK,
                 "content": message.get("content"),
                 "reasoning_details": message.get("reasoning_details"),
                 "latency_ms": latency_ms,
+                "route": "openrouter",
+                "session_id": cache_ctx.session_id if cache_ctx else None,
                 "usage": {
                     "prompt_tokens": usage.get("prompt_tokens", 0),
                     "completion_tokens": usage.get("completion_tokens", 0),
@@ -165,6 +200,8 @@ async def query_model_with_status(
                     # can account cost, not just tokens.
                     "cost": usage.get("cost"),
                     "cached_tokens": _extract_cached_tokens(usage),
+                    # ADR-049 D4: cache writes (0 when the route reports none).
+                    "cache_write_tokens": _extract_cache_write_tokens(usage),
                 },
             }
 
