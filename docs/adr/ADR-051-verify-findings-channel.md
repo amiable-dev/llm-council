@@ -89,10 +89,27 @@ independently confirmed by the maintainer against the arXiv HTML.
 | LLM judges are overconfident / miscalibrated; reasoning models are better-calibrated judges | **VERIFIED** | Overconfidence documented (2508.06225 + others); reasoning/extended-CoT models strictly better calibrated in 33/36 model×dataset settings — corroborates the observed "high tier converges, balanced tier churns". |
 | Critique/evidence **fusion is *necessary*** to beat independent tallying | **MIXED — do not overclaim** | Some fusion aggregators beat tallying, but PoLL ("Replacing Judges with Juries", arXiv [2404.18796](https://arxiv.org/abs/2404.18796)) shows a **diverse panel with simple independent voting already beats a single strong judge, ~7× cheaper**. llm-council already does diverse-panel tallying. ⇒ Part 5 is "does the Fuser beat our *existing panel*", not "adopt fusion". |
 
+### Council review (rev 2, high tier)
+
+The Council endorsed the core diagnosis and the structured-findings fix, and
+raised amendments, all folded in above:
+1. **Proof-Before-Preference needs enforcement, not a prompt** → Part 1
+   commits to two-phase / constrained decoding.
+2. **Bidirectional consistency guard** → Part 2 now also guards `pass` +
+   critical findings; zero-finding FAILs survive; any re-run is non-coercive.
+3. **`inner_verdict` is a footgun as a top-level field** → Part 3 nests it
+   under `diagnostics`, telemetry-only.
+4. **P4 (completeness) is orthogonal** → deferred to its own follow-up.
+5. **P5 must be bounded** → pre-registered accept thresholds.
+6. **Breaking change** → MAJOR bump / feature flag, not a CHANGELOG line.
+One council claim was **rejected on the code**: `blocking_issues` is not
+`List[str]` (no type-crash risk) — it is already `List[BlockingIssueResponse]`,
+the exact object shape `findings[]` produces.
+
 ## Decision (proposed)
 
-Five parts, ordered by leverage. Parts 1–3 are the core; 4 is a rider; 5 is a
-spike.
+Five parts, ordered by leverage. Parts 1–3 are the core structural fix; 4 is
+deferred to a follow-up; 5 is a bounded spike.
 
 ### 1. Structured findings channel (P0)
 
@@ -109,41 +126,64 @@ findings: [ { severity: critical|major|minor,
 
 Populate `blocking_issues` from `findings` filtered to
 `severity == critical` (and any ADR-042 blocking-evidence dispositions),
-**not** from the prose regex. Keep `extract_blocking_issues` only as a
-fallback for models that don't return structured findings, and mark that
-fallback in the response so consumers know the channel degraded.
+**not** from the prose regex. Non-critical findings (`major`/`minor`/`info`)
+stay in `findings[]` (not dropped) but do not gate. **No type break** (Council
+rev-2): `blocking_issues` is already `List[BlockingIssueResponse]`
+(`{severity, description, location: Optional[str]}`, `schemas.py`), the exact
+shape `findings[]` produces — this is object→object, and `location` already
+permits `null` (a holistic finding with no line). Keep `extract_blocking_issues`
+only as a fallback for models that don't return structured findings, and set
+`findings_source: structured|fallback` + `fallback_reason` on the response so
+consumers see when the channel degraded.
 
-**Findings precede the verdict (evidence-locking).** Research verification
-refuted the weaker version of this decision: a structured rationale *emitted
-alongside* the verdict does not fix decoupling — the judge still rationalizes
-post-hoc. The chairman must be prompted to enumerate `findings` (with cited
-locations) *before* committing the go/no-go, so the verdict is a function of
-the findings rather than the findings a justification of the verdict
-("Proof-Before-Preference"). This is a prompt-ordering constraint, not just a
-schema change.
+**Findings precede the verdict — and it must be *enforced*, not just
+prompted (Council rev-2).** Research verification refuted the weaker version:
+a structured rationale emitted *alongside* the verdict does not fix decoupling.
+But JSON has no ordering guarantee and generation order alone is brittle, so
+"findings first" must be enforced by one of: **constrained decoding / structured
+outputs** (schema topological order), **two-phase generation** (emit findings,
+then a second call renders the verdict from them), or at minimum a **parse-time
+co-emission + ordering check**. The ADR commits to two-phase or constrained
+decoding — not a bare prompt instruction ("Proof-Before-Preference").
 
 ### 2. Verdict–evidence consistency guard
 
-When `verdict == fail` (or `unclear`) but `findings` is empty, the result is
-internally inconsistent (rejection with no justification). Emit a structured
-`verdict_evidence_mismatch` marker on the response and log it; optionally,
-behind a flag, trigger a single bounded re-run. This makes the pathology
-**observable** instead of silently producing `blocking_issues: []`.
+Guard **both directions** (Council rev-2): `fail`/`unclear` with empty
+`findings` (rejection with no justification), AND `pass` with any
+`severity == critical` finding (approval over a stated blocker). Either
+inconsistency emits a structured `verdict_evidence_mismatch` marker and is
+logged. This makes the pathology **observable** instead of silently producing
+`blocking_issues: []`.
+
+**A zero-finding FAIL is legitimate and must survive** (Council rev-2): a
+holistic rejection ("fundamentally wrong approach") may have no line-level
+finding. The marker is observability, never a forced flip. If a bounded re-run
+is enabled behind a flag it must be **non-coercive** — it may ask the model to
+*localize its existing failure* (fill `findings`), never to *reconsider the
+verdict*. Coercing localization risks fabricated findings or a false `pass`
+just to satisfy the parser.
 
 ### 3. Surface the inner verdict on UNCLEAR
 
 When a structured "approved @ c" is softened to `unclear` because
 `c < threshold`, carry `inner_verdict` and `inner_confidence` (and the
-calibrated value) as structured fields on the response. Automation can then
-distinguish "the council approved but under threshold" from "the council was
-genuinely undecided" without parsing prose.
+calibrated value) so automation can distinguish "approved but under threshold"
+from "genuinely undecided" without parsing prose. **Nest these under a
+`diagnostics: {}` object** (Council rev-2) and document them as telemetry-only,
+so consumers don't parse `inner_verdict` to bypass the low-confidence safety
+gate — the softening to `unclear` is the contract; the inner state is for
+threshold tuning and observability, not control flow.
 
-### 4. Recalibrate `completeness` for code-review verification
+### 4. Recalibrate `completeness` — DEFERRED to a follow-up (Council rev-2)
 
-`completeness` (0.20 weight) does not discriminate for code review. Either
-drop its weight in the code-review rubric profile, or redefine it as a
-code-relevant axis (e.g. "tests/edge-cases covered"). A non-signal dimension
-must not carry a fifth of the weighted score.
+`completeness` (0.20 weight) does not discriminate for code review — drop its
+weight in the code-review rubric profile or redefine it as a code-relevant axis
+("tests/edge-cases covered"). But this is a **scoring-heuristic tweak,
+orthogonal to the evidence-plumbing defect** (it lives in the stage-2 rubric
+path, `verdict_extractor.py:135`, not the `blocking_issues` regex), so it is
+**deferred out of this ADR** to keep the P0/P1 structural fix unblocked.
+Re-measure `completeness` *after* P0/P1 lands to confirm the flatness isn't
+entangled with the findings channel, then reweight in its own change.
 
 ### 5. (Spike) evaluate a fuser aggregator against our existing panel
 
@@ -159,7 +199,11 @@ beats a single strong judge ~7× cheaper — and that is essentially what
 llm-council already does. So the question is not "single judge → fusion" (a
 straw man; we don't use a single judge) but "existing panel-tallying → fusion:
 does it add enough calibration/accuracy to justify the extra synthesis cost?"
-A research spike with a cost/quality gate, not a committed change. Note the
+A research spike, not a committed change — and **pre-registered** to keep it
+bounded (Council rev-2): before running it, fix the thresholds that would
+justify adopting a Fuser — a minimum accuracy/calibration delta over the
+existing panel, a maximum added latency, and a maximum cost multiple. If the
+spike doesn't clear all three, the incumbent panel-tallying stays. Note the
 2508.06225 baseline is *Self-Confidence* (a per-judge confidence method), not
 self-consistency.
 
@@ -173,11 +217,14 @@ keys on blocking count (the reported downstream pain).
 
 **Negative / cost.** The chairman prompt gains a structured-output
 requirement (a compatibility surface across models; needs the same
-JSON-won't-parse fallback the rubric already has). `blocking_issues`
-semantics change — a **behavior change for consumers** that must be versioned
-and documented (today they receive `[]`; after, they receive real findings on
-FAIL). Parts 1–3 touch the verdict-extraction hot path and need golden tests
-against both the structured and fallback paths.
+JSON-won't-parse fallback the rubric already has). **`blocking_issues`
+semantics change is a breaking change under Hyrum's Law** (Council rev-2):
+consumers built gating logic against always-`[]`, and populating it on FAIL
+wakes that dormant logic. It warrants a **MAJOR version bump** (or a transition
+feature flag defaulting to the new behavior with an opt-out) — not just a
+CHANGELOG line. Parts 1–3 touch the verdict-extraction hot path and need golden
+tests against both the structured and fallback paths; the two-phase/constrained
+enforcement adds one generation hop on the chairman path.
 
 **Neutral.** `input_too_large` / `unclear_reason` structured outcomes are
 unchanged (keep). No new external dependency.
