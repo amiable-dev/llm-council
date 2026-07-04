@@ -1,6 +1,6 @@
 # ADR-051: Verify Findings Channel & Verdict–Evidence Consistency
 
-**Status:** Draft 2026-07-04
+**Status:** Proposed 2026-07-04 (rev 2: literature claims verified via adversarial deep-research, 105 agents, 3-vote, checked 2026-07-04, with the anchor paper's numbers independently confirmed against the primary arXiv source. See "Research verification".)
 **Date:** 2026-07-04
 **Decision Makers:** llm-council maintainers (review requested)
 **Proposed by:** maintainer triage of a downstream field report (amiable-dev/epic-loop)
@@ -65,13 +65,29 @@ channel is.
   one arithmetically false, one re-litigated). High tier (+ a factual
   informational evidence item) produced substantively real findings every
   time and twice gave explicit fix-acknowledgement. Consistent with the
-  overconfidence / aggregation literature (arXiv 2508.06225v2, 2508.06225).
+  overconfidence / calibration literature (arXiv 2508.06225; see Research
+  verification).
 - **ADR-042 evidence firewall: flag-then-penalize.** The council correctly
   firewalled imperative language inside an *informational* evidence item, then
   cited that flagged "steering" sentence *in the rejection rationale* —
   counting it against the submission rather than flag-and-ignore.
 - **Structured non-verdicts work.** `input_too_large` and
   `unclear_reason=low_confidence` were clean, routable outcomes — keep them.
+
+## Research verification (rev 2)
+
+The literature scaffolding was checked by adversarial deep-research (105
+agents, 3-vote) against primary sources; the load-bearing statistic was then
+independently confirmed by the maintainer against the arXiv HTML.
+
+| Claim | Status | Evidence |
+|---|---|---|
+| The cited "86.3% acc / 6.4% ECE vs 77.4%" figures are real | **VERIFIED** | arXiv [2508.06225](https://arxiv.org/abs/2508.06225) (Tian et al., *Overconfidence in LLM-as-a-Judge*): **LLM-as-a-Fuser** = 86.29% / 6.42% ECE vs single-judge Self-Confidence baseline 77.43% / 11.78% on JudgeBench (Tables 1 & 4, confirmed against the [v3 HTML](https://arxiv.org/html/2508.06225v3)). Majority-vote / confidence-weighted-vote = 80.00%. |
+| Method name "critique-fusion" | **CORRECTED** | The method is **LLM-as-a-Fuser** (fuses decisions *and* rationales; ships a `TH-Score` calibration metric). The ADR's "critique-fusion" label was a misremember; the decoy papers 2508.16889 (ObjexMT) and 2601.05420 (single-judge debiasing) report neither the method nor these numbers. |
+| Verdict–evidence decoupling / post-hoc rationalization is an established LLM-judge pathology | **VERIFIED** | Multi-paper finding: superficial cues drive verdicts the rationale never mentions; judges trust asserted reasoning over observable evidence. Directly supports Parts 1–3. |
+| Structured rationale *alone* fixes it | **REFUTED (important nuance)** | Free-text/JSON rationale does **not** close the gap; a protocol that **locks cited evidence BEFORE scoring** ("Proof-Before-Preference") substantially reduces rationalization. ⇒ Part 1 must emit findings *before* the verdict, not alongside it. |
+| LLM judges are overconfident / miscalibrated; reasoning models are better-calibrated judges | **VERIFIED** | Overconfidence documented (2508.06225 + others); reasoning/extended-CoT models strictly better calibrated in 33/36 model×dataset settings — corroborates the observed "high tier converges, balanced tier churns". |
+| Critique/evidence **fusion is *necessary*** to beat independent tallying | **MIXED — do not overclaim** | Some fusion aggregators beat tallying, but PoLL ("Replacing Judges with Juries", arXiv [2404.18796](https://arxiv.org/abs/2404.18796)) shows a **diverse panel with simple independent voting already beats a single strong judge, ~7× cheaper**. llm-council already does diverse-panel tallying. ⇒ Part 5 is "does the Fuser beat our *existing panel*", not "adopt fusion". |
 
 ## Decision (proposed)
 
@@ -97,6 +113,15 @@ Populate `blocking_issues` from `findings` filtered to
 fallback for models that don't return structured findings, and mark that
 fallback in the response so consumers know the channel degraded.
 
+**Findings precede the verdict (evidence-locking).** Research verification
+refuted the weaker version of this decision: a structured rationale *emitted
+alongside* the verdict does not fix decoupling — the judge still rationalizes
+post-hoc. The chairman must be prompted to enumerate `findings` (with cited
+locations) *before* committing the go/no-go, so the verdict is a function of
+the findings rather than the findings a justification of the verdict
+("Proof-Before-Preference"). This is a prompt-ordering constraint, not just a
+schema change.
+
 ### 2. Verdict–evidence consistency guard
 
 When `verdict == fail` (or `unclear`) but `findings` is empty, the result is
@@ -120,13 +145,23 @@ drop its weight in the code-review rubric profile, or redefine it as a
 code-relevant axis (e.g. "tests/edge-cases covered"). A non-signal dimension
 must not carry a fifth of the weighted score.
 
-### 5. (Spike) critique-fusion aggregation
+### 5. (Spike) evaluate a fuser aggregator against our existing panel
 
-Evaluate replacing independent-verdict tallying with a critique-fusion
-aggregator (one strong fuser synthesizing member critiques). The literature
-(arXiv 2508.06225v2: 86.3% acc / 6.4% ECE vs 77.4% best-single) and the
-corpus (high-tier synthesis quality drove verdict quality) both point this
-way. Scoped as a research spike, not part of the core change.
+Evaluate whether an **LLM-as-a-Fuser** aggregator (one strong model fusing the
+panel's decisions *and* rationales — Tian et al., arXiv 2508.06225: 86.29% acc
+/ 6.42% ECE vs 77.43% for the best single judge on JudgeBench) beats
+llm-council's **current** diverse-panel independent tallying.
+
+Framed carefully, because the research verification found the "fusion is
+necessary" premise is **mixed**: PoLL ("Replacing Judges with Juries", arXiv
+2404.18796) shows a diverse panel with *simple independent voting* already
+beats a single strong judge ~7× cheaper — and that is essentially what
+llm-council already does. So the question is not "single judge → fusion" (a
+straw man; we don't use a single judge) but "existing panel-tallying → fusion:
+does it add enough calibration/accuracy to justify the extra synthesis cost?"
+A research spike with a cost/quality gate, not a committed change. Note the
+2508.06225 baseline is *Self-Confidence* (a per-judge confidence method), not
+self-consistency.
 
 ## Consequences
 
