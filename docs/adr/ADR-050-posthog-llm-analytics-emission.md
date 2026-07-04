@@ -1,6 +1,6 @@
 # ADR-050: PostHog LLM Analytics Emission
 
-**Status:** Proposed 2026-07-04 (rev 2: every external claim verified against primary PostHog docs — adversarial deep-research, 92 agents, checked 2026-07-04 — plus empirical verification of the live receiving project via the PostHog MCP. One claim REFUTED and corrected; see "Research verification".)
+**Status:** Implemented 2026-07-04 (v0.35.0, epic #472: D1 #473/PR #477, D2 #474/PR #478, D3 #475/PR #479, D4 #476/PR #480 — emission-only first cut. Part 4 feature-flag tier routing DEFERRED to a future ADR per Council rev-2. Rev 2 research: every external claim verified against primary PostHog docs — adversarial deep-research, 92 agents — plus empirical verification of the live receiving project via the PostHog MCP; one claim REFUTED and corrected, see "Research verification".)
 **Date:** 2026-07-04
 **Decision Makers:** llm-council maintainers (review requested)
 **Proposed by:** epic-loop project (consumer hand-over — Chris / Claude; companion: ADR-049 rev 2, `epic-loop/docs/assessments/research-2026-07-04-headroom-context-compression.md`, `council-verify-stats.md`)
