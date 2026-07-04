@@ -146,14 +146,24 @@ class CostResolver:
         model_id: str,
         provider_cost_usd: Optional[float] = None,
         cached_tokens: Optional[int] = None,
+        cache_read_tokens: int = 0,
+        cache_write_5m_tokens: int = 0,
+        cache_write_1h_tokens: int = 0,
     ) -> UsageInfo:
-        """Populate cost fields on ``usage`` in place and return it."""
+        """Populate cost fields on ``usage`` in place and return it.
+
+        Cache token counts (ADR-049 D3) thread through to ``resolve`` so
+        registry estimates price them; the provider-cost path ignores them.
+        """
         cost, source = self.resolve(
             gateway=gateway,
             model_id=model_id,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             provider_cost_usd=provider_cost_usd,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_5m_tokens=cache_write_5m_tokens,
+            cache_write_1h_tokens=cache_write_1h_tokens,
         )
         usage.cost_usd = cost
         usage.cost_source = source

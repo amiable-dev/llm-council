@@ -352,3 +352,17 @@ class TestCachePriceClasses:
         # Schema tolerance: at least one entry has no cache fields and the
         # resolver defaults are exercised above.
         assert any("cache_read" not in m.get("pricing", {}) for m in reg["models"])
+
+    def test_apply_threads_cache_tokens_to_resolve(self):
+        # apply() is the gateway entry point: cache counts must reach the
+        # registry-estimate arithmetic (round-1 council finding).
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        usage = UsageInfo(prompt_tokens=1000, completion_tokens=0, total_tokens=1000)
+        r.apply(
+            usage,
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            cache_read_tokens=10000,
+        )
+        assert usage.cost_usd == 0.005 + 0.005  # prompt + 10K cache reads
+        assert usage.cost_source == "registry_estimate"
