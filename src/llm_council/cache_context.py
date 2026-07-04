@@ -93,7 +93,7 @@ class CacheContext:
         accidental injection into a different stage's prompt practically
         impossible.
         """
-        if not self.segments or self.segments[-1]["end"] != len(prompt):
+        if not self.segments or self.segments[-1].get("end") != len(prompt):
             return False
         return prompt.startswith(self.prompt_head)
 
@@ -102,20 +102,25 @@ class CacheContext:
 
         Candidates: end of evidence, end of subject. A candidate qualifies
         only when the cumulative est_tokens up to it meets the model's
-        minimum cacheable prefix. Segments are walked in list order (D1
-        emits them contiguous and uniquely named; walking the list keeps
-        this correct even if a name ever repeated).
+        minimum cacheable prefix. Segments are walked in list order and
+        EVERY segment's tokens count toward the cumulative prefix (they are
+        contiguous from offset 0, so the running sum is the true prefix
+        size even if a future builder inserts a segment name this module
+        has never heard of). Malformed segments contribute nothing and can
+        only suppress a breakpoint, never misplace one.
         """
         minimum = anthropic_min_prefix_tokens(model_id)
         offsets: List[int] = []
         cumulative = 0
         for seg in self.segments:
-            name = seg.get("name")
-            if name not in ("static_head", "evidence", "subject"):
-                continue
-            cumulative += seg["est_tokens"]
-            if name in ("evidence", "subject") and cumulative >= minimum:
-                offsets.append(seg["end"])
+            cumulative += seg.get("est_tokens") or 0
+            end = seg.get("end")
+            if (
+                seg.get("name") in ("evidence", "subject")
+                and isinstance(end, int)
+                and cumulative >= minimum
+            ):
+                offsets.append(end)
         # At most 2 candidates by construction — well under the limit of 4,
         # leaving headroom for any future automatic-mode slot (ADR-049).
         return offsets

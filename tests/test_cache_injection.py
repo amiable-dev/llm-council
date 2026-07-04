@@ -120,6 +120,37 @@ class TestInjection:
         ctx = CacheContext(segments=segs)
         assert ctx.breakpoint_offsets("anthropic/claude-opus-4.8") == [10000, 16000]
 
+    def test_never_emits_empty_text_parts(self):
+        # A zero-width evidence segment makes the evidence end coincide with
+        # the subject end candidate... simulate the degenerate map directly:
+        # duplicate + end-of-prompt offsets must be deduped/dropped, so every
+        # emitted part is non-empty (Anthropic rejects empty text blocks).
+        prompt = "H" * 6000 + "S" * 2
+        segs = [
+            {"name": "static_head", "start": 0, "end": 6000, "est_tokens": 1500},
+            {"name": "evidence", "start": 6000, "end": 6000, "est_tokens": 0},
+            {"name": "subject", "start": 6000, "end": len(prompt),
+             "est_tokens": 1},
+        ]
+        set_cache_context(CacheContext(segments=segs, session_id="s"))
+        payload = build_openrouter_payload(
+            "anthropic/claude-opus-4.8", [{"role": "user", "content": prompt}]
+        )
+        parts = payload["messages"][0]["content"]
+        assert isinstance(parts, list)
+        assert all(p["text"] for p in parts)
+        assert "".join(p["text"] for p in parts) == prompt
+
+    def test_malformed_segments_soft_fail_to_plain_payload(self):
+        # Missing est_tokens/end never crashes the query (soft-fail): the
+        # payload survives as a plain string.
+        segs = [{"name": "subject", "start": 0}]  # no end, no est_tokens
+        set_cache_context(CacheContext(segments=segs, session_id="s"))
+        payload = build_openrouter_payload(
+            "anthropic/claude-opus-4.8", [{"role": "user", "content": PROMPT}]
+        )
+        assert payload["messages"][0]["content"] == PROMPT
+
     def test_min_prefix_guard_skips_small_segments(self):
         # Haiku 4.5 minimum is 4096 tokens: head+evidence (~2000) is below,
         # so its breakpoint is skipped; head+evidence+subject (~4000) is also

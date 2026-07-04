@@ -71,7 +71,12 @@ def _apply_cache_breakpoints(
         if not isinstance(content, str) or not cache_ctx.matches(content):
             out.append(msg)
             continue
-        offsets = cache_ctx.breakpoint_offsets(model)
+        # Sorted, deduped, strictly inside the content: a zero-width segment
+        # (e.g. empty evidence) or an end-of-prompt offset would otherwise
+        # produce an empty text part, which the Anthropic API rejects.
+        offsets = sorted(
+            {off for off in cache_ctx.breakpoint_offsets(model) if 0 < off < len(content)}
+        )
         if not offsets:
             out.append(msg)
             continue
@@ -86,8 +91,7 @@ def _apply_cache_breakpoints(
                 }
             )
             cursor = off
-        if cursor < len(content):
-            parts.append({"type": "text", "text": content[cursor:]})
+        parts.append({"type": "text", "text": content[cursor:]})
         out.append({**msg, "content": parts})
     return out
 
@@ -124,15 +128,21 @@ def build_openrouter_payload(
     # key. Kill-switch LLM_COUNCIL_PROMPT_CACHING=false ⇒ byte-identical.
     from ..cache_context import get_cache_context, prompt_caching_enabled
 
-    cache_ctx = get_cache_context()
-    if cache_ctx is not None and prompt_caching_enabled():
-        if cache_ctx.session_id:
-            # Affinity helps every vendor via OpenRouter sticky routing.
-            payload["session_id"] = cache_ctx.session_id
-        if model.startswith("anthropic/"):
-            payload["messages"] = _apply_cache_breakpoints(
-                messages, model, cache_ctx
-            )
+    try:
+        cache_ctx = get_cache_context()
+        if cache_ctx is not None and prompt_caching_enabled():
+            if cache_ctx.session_id:
+                # Affinity helps every vendor via OpenRouter sticky routing.
+                payload["session_id"] = cache_ctx.session_id
+            if model.startswith("anthropic/"):
+                payload["messages"] = _apply_cache_breakpoints(
+                    messages, model, cache_ctx
+                )
+    except Exception:  # pragma: no cover - defensive
+        # Soft-fail (ADR-011/024 convention): caching changes price class,
+        # never content — a bad segment map must never break the query.
+        payload["messages"] = messages
+        payload.pop("session_id", None)
 
     if disable_tools:
         payload["tools"] = []
