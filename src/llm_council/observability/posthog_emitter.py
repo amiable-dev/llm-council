@@ -40,6 +40,16 @@ def posthog_emission_enabled() -> bool:
     return bool(os.getenv("POSTHOG_API_KEY"))
 
 
+def scrub_exception(exc: BaseException) -> str:
+    """Return the exception TYPE name only (ADR-050 Part 2 residual-leakage rule).
+
+    Provider/gateway errors sometimes echo the prompt in their message; the
+    soft-fail paths log this scrubbed form so customer code can never leak into
+    a debug log (and never into a property).
+    """
+    return type(exc).__name__
+
+
 def _get_client() -> Optional[Any]:
     """Lazily build the PostHog client; ``None`` if disabled or unavailable.
 
@@ -73,7 +83,7 @@ def _get_client() -> Optional[Any]:
                 atexit.register(shutdown)
                 _atexit_registered = True
         except Exception as exc:  # missing SDK, bad config — soft-fail
-            logger.debug("posthog emitter init failed (disabled): %s", exc)
+            logger.debug("posthog emitter init failed (disabled): %s", scrub_exception(exc))
             _client = None
         return _client
 
@@ -90,7 +100,7 @@ def emit(event: str, properties: Dict[str, Any], distinct_id: str) -> None:
             return
         client.capture(distinct_id=distinct_id, event=event, properties=properties)
     except Exception as exc:  # emission must never break a run
-        logger.debug("posthog emit failed for %s (ignored): %s", event, exc)
+        logger.debug("posthog emit failed for %s (ignored): %s", event, scrub_exception(exc))
 
 
 def shutdown(timeout: float = _FLUSH_TIMEOUT_S) -> None:
@@ -112,7 +122,7 @@ def shutdown(timeout: float = _FLUSH_TIMEOUT_S) -> None:
             if fn is not None:
                 fn()
         except Exception as exc:  # flush failure is non-fatal
-            logger.debug("posthog shutdown failed (ignored): %s", exc)
+            logger.debug("posthog shutdown failed (ignored): %s", scrub_exception(exc))
 
     t = threading.Thread(target=_flush, name="posthog-flush", daemon=True)
     t.start()

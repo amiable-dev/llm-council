@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from .posthog_emitter import emit, posthog_emission_enabled
+from .posthog_emitter import emit, posthog_emission_enabled, scrub_exception
 
 logger = logging.getLogger(__name__)
 
@@ -126,4 +126,4 @@ def emit_generation_events(
             )
             emit("$ai_generation", props, distinct_id=distinct_id)
     except Exception as exc:  # emission must never break a run
-        logger.debug("emit_generation_events failed (ignored): %s", exc)
+        logger.debug("emit_generation_events failed (ignored): %s", scrub_exception(exc))
