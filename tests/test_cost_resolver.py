@@ -217,3 +217,152 @@ class TestRegistryPricingLookup:
         monkeypatch.setattr("llm_council.metadata.get_provider", _boom)
         # Never raises into the hot path; unknown pricing -> empty dict.
         assert registry_pricing_lookup("any/model") == {}
+
+
+# --- ADR-049 D3: cache price classes on the registry_estimate path ---------
+def _cache_pricing_lookup(model_id):
+    table = {
+        # Anthropic verified multipliers: read 0.1x, write-5m 1.25x, write-1h 2x
+        "anthropic/claude-opus-4.8": {
+            "prompt": 0.005,
+            "completion": 0.025,
+            "cache_read": 0.0005,
+            "cache_write_5m": 0.00625,
+            "cache_write_1h": 0.01,
+        },
+        # No cache prices: unknowns default to the prompt price.
+        "openai/gpt-4o": {"prompt": 0.0025, "completion": 0.01},
+    }
+    return table.get(model_id, {})
+
+
+class TestCachePriceClasses:
+    """ADR-049 §Decision.3 golden paths: hit / miss / write-5m / write-1h /
+    unknown-cache-price-defaults-to-prompt-price. Cache token counts are the
+    provider's SEPARATE fields (Anthropic direct: input_tokens excludes
+    cache_read/cache_creation) — they are priced in ADDITION to prompt_tokens.
+    """
+
+    def test_cache_read_hit_priced_at_cache_read_price(self):
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, source = r.resolve(
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            prompt_tokens=1000,
+            completion_tokens=1000,
+            cache_read_tokens=10000,
+        )
+        # 1000/1K*0.005 + 1000/1K*0.025 + 10000/1K*0.0005 = 0.005+0.025+0.005
+        assert cost == 0.035
+        assert source == "registry_estimate"
+
+    def test_cache_miss_is_pre_d3_arithmetic(self):
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, source = r.resolve(
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            prompt_tokens=1000,
+            completion_tokens=500,
+        )
+        assert cost == 0.005 + 0.0125
+        assert source == "registry_estimate"
+
+    def test_cache_write_5m_priced_at_write_premium(self):
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, _ = r.resolve(
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            prompt_tokens=1000,
+            completion_tokens=0,
+            cache_write_5m_tokens=8000,
+        )
+        # 0.005 + 8000/1K*0.00625 = 0.005 + 0.05
+        assert cost == 0.055
+
+    def test_cache_write_1h_priced_at_2x(self):
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, _ = r.resolve(
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            prompt_tokens=1000,
+            completion_tokens=0,
+            cache_write_1h_tokens=8000,
+        )
+        # 0.005 + 8000/1K*0.01 = 0.005 + 0.08
+        assert cost == 0.085
+
+    def test_unknown_cache_prices_default_to_prompt_price(self):
+        # gpt-4o entry carries no cache price classes: every cache token is
+        # billed at the prompt price (conservative, never under-reported).
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, source = r.resolve(
+            gateway="direct",
+            model_id="openai/gpt-4o",
+            prompt_tokens=1000,
+            completion_tokens=0,
+            cache_read_tokens=2000,
+            cache_write_5m_tokens=1000,
+            cache_write_1h_tokens=1000,
+        )
+        # 0.0025 + (2000+1000+1000)/1K*0.0025 = 0.0025 + 0.01
+        assert cost == 0.0125
+        assert source == "registry_estimate"
+
+    def test_provider_cost_path_ignores_cache_tokens(self):
+        # Ground truth wins unconditionally — the provider figure already
+        # includes any cache discount; cache params must not perturb it.
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, source = r.resolve(
+            gateway="openrouter",
+            model_id="anthropic/claude-opus-4.8",
+            prompt_tokens=1000,
+            completion_tokens=1000,
+            provider_cost_usd=0.01,
+            cache_read_tokens=999999,
+            cache_write_1h_tokens=999999,
+        )
+        assert cost == 0.01
+        assert source == "provider"
+
+    def test_negative_cache_token_counts_clamped(self):
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        cost, _ = r.resolve(
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            prompt_tokens=1000,
+            completion_tokens=0,
+            cache_read_tokens=-500,
+        )
+        assert cost == 0.005  # clamped to zero, never negative
+
+    def test_bundled_registry_carries_cache_prices_for_anthropic(self):
+        # The shipped registry.yaml prices the verified Anthropic classes;
+        # absent cache fields elsewhere must not break pricing lookups.
+        import yaml
+        from pathlib import Path
+
+        reg = yaml.safe_load(
+            Path("src/llm_council/models/registry.yaml").read_text()
+        )
+        models = {m["id"]: m for m in reg["models"]}
+        opus = models["anthropic/claude-opus-4.8"]["pricing"]
+        assert opus["cache_read"] == round(opus["prompt"] * 0.1, 8)
+        assert opus["cache_write_5m"] == round(opus["prompt"] * 1.25, 8)
+        assert opus["cache_write_1h"] == round(opus["prompt"] * 2.0, 8)
+        # Schema tolerance: at least one entry has no cache fields and the
+        # resolver defaults are exercised above.
+        assert any("cache_read" not in m.get("pricing", {}) for m in reg["models"])
+
+    def test_apply_threads_cache_tokens_to_resolve(self):
+        # apply() is the gateway entry point: cache counts must reach the
+        # registry-estimate arithmetic (round-1 council finding).
+        r = CostResolver(pricing_lookup=_cache_pricing_lookup)
+        usage = UsageInfo(prompt_tokens=1000, completion_tokens=0, total_tokens=1000)
+        r.apply(
+            usage,
+            gateway="direct",
+            model_id="anthropic/claude-opus-4.8",
+            cache_read_tokens=10000,
+        )
+        assert usage.cost_usd == 0.005 + 0.005  # prompt + 10K cache reads
+        assert usage.cost_source == "registry_estimate"

@@ -18,6 +18,7 @@ without loading the metadata stack. See ADR-011 §1 and ADR-023 §5.
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -57,6 +58,13 @@ def registry_pricing_lookup(model_id: str) -> Dict[str, float]:
 
         return get_provider().get_pricing(model_id) or {}
     except Exception:
+        # Soft-fail is the ADR-011 contract (cost accounting never fails a
+        # run) — but not silently: leave a debug trace for diagnosis.
+        logging.getLogger(__name__).debug(
+            "pricing lookup failed for %s; cost will be unknown",
+            model_id,
+            exc_info=True,
+        )
         return {}
 
 
@@ -77,11 +85,25 @@ class CostResolver:
         prompt_tokens: int,
         completion_tokens: int,
         provider_cost_usd: Optional[float] = None,
+        cache_read_tokens: int = 0,
+        cache_write_5m_tokens: int = 0,
+        cache_write_1h_tokens: int = 0,
     ) -> Tuple[Optional[float], Optional[str]]:
         """Return ``(cost_usd, cost_source)`` for one call.
 
         Ground truth wins; otherwise fall back to a registry estimate; local
         gateways are free; anything unpriced resolves to ``(None, None)``.
+
+        Cache token counts (ADR-049 D3) are the provider's SEPARATE fields —
+        e.g. Anthropic direct reports ``input_tokens`` EXCLUDING cache reads
+        and writes — so they are priced in ADDITION to ``prompt_tokens``,
+        using the registry's ``cache_read`` / ``cache_write_5m`` /
+        ``cache_write_1h`` per-1K prices. An entry without a cache price
+        bills those tokens at the ``prompt`` price (the documented default:
+        consistent, predictable, and exact for providers whose prompt counts
+        already include cache traffic since their separate fields stay 0).
+        They only affect the registry-estimate path: a provider-reported
+        cost already includes any cache discount and wins unconditionally.
         """
         if provider_cost_usd is not None:
             try:
@@ -108,6 +130,17 @@ class CostResolver:
             cost = (prompt / 1000.0) * (price_in or 0.0) + (completion / 1000.0) * (
                 price_out or 0.0
             )
+            # ADR-049 D3: cache price classes. Unknown class -> prompt price.
+            fallback = price_in or 0.0
+            for count, key in (
+                (cache_read_tokens, "cache_read"),
+                (cache_write_5m_tokens, "cache_write_5m"),
+                (cache_write_1h_tokens, "cache_write_1h"),
+            ):
+                price = _safe_price(pricing.get(key))
+                cost += (max(count or 0, 0) / 1000.0) * (
+                    price if price is not None else fallback
+                )
             # 8dp: sub-cent per-call costs must not round to zero.
             return round(cost, 8), "registry_estimate"
 
@@ -121,14 +154,24 @@ class CostResolver:
         model_id: str,
         provider_cost_usd: Optional[float] = None,
         cached_tokens: Optional[int] = None,
+        cache_read_tokens: int = 0,
+        cache_write_5m_tokens: int = 0,
+        cache_write_1h_tokens: int = 0,
     ) -> UsageInfo:
-        """Populate cost fields on ``usage`` in place and return it."""
+        """Populate cost fields on ``usage`` in place and return it.
+
+        Cache token counts (ADR-049 D3) thread through to ``resolve`` so
+        registry estimates price them; the provider-cost path ignores them.
+        """
         cost, source = self.resolve(
             gateway=gateway,
             model_id=model_id,
             prompt_tokens=usage.prompt_tokens,
             completion_tokens=usage.completion_tokens,
             provider_cost_usd=provider_cost_usd,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_5m_tokens=cache_write_5m_tokens,
+            cache_write_1h_tokens=cache_write_1h_tokens,
         )
         usage.cost_usd = cost
         usage.cost_source = source

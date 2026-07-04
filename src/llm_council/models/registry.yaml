@@ -6,7 +6,9 @@
 # Schema:
 #   id: Full model identifier (required)
 #   context_window: Maximum context length in tokens (required)
-#   pricing: Dict with "prompt" and "completion" costs per 1K tokens
+#   pricing: Dict with "prompt" and "completion" costs per 1K tokens; optional
+#     "cache_read"/"cache_write_5m"/"cache_write_1h" per-1K cache price classes
+#     (ADR-049 D3 — absent classes bill at the prompt price)
 #   supported_parameters: List of supported API parameters
 #   modalities: List of input modalities (text, vision, audio)
 #   quality_tier: frontier | standard | economy | local
@@ -170,6 +172,9 @@ models:
     pricing:
       prompt: 0.003
       completion: 0.015
+      cache_read: 0.0003
+      cache_write_5m: 0.00375
+      cache_write_1h: 0.006
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -179,6 +184,9 @@ models:
     pricing:
       prompt: 0.005
       completion: 0.025
+      cache_read: 0.0005
+      cache_write_5m: 0.00625
+      cache_write_1h: 0.01
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -188,6 +196,9 @@ models:
     pricing:
       prompt: 0.005
       completion: 0.025
+      cache_read: 0.0005
+      cache_write_5m: 0.00625
+      cache_write_1h: 0.01
     supported_parameters: ["temperature", "top_p", "tools"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -197,6 +208,9 @@ models:
     pricing:
       prompt: 0.015
       completion: 0.075
+      cache_read: 0.0015
+      cache_write_5m: 0.01875
+      cache_write_1h: 0.03
     supported_parameters: ["temperature", "top_p", "tools"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -206,6 +220,9 @@ models:
     pricing:
       prompt: 0.003
       completion: 0.015
+      cache_read: 0.0003
+      cache_write_5m: 0.00375
+      cache_write_1h: 0.006
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -215,6 +232,9 @@ models:
     pricing:
       prompt: 0.001
       completion: 0.005
+      cache_read: 0.0001
+      cache_write_5m: 0.00125
+      cache_write_1h: 0.002
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
     modalities: ["text", "vision"]
     quality_tier: "economy"
@@ -224,6 +244,9 @@ models:
     pricing:
       prompt: 0.003
       completion: 0.015
+      cache_read: 0.0003
+      cache_write_5m: 0.00375
+      cache_write_1h: 0.006
     supported_parameters: ["temperature", "top_p", "tools"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -233,6 +256,9 @@ models:
     pricing:
       prompt: 0.0008
       completion: 0.004
+      cache_read: 0.00008
+      cache_write_5m: 0.001
+      cache_write_1h: 0.0016
     supported_parameters: ["temperature", "top_p", "tools"]
     modalities: ["text", "vision"]
     quality_tier: "economy"
@@ -242,6 +268,9 @@ models:
     pricing:
       prompt: 0.015
       completion: 0.075
+      cache_read: 0.0015
+      cache_write_5m: 0.01875
+      cache_write_1h: 0.03
     supported_parameters: ["temperature", "top_p", "tools"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -251,6 +280,9 @@ models:
     pricing:
       prompt: 0.003
       completion: 0.015
+      cache_read: 0.0003
+      cache_write_5m: 0.00375
+      cache_write_1h: 0.006
     supported_parameters: ["temperature", "top_p", "tools"]
     modalities: ["text", "vision"]
     quality_tier: "standard"
