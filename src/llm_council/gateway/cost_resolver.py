@@ -77,11 +77,25 @@ class CostResolver:
         prompt_tokens: int,
         completion_tokens: int,
         provider_cost_usd: Optional[float] = None,
+        cache_read_tokens: int = 0,
+        cache_write_5m_tokens: int = 0,
+        cache_write_1h_tokens: int = 0,
     ) -> Tuple[Optional[float], Optional[str]]:
         """Return ``(cost_usd, cost_source)`` for one call.
 
         Ground truth wins; otherwise fall back to a registry estimate; local
         gateways are free; anything unpriced resolves to ``(None, None)``.
+
+        Cache token counts (ADR-049 D3) are the provider's SEPARATE fields —
+        e.g. Anthropic direct reports ``input_tokens`` EXCLUDING cache reads
+        and writes — so they are priced in ADDITION to ``prompt_tokens``,
+        using the registry's ``cache_read`` / ``cache_write_5m`` /
+        ``cache_write_1h`` per-1K prices. An entry without a cache price
+        bills those tokens at the ``prompt`` price (the documented default:
+        consistent, predictable, and exact for providers whose prompt counts
+        already include cache traffic since their separate fields stay 0).
+        They only affect the registry-estimate path: a provider-reported
+        cost already includes any cache discount and wins unconditionally.
         """
         if provider_cost_usd is not None:
             try:
@@ -108,6 +122,17 @@ class CostResolver:
             cost = (prompt / 1000.0) * (price_in or 0.0) + (completion / 1000.0) * (
                 price_out or 0.0
             )
+            # ADR-049 D3: cache price classes. Unknown class -> prompt price.
+            fallback = price_in or 0.0
+            for count, key in (
+                (cache_read_tokens, "cache_read"),
+                (cache_write_5m_tokens, "cache_write_5m"),
+                (cache_write_1h_tokens, "cache_write_1h"),
+            ):
+                price = _safe_price(pricing.get(key))
+                cost += (max(count or 0, 0) / 1000.0) * (
+                    price if price is not None else fallback
+                )
             # 8dp: sub-cent per-call costs must not round to zero.
             return round(cost, 8), "registry_estimate"
 
