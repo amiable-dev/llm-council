@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Stable-prefix-first prompt assembly (ADR-049 D1, #459)** — the verification prompt is restructured into stability-ordered segments: static head (role/instructions/rubric/focus) → evidence (ADR-042) → subject (file contents) → volatile tail. The snapshot SHA — previously the FIRST line, invalidating any provider prompt cache from byte zero on every round — now lives only in the tail. Segment boundaries (char offsets + token estimates) are exposed on the prompt-builder's render info for ADR-049 D2 cache-breakpoint placement. Byte-stability is golden-file-tested: two rounds of the same subject with different SHAs are byte-identical through the evidence segment. Intentional prompt drift: the ADR-042 evidence_none golden hash is regenerated (ordering contract — focus → evidence → code — preserved and test-pinned).
+
 ## [0.33.0] - 2026-07-03
 
 **Documentation Usability Overhaul** — epic [#443](https://github.com/amiable-dev/llm-council/issues/443), from the 2026-07-03 documentation review. Ships the documented-but-missing API surfaces (docs-as-spec: the `consult_council` Python facade and `gate --tier`), fixes every doc that failed when executed, surfaces the v0.25–v0.32 feature set on the published site (which had frozen at ADR-038), and adds CI drift guards so docs currency is enforced like code currency.

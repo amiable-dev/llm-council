@@ -202,11 +202,13 @@ async def _build_verification_prompt(
 
     evidence_instructions = _build_evidence_instructions(bool(kept_evidence))
 
-    prompt = f"""You are reviewing code at commit `{snapshot_id}`.{focus_section}{evidence_section}
-
-## Code to Review
-
-{file_contents}
+    # ADR-049 D1: stable-prefix-first assembly. Segments render in stability
+    # order — static head (round- AND subject-invariant), evidence, subject,
+    # volatile tail — so provider prompt caches can reuse the unchanged
+    # prefix across verification rounds. The snapshot SHA is the canonical
+    # cache-buster and lives ONLY in the tail; nothing above the tail may
+    # contain timestamps, UUIDs, or per-round values.
+    static_head = f"""You are reviewing code for quality verification.{focus_section}
 
 ## Instructions
 
@@ -222,9 +224,39 @@ At the end of your review, provide a clear verdict:
 - **REJECTED** if there are critical issues that must be fixed
 - **NEEDS REVIEW** if you're uncertain and recommend human review
 
-Be specific and cite file paths and line numbers when identifying issues."""
+Be specific and cite file paths and line numbers when identifying issues.
+"""
+    subject = f"""
+## Code to Review
+
+{file_contents}
+"""
+    volatile_tail = f"""
+## Review Target
+
+Commit under review: `{snapshot_id}`"""
+
+    prompt = static_head + evidence_section + subject + volatile_tail
+
+    # Contiguous char-offset segment map (est_tokens = chars // 4), exposed
+    # for ADR-049 D2 breakpoint placement and the byte-stability tests.
+    segments = []
+    cursor = 0
+    for name, text in (
+        ("static_head", static_head),
+        ("evidence", evidence_section),
+        ("subject", subject),
+        ("volatile_tail", volatile_tail),
+    ):
+        end = cursor + len(text)
+        segments.append(
+            {"name": name, "start": cursor, "end": end,
+             "est_tokens": (end - cursor) // 4}
+        )
+        cursor = end
 
     render_info = {
+        "segments": segments,
         "kept": kept_evidence,
         "warnings": evidence_warnings,
         "chars_rendered": chars_rendered,
