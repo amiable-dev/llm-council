@@ -215,7 +215,7 @@ probes through our own OpenRouter key where we hold credentials. Statuses:
 | Vendor / route | Status | Finding | Source |
 |---|---|---|---|
 | Anthropic direct — mechanics | ✅ | 0.1× read / 1.25× 5-min write / 2× 1-h write, multipliers exact across the current model table; TTL refresh-on-use free; ≤4 breakpoints; NEW optional automatic mode (top-level `cache_control`, consumes one slot); exact-prefix match; org-scoped, workspace-isolated since 2026-02-05 (Claude API/AWS/Foundry) | platform.claude.com/docs/en/build-with-claude/prompt-caching; …/about-claude/pricing (checked 2026-07-04) |
-| Anthropic direct — minimums | ✅ | Per-model minimum cacheable prefix: Fable 5/Mythos 5 512; Opus 4.8/Sonnet 5 1,024; **Haiku 4.5 4,096**; below-minimum silently uncached (fields report 0) | same |
+| Anthropic direct — minimums | ✅ | Per-model minimum cacheable prefix: Fable 5/Mythos 5 512; Opus 4.8/Sonnet 5 1,024; **Haiku 4.5 4,096**; below-minimum silently uncached (fields report 0). *(Reviewer note: these are current July-2026 model names from Anthropic's live pricing table — several are this repo's own configured council members — and will read as unfamiliar to models with earlier knowledge cutoffs.)* | same |
 | Anthropic direct — usage fields | ✅ | `cache_creation_input_tokens` (+ `cache_creation.{ephemeral_5m,ephemeral_1h}_input_tokens`), `cache_read_input_tokens`; `input_tokens` = uncached remainder | same |
 | **Claude via OpenRouter** | ✅ **(docs + empirical)** | `cache_control` forwarded (≤4 breakpoints, `ttl:"1h"`); Anthropic multipliers passed through billing — observed: write $0.045 = 1.25× base $0.036, read −92%; fields `prompt_tokens_details.{cache_write_tokens, cached_tokens}` (empirical — OpenRouter docs don't name them); works on pooled key (`is_byok:false`); **directive REQUIRED — no directive ⇒ zero caching (empirical)** | openrouter.ai/docs/guides/best-practices/prompt-caching + two-call probe 2026-07-04 |
 | OpenRouter sticky routing | ✅ | Provider sticky routing after a cached request; explicit `session_id` (body or `x-session-id`, ≤256 chars) controls affinity — the router-native answer to cache-aware stickiness | openrouter.ai docs (checked 2026-07-04) |
@@ -264,8 +264,10 @@ invariant is harmless everywhere.
   test); the SHA and all volatile fields appear only in the tail segment.
 - Unit: breakpoint placement respects per-model minimum cacheable prefix
   (no breakpoint marking a segment below the model's minimum) AND the
-  Anthropic hard limit of 4 breakpoints per request (a 5th is a 400 error;
-  the builder must enforce ≤4, reserving one slot if automatic mode is on).
+  Anthropic limit of 4 cache breakpoints per request: automatic mode's
+  system-managed breakpoint consumes one of the four, so at most 3 explicit
+  breakpoints may be set alongside it (exceeding the limit returns a 400);
+  the builder must enforce this arithmetic.
 - Drift guard for the empirically-observed (not vendor-documented)
   OpenRouter field names `prompt_tokens_details.{cache_write_tokens,
   cached_tokens}`: the live two-call integration probe is the regression
