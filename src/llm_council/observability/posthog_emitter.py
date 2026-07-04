@@ -33,6 +33,7 @@ _lock = threading.Lock()
 _client: Optional[Any] = None
 _init_attempted = False
 _atexit_registered = False
+_shutdown_done = False
 
 
 def posthog_emission_enabled() -> bool:
@@ -111,10 +112,15 @@ def shutdown(timeout: float = _FLUSH_TIMEOUT_S) -> None:
     with the process). Registered via ``atexit`` on client init; also safe to
     call explicitly from a CLI/gate teardown.
     """
+    global _shutdown_done
     with _lock:  # snapshot under the lock — a concurrent reset must not race
+        # Idempotent: atexit + an explicit teardown call must not double-flush.
+        if _shutdown_done:
+            return
         client = _client
-    if client is None:
-        return
+        if client is None:
+            return
+        _shutdown_done = True
 
     def _flush() -> None:
         try:
@@ -136,7 +142,8 @@ def reset_for_testing() -> None:
     process-global and idempotent (None-guarded), so it must be registered at
     most once for the process, never re-registered per test.
     """
-    global _client, _init_attempted
+    global _client, _init_attempted, _shutdown_done
     with _lock:
         _client = None
         _init_attempted = False
+        _shutdown_done = False

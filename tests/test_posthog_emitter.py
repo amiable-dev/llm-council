@@ -144,3 +144,18 @@ class TestShutdown:
         pe._client = C()
         pe._init_attempted = True
         pe.shutdown(timeout=1.0)  # must not raise
+
+
+class TestShutdownIdempotent:
+    def test_double_shutdown_flushes_once(self, monkeypatch):
+        calls = []
+
+        class C:
+            def shutdown(self):
+                calls.append(1)
+
+        pe._client = C()
+        pe._init_attempted = True
+        pe.shutdown(timeout=1.0)
+        pe.shutdown(timeout=1.0)  # atexit + explicit — must not double-flush
+        assert calls == [1]
