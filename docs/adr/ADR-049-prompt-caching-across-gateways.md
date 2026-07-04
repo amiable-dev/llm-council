@@ -172,11 +172,31 @@ the verify path), 5-min default for `consult_council`/interactive use.
 Config knob: `LLM_COUNCIL_CACHE_TTL` (`5m` | `1h`), verify path defaulting
 to `1h`.
 
+Explicit three-way math (Anthropic's published break-even — 1h pays off
+after two reads — compares 1h-write against *no caching*; the operative
+comparison for verify flows is 1h **vs 5m** at the observed cadence):
+
+| Round gap | 5-min TTL outcome | 1-hour TTL outcome | Winner |
+|---|---|---|---|
+| < 5 min | free refresh, 0.1× reads | same reads, paid 2× once | 5m (1h wastes 0.75×) |
+| 5–60 min | cache lapsed: every round re-pays 1.25× write, **zero reads** | 2× once, then 0.1× reads | **1h from the first read** |
+| sequence ends after r1 | 1.25× sunk | 2× sunk | 5m (bounded 0.75× loss) |
+
+Observed gaps straddle 5 minutes (3–11 min), so `1h` on the verify path
+wins in expectation; the worst case (single-round sequence) is a bounded
+0.75× premium on one cached segment.
+
 **Stickiness (policy question A, resolved):** OpenRouter itself ships
 **provider sticky routing keyed on `session_id`** (request body or
 `x-session-id` header), designed precisely to preserve cache warmth across
-its upstream pool. Adopt it: pass `session_id = <verification subject key>`
-(e.g. PR/subject identifier) on verify-path calls. This delegates
+its upstream pool. Adopt it with a precisely-specified key:
+`session_id = "verify:{repo}:{subject}"` where `subject` is the **stable
+sequence identifier** (PR number / branch) — explicitly NOT the per-round
+snapshot SHA, which changes every round and would defeat the affinity it
+exists to provide. Note `session_id` is **routing affinity only, not a
+cache key**: provider caches match on exact prompt prefix, so two subjects
+sharing a session_id cannot collide on content — the worst mis-keying
+outcome is lost affinity (a cold cache), never cross-subject reuse. This delegates
 stickiness to the router, adds no state to our selection policy, and —
 resolving the resilience concern — **never overrides circuit state**: our
 circuit breaker and fallback chains behave exactly as today; a failover
@@ -243,7 +263,15 @@ invariant is harmless everywhere.
   byte-identical through the declared segment boundaries (golden-file
   test); the SHA and all volatile fields appear only in the tail segment.
 - Unit: breakpoint placement respects per-model minimum cacheable prefix
-  (no breakpoint marking a segment below the model's minimum).
+  (no breakpoint marking a segment below the model's minimum) AND the
+  Anthropic hard limit of 4 breakpoints per request (a 5th is a 400 error;
+  the builder must enforce ≤4, reserving one slot if automatic mode is on).
+- Drift guard for the empirically-observed (not vendor-documented)
+  OpenRouter field names `prompt_tokens_details.{cache_write_tokens,
+  cached_tokens}`: the live two-call integration probe is the regression
+  test; extraction must treat a missing field as 0/unknown (degrade to
+  full-price accounting, per ADR-011 `cost_known` semantics — never crash,
+  never fabricate).
 - Integration (per caching-capable route, opt-in/live): two back-to-back
   calls; assert call 2 reports cache-read tokens > 0 and `usage.cost`
   reflects the discount (the 2026-07-04 probe is the template).
