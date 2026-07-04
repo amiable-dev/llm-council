@@ -18,6 +18,7 @@ without loading the metadata stack. See ADR-011 §1 and ADR-023 §5.
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -57,6 +58,13 @@ def registry_pricing_lookup(model_id: str) -> Dict[str, float]:
 
         return get_provider().get_pricing(model_id) or {}
     except Exception:
+        # Soft-fail is the ADR-011 contract (cost accounting never fails a
+        # run) — but not silently: leave a debug trace for diagnosis.
+        logging.getLogger(__name__).debug(
+            "pricing lookup failed for %s; cost will be unknown",
+            model_id,
+            exc_info=True,
+        )
         return {}
 
 
