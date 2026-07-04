@@ -55,11 +55,18 @@ def _get_client() -> Optional[Any]:
         if _init_attempted:
             return _client
         _init_attempted = True
+        # Re-read the key under the lock via getenv (consistent with
+        # posthog_emission_enabled) — never os.environ[...], which would
+        # KeyError if the env was cleared between the enabled-check and here.
+        key = os.getenv("POSTHOG_API_KEY")
+        if not key:
+            _client = None
+            return None
         try:
             from posthog import Posthog  # optional dependency — [posthog] extra
 
             _client = Posthog(
-                project_api_key=os.environ["POSTHOG_API_KEY"],
+                project_api_key=key,
                 host=os.getenv("POSTHOG_HOST", DEFAULT_HOST),
             )
             if not _atexit_registered:
@@ -94,7 +101,8 @@ def shutdown(timeout: float = _FLUSH_TIMEOUT_S) -> None:
     with the process). Registered via ``atexit`` on client init; also safe to
     call explicitly from a CLI/gate teardown.
     """
-    client = _client
+    with _lock:  # snapshot under the lock — a concurrent reset must not race
+        client = _client
     if client is None:
         return
 
@@ -112,7 +120,12 @@ def shutdown(timeout: float = _FLUSH_TIMEOUT_S) -> None:
 
 
 def reset_for_testing() -> None:
-    """Test hook: clear the module singleton so env changes take effect."""
+    """Test hook: clear the client singleton so env changes take effect.
+
+    Deliberately does NOT clear ``_atexit_registered``: the atexit handler is
+    process-global and idempotent (None-guarded), so it must be registered at
+    most once for the process, never re-registered per test.
+    """
     global _client, _init_attempted
     with _lock:
         _client = None
