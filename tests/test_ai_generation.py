@@ -70,7 +70,7 @@ class TestBuildProperties:
               "cost_usd": 0.0}
         p = ag.build_generation_properties(
             "m/x", mu, verification_id="v", tier="high", route="openrouter",
-            round=2, subject_sha="abc123", consumer="opaque-1")
+            round_index=2, subject_sha="abc123", consumer="opaque-1")
         assert p["route"] == "openrouter"
         assert p["round"] == 2
         assert p["subject_sha"] == "abc123"

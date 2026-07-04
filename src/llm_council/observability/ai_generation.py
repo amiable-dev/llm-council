@@ -32,6 +32,18 @@ def _int(value: Any) -> int:
         return 0
 
 
+def _float(value: Any) -> float:
+    """Coerce a cost to a finite float, else 0.0 — a junk value must never drop
+    the whole event via an unguarded ``float()`` raise."""
+    try:
+        import math
+
+        f = float(value or 0.0)
+        return f if math.isfinite(f) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def build_generation_properties(
     model: str,
     model_usage: Dict[str, Any],
@@ -39,7 +51,7 @@ def build_generation_properties(
     verification_id: str,
     tier: Optional[str] = None,
     route: Optional[str] = None,
-    round: Optional[int] = None,
+    round_index: Optional[int] = None,
     subject_sha: Optional[str] = None,
     consumer: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -67,11 +79,11 @@ def build_generation_properties(
     if cache_write:
         props["$ai_cache_creation_input_tokens"] = cache_write
     if model_usage.get("cost_known"):
-        props["$ai_total_cost_usd"] = float(model_usage.get("cost_usd", 0.0) or 0.0)
+        props["$ai_total_cost_usd"] = _float(model_usage.get("cost_usd"))
     for key, value in (
         ("tier", tier),
         ("route", route),
-        ("round", round),
+        ("round", round_index),
         ("subject_sha", subject_sha),
         ("consumer", consumer),
     ):
@@ -86,7 +98,7 @@ def emit_generation_events(
     verification_id: str,
     tier: Optional[str] = None,
     route: Optional[str] = None,
-    round: Optional[int] = None,
+    round_index: Optional[int] = None,
     subject_sha: Optional[str] = None,
     consumer: Optional[str] = None,
 ) -> None:
@@ -108,7 +120,7 @@ def emit_generation_events(
                 verification_id=verification_id,
                 tier=tier,
                 route=route,
-                round=round,
+                round_index=round_index,
                 subject_sha=subject_sha,
                 consumer=consumer,
             )
