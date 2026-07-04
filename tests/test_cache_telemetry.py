@@ -238,3 +238,16 @@ class TestHitRateReconstructionFromLogs:
         stats = by_session["verify:abc123def456"]
         assert stats["writes"] == 800
         assert stats["reads"] / stats["prompt"] == 0.4  # 800 of 2000
+
+
+class TestMalformedProviderShapes:
+    def test_non_numeric_values_degrade_to_zero(self):
+        # Untrusted provider payloads: strings/None/bools never crash capture.
+        assert _extract_cache_write_tokens({"cache_creation_input_tokens": "800"}) == 0
+        assert _extract_cache_write_tokens({"cache_creation_input_tokens": None}) == 0
+        assert _extract_cache_write_tokens(
+            {"cache_creation": {"ephemeral_1h_input_tokens": "x"}}
+        ) == 0
+        assert _extract_cache_write_tokens(
+            {"prompt_tokens_details": {"cache_write_tokens": True}}
+        ) == 0

@@ -50,13 +50,18 @@ def _extract_cache_write_tokens(usage: Dict[str, Any]) -> int:
        observed 2026-07-04, not vendor-documented — ADR-049 §Compliance
        drift guard re-probes quarterly).
     """
+    def _count(value: Any) -> int:
+        # Provider payloads are untrusted: a non-numeric value degrades to 0
+        # rather than crashing usage capture (same posture as missing).
+        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
     top_level = usage.get("cache_creation_input_tokens")
     if top_level is not None:
-        return top_level
+        return _count(top_level)
     sub = usage.get("cache_creation")
     if isinstance(sub, dict) and sub:
-        return sum(v or 0 for k, v in sub.items() if k.endswith("_input_tokens"))
-    return (usage.get("prompt_tokens_details") or {}).get("cache_write_tokens", 0) or 0
+        return sum(_count(v) for k, v in sub.items() if k.endswith("_input_tokens"))
+    return _count((usage.get("prompt_tokens_details") or {}).get("cache_write_tokens"))
 
 if TYPE_CHECKING:
     from llm_council.gateway.types import ReasoningParams
