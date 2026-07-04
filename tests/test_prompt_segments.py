@@ -124,5 +124,7 @@ class TestExistingPinsPreserved:
             evidence=[EvidenceItem(id="e1", source="s", strength="informational",
                                    content="finding-xyz")],
         )
-        assert prompt.index("Security") < prompt.index("finding-xyz")
+        # Anchor on the distinctive focus phrase — a bare "Security" could
+        # false-positive on the instructions' "security vulnerabilities".
+        assert prompt.index("**Focus Area**: Security") < prompt.index("finding-xyz")
         assert prompt.index("finding-xyz") < prompt.index("## Code to Review")
