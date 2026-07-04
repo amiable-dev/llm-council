@@ -39,29 +39,48 @@ PROBE_PROMPT = ("You are a code reviewer. " * 1200) + "\nReply with the single w
 async def test_second_call_hits_cache_with_discounted_cost():
     import httpx
 
+    from llm_council.cache_context import (
+        CacheContext,
+        clear_cache_context,
+        set_cache_context,
+    )
+    from llm_council.gateway.openrouter import build_openrouter_payload
     from llm_council.unified_config import get_api_key
 
     api_key = get_api_key("openrouter")
     if not api_key:
         pytest.skip("no OpenRouter key resolvable")
 
-    payload = {
-        "model": PROBE_MODEL,
-        "max_tokens": 8,
-        "usage": {"include": True},
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": PROBE_PROMPT,
-                        "cache_control": {"type": "ephemeral", "ttl": "5m"},
-                    }
-                ],
-            }
-        ],
-    }
+    # Build the payload through the PRODUCTION injection path: publish a
+    # segment map (head = everything but the last line, per the D1 shape)
+    # and let build_openrouter_payload place the breakpoint + session_id.
+    split = len(PROBE_PROMPT) - 40
+    segments = [
+        {"name": "static_head", "start": 0, "end": split,
+         "est_tokens": split // 4},
+        {"name": "subject", "start": split, "end": len(PROBE_PROMPT) - 20,
+         "est_tokens": 5},
+        {"name": "volatile_tail", "start": len(PROBE_PROMPT) - 20,
+         "end": len(PROBE_PROMPT), "est_tokens": 5},
+    ]
+    set_cache_context(CacheContext(
+        segments=segments,
+        session_id="verify:live-probe",
+        ttl="5m",
+        prompt_head=PROBE_PROMPT[:64],
+    ))
+    try:
+        payload = build_openrouter_payload(
+            PROBE_MODEL, [{"role": "user", "content": PROBE_PROMPT}]
+        )
+    finally:
+        clear_cache_context()
+
+    content = payload["messages"][0]["content"]
+    assert isinstance(content, list), "production injection did not fire"
+    assert payload["session_id"] == "verify:live-probe"
+    payload["max_tokens"] = 8
+    payload["usage"] = {"include": True}
 
     async def call():
         async with httpx.AsyncClient(timeout=60) as client:
