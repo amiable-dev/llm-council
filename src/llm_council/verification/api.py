@@ -150,6 +150,36 @@ def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any
         logger.debug("Failed to persist partial/timeout result.json", exc_info=True)
 
 
+def _emit_posthog_generations(
+    usage: Optional[Dict[str, Any]],
+    *,
+    verification_id: str,
+    tier: str,
+    subject_sha: Optional[str] = None,
+) -> None:
+    """ADR-050 D2: opt-in PostHog ``$ai_generation`` emission (soft-fail).
+
+    Gated on ``posthog_emission_enabled`` BEFORE importing the mapper, so a
+    verify with no ``POSTHOG_API_KEY`` pays only one env check and is
+    byte-identical. Telemetry never breaks a verify.
+    """
+    try:
+        from llm_council.observability.posthog_emitter import posthog_emission_enabled
+
+        if not posthog_emission_enabled():
+            return
+        from llm_council.observability.ai_generation import emit_generation_events
+
+        emit_generation_events(
+            usage,
+            verification_id=verification_id,
+            tier=tier,
+            subject_sha=subject_sha,
+        )
+    except Exception:  # telemetry must never break a verify
+        logger.debug("posthog $ai_generation emission failed (ignored)", exc_info=True)
+
+
 # Maximum characters per file to include in prompt.
 
 async def _build_verification_prompt(
@@ -709,6 +739,16 @@ async def _run_verification_pipeline(
 
     # Persist result
     store.write_stage(verification_id, "result", result)
+
+    # ADR-050 D2 (#474): opt-in PostHog $ai_generation emission — one event per
+    # council-member model, keyed to this verification_id. No-op + soft-fail
+    # when POSTHOG_API_KEY is unset (byte-identical); never delays a verify.
+    _emit_posthog_generations(
+        partial_state.get("usage"),
+        verification_id=verification_id,
+        tier=request.tier,
+        subject_sha=request.snapshot_id,
+    )
 
     return result
 
