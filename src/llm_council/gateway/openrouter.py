@@ -8,6 +8,7 @@ conforming to the BaseRouter interface.
 """
 
 import json
+import logging
 import time
 from datetime import datetime
 from typing import AsyncIterator, Dict, Any, List, Optional
@@ -141,6 +142,13 @@ def build_openrouter_payload(
     except Exception:  # pragma: no cover - defensive
         # Soft-fail (ADR-011/024 convention): caching changes price class,
         # never content — a bad segment map must never break the query.
+        # Revert to the full pre-D2 payload (session_id included: on any
+        # anomaly we want the known-good baseline, not a partial mode).
+        logging.getLogger(__name__).debug(
+            "prompt-cache injection failed for %s; reverting to plain payload",
+            model,
+            exc_info=True,
+        )
         payload["messages"] = messages
         payload.pop("session_id", None)
 
