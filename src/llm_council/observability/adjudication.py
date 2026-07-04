@@ -61,8 +61,10 @@ def emit_adjudication(
             f"disposition must be one of {sorted(ADJUDICATION_VALUES)}, "
             f"got {disposition!r}"
         )
-    if not verification_id:
-        raise ValueError("verification_id is required (the $ai_trace_id to key the metric)")
+    if not verification_id or not verification_id.strip():
+        raise ValueError(
+            "verification_id is required and non-blank (the $ai_trace_id to key the metric)"
+        )
     if not posthog_emission_enabled():
         return
     try:
@@ -72,8 +74,10 @@ def emit_adjudication(
             "metric_value": ADJUDICATION_VALUES[disposition],
             "adjudication_label": disposition,
         }
-        if notes:
+        if notes and notes.strip():  # omit empty/whitespace-only notes
             props["adjudication_notes"] = notes
-        emit("$ai_metric", props, distinct_id=consumer or DEFAULT_DISTINCT_ID)
+        # Empty/whitespace consumer falls back to the default actor.
+        distinct_id = (consumer or "").strip() or DEFAULT_DISTINCT_ID
+        emit("$ai_metric", props, distinct_id=distinct_id)
     except Exception as exc:  # telemetry must never break the caller
         logger.debug("emit_adjudication failed (ignored): %s", scrub_exception(exc))

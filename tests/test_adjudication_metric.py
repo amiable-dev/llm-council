@@ -91,3 +91,26 @@ class TestEmitAdjudication:
 
     def test_vocabulary_is_the_adr_set(self):
         assert set(adj.ADJUDICATION_VALUES) == {"real", "marginal", "refuted", "pass-clean"}
+
+
+class TestEdgeCases:
+    def test_whitespace_verification_id_raises(self):
+        import pytest as _pytest
+        with _pytest.raises(ValueError):
+            adj.emit_adjudication("   ", "real")
+
+    def test_blank_consumer_falls_back_to_default(self, monkeypatch):
+        monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
+        sink = []
+        monkeypatch.setattr(adj, "emit",
+                            lambda event, properties, distinct_id: sink.append(distinct_id))
+        adj.emit_adjudication("v1", "real", consumer="   ")
+        assert sink == ["llm-council"]
+
+    def test_whitespace_notes_omitted(self, monkeypatch):
+        monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
+        sink = []
+        monkeypatch.setattr(adj, "emit",
+                            lambda event, properties, distinct_id: sink.append(properties))
+        adj.emit_adjudication("v1", "real", notes="   ")
+        assert "adjudication_notes" not in sink[0]
