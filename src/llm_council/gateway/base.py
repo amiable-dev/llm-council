@@ -28,6 +28,24 @@ class HealthStatus(Enum):
 
 
 @dataclass
+class CachingCapability:
+    """Prompt-caching descriptor for a route (ADR-049 D2).
+
+    ``semantics`` values: explicit | explicit_auto | router_flag | implicit
+    | none. For aggregator routes (OpenRouter) the descriptor describes the
+    best-supported vendor family on that route — e.g. semantics="explicit"
+    with directive="anthropic_cache_control" applies to anthropic/* models
+    only; other models on the route behave as "none" (verified 2026-07-04,
+    ADR-049 research matrix).
+    """
+
+    semantics: str = "none"
+    directive: Optional[str] = None
+    billing_passthrough: Optional[bool] = None  # None = unverified
+    usage_fields: Optional[str] = None
+
+
+@dataclass
 class RouterCapabilities:
     """Capabilities supported by a gateway router.
 
@@ -42,6 +60,7 @@ class RouterCapabilities:
     requires_byok: bool = False  # Requires user API keys
     max_context_window: Optional[int] = None
     supported_models: List[str] = field(default_factory=list)
+    caching: CachingCapability = field(default_factory=CachingCapability)
 
 
 @dataclass

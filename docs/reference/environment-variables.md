@@ -150,6 +150,7 @@
 
 | Variable | Description | Default |
 |---|---|---|
+| `LLM_COUNCIL_PROMPT_CACHING` | Anthropic prompt-cache breakpoints + OpenRouter session affinity on the verify path (ADR-049 D2). Default ON — price-class-only change; set `false` to force byte-identical pre-D2 payloads | true |
 | `LLM_COUNCIL_CACHE` | Response cache | code |
 | `LLM_COUNCIL_CACHE_DIR` | Cache directory | code |
 | `LLM_COUNCIL_CACHE_TTL` | Cache TTL (s) | code |

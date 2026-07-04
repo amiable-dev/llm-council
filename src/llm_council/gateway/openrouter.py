@@ -35,6 +35,7 @@ def _get_openrouter_api_key() -> str:
 OPENROUTER_API_KEY = _get_openrouter_api_key()
 
 from .base import (
+    CachingCapability,
     DEFAULT_HEALTH_CHECK_MODEL,
     BaseRouter,
     HealthStatus,
@@ -49,6 +50,46 @@ from .types import (
     ReasoningParams,
     UsageInfo,
 )
+
+
+def _apply_cache_breakpoints(
+    messages: List[Dict[str, Any]],
+    model: str,
+    cache_ctx: "Any",
+) -> List[Dict[str, Any]]:
+    """Split the matching prompt into content parts with cache_control.
+
+    Only the message whose string content matches the published segment map
+    is transformed; everything else passes through untouched. Reassembly of
+    the parts is byte-identical to the original prompt. Breakpoints honor
+    the per-model minimum cacheable prefix (below-minimum marks are silently
+    useless AND we skip them) and the ≤4-breakpoint hard limit.
+    """
+    out: List[Dict[str, Any]] = []
+    for msg in messages:
+        content = msg.get("content")
+        if not isinstance(content, str) or not cache_ctx.matches(content):
+            out.append(msg)
+            continue
+        offsets = cache_ctx.breakpoint_offsets(model)
+        if not offsets:
+            out.append(msg)
+            continue
+        parts: List[Dict[str, Any]] = []
+        cursor = 0
+        for off in offsets:
+            parts.append(
+                {
+                    "type": "text",
+                    "text": content[cursor:off],
+                    "cache_control": {"type": "ephemeral", "ttl": cache_ctx.ttl},
+                }
+            )
+            cursor = off
+        if cursor < len(content):
+            parts.append({"type": "text", "text": content[cursor:]})
+        out.append({**msg, "content": parts})
+    return out
 
 
 def build_openrouter_payload(
@@ -76,6 +117,22 @@ def build_openrouter_payload(
         "model": model,
         "messages": messages,
     }
+
+    # ADR-049 D2: request-scoped prompt-cache context (segments published by
+    # the verification pipeline). Applies Anthropic cache_control breakpoints
+    # at the D1 segment boundaries and the OpenRouter session_id affinity
+    # key. Kill-switch LLM_COUNCIL_PROMPT_CACHING=false ⇒ byte-identical.
+    from ..cache_context import get_cache_context, prompt_caching_enabled
+
+    cache_ctx = get_cache_context()
+    if cache_ctx is not None and prompt_caching_enabled():
+        if cache_ctx.session_id:
+            # Affinity helps every vendor via OpenRouter sticky routing.
+            payload["session_id"] = cache_ctx.session_id
+        if model.startswith("anthropic/"):
+            payload["messages"] = _apply_cache_breakpoints(
+                messages, model, cache_ctx
+            )
 
     if disable_tools:
         payload["tools"] = []
@@ -135,6 +192,14 @@ class OpenRouterGateway(BaseRouter):
             supports_json_mode=True,
             supports_byok=False,  # OpenRouter manages API keys
             requires_byok=False,
+            # ADR-049: verified 2026-07-04 (docs + empirical two-call probe) —
+            # anthropic/* only; other vendors on this route showed no caching.
+            caching=CachingCapability(
+                semantics="explicit",
+                directive="anthropic_cache_control",
+                billing_passthrough=True,
+                usage_fields="openrouter_normalized",
+            ),
         )
 
     @property

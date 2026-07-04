@@ -13,6 +13,7 @@ Exit codes:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 import time
@@ -43,6 +44,11 @@ from llm_council.verification.context import (
 from llm_council.verification.transcript import (
     TranscriptStore,
     create_transcript_store,
+)
+from llm_council.cache_context import (
+    CacheContext,
+    clear_cache_context,
+    set_cache_context,
 )
 from llm_council.verification.calibration import (
     calibrated_confidence_enabled,
@@ -795,6 +801,22 @@ async def run_verification(
             _persist_result_safe(store, verification_id, cap_result)
             return cap_result
 
+        # ADR-049 D2 (#460): publish the D1 segment map + session affinity key
+        # to the request-scoped cache context. The session key is the STABLE
+        # sequence id (hash of the target paths) — never the per-round SHA,
+        # which would defeat the affinity it exists to provide. Cleared in
+        # the finally below; consumers no-op when the context is absent.
+        subject_key = hashlib.sha1(
+            "\n".join(sorted(request.target_paths or ["<repo>"])).encode()
+        ).hexdigest()[:12]
+        set_cache_context(
+            CacheContext(
+                segments=evidence_render_info.get("segments") or [],
+                session_id=f"verify:{subject_key}",
+                ttl="1h",
+            )
+        )
+
         # ADR-047 P3 (#415): opt-in lightweight screening pre-gate.
         # off (default) = no screen call, byte-identical. shadow = screen +
         # log only. active = short-circuit on a unanimous screen pass.
@@ -843,6 +865,7 @@ async def run_verification(
                     },
                 }
                 _persist_result_safe(store, verification_id, screen_result)
+                clear_cache_context()
                 return screen_result
             log_decision(decision)
             screening_info = {
@@ -1020,6 +1043,10 @@ async def run_verification(
             # real-world failure mode) are not lost from the transcript logs.
             _persist_result_safe(store, verification_id, timeout_result)
             return timeout_result
+        finally:
+            # ADR-049 D2: request-scoped cache context must not leak into a
+            # subsequent verification handled by the same task.
+            clear_cache_context()
 
 
 @router.post("/verify", response_model=VerifyResponse)

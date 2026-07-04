@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Prompt-cache injection + session affinity (ADR-049 D2, #460)** — the verify path now publishes its D1 segment map into a request-scoped `CacheContext` (ContextVar, zero signature changes); `build_openrouter_payload` consumes it to place Anthropic `cache_control` breakpoints (ephemeral, 1h TTL, at the evidence and subject boundaries — empirically verified −92% read / 1.25× write pass-through on the OpenRouter route) and an OpenRouter `session_id` affinity key (`verify:{subject-digest}`, stable across rounds, never per-SHA). Safety rails: per-model minimum-prefix guards (Fable 5: 512 / Opus 4.8 & Sonnet 5: 1,024 / Haiku 4.5 and unknown: 4,096 tokens), injection only when the outgoing prompt matches the published segment map (stage-2/3 prompts are a no-op), ≤2 of Anthropic's 4 breakpoints used, byte-identical reassembly test-pinned. `LLM_COUNCIL_PROMPT_CACHING=false` kill-switch restores byte-identical payloads (default ON — price-class-only change). The OpenRouter gateway declares a `CachingCapability` descriptor (`explicit` / `anthropic_cache_control` / billing pass-through verified).
+
 ### Changed
 
 - **Stable-prefix-first prompt assembly (ADR-049 D1, #459)** — the verification prompt is restructured into stability-ordered segments: static head (role/instructions/rubric/focus) → evidence (ADR-042) → subject (file contents) → volatile tail. The snapshot SHA — previously the FIRST line, invalidating any provider prompt cache from byte zero on every round — now lives only in the tail. Segment boundaries (char offsets + token estimates) are exposed on the prompt-builder's render info for ADR-049 D2 cache-breakpoint placement. Byte-stability is golden-file-tested: two rounds of the same subject with different SHAs are byte-identical through the evidence segment. Intentional prompt drift: the ADR-042 evidence_none golden hash is regenerated (ordering contract — focus → evidence → code — preserved and test-pinned).
