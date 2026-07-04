@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.34.0] - 2026-07-04
+
+**Prompt Caching Across Gateways (ADR-049)** — epic [#458](https://github.com/amiable-dev/llm-council/issues/458). Verification rounds re-send a nearly identical prompt every round; this release makes the stable prefix actually cacheable and the cache observable. Stable-prefix-first prompt assembly (D1), Anthropic `cache_control` breakpoints + OpenRouter session affinity on the verify path (D2, default ON — price-class-only, empirically verified −92% read cost on the production route), cache price classes in registry estimates (D3), cache-write/route/session telemetry with log-only hit-rate reconstruction (D4), and a per-path TTL knob with an opt-in live probe (D5). Every decision traces to the ADR's research matrix — vendor docs adversarially verified plus two-call probes on our own key; refuted routes (OpenAI/Gemini/DeepSeek via OpenRouter) are documented with a quarterly re-probe note.
 
 ### Added
 
