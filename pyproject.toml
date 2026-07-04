@@ -53,6 +53,8 @@ mcp = [
 secure = ["keyring>=23.0.0"]
 # Ollama local LLM support via LiteLLM - install with: pip install "llm-council-core[ollama]"
 ollama = ["litellm>=1.50.0"]
+# PostHog LLM Analytics emission (ADR-050) - install with: pip install "llm-council-core[posthog]"
+posthog = ["posthog>=3.0.0"]
 # All server dependencies
 all = ["llm-council-core[http,mcp]"]
 # Development dependencies

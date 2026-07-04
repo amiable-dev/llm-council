@@ -168,6 +168,15 @@
 | `LLM_COUNCIL_TELEMETRY` | Telemetry client | code |
 | `LLM_COUNCIL_TELEMETRY_ENDPOINT` | Telemetry endpoint | code |
 
+## PostHog LLM Analytics (ADR-050)
+
+Opt-in emission of `$ai_generation` events to PostHog. Off by default — with no `POSTHOG_API_KEY` the emitter is disabled and behavior is byte-identical (the optional `posthog` SDK is never imported). Install with `pip install "llm-council-core[posthog]"`.
+
+| Variable | Description | Default |
+|---|---|---|
+| `POSTHOG_API_KEY` | PostHog project API key (publishable `phc_` key). Presence enables emission | — (disabled) |
+| `POSTHOG_HOST` | PostHog ingestion host. Use `https://us.i.posthog.com` for US Cloud | `https://eu.i.posthog.com` |
+
 ## Webhooks
 
 | Variable | Description | Default |
