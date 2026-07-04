@@ -1,6 +1,6 @@
 # ADR-049: Prompt Caching Across Gateways
 
-**Status:** Proposed 2026-07-04 (rev 2: research matrix verified — vendor docs via adversarial deep-research + empirical two-call probes on our own OpenRouter key; codebase claims audited against source)
+**Status:** Implemented 2026-07-04 (v0.34.0, epic #458: D1 #459/PR #464, D2 #460/PR #466, D3 #461/PR #467, D4 #462/PR #468, D5 #463/PR #469; live two-call probe green against the production route. Rev 2 research matrix: vendor docs via adversarial deep-research + empirical probes on our own OpenRouter key)
 **Date:** 2026-07-04
 **Decision Makers:** llm-council maintainers (review requested)
 **Proposed by:** epic-loop project (consumer hand-over — Chris / Claude; companion evidence in `epic-loop/docs/assessments/research-2026-07-04-headroom-context-compression.md` and `council-verify-stats.md`)
