@@ -49,6 +49,7 @@ from llm_council.cache_context import (
     CacheContext,
     clear_cache_context,
     get_cache_context,
+    prompt_cache_ttl,
     set_cache_context,
 )
 from llm_council.verification.calibration import (
@@ -818,7 +819,7 @@ async def run_verification(
             CacheContext(
                 segments=evidence_render_info.get("segments") or [],
                 session_id=f"verify:{subject_key}",
-                ttl="1h",
+                ttl=prompt_cache_ttl("1h"),
                 prompt_head=verification_query[:64],
             )
         )

@@ -36,9 +36,12 @@ __all__ = [
     "get_cache_context",
     "clear_cache_context",
     "prompt_caching_enabled",
+    "prompt_cache_ttl",
     "anthropic_min_prefix_tokens",
     "MAX_BREAKPOINTS",
 ]
+
+_VALID_TTLS = ("5m", "1h")
 
 MAX_BREAKPOINTS = 4  # Anthropic hard limit per request
 
@@ -75,13 +78,28 @@ def prompt_caching_enabled() -> bool:
     )
 
 
+def prompt_cache_ttl(path_default: str) -> str:
+    """ADR-049 D5 TTL knob: ``LLM_COUNCIL_PROMPT_CACHE_TTL`` (``5m``|``1h``).
+
+    Returns the env value when valid, else ``path_default`` (verify passes
+    ``"1h"`` — observed 3-11 min round gaps straddle the 5-minute boundary;
+    interactive paths get the ``5m`` dataclass default). An invalid value
+    falls back rather than reaching the API (Anthropic accepts only 5m/1h).
+
+    NOTE: deliberately NOT ``LLM_COUNCIL_CACHE_TTL`` — that name already
+    belongs to the response cache (seconds).
+    """
+    ttl = os.getenv("LLM_COUNCIL_PROMPT_CACHE_TTL", "").strip().lower()
+    return ttl if ttl in _VALID_TTLS else path_default
+
+
 @dataclass
 class CacheContext:
     """Segment map + affinity key for the CURRENT request scope."""
 
     segments: List[Dict[str, Any]] = field(default_factory=list)
     session_id: Optional[str] = None
-    ttl: str = "1h"  # verification default per ADR-049 §Decision.5
+    ttl: str = "5m"  # interactive default; verify passes 1h (ADR-049 §Dec.5)
     prompt_head: str = ""  # first bytes of the prompt the segments describe
 
     def matches(self, prompt: str) -> bool:

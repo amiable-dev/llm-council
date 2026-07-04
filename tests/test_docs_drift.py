@@ -27,8 +27,17 @@ DYNAMIC_EXPANSIONS = {
         f"LLM_COUNCIL_MODELS_{t}" for t in ("QUICK", "BALANCED", "HIGH", "REASONING")
     ],
 }
-# Client-side vars we document but do not read ourselves.
-DOC_ONLY_ALLOWED = {"MCP_TIMEOUT", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "HOME"}
+# Client-side vars we document but do not read ourselves — plus test-only
+# opt-in knobs read under tests/ (this guard scans src/ only), e.g. the
+# ADR-049 D5 live cache probe gate.
+DOC_ONLY_ALLOWED = {
+    "MCP_TIMEOUT",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GOOGLE_API_KEY",
+    "HOME",
+    "LLM_COUNCIL_LIVE_CACHE_PROBE",
+}
 
 
 def _env_reads_in_src() -> set:

@@ -71,6 +71,19 @@ Feed upstream tool output (linters, scanners) as structured evidence; the
 council must disposition each item. `strength: blocking` items make the
 request blocking-capable.
 
+## Prompt-cache cost note (ADR-049)
+
+Verification prompts are assembled stable-prefix-first and cached on
+Anthropic council members (0.1× read price on repeat rounds; verified on
+the OpenRouter route). Multi-round verify sessions on the same subject are
+therefore much cheaper than round 1. The verify path uses a 1-hour cache
+TTL by default (rounds typically land 3–11 minutes apart);
+`LLM_COUNCIL_PROMPT_CACHE_TTL=5m|1h` overrides it, and
+`LLM_COUNCIL_PROMPT_CACHING=false` disables injection entirely.
+`input_metrics` reports `cached_tokens` (reads), `cache_write_tokens`, and
+`cache_session_id` — zero reads across rounds means a broken prefix or a
+lapsed TTL.
+
 ## Operational tips
 
 - Scope `target_paths` to the files that changed — whole-file expansion of

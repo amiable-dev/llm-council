@@ -151,6 +151,8 @@
 | Variable | Description | Default |
 |---|---|---|
 | `LLM_COUNCIL_PROMPT_CACHING` | Anthropic prompt-cache breakpoints + OpenRouter session affinity on the verify path (ADR-049 D2). Default ON — price-class-only change; set `false` to force byte-identical pre-D2 payloads | true |
+| `LLM_COUNCIL_PROMPT_CACHE_TTL` | Prompt-cache TTL override: `5m` or `1h` (ADR-049 D5). Verify path defaults to `1h`, interactive paths to `5m`; invalid values fall back to the path default. Distinct from `LLM_COUNCIL_CACHE_TTL` (response cache, seconds) | per-path |
+| `LLM_COUNCIL_LIVE_CACHE_PROBE` | Opt-in LIVE two-call cache probe test (~$0.05 real spend; never in CI) | false |
 | `LLM_COUNCIL_CACHE` | Response cache | code |
 | `LLM_COUNCIL_CACHE_DIR` | Cache directory | code |
 | `LLM_COUNCIL_CACHE_TTL` | Cache TTL (s) | code |
