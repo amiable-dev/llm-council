@@ -74,11 +74,11 @@ class TestEmitAdjudication:
         adj.emit_adjudication("v1", "real")  # no key → no emit
         assert sink == []
 
-    def test_empty_verification_id_noop(self, monkeypatch):
-        monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
-        sink = self._capture(monkeypatch)
-        adj.emit_adjudication("", "real")
-        assert sink == []
+    def test_empty_verification_id_raises(self):
+        # Required input: an empty trace id is a caller error (consistent with
+        # the disposition validation), raised even when emission is disabled.
+        with pytest.raises(ValueError):
+            adj.emit_adjudication("", "real")
 
     def test_soft_fail_on_emit_error(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")

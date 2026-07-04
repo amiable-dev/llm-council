@@ -53,12 +53,17 @@ def emit_adjudication(
     side-effect, not argument validation). Emission itself is soft-fail and
     opt-in.
     """
+    # Required-input validation is unconditional and consistent: both a bad
+    # disposition AND a missing verification_id are caller errors that must
+    # surface even when emission is disabled.
     if disposition not in ADJUDICATION_VALUES:
         raise ValueError(
             f"disposition must be one of {sorted(ADJUDICATION_VALUES)}, "
             f"got {disposition!r}"
         )
-    if not posthog_emission_enabled() or not verification_id:
+    if not verification_id:
+        raise ValueError("verification_id is required (the $ai_trace_id to key the metric)")
+    if not posthog_emission_enabled():
         return
     try:
         props = {
