@@ -194,10 +194,11 @@ def parse_findings(
         if not isinstance(item, dict):
             continue
         description = item.get("description")
-        # Skip only genuinely-empty descriptions (None / blank) — a useless
-        # finding, not data loss. Anything else is stringified below.
+        # Fail-safe: NEVER drop a finding for a missing description — a critical
+        # with no text would silently vanish and false-pass. Keep it with a
+        # placeholder so its severity still gates (Council C3 finding).
         if description is None or str(description).strip() == "":
-            continue
+            description = "(no description provided)"
         severity = _normalize_severity(item.get("severity", ""))
         # `is not None` (not truthiness): keep a present-but-falsy value like
         # 0/false rather than silently discarding it.

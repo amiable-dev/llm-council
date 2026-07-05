@@ -62,10 +62,13 @@ class TestParseFindings:
             findings, _, _ = parse_findings(text)
             assert findings[0].severity == want
 
-    def test_items_without_description_skipped(self):
+    def test_description_less_finding_kept_with_placeholder(self):
+        # Fail-safe: a critical with no description must NOT vanish.
         text = '{"findings":[{"severity":"critical"},{"severity":"minor","description":"d"}]}'
         findings, source, _ = parse_findings(text)
-        assert len(findings) == 1 and findings[0].description == "d"
+        assert len(findings) == 2
+        crit = [f for f in findings if f.severity == "critical"][0]
+        assert crit.description == "(no description provided)"
 
     def test_non_dict_items_skipped(self):
         text = '{"findings":["oops",{"severity":"info","description":"d"}]}'
