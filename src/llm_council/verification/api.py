@@ -721,6 +721,10 @@ async def _run_verification_pipeline(
         "unclear_reason": unclear_reason,
         "rubric_scores": verification_output["rubric_scores"],
         "blocking_issues": verification_output["blocking_issues"],
+        # ADR-051 (#486): structured findings + telemetry diagnostics (empty
+        # defaults when the flag is off ⇒ additive, non-breaking).
+        "findings": verification_output.get("findings", []),
+        "diagnostics": verification_output.get("diagnostics", {}),
         "rationale": verification_output["rationale"],
         "transcript_location": str(transcript_dir),
         "partial": False,

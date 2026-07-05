@@ -449,6 +449,34 @@ def _get_binary_chairman_prompt(
 ) -> str:
     """Generate chairman prompt for binary verdict mode."""
     dispositions_block = dispositions_instruction or ""
+
+    # ADR-051 C2: behind the flag, ask the chairman to enumerate structured
+    # findings FIRST, then the verdict — so the verdict is grounded in the
+    # findings ("Proof-Before-Preference"). Lazy import avoids a module cycle.
+    from llm_council.verification.findings import structured_findings_enabled
+
+    if structured_findings_enabled():
+        findings_instruction = (
+            "First enumerate every concrete finding, THEN render the verdict as a"
+            " function of those findings. Use severity `critical` for anything"
+            " that should block approval.\n\n"
+        )
+        json_schema = """{
+  "findings": [
+    {"severity": "critical|major|minor|info", "description": "...", "location": "file.py:line or null"}
+  ],
+  "verdict": "approved" or "rejected",
+  "confidence": 0.0 to 1.0,
+  "rationale": "Brief explanation grounded in the findings above"
+}"""
+    else:
+        findings_instruction = ""
+        json_schema = """{
+  "verdict": "approved" or "rejected",
+  "confidence": 0.0 to 1.0,
+  "rationale": "Brief explanation of the decision basis"
+}"""
+
     return f"""You are the Chairman synthesizing the council's deliberation.
 
 The council has reviewed and ranked responses to the following query:
@@ -467,12 +495,8 @@ Consider:
 RANKINGS SUMMARY:
 {rankings}
 {dispositions_block}
-Output ONLY valid JSON with no additional text:
-{{
-  "verdict": "approved" or "rejected",
-  "confidence": 0.0 to 1.0,
-  "rationale": "Brief explanation of the decision basis"
-}}"""
+{findings_instruction}Output ONLY valid JSON with no additional text:
+{json_schema}"""
 
 
 def _get_tie_breaker_chairman_prompt(

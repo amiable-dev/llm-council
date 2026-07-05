@@ -406,7 +406,7 @@ def build_verification_result(
     # extractors — a missing/None stage3_result must not raise, #434 review)
     rationale = (stage3_result or {}).get("response") or "No synthesis available."
 
-    return {
+    result = {
         "verdict": verdict,
         "confidence": confidence,
         # ADR-047 P2: None when no calibrator was applied here — the API
@@ -416,6 +416,26 @@ def build_verification_result(
         "blocking_issues": blocking_issues,
         "rationale": rationale,
     }
+
+    # ADR-051 C2 (#486): behind the flag, emit the chairman's structured
+    # findings + diagnostics. Verdict/blocking_issues still come from the legacy
+    # path in C2 (the mechanical verdict is C3); soft-fail to fallback.
+    from .findings import parse_findings, structured_findings_enabled
+
+    findings_dicts: List[Dict[str, Any]] = []
+    diagnostics: Dict[str, Any] = {"findings_source": "fallback", "verdict_source": "legacy"}
+    if structured_findings_enabled():
+        try:
+            parsed, source, reason = parse_findings((stage3_result or {}).get("response") or "")
+            findings_dicts = [f.model_dump() for f in parsed]
+            diagnostics["findings_source"] = source
+            if reason:
+                diagnostics["fallback_reason"] = reason
+        except Exception:  # telemetry must never break a verdict
+            diagnostics["fallback_reason"] = "findings_exception"
+    result["findings"] = findings_dicts
+    result["diagnostics"] = diagnostics
+    return result
 
 
 def derive_unclear_reason(
