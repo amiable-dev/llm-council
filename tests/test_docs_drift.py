@@ -121,3 +121,62 @@ class TestGuideSnippets:
                         except Exception as e:
                             failures.append(f"{guide.name}#{i}: {line} -> {e}")
         assert not failures, "\n".join(failures)
+
+
+class TestVerifyResponseFieldDrift:
+    """ADR-051 C6 (#490): every field of the verify response contract must be
+    documented by name.
+
+    The ADR-051 defect was a verdict decoupled from its evidence; the fix adds
+    ``findings`` / ``diagnostics`` to the response. A field that ships but is
+    undocumented is the same silent-contract-drift failure class the env
+    reference guard above catches — so pin the whole ``VerifyResponse`` surface
+    (plus the nested ``Finding`` / ``VerifyDiagnostics`` models) to the docs.
+    """
+
+    # The verify contract is documented across the guide and the HTTP API page;
+    # a field is "documented" if it appears by name in EITHER.
+    DOC_SOURCES = [
+        REPO / "docs" / "guides" / "verify.md",
+        REPO / "docs" / "api.md",
+    ]
+
+    def _documented_names(self) -> set:
+        text = "\n".join(p.read_text() for p in self.DOC_SOURCES)
+        # Match only backtick-quoted identifiers — how docs reference a field
+        # (`unclear_reason`, `findings`). A bare prose-word match would let a
+        # field whose NAME is a common English word (`partial`, `timing`,
+        # `location`) read as "documented" merely by appearing in a sentence,
+        # defeating the guard. The `\b`s keep `verdict` from satisfying
+        # `inner_verdict`.
+        return set(re.findall(r"`\b([a-z][a-z0-9_]+)\b`", text))
+
+    def _contract_fields(self) -> set:
+        from llm_council.verification.schemas import (
+            Finding,
+            VerifyDiagnostics,
+            VerifyResponse,
+        )
+
+        names: set = set()
+        for model in (VerifyResponse, Finding, VerifyDiagnostics):
+            names.update(model.model_fields.keys())
+        return names
+
+    def test_every_response_field_is_documented(self):
+        undocumented = sorted(self._contract_fields() - self._documented_names())
+        assert not undocumented, (
+            "verify response fields missing from docs/guides/verify.md or "
+            f"docs/api.md (ADR-051 C6 drift guard): {undocumented}"
+        )
+
+    def test_guard_has_teeth(self):
+        """The guard must actually detect an undocumented field, not vacuously
+        pass. A synthetic field name that appears nowhere in the docs must be
+        reported as undocumented — proving the backtick match discriminates and
+        the acceptance criterion ("fails on an undocumented field") holds."""
+        documented = self._documented_names()
+        assert "zzz_never_documented_field" not in documented
+        # And a bare prose word (not backtick-quoted) must NOT count as
+        # documented — the #490 regex-broadening failure mode.
+        assert "the" not in documented

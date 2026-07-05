@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+**Verify Findings Channel — telemetry, diagnostics & docs (ADR-051, C4–C6 of epic [#484](https://github.com/amiable-dev/llm-council/issues/484))** — completes the epic on top of the v0.36.0 mechanical gate. Still behind `LLM_COUNCIL_STRUCTURED_FINDINGS` (**default OFF; flag-off byte-identical**); the whole epic remains non-breaking and the default-ON flip is a separate later release.
+
+### Added
+
+- **Docs sweep + response-field drift guard (ADR-051 C6, #490)** — the full `verify` response contract (`VerifyResponse` + nested `Finding`/`VerifyDiagnostics`) is documented field-by-field in `docs/guides/verify.md`, with a consumer migration note (**stop keying on `blocking_issues == []`; key on `verdict` + `findings`/`severity`**) propagated to the MCP guide, the CI/CD blog, and the bundled `council-verify`/`council-gate` skills. New `TestVerifyResponseFieldDrift` guard in `tests/test_docs_drift.py` fails CI on any undocumented response field.
+- **Consistency-invariant + severity telemetry (ADR-051 C4, #488)** — `diagnostics.findings_by_severity` (per-severity counts, surfacing severity mis-labelling) and a defensive `diagnostics.verdict_evidence_mismatch` marker that asserts the mechanical-gate invariant (a `fail` iff a `critical` finding exists) and logs if it is ever violated.
+- **Inner-verdict diagnostics (ADR-051 C5, #489)** — `diagnostics.inner_verdict`/`inner_confidence`/`inner_confidence_calibrated` capture the structured verdict **before** the low-confidence UNCLEAR softening (nested under `diagnostics` so consumers can't parse them to bypass the gate). The mechanical block recomputes agreement-confidence for its verdict and applies all result mutations atomically (calibrated once, throw-free apply) so a mid-computation error leaves the legacy result intact.
+
 ## [0.36.0] - 2026-07-05
 
 **Verify Findings Channel — structural fix, opt-in (ADR-051, C1–C3 of epic [#484](https://github.com/amiable-dev/llm-council/issues/484))** — fixes the field-reported defect where `verify()`'s `blocking_issues` was `[]` on nearly every call (the verdict came from a structured path while `blocking_issues` was regex-scraped from chairman prose modern models don't format with `SEVERITY:` markers). Behind the new `LLM_COUNCIL_STRUCTURED_FINDINGS` flag (**default OFF — additive, non-breaking; flag-off is byte-identical**) the chairman now emits a structured `findings[]` array and the verdict is **computed from it by host code** (the "mechanical gate": any `critical` finding ⇒ `fail`), so the verdict can't decouple from the evidence and `blocking_issues` = the critical subset. This is the core of ADR-051; the consistency-invariant telemetry (C4), inner-verdict diagnostics (C5), docs sweep (C6), and the eventual default-ON flip (a separate breaking release) follow. Two Council reviews + an enforcement-fork review shaped the mechanical-gate design; the findings parser itself was hardened across ~10 Council rounds (string-aware JSON extraction, fail-safe severity normalization, no-drop findings).

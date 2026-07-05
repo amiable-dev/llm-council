@@ -83,7 +83,10 @@ routing, calibrated confidence, screening, and evidence injection.
 | `evidence` | list | none | Upstream tool findings (ADR-042) |
 
 Returns verdict/confidence (raw + calibrated), rubric scores, blocking
-issues, `unclear_reason` on UNCLEAR, and the transcript location.
+issues, `unclear_reason` on UNCLEAR, and the transcript location. Under
+`LLM_COUNCIL_STRUCTURED_FINDINGS` (ADR-051) it also returns a typed `findings`
+array and computes the verdict from it — see the verify guide's
+[Response fields](verify.md#response-fields) and structured-findings sections.
 
 ### `audit`
 
