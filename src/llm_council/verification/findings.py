@@ -20,30 +20,28 @@ __all__ = ["structured_findings_enabled", "parse_findings"]
 _VALID_SEVERITIES = {"critical", "major", "minor", "info"}
 
 
-def _extract_json_object(text: str) -> Any:
-    """Extract a (possibly nested) JSON object from chairman text.
-
-    Unlike the flat verdict extractor (`verdict._extract_json_from_text`, whose
-    `\\{[^{}]*\\}` pattern breaks on nested arrays of objects), this handles the
-    `findings` array. It first tries the whole string, then scans for the first
-    balanced ``{…}`` with a **string-aware** matcher (braces inside JSON string
-    values, and escaped quotes, are ignored — a naive brace count miscounts a
-    description like ``"use {x}"``). No greedy regex (which spans multiple
-    fenced blocks). Raises on no valid object; the caller soft-fails.
-    """
-    stripped = text.strip()
+def _as_text(value: Any) -> str:
+    """Stringify a field, JSON-encoding non-strings so a dict/list doesn't leak
+    a Python repr (``str({'a':1})`` → ``"{'a': 1}"``) into a description."""
+    if isinstance(value, str):
+        return value
     try:
-        return json.loads(stripped)  # fast path: the whole thing is JSON
-    except json.JSONDecodeError:
-        pass
-    start = stripped.find("{")
-    if start == -1:
-        raise ValueError("no JSON object found")
+        return json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _matching_brace(text: str, start: int) -> int:
+    """Index of the ``}`` matching the ``{`` at ``start``, string-aware, or -1.
+
+    Braces inside JSON string values and escaped quotes are ignored, so a
+    description like ``"use {x}"`` doesn't miscount.
+    """
     depth = 0
     in_string = False
     escaped = False
-    for i in range(start, len(stripped)):
-        c = stripped[i]
+    for i in range(start, len(text)):
+        c = text[i]
         if in_string:
             if escaped:
                 escaped = False
@@ -59,8 +57,39 @@ def _extract_json_object(text: str) -> Any:
         elif c == "}":
             depth -= 1
             if depth == 0:
-                return json.loads(stripped[start : i + 1])
-    raise ValueError("unbalanced JSON object")
+                return i
+    return -1
+
+
+def _extract_json_object(text: str) -> Any:
+    """Extract a JSON object from chairman text (LLM-resilient).
+
+    Unlike the flat verdict extractor (`verdict._extract_json_from_text`, whose
+    `\\{[^{}]*\\}` pattern breaks on nested arrays), this tries the whole string,
+    then walks EVERY ``{`` position and returns the FIRST balanced span that
+    parses to a dict — so a natural-language ``{brace}`` before the real JSON
+    doesn't abort the search (it just isn't a dict). String-aware brace
+    matching; no greedy regex. Raises when no candidate parses to a dict.
+    """
+    stripped = text.strip()
+    try:
+        obj = json.loads(stripped)  # fast path: the whole thing is JSON
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    idx = stripped.find("{")
+    while idx != -1:
+        end = _matching_brace(stripped, idx)
+        if end != -1:
+            try:
+                obj = json.loads(stripped[idx : end + 1])
+                if isinstance(obj, dict):
+                    return obj
+            except json.JSONDecodeError:
+                pass
+        idx = stripped.find("{", idx + 1)
+    raise ValueError("no JSON object found")
 
 
 def structured_findings_enabled() -> bool:
@@ -124,9 +153,11 @@ def parse_findings(
         findings.append(
             Finding(
                 severity=severity,  # type: ignore[arg-type]
-                description=str(description),
-                location=str(location) if location is not None else None,
-                dimension=str(dimension) if dimension is not None else None,
+                # A dict/list description would leak a Python repr via str();
+                # JSON-encode non-strings so the text stays valid data.
+                description=_as_text(description),
+                location=_as_text(location) if location is not None else None,
+                dimension=_as_text(dimension) if dimension is not None else None,
             )
         )
     return findings, "structured", None

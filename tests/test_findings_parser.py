@@ -132,3 +132,21 @@ class TestRound2Fixes:
         text = '{"findings":[{"severity":"minor","description":"d","location":0}]}'
         findings, source, _ = parse_findings(text)
         assert source == "structured" and findings[0].location == "0"
+
+
+class TestRound3Fixes:
+    def test_prose_braces_before_real_json(self):
+        # A natural-language {brace} before the real JSON must not abort the search.
+        text = 'I considered {options} carefully. Result:\n' \
+               '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"d"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured" and findings[0].severity == "critical"
+
+    def test_dict_description_json_encoded_not_repr(self):
+        text = '{"findings":[{"severity":"minor","description":{"nested":"x"}}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured"
+        # JSON-encoded, not a Python repr ("{'nested': 'x'}")
+        assert findings[0].description == '{"nested": "x"}'
+        assert "'" not in findings[0].description
