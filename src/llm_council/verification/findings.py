@@ -64,12 +64,16 @@ def _extract_json_object(text: str) -> Any:
 
 
 def structured_findings_enabled() -> bool:
-    """Opt-in flag for the ADR-051 structured findings channel (default OFF)."""
-    return os.getenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "false").strip().lower() not in (
-        "false",
-        "0",
-        "no",
-        "",
+    """Opt-in flag for the ADR-051 structured findings channel (default OFF).
+
+    Explicit true-set (not "anything but false"): a default-OFF flag must
+    require a deliberate opt-in, so a typo can never silently enable it.
+    """
+    return os.getenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
     )
 
 
@@ -113,13 +117,16 @@ def parse_findings(
         severity = str(item.get("severity", "")).strip().lower()
         if severity not in _VALID_SEVERITIES:
             severity = "major"  # visible, never dropped
+        # `is not None` (not truthiness): keep a present-but-falsy value like
+        # 0/false rather than silently discarding it.
         location = item.get("location")
+        dimension = item.get("dimension")
         findings.append(
             Finding(
                 severity=severity,  # type: ignore[arg-type]
                 description=str(description),
-                location=str(location) if location else None,
-                dimension=(str(item["dimension"]) if item.get("dimension") else None),
+                location=str(location) if location is not None else None,
+                dimension=str(dimension) if dimension is not None else None,
             )
         )
     return findings, "structured", None

@@ -119,3 +119,16 @@ class TestExtractionRobustness:
                'second:\n```json\n{"other":1}\n```'
         findings, source, _ = parse_findings(text)
         assert source == "structured" and len(findings) == 1
+
+
+class TestRound2Fixes:
+    def test_unrecognized_flag_value_is_off(self, monkeypatch):
+        from llm_council.verification.findings import structured_findings_enabled
+        for v in ("maybe", "ture", "enabled", "2"):
+            monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", v)
+            assert structured_findings_enabled() is False  # opt-in requires explicit true
+
+    def test_present_but_falsy_location_kept(self):
+        text = '{"findings":[{"severity":"minor","description":"d","location":0}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured" and findings[0].location == "0"
