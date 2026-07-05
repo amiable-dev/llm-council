@@ -417,10 +417,11 @@ def build_verification_result(
         "rationale": rationale,
     }
 
-    # ADR-051 C2 (#486): behind the flag, emit the chairman's structured
-    # findings + diagnostics. Verdict/blocking_issues still come from the legacy
-    # path in C2 (the mechanical verdict is C3); soft-fail to fallback.
-    from .findings import parse_findings, structured_findings_enabled
+    # ADR-051 (#486 C2 emission / #487 C3 mechanical verdict): behind the flag,
+    # parse the chairman's structured findings and — when they parse cleanly —
+    # DERIVE the verdict and blocking_issues from them (the mechanical gate),
+    # replacing the legacy prose-scraped values. Soft-fail to the legacy path.
+    from .findings import parse_findings, structured_findings_enabled, verdict_policy
 
     findings_dicts: List[Dict[str, Any]] = []
     diagnostics: Dict[str, Any] = {"findings_source": "fallback", "verdict_source": "legacy"}
@@ -431,6 +432,25 @@ def build_verification_result(
             diagnostics["findings_source"] = source
             if reason:
                 diagnostics["fallback_reason"] = reason
+            if source == "structured":
+                # C3 mechanical gate: verdict = policy(findings) (pure host
+                # code); blocking_issues = the critical subset. The confidence
+                # softening to "unclear" is the SAME rule as the legacy path.
+                mechanical = verdict_policy(parsed)
+                eff = calibrate(confidence) if calibrate is not None else confidence
+                if mechanical == "pass" and eff < confidence_threshold:
+                    mechanical = "unclear"
+                result["verdict"] = mechanical
+                result["blocking_issues"] = [
+                    {
+                        "severity": f.severity,
+                        "description": f.description,
+                        "location": f.location,
+                    }
+                    for f in parsed
+                    if f.severity == "critical"
+                ]
+                diagnostics["verdict_source"] = "mechanical"
         except Exception:  # telemetry must never break a verdict
             diagnostics["fallback_reason"] = "findings_exception"
     result["findings"] = findings_dicts

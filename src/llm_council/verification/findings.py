@@ -15,9 +15,20 @@ from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from .schemas import Finding
 
-__all__ = ["structured_findings_enabled", "parse_findings"]
+__all__ = ["structured_findings_enabled", "parse_findings", "verdict_policy"]
 
 _VALID_SEVERITIES = {"critical", "major", "minor", "info"}
+
+
+def verdict_policy(findings: "List[Finding]") -> str:
+    """The mechanical gate (ADR-051 C3): the verdict is a PURE function of the
+    findings — ``"fail"`` iff any finding is ``critical``, else ``"pass"``.
+
+    This is the whole point of the mechanical gate: the verdict cannot be
+    decoupled from the evidence because it is *computed* from it, not generated.
+    Confidence-based softening to ``unclear`` is applied by the caller.
+    """
+    return "fail" if any(f.severity == "critical" for f in findings) else "pass"
 
 
 def _as_text(value: Any) -> str:
