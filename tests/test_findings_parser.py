@@ -98,3 +98,24 @@ class TestBuildResultWiring:
         r = build_verification_result([], [], self._stage3("no json here"))
         assert r["diagnostics"]["findings_source"] == "fallback"
         assert "fallback_reason" in r["diagnostics"]
+
+
+class TestExtractionRobustness:
+    def test_braces_inside_string_values(self):
+        # A description containing braces must not break brace-matching.
+        text = '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"use {x} and }{ here"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured"
+        assert findings[0].description == "use {x} and }{ here"
+
+    def test_escaped_quote_in_string(self):
+        text = r'{"findings":[{"severity":"minor","description":"a \"quoted\" bit"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured" and '"quoted"' in findings[0].description
+
+    def test_multiple_fenced_blocks_takes_first_object(self):
+        text = 'first:\n```json\n{"findings":[{"severity":"info","description":"d"}]}\n```\n' \
+               'second:\n```json\n{"other":1}\n```'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured" and len(findings) == 1

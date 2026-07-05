@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,7 +18,6 @@ if TYPE_CHECKING:
 __all__ = ["structured_findings_enabled", "parse_findings"]
 
 _VALID_SEVERITIES = {"critical", "major", "minor", "info"}
-_FENCED_JSON = re.compile(r"```(?:json)?\s*(\{.*\})\s*```", re.DOTALL)
 
 
 def _extract_json_object(text: str) -> Any:
@@ -27,26 +25,36 @@ def _extract_json_object(text: str) -> Any:
 
     Unlike the flat verdict extractor (`verdict._extract_json_from_text`, whose
     `\\{[^{}]*\\}` pattern breaks on nested arrays of objects), this handles the
-    `findings` array via balanced-brace matching. Raises on no valid object.
+    `findings` array. It first tries the whole string, then scans for the first
+    balanced ``{…}`` with a **string-aware** matcher (braces inside JSON string
+    values, and escaped quotes, are ignored — a naive brace count miscounts a
+    description like ``"use {x}"``). No greedy regex (which spans multiple
+    fenced blocks). Raises on no valid object; the caller soft-fails.
     """
     stripped = text.strip()
-    m = _FENCED_JSON.search(stripped)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
     try:
-        return json.loads(stripped)
+        return json.loads(stripped)  # fast path: the whole thing is JSON
     except json.JSONDecodeError:
         pass
     start = stripped.find("{")
     if start == -1:
         raise ValueError("no JSON object found")
     depth = 0
+    in_string = False
+    escaped = False
     for i in range(start, len(stripped)):
         c = stripped[i]
-        if c == "{":
+        if in_string:
+            if escaped:
+                escaped = False
+            elif c == "\\":
+                escaped = True
+            elif c == '"':
+                in_string = False
+            continue
+        if c == '"':
+            in_string = True
+        elif c == "{":
             depth += 1
         elif c == "}":
             depth -= 1
@@ -98,7 +106,9 @@ def parse_findings(
         if not isinstance(item, dict):
             continue
         description = item.get("description")
-        if not description:
+        # Skip only genuinely-empty descriptions (None / blank) — a useless
+        # finding, not data loss. Anything else is stringified below.
+        if description is None or str(description).strip() == "":
             continue
         severity = str(item.get("severity", "")).strip().lower()
         if severity not in _VALID_SEVERITIES:
