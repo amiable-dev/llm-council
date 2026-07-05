@@ -52,8 +52,16 @@ def verdict_policy(findings: "List[Finding]") -> str:
     This is the whole point of the mechanical gate: the verdict cannot be
     decoupled from the evidence because it is *computed* from it, not generated.
     Confidence-based softening to ``unclear`` is applied by the caller.
+
+    ``Finding.severity`` is a pydantic ``Literal`` so it is already canonical,
+    but we normalize defensively here too — should a ``Finding`` ever be built
+    outside ``parse_findings`` with a raw label, it must still fail closed.
     """
-    return "fail" if any(f.severity == "critical" for f in findings) else "pass"
+    return (
+        "fail"
+        if any(_normalize_severity(f.severity) == "critical" for f in findings)
+        else "pass"
+    )
 
 
 def _as_text(value: Any) -> str:
