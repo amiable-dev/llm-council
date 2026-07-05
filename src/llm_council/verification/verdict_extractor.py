@@ -458,7 +458,11 @@ def build_verification_result(
                 # Confidence must correspond to the mechanical verdict it
                 # accompanies, not the discarded legacy one (Council C5 round 1).
                 mech_conf = calculate_confidence_from_agreement(stage2_results, mechanical)
-                mech_eff = calibrate(mech_conf) if calibrate is not None else mech_conf
+                # Calibrate ONCE, here in the compute section — the apply block
+                # below must contain no throwing calls, so it reuses this local
+                # rather than calling calibrate() again (Council C5 round 3).
+                mech_calibrated = calibrate(mech_conf) if calibrate is not None else None
+                mech_eff = mech_calibrated if mech_calibrated is not None else mech_conf
                 _inner: Optional[Tuple[str, float, Optional[float]]] = None
                 if mechanical == "pass" and mech_eff < confidence_threshold:
                     _inner = ("pass", mech_conf, mech_eff)
@@ -481,9 +485,7 @@ def build_verification_result(
                 # --- all computed; apply atomically (no throwing calls below) ---
                 result["verdict"] = mechanical
                 result["confidence"] = mech_conf
-                result["confidence_calibrated"] = (
-                    calibrate(mech_conf) if calibrate is not None else None
-                )
+                result["confidence_calibrated"] = mech_calibrated
                 result["blocking_issues"] = mech_blocking
                 diagnostics["verdict_source"] = "mechanical"
                 diagnostics["findings_by_severity"] = by_sev
