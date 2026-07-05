@@ -1,6 +1,6 @@
 # ADR-051: Verify Findings Channel & Verdict–Evidence Consistency
 
-**Status:** Proposed 2026-07-04 (rev 2: literature claims verified via adversarial deep-research, 105 agents, 3-vote, checked 2026-07-04, with the anchor paper's numbers independently confirmed against the primary arXiv source. See "Research verification".)
+**Status:** Implemented 2026-07-05 (epic [#484](https://github.com/amiable-dev/llm-council/issues/484), C1–C6; C1–C3 in v0.36.0, C4–C6 in v0.37.0. Behind `LLM_COUNCIL_STRUCTURED_FINDINGS`, default-OFF; the default-ON flip is a separate future breaking release.) — proposed 2026-07-04 (rev 2: literature claims verified via adversarial deep-research, 105 agents, 3-vote, checked 2026-07-04, with the anchor paper's numbers independently confirmed against the primary arXiv source. See "Research verification".)
 **Date:** 2026-07-04
 **Decision Makers:** llm-council maintainers (review requested)
 **Proposed by:** maintainer triage of a downstream field report (amiable-dev/epic-loop)
