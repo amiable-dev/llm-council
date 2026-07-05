@@ -111,6 +111,12 @@ jobs:
 }
 ```
 
+Under `LLM_COUNCIL_STRUCTURED_FINDINGS=true` (ADR-051) the response also carries
+a typed `findings` array (all severities) and the verdict is computed as `fail`
+iff any `critical` finding exists. `blocking_issues` is then the `critical`
+subset. Gate on the `verdict` / `exit_code`, not on `blocking_issues == []`
+(empty even on real FAILs on the default prose-scrape path).
+
 ### Timeout Handling (ADR-040)
 
 If `timeout_fired: true`, the gate timed out before completing all stages. This returns exit code `2` (UNCLEAR), pausing the pipeline for human review. Check `completed_stages` to see how far it got. Consider using `--tier quick` for faster gate checks (the tier sets the timeout budget; there is no separate --timeout flag).

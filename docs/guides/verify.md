@@ -84,6 +84,91 @@ TTL by default (rounds typically land 3–11 minutes apart);
 `cache_session_id` — zero reads across rounds means a broken prefix or a
 lapsed TTL.
 
+## Structured findings (ADR-051, opt-in)
+
+By default the verdict is derived from the chairman's prose and `blocking_issues`
+is scraped from it — which historically left `blocking_issues` empty even on
+FAIL. With `LLM_COUNCIL_STRUCTURED_FINDINGS=true` the chairman instead emits a
+typed `findings` array (one entry per issue, each with a `severity`), and the
+host **computes** the verdict mechanically: `fail` iff any finding is
+`critical`, else `pass` (confidence may still soften a `pass` to `unclear`).
+The verdict is therefore a provable function of the evidence — it cannot
+decouple from `findings`.
+
+- `findings` — the full list across **all** severities.
+- `blocking_issues` — the `critical` subset (unchanged shape; now always
+  consistent with the verdict).
+- `diagnostics.verdict_source` — `mechanical` when the flag drove the verdict,
+  else `legacy`.
+
+**Consumer migration.** Stop keying acceptance on `blocking_issues == []`
+(empty even on real FAILs under the legacy path). Key on the `verdict` plus the
+`findings`/`severity` you care about — e.g. "block on any `critical` or
+`major`". This is the durable contract; the flag defaults **off** and this
+epic is non-breaking, but the legacy prose-scrape is the path being retired.
+
+## Response fields
+
+Every field on the `verify` response (`VerifyResponse`), the nested `Finding`,
+and the telemetry-only `VerifyDiagnostics`. All are additive — older clients
+that ignore unknown fields keep working.
+
+### Core verdict
+
+| Field | Type | Meaning |
+|---|---|---|
+| `verification_id` | string | Unique id for this run. |
+| `verdict` | string | `pass` \| `fail` \| `unclear`. |
+| `exit_code` | int | `0` PASS · `1` FAIL · `2` UNCLEAR (CLI/`gate`). |
+| `confidence` | float | Raw council-agreement confidence, 0–1. |
+| `confidence_calibrated` | float? | `confidence` after the fitted monotonic mapping (ADR-047); equals raw until a mapping is fitted. |
+| `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` (see above); `None` for pass/fail. |
+| `rationale` | string | Chairman synthesis explanation. |
+| `transcript_location` | string | Path to the full `.council/logs/<id>/` transcript. |
+| `error` | string? | Non-verdict error marker (e.g. `input_too_large`); `None` for a real verdict (#357). |
+
+### Scores & findings
+
+| Field | Type | Meaning |
+|---|---|---|
+| `rubric_scores` | object | Per-dimension scores (accuracy/relevance/completeness/conciseness/clarity), 0–10 or null. |
+| `blocking_issues` | list | Issues that caused FAIL — the `critical` subset of `findings`. |
+| `findings` | list of `Finding` | Full structured findings across all severities (ADR-051; empty unless `LLM_COUNCIL_STRUCTURED_FINDINGS`). |
+| `diagnostics` | `VerifyDiagnostics` | Telemetry-only (below) — **not** control flow. |
+
+A `Finding` has: `severity` (`critical` \| `major` \| `minor` \| `info`),
+`description` (text), `location` (`file.py:42`, `global`, or null), and
+`dimension` (the rubric axis it maps to, when derivable).
+
+### Diagnostics (telemetry only — never gate on these)
+
+| Field | Type | Meaning |
+|---|---|---|
+| `findings_source` | string | `structured` (clean parse) or `fallback` (missing/malformed → legacy path). |
+| `fallback_reason` | string? | Why the fallback fired, when it did. |
+| `verdict_source` | string | `mechanical` = `policy(findings)`; `legacy` = prose parse. |
+| `findings_by_severity` | object | Count per severity — surfaces severity mis-labelling over time. |
+| `verdict_evidence_mismatch` | string? | Defensive invariant marker; `None` in normal operation (should never fire under the mechanical gate). |
+| `inner_verdict` | string? | Structured verdict **before** UNCLEAR softening (nested so consumers can't parse it to bypass the low-confidence gate). |
+| `inner_confidence` | float? | Confidence that accompanied `inner_verdict`. |
+| `inner_confidence_calibrated` | float? | Calibrated form of `inner_confidence`. |
+
+### Timeout, expansion & telemetry
+
+| Field | Type | Meaning |
+|---|---|---|
+| `partial` | bool | Result is partial (timeout/error) (ADR-040). |
+| `timeout_fired` | bool | Global deadline was exceeded. |
+| `completed_stages` | list? | Stages completed before a timeout (e.g. `["stage1","stage2"]`). |
+| `expanded_paths` | list? | Files included after directory expansion (#311). |
+| `paths_truncated` | bool? | `MAX_FILES_EXPANSION` limit was reached. |
+| `expansion_warnings` | list? | Warnings from directory expansion (skipped files, etc.). |
+| `timing` | object? | Per-stage and total timing in ms (ADR-041). |
+| `input_metrics` | object? | Input-size metrics (`content_chars`, `tier_max_chars`, `num_models`, `num_reviewers`, `tier`, cache fields). |
+| `screening` | object? | Screening-judge audit trail (ADR-047); present only when `LLM_COUNCIL_SCREENING` is shadow/active. |
+| `evidence_summary` | list? | Per-evidence-item Council disposition (ADR-042); `None` when no evidence supplied. |
+| `evidence_warnings` | list? | Structured warnings about evidence handling (truncation, format errors). |
+
 ## Operational tips
 
 - Scope `target_paths` to the files that changed — whole-file expansion of

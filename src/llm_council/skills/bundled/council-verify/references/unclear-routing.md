@@ -14,6 +14,14 @@ caller policies applied on top of exit 2, never different exit codes):
 `unclear_reason` is `null` for pass/fail and on non-deliberated cap results
 (where the `error` marker governs, e.g. `input_too_large`).
 
+**Structured findings (ADR-051).** The `low_confidence` "accept when
+`blocking_issues` is empty" policy above assumes `blocking_issues` reflects the
+verdict. Under `LLM_COUNCIL_STRUCTURED_FINDINGS=true` it always does (the
+verdict is computed as `fail` iff any `critical` finding exists), and you can
+route on the richer `findings`/`severity` instead. With the flag **off**
+(default), `blocking_issues` is prose-scraped and may be empty even on a real
+FAIL — so prefer keying on `verdict` and `findings`, not `blocking_issues == []`.
+
 ## Calibrated confidence (ADR-047 P2)
 
 `confidence_calibrated` is the raw confidence passed through the persisted

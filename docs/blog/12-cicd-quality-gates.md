@@ -336,6 +336,15 @@ Council verdicts include categorized issues:
 | **Major** | Bugs in core functionality, missing error handling | Usually FAIL |
 | **Minor** | Style issues, documentation gaps, improvements | Suggestions only |
 
+!!! note "Structured findings (ADR-051)"
+    With `LLM_COUNCIL_STRUCTURED_FINDINGS=true`, the council emits a typed
+    `findings` array (all severities) and the verdict is **computed** from it —
+    `fail` iff any `critical` finding exists — so the verdict can never decouple
+    from its evidence. `blocking_issues` becomes the `critical` subset. Gate your
+    pipeline on `verdict` / `exit_code` (as the workflow above does), not on
+    `blocking_issues == []`. See the
+    [verification guide](../guides/verify.md#structured-findings-adr-051-opt-in).
+
 ## Cost and Latency Considerations
 
 ### Cost

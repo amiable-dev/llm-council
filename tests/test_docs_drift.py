@@ -121,3 +121,46 @@ class TestGuideSnippets:
                         except Exception as e:
                             failures.append(f"{guide.name}#{i}: {line} -> {e}")
         assert not failures, "\n".join(failures)
+
+
+class TestVerifyResponseFieldDrift:
+    """ADR-051 C6 (#490): every field of the verify response contract must be
+    documented by name.
+
+    The ADR-051 defect was a verdict decoupled from its evidence; the fix adds
+    ``findings`` / ``diagnostics`` to the response. A field that ships but is
+    undocumented is the same silent-contract-drift failure class the env
+    reference guard above catches — so pin the whole ``VerifyResponse`` surface
+    (plus the nested ``Finding`` / ``VerifyDiagnostics`` models) to the docs.
+    """
+
+    # The verify contract is documented across the guide and the HTTP API page;
+    # a field is "documented" if it appears by name in EITHER.
+    DOC_SOURCES = [
+        REPO / "docs" / "guides" / "verify.md",
+        REPO / "docs" / "api.md",
+    ]
+
+    def _documented_names(self) -> set:
+        text = "\n".join(p.read_text() for p in self.DOC_SOURCES)
+        # Whole-word match so `verdict` doesn't satisfy `inner_verdict`.
+        return set(re.findall(r"\b([a-z][a-z0-9_]+)\b", text))
+
+    def _contract_fields(self) -> set:
+        from llm_council.verification.schemas import (
+            Finding,
+            VerifyDiagnostics,
+            VerifyResponse,
+        )
+
+        names: set = set()
+        for model in (VerifyResponse, Finding, VerifyDiagnostics):
+            names.update(model.model_fields.keys())
+        return names
+
+    def test_every_response_field_is_documented(self):
+        undocumented = sorted(self._contract_fields() - self._documented_names())
+        assert not undocumented, (
+            "verify response fields missing from docs/guides/verify.md or "
+            f"docs/api.md (ADR-051 C6 drift guard): {undocumented}"
+        )
