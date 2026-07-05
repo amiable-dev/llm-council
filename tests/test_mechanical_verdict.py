@@ -102,3 +102,36 @@ class TestMechanicalGate:
             "response": "The critical issues have all been resolved. Looks great."})
         # No parseable JSON ⇒ fallback ⇒ legacy path; a pass has no blocking.
         assert r["diagnostics"]["verdict_source"] == "legacy"
+
+
+class TestC4ConsistencyAndTelemetry:
+    def test_severity_distribution_emitted(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        r = build_verification_result([], [], _stage3([
+            {"severity": "critical", "description": "c"},
+            {"severity": "minor", "description": "m1"},
+            {"severity": "minor", "description": "m2"},
+        ]))
+        assert r["diagnostics"]["findings_by_severity"] == {"critical": 1, "minor": 2}
+
+    def test_invariant_does_not_fire_on_fail(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "critical", "description": "c"}]))
+        assert r["verdict"] == "fail"
+        assert r["diagnostics"].get("verdict_evidence_mismatch") is None
+
+    def test_invariant_does_not_fire_on_pass(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.0)
+        assert r["verdict"] == "pass"
+        assert r["diagnostics"].get("verdict_evidence_mismatch") is None
+
+    def test_invariant_does_not_fire_on_softened_unclear(self, monkeypatch):
+        # unclear (softened pass, no critical) is consistent — not a mismatch.
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
+        assert r["verdict"] == "unclear"
+        assert r["diagnostics"].get("verdict_evidence_mismatch") is None

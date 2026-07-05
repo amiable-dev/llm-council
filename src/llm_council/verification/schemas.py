@@ -327,6 +327,9 @@ class VerifyDiagnostics(BaseModel):
     verdict_source: Literal["mechanical", "legacy"] = Field(
         default="legacy", description="mechanical = policy(findings); legacy = prose parse"
     )
+    # ADR-051 C4 (#488): severity distribution — surfaces severity mis-labelling
+    # (the mechanical gate's residual failure mode) over time.
+    findings_by_severity: Dict[str, int] = Field(default_factory=dict)
 
 
 class VerifyResponse(BaseModel):

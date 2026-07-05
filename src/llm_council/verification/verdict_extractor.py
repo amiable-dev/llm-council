@@ -7,9 +7,12 @@ council stage outputs for verification results.
 
 from __future__ import annotations
 
+import logging
 import re
 import statistics
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 # Verdict patterns in synthesis text
@@ -451,6 +454,24 @@ def build_verification_result(
                     if f.severity == "critical"
                 ]
                 diagnostics["verdict_source"] = "mechanical"
+                # C4: severity-distribution telemetry (mis-labelling signal).
+                by_sev: Dict[str, int] = {}
+                for f in parsed:
+                    by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
+                diagnostics["findings_by_severity"] = by_sev
+                # C4: defensive invariant — under the mechanical gate a `fail`
+                # iff a critical exists is guaranteed; if it's ever violated
+                # that's a gate-policy BUG (never model behavior), so mark it.
+                has_critical = any(f.severity == "critical" for f in parsed)
+                if (mechanical == "fail") != has_critical:
+                    diagnostics["verdict_evidence_mismatch"] = (
+                        "fail_without_critical" if mechanical == "fail" else "nonfail_with_critical"
+                    )
+                    logger.error(
+                        "ADR-051 mechanical-gate invariant violated: verdict=%s has_critical=%s",
+                        mechanical,
+                        has_critical,
+                    )
         except Exception:  # telemetry must never break a verdict
             diagnostics["fallback_reason"] = "findings_exception"
     result["findings"] = findings_dicts
