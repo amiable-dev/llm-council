@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.37.1] - 2026-07-05
+
+### Fixed
+
+- **Release housekeeping** — the `v0.37.0` git tag was cut one commit early and did not include the `chore(release): Prepare v0.37.0 release` commit (the CHANGELOG `[0.37.0]` heading + the ADR-051 Status → Implemented flip). The published `0.37.0` wheel was functionally complete (all ADR-051 C4–C6 code was already on `master`); this patch re-tags so the release commit is included in the tagged history. **No functional or API change from `0.37.0`.**
+
 ## [0.37.0] - 2026-07-05
 
 **Verify Findings Channel — telemetry, diagnostics & docs (ADR-051, C4–C6 of epic [#484](https://github.com/amiable-dev/llm-council/issues/484))** — completes the epic on top of the v0.36.0 mechanical gate. Still behind `LLM_COUNCIL_STRUCTURED_FINDINGS` (**default OFF; flag-off byte-identical**); the whole epic remains non-breaking and the default-ON flip is a separate later release.
