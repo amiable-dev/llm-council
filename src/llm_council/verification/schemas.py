@@ -284,6 +284,51 @@ class BlockingIssueResponse(BaseModel):
     location: Optional[str] = Field(default=None, description="File/line location")
 
 
+class Finding(BaseModel):
+    """A structured finding from the chairman (ADR-051).
+
+    The full severity range; ``blocking_issues`` is derived from the
+    ``critical`` subset (C3). Same shape as ``BlockingIssueResponse`` plus a
+    ``dimension`` link, so object→object with no type break.
+    """
+
+    severity: Literal["critical", "major", "minor", "info"] = Field(
+        ..., description="critical | major | minor | info"
+    )
+    description: str = Field(..., description="Finding description")
+    location: Optional[str] = Field(
+        default=None, description="File/line ('file.py:42') or 'global'/None for holistic"
+    )
+    dimension: Optional[str] = Field(
+        default=None, description="Rubric axis this finding maps to, when derivable"
+    )
+
+
+class VerifyDiagnostics(BaseModel):
+    """Telemetry-only diagnostics (ADR-051) — NOT control flow.
+
+    Nested so consumers don't parse ``inner_verdict`` to bypass the
+    low-confidence gate. ``verdict_evidence_mismatch`` is a defensive invariant
+    assertion (should never fire under the mechanical gate).
+    """
+
+    inner_verdict: Optional[str] = Field(
+        default=None, description="Structured verdict before UNCLEAR softening"
+    )
+    inner_confidence: Optional[float] = Field(default=None, ge=0, le=1)
+    inner_confidence_calibrated: Optional[float] = Field(default=None, ge=0, le=1)
+    verdict_evidence_mismatch: Optional[str] = Field(
+        default=None, description="Invariant assertion marker; None in normal operation"
+    )
+    findings_source: Literal["structured", "fallback"] = Field(
+        default="fallback", description="Where findings came from"
+    )
+    fallback_reason: Optional[str] = Field(default=None)
+    verdict_source: Literal["mechanical", "legacy"] = Field(
+        default="legacy", description="mechanical = policy(findings); legacy = prose parse"
+    )
+
+
 class VerifyResponse(BaseModel):
     """Response body for POST /v1/council/verify."""
 
@@ -297,7 +342,17 @@ class VerifyResponse(BaseModel):
     )
     blocking_issues: List[BlockingIssueResponse] = Field(
         default_factory=list,
-        description="Issues that caused FAIL verdict",
+        description="Issues that caused FAIL verdict (the critical subset of findings)",
+    )
+    # ADR-051 (#485): additive structured findings channel. Empty until the
+    # LLM_COUNCIL_STRUCTURED_FINDINGS flag emits them (C2); non-breaking.
+    findings: List[Finding] = Field(
+        default_factory=list,
+        description="Full structured findings (all severities); blocking_issues = critical subset",
+    )
+    diagnostics: VerifyDiagnostics = Field(
+        default_factory=VerifyDiagnostics,
+        description="Telemetry-only diagnostics (inner verdict, findings_source, ...) — not control flow",
     )
     rationale: str = Field(..., description="Chairman synthesis explanation")
     transcript_location: str = Field(..., description="Path to verification transcript")
