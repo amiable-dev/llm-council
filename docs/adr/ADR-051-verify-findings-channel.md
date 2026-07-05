@@ -6,6 +6,7 @@
 **Proposed by:** maintainer triage of a downstream field report (amiable-dev/epic-loop)
 **Relates to:** ADR-025b (Jury Mode / binary verdict), ADR-034 (verification), ADR-042 (evidence injection), ADR-047 (verifier calibration & unclear taxonomy), ADR-016 (rubric scoring)
 **Tracking:** [#482](https://github.com/amiable-dev/llm-council/issues/482)
+**Implementation spec:** [ADR-051-implementation-spec.md](ADR-051-implementation-spec.md) (enforcement mechanism, response schema, flagged migration, doc checklist, child breakdown)
 
 ---
 

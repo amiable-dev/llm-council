@@ -139,6 +139,7 @@ nav:
       - ADR-049 Prompt Caching: adr/ADR-049-prompt-caching-across-gateways.md
       - ADR-050 PostHog LLM Analytics: adr/ADR-050-posthog-llm-analytics-emission.md
       - ADR-051 Verify Findings Channel: adr/ADR-051-verify-findings-channel.md
+      - ADR-051 Implementation Spec: adr/ADR-051-implementation-spec.md
     - Roadmap 2026-H2: roadmap-2026-h2.md
     - Stateless Audit (ADR-045 P3): adr-045-p3-state-inventory.md
   - Reference:
