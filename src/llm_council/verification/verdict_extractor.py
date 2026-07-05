@@ -453,10 +453,18 @@ def build_verification_result(
                 # code); blocking_issues = the critical subset. The confidence
                 # softening to "unclear" is the SAME rule as the legacy path.
                 mechanical = verdict_policy(parsed)
+                # Confidence must correspond to the verdict it accompanies: the
+                # mechanical verdict REPLACES the legacy one, so recompute the
+                # agreement confidence for the mechanical direction rather than
+                # leave a stale value from the discarded verdict (Council C5).
+                confidence = calculate_confidence_from_agreement(stage2_results, mechanical)
+                result["confidence"] = confidence
+                result["confidence_calibrated"] = (
+                    calibrate(confidence) if calibrate is not None else None
+                )
                 eff = calibrate(confidence) if calibrate is not None else confidence
-                # The mechanical verdict REPLACES the legacy one, so discard any
-                # inner-verdict captured during the (now-overridden) legacy
-                # softening; re-capture only if the mechanical verdict softens.
+                # Discard any inner-verdict captured during the (now-overridden)
+                # legacy softening; re-capture only if the mechanical softens.
                 inner_verdict = inner_confidence = inner_confidence_calibrated = None
                 if mechanical == "pass" and eff < confidence_threshold:
                     inner_verdict, inner_confidence, inner_confidence_calibrated = (

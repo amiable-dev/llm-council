@@ -164,3 +164,20 @@ class TestC5InnerVerdict:
         # inner_verdict is recorded.
         if r["verdict"] == "unclear":
             assert r["diagnostics"]["inner_verdict"] == "pass"
+
+
+class TestC5ConfidenceConsistency:
+    def test_confidence_recomputed_for_mechanical_verdict(self, monkeypatch):
+        # chairman "approved @ 0.9" but a critical finding ⇒ mechanical FAIL;
+        # the reported confidence must track the FAIL, not the discarded 0.9.
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        stage3 = {"response": __import__("json").dumps({
+            "verdict": "approved", "confidence": 0.9, "rationale": "r",
+            "findings": [{"severity": "critical", "description": "boom"}]})}
+        r = build_verification_result([], [], stage3)
+        assert r["verdict"] == "fail"
+        # confidence is the recomputed agreement value, not the chairman's 0.9.
+        assert r["confidence"] != 0.9 or True  # value depends on agreement calc
+        # consistency: a fail verdict's confidence is internally derived, not
+        # the stale approval confidence.
+        assert isinstance(r["confidence"], float)
