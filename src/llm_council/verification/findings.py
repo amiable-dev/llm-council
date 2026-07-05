@@ -15,9 +15,53 @@ from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from .schemas import Finding
 
-__all__ = ["structured_findings_enabled", "parse_findings"]
+__all__ = ["structured_findings_enabled", "parse_findings", "verdict_policy"]
 
 _VALID_SEVERITIES = {"critical", "major", "minor", "info"}
+
+# Explicit NON-critical synonyms → canonical. Everything NOT resolvable to one
+# of these (or a canonical value) fails safe to `critical` in _normalize_severity.
+_NONCRITICAL_SYNONYMS = {
+    "moderate": "major", "medium": "major", "warning": "major", "warn": "major",
+    "low": "minor", "nit": "minor", "nitpick": "minor", "trivial": "minor",
+    "informational": "info", "note": "info", "notice": "info",
+}
+
+
+def _normalize_severity(raw: Any) -> str:
+    """Map a model-supplied severity to a canonical value, **fail-safe** for a gate.
+
+    The mechanical gate (C3) fails only on ``critical``, so anything ambiguous
+    must map UP, not down: a missing/blank field, a typo of "critical", a
+    "blocker"/"fatal" tag, or any unrecognized label ⇒ ``critical`` — a real
+    blocker can never silently false-pass (Council C3 finding, 3-round
+    consensus). Only an EXPLICIT known non-critical label is downgraded.
+    """
+    s = str(raw).strip().lower()
+    if s in _VALID_SEVERITIES:
+        return s
+    if s in _NONCRITICAL_SYNONYMS:
+        return _NONCRITICAL_SYNONYMS[s]
+    return "critical"  # missing / unrecognized ⇒ fail closed
+
+
+def verdict_policy(findings: "List[Finding]") -> str:
+    """The mechanical gate (ADR-051 C3): the verdict is a PURE function of the
+    findings — ``"fail"`` iff any finding is ``critical``, else ``"pass"``.
+
+    This is the whole point of the mechanical gate: the verdict cannot be
+    decoupled from the evidence because it is *computed* from it, not generated.
+    Confidence-based softening to ``unclear`` is applied by the caller.
+
+    ``Finding.severity`` is a pydantic ``Literal`` so it is already canonical,
+    but we normalize defensively here too — should a ``Finding`` ever be built
+    outside ``parse_findings`` with a raw label, it must still fail closed.
+    """
+    return (
+        "fail"
+        if any(_normalize_severity(f.severity) == "critical" for f in findings)
+        else "pass"
+    )
 
 
 def _as_text(value: Any) -> str:
@@ -61,21 +105,34 @@ def _matching_brace(text: str, start: int) -> int:
     return -1
 
 
-def _extract_json_object(text: str) -> Any:
+def _extract_json_object(text: str, preferred_key: Optional[str] = None) -> Any:
     """Extract a JSON object from chairman text (LLM-resilient).
 
     Unlike the flat verdict extractor (`verdict._extract_json_from_text`, whose
     `\\{[^{}]*\\}` pattern breaks on nested arrays), this tries the whole string,
-    then walks EVERY ``{`` position and returns the FIRST balanced span that
-    parses to a dict — so a natural-language ``{brace}`` before the real JSON
-    doesn't abort the search (it just isn't a dict). String-aware brace
-    matching; no greedy regex. Raises when no candidate parses to a dict.
+    then walks EVERY ``{`` position with string-aware brace matching. When
+    ``preferred_key`` is given it returns the first parsed dict that CONTAINS
+    that key (so a decoy object before the real verdict payload — which would
+    cause a silent empty-findings false pass, Council C3 finding — is skipped);
+    if none has the key, it returns the first dict. Raises when nothing parses.
     """
     stripped = text.strip()
-    try:
-        obj = json.loads(stripped)  # fast path: the whole thing is JSON
-        if isinstance(obj, dict):
+    first_dict: Any = None
+
+    def _consider(obj: Any) -> Optional[Any]:
+        nonlocal first_dict
+        if not isinstance(obj, dict):
+            return None
+        if preferred_key is None or preferred_key in obj:
             return obj
+        if first_dict is None:
+            first_dict = obj
+        return None
+
+    try:
+        hit = _consider(json.loads(stripped))  # fast path: the whole thing is JSON
+        if hit is not None:
+            return hit
     except json.JSONDecodeError:
         pass
     idx = stripped.find("{")
@@ -83,12 +140,18 @@ def _extract_json_object(text: str) -> Any:
         end = _matching_brace(stripped, idx)
         if end != -1:
             try:
-                obj = json.loads(stripped[idx : end + 1])
-                if isinstance(obj, dict):
-                    return obj
+                hit = _consider(json.loads(stripped[idx : end + 1]))
+                if hit is not None:
+                    return hit
             except json.JSONDecodeError:
                 pass
-        idx = stripped.find("{", idx + 1)
+            # Advance PAST this whole object, not to idx+1 (which would rescan
+            # its nested braces — an O(n^2) walk).
+            idx = stripped.find("{", end + 1)
+        else:
+            idx = stripped.find("{", idx + 1)  # unbalanced from here: step by one
+    if first_dict is not None:
+        return first_dict
     raise ValueError("no JSON object found")
 
 
@@ -118,14 +181,14 @@ def parse_findings(
     is missing/malformed. Soft-fail: never raises — the verdict path still works
     via the legacy route when this returns fallback.
 
-    Robustness rules: an unknown severity is coerced to ``"major"`` (visible,
-    never silently dropped — the C3 mechanical gate can't act on what it can't
-    see); items without a description, or non-dict items, are skipped.
+    Robustness: severity is normalized fail-safe (blocker-ish labels →
+    ``critical`` so the mechanical gate can't false-pass them); items without a
+    description, or non-dict items, are skipped.
     """
     from .schemas import Finding
 
     try:
-        data = _extract_json_object(chairman_response)
+        data = _extract_json_object(chairman_response, preferred_key="findings")
     except Exception as exc:  # unparseable ⇒ legacy fallback
         return [], "fallback", f"json_parse:{type(exc).__name__}"
     if not isinstance(data, dict) or "findings" not in data:
@@ -139,13 +202,12 @@ def parse_findings(
         if not isinstance(item, dict):
             continue
         description = item.get("description")
-        # Skip only genuinely-empty descriptions (None / blank) — a useless
-        # finding, not data loss. Anything else is stringified below.
+        # Fail-safe: NEVER drop a finding for a missing description — a critical
+        # with no text would silently vanish and false-pass. Keep it with a
+        # placeholder so its severity still gates (Council C3 finding).
         if description is None or str(description).strip() == "":
-            continue
-        severity = str(item.get("severity", "")).strip().lower()
-        if severity not in _VALID_SEVERITIES:
-            severity = "major"  # visible, never dropped
+            description = "(no description provided)"
+        severity = _normalize_severity(item.get("severity", ""))
         # `is not None` (not truthiness): keep a present-but-falsy value like
         # 0/false rather than silently discarding it.
         location = item.get("location")

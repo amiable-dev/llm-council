@@ -43,19 +43,32 @@ class TestParseFindings:
             '{"verdict":"approved","confidence":0.8,"rationale":"r","findings":"oops"}')
         assert source == "fallback" and reason == "findings_not_list"
 
-    def test_unknown_severity_coerced_visible_not_dropped(self):
-        # A blocker-ish unknown severity must stay visible (mapped to major),
-        # never silently dropped — the mechanical gate (C3) can't act on what
-        # it can't see.
-        text = '{"findings":[{"severity":"blocker","description":"d"}]}'
-        findings, source, _ = parse_findings(text)
-        assert source == "structured"
-        assert findings[0].severity == "major"  # coerced, not dropped
+    def test_blocker_synonym_maps_to_critical_failsafe(self):
+        # C3 fail-safe: a blocker-ish label must map to CRITICAL, not major —
+        # else the mechanical gate (fails only on critical) false-passes it.
+        for sev in ("blocker", "fatal", "critcal", "BLOCKING"):
+            text = '{"findings":[{"severity":"%s","description":"d"}]}' % sev
+            findings, source, _ = parse_findings(text)
+            assert source == "structured" and findings[0].severity == "critical"
 
-    def test_items_without_description_skipped(self):
+    def test_unrecognized_severity_fails_safe_to_critical(self):
+        text = '{"findings":[{"severity":"weird","description":"d"}]}'
+        findings, _, _ = parse_findings(text)
+        assert findings[0].severity == "critical"  # fail-safe for a gate
+
+    def test_explicit_noncritical_synonym_downgrades(self):
+        for sev, want in (("warning", "major"), ("nit", "minor"), ("note", "info")):
+            text = '{"findings":[{"severity":"%s","description":"d"}]}' % sev
+            findings, _, _ = parse_findings(text)
+            assert findings[0].severity == want
+
+    def test_description_less_finding_kept_with_placeholder(self):
+        # Fail-safe: a critical with no description must NOT vanish.
         text = '{"findings":[{"severity":"critical"},{"severity":"minor","description":"d"}]}'
         findings, source, _ = parse_findings(text)
-        assert len(findings) == 1 and findings[0].description == "d"
+        assert len(findings) == 2
+        crit = [f for f in findings if f.severity == "critical"][0]
+        assert crit.description == "(no description provided)"
 
     def test_non_dict_items_skipped(self):
         text = '{"findings":["oops",{"severity":"info","description":"d"}]}'
@@ -150,3 +163,31 @@ class TestRound3Fixes:
         # JSON-encoded, not a Python repr ("{'nested': 'x'}")
         assert findings[0].description == '{"nested": "x"}'
         assert "'" not in findings[0].description
+
+
+class TestC3Fixes:
+    def test_prefers_findings_bearing_object_over_decoy(self):
+        # A decoy JSON object before the real payload must not shadow it (a
+        # silent empty-findings false pass).
+        text = '{"note":"thinking..."}\n' \
+               '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"real"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured"
+        assert len(findings) == 1 and findings[0].description == "real"
+
+
+class TestC3Round2:
+    def test_multiple_sequential_objects_scanned_efficiently(self):
+        # Several decoy objects before the payload — must still find it.
+        decoys = "".join('{"x":%d}\n' % i for i in range(20))
+        text = decoys + '{"findings":[{"severity":"critical","description":"real"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured" and findings[0].description == "real"
+
+    def test_missing_severity_fails_safe_to_critical(self):
+        # Fail-safe for a gate: an omitted severity ⇒ critical, never silently
+        # non-blocking (Council 3-round consensus).
+        text = '{"findings":[{"description":"no severity field"}]}'
+        findings, _, _ = parse_findings(text)
+        assert findings[0].severity == "critical"
