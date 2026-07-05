@@ -18,47 +18,56 @@ emitted *alongside* the verdict does not fix verdict–evidence decoupling. Toda
 there is **no structured-output plumbing**: `verdict.py:parse_binary_verdict`
 regex-parses the chairman's prose. So every option below is net-new.
 
-**Decision: two-phase generation for v1.**
+**Decision: mechanical gate — LLM findings, deterministic verdict.** (Revised
+after the Council fork review, 2026-07-05, high tier — it challenged plain
+two-phase and 3/4 models converged on this hybrid.)
 
-- **Phase 1 (findings):** the chairman is called with the code + evidence and a
-  prompt that asks *only* for `findings[]` (severity, description, cited
-  location) — **no verdict requested, none in context.**
-- **Phase 2 (verdict):** a second, compact chairman call receives *its own
-  Phase-1 findings* (not the code again) and renders `approved|rejected` +
-  confidence **as a function of those findings.**
+- **Phase 1 (LLM):** ONE chairman call emits severity-tagged `findings[]`
+  (severity, description, cited location) *and* the human-readable synthesis
+  prose. No verdict is requested.
+- **Phase 2 (deterministic host code):** the verdict is **computed from the
+  findings**, not generated — v1 policy: any `severity == "critical"` finding
+  (or an ADR-042 blocking-evidence disposition) ⇒ `fail`; otherwise `pass`.
+  The policy is explicit, auditable code (tunable later, e.g. "N majors ⇒
+  fail"). Confidence continues to come from the existing deliberation/agreement
+  signal (`calculate_confidence_from_agreement`), independent of the verdict.
 
-**The one decisive reason:** only two-phase makes the verdict *causally* depend
-on the findings. Phase 1 cannot backfill findings to a verdict it has not made;
-Phase 2 has the findings as its input. The alternatives give **cosmetic**
-ordering at best.
+**The one decisive reason:** the verdict is a **provable function of the
+findings** — it is literally `verdict = policy(findings)` in code, the strongest
+possible form of "findings-first." A generated Phase-2 verdict is only
+*hopefully* causal; the Council showed a second LLM call that sees the code
+re-judges freshly and can emit `ACCEPT` over its own `CRITICAL` finding (the
+"Yes-Man contradiction").
 
-| Option | Causal findings-first? | Portability | Failure mode left open |
+| Option | Verdict genuinely = f(findings)? | LLM hops | Failure mode left open |
 |---|---|---|---|
-| **A. Two-phase (chosen)** | **Yes** — Phase 1 has no verdict | High (reuses the chairman call twice; provider-agnostic) | Phase-1/Phase-2 drift (mitigated: Phase 2 sees the findings verbatim; a mismatch trips the Part-2 guard) |
-| B. Constrained decoding | No — JSON field order ≠ reasoning order; model may decide verdict-first and emit findings to match | Low — needs per-provider structured-output adapters (OpenAI json_schema / Gemini responseSchema / Anthropic tool-use) built + maintained | Rationalization survives; the exact pathology we're fixing |
-| C. Single free-form + parse | No | High | Weakest; ~= today's prose fragility |
+| **Mechanical gate (chosen)** | **Yes — computed in code** | **1** (same as today) | Severity **mis-labelling** by the model (a real "critical" tagged "major" won't fail) — localized, auditable, tunable via the rubric + policy |
+| Two-phase (both LLM) | No — Phase 2 can re-judge / Yes-Man contradict | 2 (extra hop, waterfall-budget risk) | Contradiction + latency; needs info-starvation + a code guard anyway → collapses toward the mechanical gate |
+| Constrained decoding | No — JSON field order ≠ reasoning order | 1 | Rationalization survives; net-new per-provider adapters |
+| Single free-form + parse | No | 1 | Weakest; ≈ today's prose fragility |
 
-**Cost.** One extra chairman hop inside stage-3's waterfall budget (ADR-040:
-stage 3 gets the remaining time). Phase 2's input is compact (findings only, not
-the code), so it is short and cheap. Acceptable for a quality gate where
-correctness dominates a ~1–2 s latency add.
+**Why this beats plain two-phase (Council):** it is single-hop (no waterfall-
+budget penalty — Gemini's objection), makes the Yes-Man contradiction
+*structurally impossible* (so the Part-2 guard becomes a defensive invariant,
+§below), and makes soft-fail safe (a deterministic verdict from stranded
+findings, never an untrusted LLM inference). It also lands the ADR's root fix
+maximally: the verdict is no longer *decoupled* from the evidence — it is
+*derived* from it.
 
-**Graceful degradation (soft-fail, ADR-011/024).** If Phase 2 fails or times
-out, fall back to a verdict derived from Phase-1 findings (critical present ⇒
-lean fail) and mark `findings_source: structured`, `verdict_source: degraded`.
-If Phase 1 itself fails or the flag is off, fall back to the **legacy single
-synthesis + `parse_binary_verdict` + prose-regex** path and mark
-`findings_source: fallback`, `fallback_reason: <cause>`. Verify never crashes on
-a bad model output.
+**Graceful degradation (soft-fail, ADR-011/024).** If the Phase-1 findings
+emission fails or won't parse (or the flag is off), fall back to the **legacy
+single synthesis + `parse_binary_verdict` + prose-regex** path and mark
+`findings_source: fallback`, `fallback_reason: <cause>`. The verdict computation
+(Phase 2) is pure code and never fails. Verify never crashes on a bad model
+output.
 
 **Constrained decoding is explicitly deferred** to a future per-chairman-model
-optimization — considered only if a provider's structured output empirically
-adds value over two-phase, and never as the sole enforcement (it is cosmetic on
-the causal property).
+optimization for how Phase 1 *emits* findings (e.g. json_schema / responseSchema
+/ tool-use) — a robustness upgrade to parsing, never the verdict mechanism.
 
-> Note: a Council validation of this fork was attempted 2026-07-05 but the
-> council could not run (OpenRouter `402 Payment Required` — account credits).
-> Re-validate once billing is restored; the decision does not block on it.
+> The Council validation ran 2026-07-05, high tier (OpenRouter billing
+> restored). It did not rubber-stamp two-phase — the mechanical-gate pivot is
+> its convergent recommendation, folded in here.
 
 ## 2. Response schema (concrete)
 
@@ -75,24 +84,34 @@ class VerifyDiagnostics(BaseModel):          # telemetry-only; NOT control flow
     inner_verdict: Optional[str] = None       # "approved"/"rejected" pre-softening
     inner_confidence: Optional[float] = None
     inner_confidence_calibrated: Optional[float] = None
-    verdict_evidence_mismatch: Optional[str] = None   # "fail_without_findings" | "pass_with_critical"
+    verdict_evidence_mismatch: Optional[str] = None   # invariant assertion — should never fire
     findings_source: Literal["structured", "fallback"] = "fallback"
     fallback_reason: Optional[str] = None
-    verdict_source: Literal["two_phase", "degraded", "legacy"] = "legacy"
+    verdict_source: Literal["mechanical", "legacy"] = "legacy"   # mechanical = policy(findings)
 ```
 
 `VerifyResponse` gains:
 - `findings: List[Finding]` — the full structured list (all severities).
 - `diagnostics: VerifyDiagnostics` — nested, telemetry-only.
 
+**Verdict is derived, not parsed.** On the structured path the verdict is
+`verdict_source: mechanical` = `policy(findings)` (v1: any `critical` ⇒ `fail`,
+else `pass`); confidence stays from the deliberation/agreement signal. On the
+fallback path it is `legacy` (`parse_binary_verdict` + prose regex).
+
 `blocking_issues` is **derived**, unchanged in type
 (`List[BlockingIssueResponse]` — already `{severity, description, location}`, so
-**no type break**): `blocking_issues = [b for f in findings if f.severity ==
+**no type break**): `blocking_issues = [f for f in findings if f.severity ==
 "critical"]` plus any ADR-042 blocking-evidence dispositions. Non-critical
 findings live only in `findings[]`.
 
-**Invariant tests:** a FAIL with a critical finding never yields
-`blocking_issues == []`; `findings[]` ⊇ `blocking_issues` (by severity filter).
+**Invariants (now structural, not hoped-for).** Because the verdict is
+`policy(findings)`, `fail`-with-no-critical and `pass`-with-critical are
+**impossible by construction** on the mechanical path — the Part-2
+`verdict_evidence_mismatch` marker is a defensive assertion that should never
+fire (if it does, it's a code bug in the gate policy, and it's logged). Tests:
+`fail` ⇒ `blocking_issues` non-empty; `findings[] ⊇ blocking_issues`; the policy
+is a pure function (property test over synthetic findings).
 
 ## 3. Migration & versioning — flagged, non-breaking epic; deliberate flip
 
@@ -149,15 +168,19 @@ epic. Non-critical/`info` findings are retained in `findings[]`.
    `VerifyDiagnostics` models, and the additive `VerifyResponse` fields
    (empty by default). Flag-off ⇒ byte-identical (test-pinned). Env-reference +
    drift-guard field assertion.
-2. **C2 — two-phase chairman emission (behind flag).** Phase-1 findings-first
-   prompt, Phase-2 verdict-from-findings; populate `findings[]`; soft-fail
-   ladder (degraded → legacy) with `findings_source`/`verdict_source`.
-3. **C3 — derive `blocking_issues` from `findings[critical]`.** Prose regex
-   demoted to the flagged fallback; `findings_source`/`fallback_reason` set;
-   #355 regression pinned (approval prose must not fabricate criticals).
-4. **C4 — bidirectional verdict–evidence consistency guard.** `fail`+no findings
-   and `pass`+critical both emit `diagnostics.verdict_evidence_mismatch`;
-   zero-finding FAIL survives; any re-run is non-coercive (localize only).
+2. **C2 — structured findings emission (behind flag).** One chairman call emits
+   severity-tagged `findings[]` (+ synthesis prose); populate `findings[]`;
+   soft-fail to the legacy path (`findings_source`/`fallback_reason`).
+3. **C3 — mechanical verdict + derive `blocking_issues`.** `verdict =
+   policy(findings)` (any `critical` ⇒ `fail`) as a pure host function
+   (`verdict_source: mechanical`); `blocking_issues = findings[critical]`; prose
+   regex demoted to the flagged fallback; #355 regression pinned (approval prose
+   must not fabricate criticals).
+4. **C4 — consistency invariant + severity-calibration telemetry.** Assert the
+   structural invariant (`fail`⇔critical present) and log
+   `verdict_evidence_mismatch` if it ever fires (a gate-policy bug); emit
+   findings-count / severity-distribution telemetry so severity **mis-labelling**
+   (the named residual failure mode) is observable over time.
 5. **C5 — `diagnostics.inner_verdict`/`inner_confidence` on softened UNCLEAR.**
 6. **C6 — docs sweep + drift guard + migration guide.** The §4 checklist,
    bundled-skill sync, CHANGELOG (flag), CLAUDE.md. Flag still default-off.
@@ -174,14 +197,18 @@ epic. Non-critical/`info` findings are retained in `findings[]`.
 ## 6. Test plan (across the epic)
 
 - Flag-off byte-identical (C1).
-- Two-phase: Phase-1 prompt contains no verdict; Phase-2 input is the findings;
-  Phase-2 failure degrades, never crashes (C2).
-- `blocking_issues` invariants: FAIL+critical ⇒ non-empty; `findings ⊇
-  blocking_issues`; #355 approval-prose regression (C3).
-- Bidirectional guard fires on both mismatches; zero-finding FAIL passes through
-  untouched (C4).
+- Findings emission: a Phase-1 failure / unparseable output degrades to the
+  legacy path, never crashes (C2).
+- **Mechanical verdict is a pure function** — property test over synthetic
+  `findings[]`: `policy(findings)` is deterministic; any `critical` ⇒ `fail`;
+  no `critical` ⇒ `pass`; verdict never depends on prose (C3).
+- `blocking_issues` invariants: FAIL ⇒ non-empty; `findings ⊇ blocking_issues`;
+  #355 approval-prose regression (C3).
+- Structural invariant: `pass`-with-critical / `fail`-without-critical cannot be
+  produced; the `verdict_evidence_mismatch` assertion never fires in normal
+  operation (C4).
 - Softened UNCLEAR carries `diagnostics.inner_verdict` (C5).
 - Drift guard: an undocumented `VerifyResponse` field fails CI (C1/C6).
 - **Corpus replay:** re-run the epic-loop 25-call log (verification_ids in
   `council-verify-stats.md`) with the flag on; assert FAILs now carry non-empty
-  `findings`. (Requires OpenRouter credits — currently blocked by the 402.)
+  `findings`. (OpenRouter credits restored 2026-07-05.)

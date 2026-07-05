@@ -94,10 +94,12 @@ independently confirmed by the maintainer against the arXiv HTML.
 
 The Council endorsed the core diagnosis and the structured-findings fix, and
 raised amendments, all folded in above:
-1. **Proof-Before-Preference needs enforcement, not a prompt** → Part 1
-   commits to two-phase / constrained decoding.
-2. **Bidirectional consistency guard** → Part 2 now also guards `pass` +
-   critical findings; zero-finding FAILs survive; any re-run is non-coercive.
+1. **Proof-Before-Preference needs enforcement, not a prompt** → Part 1 → the
+   fork review (spec §1) landed on a **mechanical gate**: LLM emits findings,
+   host code computes the verdict.
+2. **Consistency guard** → the mechanical gate makes `pass`+critical /
+   `fail`-without-critical structurally impossible, so Part 2 downgrades to a
+   defensive invariant assertion + severity-calibration telemetry.
 3. **`inner_verdict` is a footgun as a top-level field** → Part 3 nests it
    under `diagnostics`, telemetry-only.
 4. **P4 (completeness) is orthogonal** → deferred to its own follow-up.
@@ -137,24 +139,27 @@ only as a fallback for models that don't return structured findings, and set
 `findings_source: structured|fallback` + `fallback_reason` on the response so
 consumers see when the channel degraded.
 
-**Findings precede the verdict — and it must be *enforced*, not just
-prompted (Council rev-2).** Research verification refuted the weaker version:
-a structured rationale emitted *alongside* the verdict does not fix decoupling.
-But JSON has no ordering guarantee and generation order alone is brittle, so
-"findings first" must be enforced by one of: **constrained decoding / structured
-outputs** (schema topological order), **two-phase generation** (emit findings,
-then a second call renders the verdict from them), or at minimum a **parse-time
-co-emission + ordering check**. The ADR commits to two-phase or constrained
-decoding — not a bare prompt instruction ("Proof-Before-Preference").
+**Findings precede the verdict — enforced by a *mechanical gate*, not a
+prompt (Council rev-2 + fork review).** Research verification refuted the
+weaker version: a structured rationale emitted *alongside* the verdict does not
+fix decoupling. The fork review (implementation spec §1) then rejected a second
+LLM verdict call too — it re-judges and can approve over its own critical
+finding. The chosen mechanism: **the chairman (LLM) emits severity-tagged
+`findings[]`; the verdict is computed by deterministic host code**
+(`verdict = policy(findings)`, v1: any `critical` ⇒ `fail`). The verdict is a
+*provable function* of the findings, single-hop, and impossible to decouple —
+see [ADR-051-implementation-spec.md](ADR-051-implementation-spec.md) §1.
 
 ### 2. Verdict–evidence consistency guard
 
-Guard **both directions** (Council rev-2): `fail`/`unclear` with empty
-`findings` (rejection with no justification), AND `pass` with any
-`severity == critical` finding (approval over a stated blocker). Either
-inconsistency emits a structured `verdict_evidence_mismatch` marker and is
-logged. This makes the pathology **observable** instead of silently producing
-`blocking_issues: []`.
+Under the mechanical gate (Part 1) the verdict is `policy(findings)`, so the
+two inconsistencies this guard targeted — `fail` with empty `findings`, and
+`pass` with a `critical` finding — are **structurally impossible**. The guard
+therefore downgrades to a **defensive invariant assertion**: if it ever fires,
+that is a bug in the gate policy, not model behavior, and it is logged as
+`verdict_evidence_mismatch`. The residual risk moves to **severity
+mis-labelling** (a real critical tagged `major`), surfaced by
+findings-count/severity telemetry rather than a verdict-vs-findings check.
 
 **A zero-finding FAIL is legitimate and must survive** (Council rev-2): a
 holistic rejection ("fundamentally wrong approach") may have no line-level
@@ -224,8 +229,9 @@ consumers built gating logic against always-`[]`, and populating it on FAIL
 wakes that dormant logic. It warrants a **MAJOR version bump** (or a transition
 feature flag defaulting to the new behavior with an opt-out) — not just a
 CHANGELOG line. Parts 1–3 touch the verdict-extraction hot path and need golden
-tests against both the structured and fallback paths; the two-phase/constrained
-enforcement adds one generation hop on the chairman path.
+tests against both the structured and fallback paths; the mechanical gate keeps
+this to a **single** chairman hop (no extra generation call — the verdict is
+host code).
 
 **Neutral.** `input_too_large` / `unclear_reason` structured outcomes are
 unchanged (keep). No new external dependency.
@@ -237,7 +243,10 @@ unchanged (keep). No new external dependency.
   `blocking_issues: []`.
 - Unit: prose-only chairman (no structured findings) ⇒ fallback regex path,
   response flags `findings_source: fallback`.
-- Unit: `verdict=fail` + empty findings ⇒ `verdict_evidence_mismatch` marker
+- Unit: the verdict policy is a pure function of `findings` — any `critical` ⇒
+  `fail`, none ⇒ `pass`; `pass`-with-critical / `fail`-without-critical are
+  unreachable (the `verdict_evidence_mismatch` assertion never fires in normal
+  operation)
   present.
 - Unit: softened UNCLEAR carries `inner_verdict`/`inner_confidence`.
 - Regression: the #355 corpus (approval prose like "critical issues resolved")
