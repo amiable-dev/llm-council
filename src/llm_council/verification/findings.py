@@ -42,7 +42,11 @@ def _normalize_severity(raw: Any) -> str:
     # Anything that LOOKS like a blocker ⇒ critical (never silently downgraded).
     if s.startswith("crit") or "block" in s or "fatal" in s or "sever" in s:
         return "critical"
-    return "major"  # unknown, non-blocker-looking: visible, not auto-failing
+    # Deliberate: a missing/blank or unrecognized-non-blocker severity ⇒ "major"
+    # (visible for human review, not auto-failing). Defaulting to "critical"
+    # here would auto-FAIL the build for any model that merely omits the field —
+    # an unusably noisy gate — while a genuine blocker is still caught above.
+    return "major"
 
 
 def verdict_policy(findings: "List[Finding]") -> str:
@@ -137,7 +141,11 @@ def _extract_json_object(text: str, preferred_key: Optional[str] = None) -> Any:
                     return hit
             except json.JSONDecodeError:
                 pass
-        idx = stripped.find("{", idx + 1)
+            # Advance PAST this whole object, not to idx+1 (which would rescan
+            # its nested braces — an O(n^2) walk).
+            idx = stripped.find("{", end + 1)
+        else:
+            idx = stripped.find("{", idx + 1)  # unbalanced from here: step by one
     if first_dict is not None:
         return first_dict
     raise ValueError("no JSON object found")

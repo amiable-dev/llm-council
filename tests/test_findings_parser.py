@@ -166,3 +166,17 @@ class TestC3Fixes:
         findings, source, _ = parse_findings(text)
         assert source == "structured"
         assert len(findings) == 1 and findings[0].description == "real"
+
+
+class TestC3Round2:
+    def test_multiple_sequential_objects_scanned_efficiently(self):
+        # Several decoy objects before the payload — must still find it.
+        decoys = "".join('{"x":%d}\n' % i for i in range(20))
+        text = decoys + '{"findings":[{"severity":"critical","description":"real"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured" and findings[0].description == "real"
+
+    def test_missing_severity_is_major(self):
+        text = '{"findings":[{"description":"no severity field"}]}'
+        findings, _, _ = parse_findings(text)
+        assert findings[0].severity == "major"
