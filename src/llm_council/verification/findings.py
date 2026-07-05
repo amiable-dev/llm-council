@@ -19,13 +19,9 @@ __all__ = ["structured_findings_enabled", "parse_findings", "verdict_policy"]
 
 _VALID_SEVERITIES = {"critical", "major", "minor", "info"}
 
-# Severity synonyms → canonical. Because the mechanical gate (C3) fails only on
-# `critical`, an unknown blocker-ish label MUST map to critical (fail-safe) — a
-# typo of "critical" or a "fatal"/"blocker" tag silently becoming "major" would
-# be a FALSE PASS on a real blocker (Council C3 finding).
-_SEVERITY_SYNONYMS = {
-    "blocker": "critical", "blocking": "critical", "fatal": "critical",
-    "severe": "critical", "high": "critical", "error": "critical",
+# Explicit NON-critical synonyms → canonical. Everything NOT resolvable to one
+# of these (or a canonical value) fails safe to `critical` in _normalize_severity.
+_NONCRITICAL_SYNONYMS = {
     "moderate": "major", "medium": "major", "warning": "major", "warn": "major",
     "low": "minor", "nit": "minor", "nitpick": "minor", "trivial": "minor",
     "informational": "info", "note": "info", "notice": "info",
@@ -33,20 +29,20 @@ _SEVERITY_SYNONYMS = {
 
 
 def _normalize_severity(raw: Any) -> str:
-    """Map a model-supplied severity to a canonical value, fail-safe for blockers."""
+    """Map a model-supplied severity to a canonical value, **fail-safe** for a gate.
+
+    The mechanical gate (C3) fails only on ``critical``, so anything ambiguous
+    must map UP, not down: a missing/blank field, a typo of "critical", a
+    "blocker"/"fatal" tag, or any unrecognized label ⇒ ``critical`` — a real
+    blocker can never silently false-pass (Council C3 finding, 3-round
+    consensus). Only an EXPLICIT known non-critical label is downgraded.
+    """
     s = str(raw).strip().lower()
     if s in _VALID_SEVERITIES:
         return s
-    if s in _SEVERITY_SYNONYMS:
-        return _SEVERITY_SYNONYMS[s]
-    # Anything that LOOKS like a blocker ⇒ critical (never silently downgraded).
-    if s.startswith("crit") or "block" in s or "fatal" in s or "sever" in s:
-        return "critical"
-    # Deliberate: a missing/blank or unrecognized-non-blocker severity ⇒ "major"
-    # (visible for human review, not auto-failing). Defaulting to "critical"
-    # here would auto-FAIL the build for any model that merely omits the field —
-    # an unusably noisy gate — while a genuine blocker is still caught above.
-    return "major"
+    if s in _NONCRITICAL_SYNONYMS:
+        return _NONCRITICAL_SYNONYMS[s]
+    return "critical"  # missing / unrecognized ⇒ fail closed
 
 
 def verdict_policy(findings: "List[Finding]") -> str:

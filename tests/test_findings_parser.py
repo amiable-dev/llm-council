@@ -51,10 +51,16 @@ class TestParseFindings:
             findings, source, _ = parse_findings(text)
             assert source == "structured" and findings[0].severity == "critical"
 
-    def test_unknown_non_blocker_severity_is_major(self):
+    def test_unrecognized_severity_fails_safe_to_critical(self):
         text = '{"findings":[{"severity":"weird","description":"d"}]}'
         findings, _, _ = parse_findings(text)
-        assert findings[0].severity == "major"
+        assert findings[0].severity == "critical"  # fail-safe for a gate
+
+    def test_explicit_noncritical_synonym_downgrades(self):
+        for sev, want in (("warning", "major"), ("nit", "minor"), ("note", "info")):
+            text = '{"findings":[{"severity":"%s","description":"d"}]}' % sev
+            findings, _, _ = parse_findings(text)
+            assert findings[0].severity == want
 
     def test_items_without_description_skipped(self):
         text = '{"findings":[{"severity":"critical"},{"severity":"minor","description":"d"}]}'
@@ -176,7 +182,9 @@ class TestC3Round2:
         findings, source, _ = parse_findings(text)
         assert source == "structured" and findings[0].description == "real"
 
-    def test_missing_severity_is_major(self):
+    def test_missing_severity_fails_safe_to_critical(self):
+        # Fail-safe for a gate: an omitted severity ⇒ critical, never silently
+        # non-blocking (Council 3-round consensus).
         text = '{"findings":[{"description":"no severity field"}]}'
         findings, _, _ = parse_findings(text)
-        assert findings[0].severity == "major"
+        assert findings[0].severity == "critical"
