@@ -43,14 +43,18 @@ class TestParseFindings:
             '{"verdict":"approved","confidence":0.8,"rationale":"r","findings":"oops"}')
         assert source == "fallback" and reason == "findings_not_list"
 
-    def test_unknown_severity_coerced_visible_not_dropped(self):
-        # A blocker-ish unknown severity must stay visible (mapped to major),
-        # never silently dropped — the mechanical gate (C3) can't act on what
-        # it can't see.
-        text = '{"findings":[{"severity":"blocker","description":"d"}]}'
-        findings, source, _ = parse_findings(text)
-        assert source == "structured"
-        assert findings[0].severity == "major"  # coerced, not dropped
+    def test_blocker_synonym_maps_to_critical_failsafe(self):
+        # C3 fail-safe: a blocker-ish label must map to CRITICAL, not major —
+        # else the mechanical gate (fails only on critical) false-passes it.
+        for sev in ("blocker", "fatal", "critcal", "BLOCKING"):
+            text = '{"findings":[{"severity":"%s","description":"d"}]}' % sev
+            findings, source, _ = parse_findings(text)
+            assert source == "structured" and findings[0].severity == "critical"
+
+    def test_unknown_non_blocker_severity_is_major(self):
+        text = '{"findings":[{"severity":"weird","description":"d"}]}'
+        findings, _, _ = parse_findings(text)
+        assert findings[0].severity == "major"
 
     def test_items_without_description_skipped(self):
         text = '{"findings":[{"severity":"critical"},{"severity":"minor","description":"d"}]}'
@@ -150,3 +154,15 @@ class TestRound3Fixes:
         # JSON-encoded, not a Python repr ("{'nested': 'x'}")
         assert findings[0].description == '{"nested": "x"}'
         assert "'" not in findings[0].description
+
+
+class TestC3Fixes:
+    def test_prefers_findings_bearing_object_over_decoy(self):
+        # A decoy JSON object before the real payload must not shadow it (a
+        # silent empty-findings false pass).
+        text = '{"note":"thinking..."}\n' \
+               '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"real"}]}'
+        findings, source, _ = parse_findings(text)
+        assert source == "structured"
+        assert len(findings) == 1 and findings[0].description == "real"
