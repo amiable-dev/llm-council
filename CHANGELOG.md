@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] - 2026-07-05
+
+**Verify Findings Channel — structural fix, opt-in (ADR-051, C1–C3 of epic [#484](https://github.com/amiable-dev/llm-council/issues/484))** — fixes the field-reported defect where `verify()`'s `blocking_issues` was `[]` on nearly every call (the verdict came from a structured path while `blocking_issues` was regex-scraped from chairman prose modern models don't format with `SEVERITY:` markers). Behind the new `LLM_COUNCIL_STRUCTURED_FINDINGS` flag (**default OFF — additive, non-breaking; flag-off is byte-identical**) the chairman now emits a structured `findings[]` array and the verdict is **computed from it by host code** (the "mechanical gate": any `critical` finding ⇒ `fail`), so the verdict can't decouple from the evidence and `blocking_issues` = the critical subset. This is the core of ADR-051; the consistency-invariant telemetry (C4), inner-verdict diagnostics (C5), docs sweep (C6), and the eventual default-ON flip (a separate breaking release) follow. Two Council reviews + an enforcement-fork review shaped the mechanical-gate design; the findings parser itself was hardened across ~10 Council rounds (string-aware JSON extraction, fail-safe severity normalization, no-drop findings).
+
+### Added
+
+- **Mechanical verdict + derived `blocking_issues` (ADR-051 C3, #487)** — `findings.verdict_policy()` computes the verdict as a pure function of the findings (any `critical` ⇒ `fail`); `blocking_issues` is the critical subset. Severity is normalized **fail-safe** (a missing/unrecognized/typo'd severity ⇒ `critical`, never a silent false-pass); the confidence→`unclear` softening is unchanged. Flag-off and the parse-fallback path keep the legacy prose behavior (the #355 non-fabrication guard is preserved).
+- **Structured findings emission (ADR-051 C2, #486)** — the chairman's BINARY-verdict JSON gains a findings-first `findings[]` array; `findings.parse_findings()` extracts it with an LLM-resilient, string-aware balanced-brace JSON scanner and soft-fails to the legacy path (`findings_source`/`fallback_reason` recorded).
+- **Findings/diagnostics schema + flag (ADR-051 C1, #485)** — `Finding` and `VerifyDiagnostics` models, additive `VerifyResponse.findings`/`.diagnostics` (empty defaults), and the `LLM_COUNCIL_STRUCTURED_FINDINGS` opt-in flag (default off). `blocking_issues` type unchanged (`List[BlockingIssueResponse]`).
+
 ## [0.35.0] - 2026-07-04
 
 **PostHog LLM Analytics Emission (ADR-050)** — epic [#472](https://github.com/amiable-dev/llm-council/issues/472). Verify telemetry stops being local-only: an **opt-in, off-by-default** emitter sends one `$ai_generation` event per council-member model to PostHog, so cost trends, the ADR-049 cache-hit-rate guard, and Council calibration land in a dashboard instead of a grep. Every external claim was verified against primary PostHog docs (adversarial deep-research, 92 agents) plus empirical checks of the live receiving project, then Council-reviewed; the feature-flag tier-routing slice (ADR-050 Part 4) was deferred to its own ADR as a critical-path concern.
