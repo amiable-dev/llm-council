@@ -379,6 +379,13 @@ def build_verification_result(
     """
     rubric_scores = extract_rubric_scores_from_rankings(stage2_results)
 
+    # ADR-051 C5 (#489): capture the pre-softening state whenever an
+    # "approved @ c" is softened to "unclear" (c < threshold), for the
+    # telemetry-only diagnostics block.
+    inner_verdict: Optional[str] = None
+    inner_confidence: Optional[float] = None
+    inner_confidence_calibrated: Optional[float] = None
+
     structured_verdict = _verdict_from_structured(verdict_result)
     if structured_verdict is not None:
         # Trust the council's structured BINARY verdict.
@@ -389,6 +396,9 @@ def build_verification_result(
         # confidence (raw is always reported alongside).
         effective = calibrate(confidence) if calibrate is not None else confidence
         if verdict == "pass" and effective < confidence_threshold:
+            inner_verdict, inner_confidence, inner_confidence_calibrated = (
+                "pass", confidence, effective,
+            )
             verdict = "unclear"
     else:
         # Fallback: legacy regex extraction over the synthesis prose.
@@ -398,6 +408,9 @@ def build_verification_result(
         confidence = round((base_confidence * 0.4) + (agreement_confidence * 0.6), 2)
         effective = calibrate(confidence) if calibrate is not None else confidence
         if verdict == "pass" and effective < confidence_threshold:
+            inner_verdict, inner_confidence, inner_confidence_calibrated = (
+                "pass", confidence, effective,
+            )
             verdict = "unclear"
 
     # Extract blocking issues (only for fail/unclear)
@@ -441,7 +454,14 @@ def build_verification_result(
                 # softening to "unclear" is the SAME rule as the legacy path.
                 mechanical = verdict_policy(parsed)
                 eff = calibrate(confidence) if calibrate is not None else confidence
+                # The mechanical verdict REPLACES the legacy one, so discard any
+                # inner-verdict captured during the (now-overridden) legacy
+                # softening; re-capture only if the mechanical verdict softens.
+                inner_verdict = inner_confidence = inner_confidence_calibrated = None
                 if mechanical == "pass" and eff < confidence_threshold:
+                    inner_verdict, inner_confidence, inner_confidence_calibrated = (
+                        "pass", confidence, eff,
+                    )
                     mechanical = "unclear"
                 result["verdict"] = mechanical
                 result["blocking_issues"] = [
@@ -474,6 +494,13 @@ def build_verification_result(
                     )
         except Exception:  # telemetry must never break a verdict
             diagnostics["fallback_reason"] = "findings_exception"
+    # ADR-051 C5: surface the pre-softening inner verdict under diagnostics
+    # (telemetry-only) so automation can tell "approved but under threshold"
+    # from "genuinely undecided" without parsing prose.
+    if inner_verdict is not None:
+        diagnostics["inner_verdict"] = inner_verdict
+        diagnostics["inner_confidence"] = inner_confidence
+        diagnostics["inner_confidence_calibrated"] = inner_confidence_calibrated
     result["findings"] = findings_dicts
     result["diagnostics"] = diagnostics
     return result

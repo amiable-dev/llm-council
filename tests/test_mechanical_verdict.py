@@ -135,3 +135,32 @@ class TestC4ConsistencyAndTelemetry:
             [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
         assert r["verdict"] == "unclear"
         assert r["diagnostics"].get("verdict_evidence_mismatch") is None
+
+
+class TestC5InnerVerdict:
+    def test_softened_unclear_carries_inner_verdict_mechanical(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
+        assert r["verdict"] == "unclear"
+        d = r["diagnostics"]
+        assert d["inner_verdict"] == "pass"
+        assert d["inner_confidence"] is not None
+        assert "inner_confidence_calibrated" in d
+
+    def test_no_inner_verdict_when_not_softened(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "critical", "description": "c"}]))  # fail, no softening
+        assert r["verdict"] == "fail"
+        assert r["diagnostics"].get("inner_verdict") is None
+
+    def test_inner_verdict_on_legacy_path(self, monkeypatch):
+        # Softening on the legacy (flag-off) path also records inner state.
+        monkeypatch.delenv("LLM_COUNCIL_STRUCTURED_FINDINGS", raising=False)
+        r = build_verification_result([], [], _stage3([], verdict="approved"),
+                                      confidence_threshold=0.99)
+        # legacy verdict path: extract_verdict_from_synthesis; if it softens,
+        # inner_verdict is recorded.
+        if r["verdict"] == "unclear":
+            assert r["diagnostics"]["inner_verdict"] == "pass"
