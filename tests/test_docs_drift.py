@@ -143,8 +143,13 @@ class TestVerifyResponseFieldDrift:
 
     def _documented_names(self) -> set:
         text = "\n".join(p.read_text() for p in self.DOC_SOURCES)
-        # Whole-word match so `verdict` doesn't satisfy `inner_verdict`.
-        return set(re.findall(r"\b([a-z][a-z0-9_]+)\b", text))
+        # Match only backtick-quoted identifiers — how docs reference a field
+        # (`unclear_reason`, `findings`). A bare prose-word match would let a
+        # field whose NAME is a common English word (`partial`, `timing`,
+        # `location`) read as "documented" merely by appearing in a sentence,
+        # defeating the guard. The `\b`s keep `verdict` from satisfying
+        # `inner_verdict`.
+        return set(re.findall(r"`\b([a-z][a-z0-9_]+)\b`", text))
 
     def _contract_fields(self) -> set:
         from llm_council.verification.schemas import (
@@ -164,3 +169,14 @@ class TestVerifyResponseFieldDrift:
             "verify response fields missing from docs/guides/verify.md or "
             f"docs/api.md (ADR-051 C6 drift guard): {undocumented}"
         )
+
+    def test_guard_has_teeth(self):
+        """The guard must actually detect an undocumented field, not vacuously
+        pass. A synthetic field name that appears nowhere in the docs must be
+        reported as undocumented — proving the backtick match discriminates and
+        the acceptance criterion ("fails on an undocumented field") holds."""
+        documented = self._documented_names()
+        assert "zzz_never_documented_field" not in documented
+        # And a bare prose word (not backtick-quoted) must NOT count as
+        # documented — the #490 regex-broadening failure mode.
+        assert "the" not in documented
