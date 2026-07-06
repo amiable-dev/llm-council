@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_api_key, get_config
 
+from llm_council.gateway.resolver import resolve_endpoint, resolve_model_name
+
 # Default OpenRouter API URL (can be overridden via gateways config)
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -22,46 +24,6 @@ def _get_openrouter_api_key() -> str:
 
 # Module-level alias for backwards compatibility with tests
 OPENROUTER_API_KEY = _get_openrouter_api_key()
-
-
-# Default Requesty API URL (used when gateways.providers.requesty.base_url is unset)
-REQUESTY_DEFAULT_API_URL = "https://router.requesty.ai/v1/chat/completions"
-
-
-def _resolve_endpoint() -> tuple:
-    """Resolve (api_url, api_key, route_label) from the configured gateway.
-
-    Honors gateways.default and providers.<gw>.base_url / api_key. Falls back
-    to OpenRouter defaults when the configured gateway is unknown or disabled,
-    so behavior is unchanged for existing OpenRouter deployments.
-    """
-    config = get_config()
-    gw = config.gateways.default
-    providers = config.gateways.providers or {}
-    provider = providers.get(gw)
-
-    if gw == "requesty" and provider is not None and getattr(provider, "enabled", False):
-        url = provider.base_url or REQUESTY_DEFAULT_API_URL
-        key = get_api_key("requesty") or (provider.api_key or "")
-        return url, key, "requesty"
-
-    return OPENROUTER_API_URL, _get_openrouter_api_key(), "openrouter"
-
-
-def _resolve_model_name(model: str, route: str) -> str:
-    """Translate a model id to the name expected by the active gateway.
-
-    OpenRouter uses a ":free" suffix to select free variants; Requesty rejects
-    that suffix (HTTP 400) and expects provider-prefixed names for some models.
-    A per-gateway model_name_map in config rewrites ids; unknown ids pass
-    through unchanged.
-    """
-    if route == "requesty":
-        config = get_config()
-        mapping = (config.gateways.model_name_map or {}).get("requesty", {})
-        if mapping:
-            return mapping.get(model, model)
-    return model
 
 
 def _extract_cached_tokens(usage: Dict[str, Any]) -> int:
@@ -172,8 +134,8 @@ async def query_model_with_status(
     Returns:
         Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
     """
-    api_url, api_key, route = _resolve_endpoint()
-    model = _resolve_model_name(model, route)
+    api_url, api_key, route = resolve_endpoint()
+    model = resolve_model_name(model, route)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
