@@ -333,6 +333,12 @@ class GatewayConfig(BaseModel):
         default_factory=dict
     )
     model_routing: Dict[str, str] = Field(default_factory=dict)
+    # Per-gateway model id translation. Keys are gateway names (e.g.
+    # "requesty"); values map a canonical model id (as used in tier pools)
+    # to the id the gateway expects. Unknown ids pass through unchanged.
+    # Lets one tier pool serve gateways that reject OpenRouter's ":free"
+    # suffix or use provider-prefixed names.
+    model_name_map: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     fallback: FallbackConfig = Field(default_factory=FallbackConfig)
 
     @field_validator("default")
