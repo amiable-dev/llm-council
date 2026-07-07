@@ -737,6 +737,10 @@ class CouncilConfig(BaseModel):
         default="google/gemini-3.1-pro-preview",
         alias="LLM_COUNCIL_CHAIRMAN",
     )
+    chairman_disabled: bool = Field(
+        default=False,
+        alias="LLM_COUNCIL_CHAIRMAN_DISABLED",
+    )
     synthesis_mode: Literal["consensus", "debate"] = Field(
         default="consensus",
         alias="LLM_COUNCIL_MODE",
@@ -1378,6 +1382,12 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
     council_chairman = os.getenv("LLM_COUNCIL_CHAIRMAN")
     if council_chairman:
         config_dict.setdefault("council", {})["chairman"] = council_chairman
+
+    council_chairman_disabled = os.getenv("LLM_COUNCIL_CHAIRMAN_DISABLED")
+    if council_chairman_disabled:
+        config_dict.setdefault("council", {})["chairman_disabled"] = (
+            council_chairman_disabled.lower() in ("true", "1", "yes")
+        )
 
     council_mode = os.getenv("LLM_COUNCIL_MODE")
     if council_mode:

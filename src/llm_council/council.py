@@ -77,6 +77,13 @@ def _get_chairman_model() -> str:
     return _get_council_config().chairman
 
 
+def _get_chairman_disabled() -> bool:
+    patched = _check_patched_attr("CHAIRMAN_DISABLED")
+    if patched is not None:
+        return patched
+    return _get_council_config().chairman_disabled
+
+
 def _get_synthesis_mode() -> str:
     patched = _check_patched_attr("SYNTHESIS_MODE")
     if patched is not None:
@@ -197,6 +204,7 @@ from llm_council.webhooks import (
 _DEPRECATED_CONFIG_ATTRS = {
     "COUNCIL_MODELS": _get_council_models,
     "CHAIRMAN_MODEL": _get_chairman_model,
+    "CHAIRMAN_DISABLED": _get_chairman_disabled,
     "SYNTHESIS_MODE": _get_synthesis_mode,
     "EXCLUDE_SELF_VOTES": _get_exclude_self_votes,
     "STYLE_NORMALIZATION": _get_style_normalization,
@@ -217,7 +225,6 @@ def __getattr__(name: str):
     if name in _DEPRECATED_CONFIG_ATTRS:
         return _DEPRECATED_CONFIG_ATTRS[name]()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
 
 
 # =============================================================================
@@ -263,6 +270,7 @@ from llm_council.council_stages import (  # noqa: E402
     stage2_collect_rankings,
     stage3_synthesize_final,
 )
+
 
 async def run_council_with_fallback(
     user_query: str,
@@ -440,7 +448,6 @@ async def run_council_with_fallback(
     on_review_event = None
     on_synthesis_delta = None
     if on_event is not None or webhook_config is not None:
-
         if stream_synthesis:
 
             async def on_synthesis_delta(text: str) -> None:
@@ -543,9 +550,7 @@ async def run_council_with_fallback(
         if on_progress is not None:
 
             async def stage2_progress(completed, total, msg):
-                await report_progress(
-                    requested_models + completed, total_steps, f"Stage 2: {msg}"
-                )
+                await report_progress(requested_models + completed, total_steps, f"Stage 2: {msg}")
 
         stage2_results, label_to_model, stage2_usage = await stage2_collect_rankings(
             user_query,
