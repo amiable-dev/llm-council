@@ -144,9 +144,13 @@ def _token_in_text(token: str, text: str) -> bool:
     t = token.lower()
     if not t:
         return False
-    left = r"\b" if t[0].isalnum() or t[0] == "_" else ""
-    right = r"\b" if t[-1].isalnum() or t[-1] == "_" else ""
-    return re.search(left + re.escape(t) + right, text) is not None
+    # Lookarounds instead of \b so tokens whose edge char is non-word
+    # (``"?"``, ``"c++"``) are still bounded correctly: require no word char
+    # immediately adjacent on either side. \b would silently drop the boundary
+    # on a punctuation edge, letting ``"c++"`` match inside ``"c++abc"``.
+    return (
+        re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", text) is not None
+    )
 
 
 def check_envelope(
@@ -231,6 +235,15 @@ async def run_bench(
     items = load_dataset(dataset_dir)
     if items_filter:
         wanted = set(items_filter)
+        known = {i.id for i in items}
+        unknown = sorted(wanted - known)
+        if unknown:
+            # A typo'd / stale --items id must not silently drop to a green
+            # "0/0 within envelope" run (#508). Fail loudly.
+            raise ValueError(
+                f"unknown --items id(s): {', '.join(unknown)}. "
+                f"Available: {', '.join(sorted(known))}"
+            )
         items = [i for i in items if i.id in wanted]
 
     run = BenchRun(
@@ -318,6 +331,11 @@ async def run_bench(
             )
         )
 
+    # An empty run (no items in the dataset, or every requested id filtered out)
+    # must NOT read as a green exit-0 that set_baseline would then accept as the
+    # reference — mark it aborted so exit is 2 and baselining refuses it (#508).
+    if run.items_run == 0 and run.aborted is None:
+        run.aborted = "no_items: 0 items ran (empty dataset or filter)"
     # The between-item cap check never sees an overshoot caused by the FINAL
     # item (the loop just ends), so a run pushed over cap on its last item used
     # to complete as a silent exit-0. A run that reached its spend ceiling is an

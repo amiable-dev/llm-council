@@ -109,6 +109,16 @@ class TestEnvelope:
         assert check_envelope(item2, "avoid os.system on user input", None) == []
         assert check_envelope(item2, "the ecosystem is large", None) != []
 
+    def test_token_punctuation_edge_not_substring(self):
+        # #506 review: a token whose last char is non-word ("c++") must not
+        # match inside a longer token ("c++abc").
+        item = BenchItem(
+            id="x", domain="coding", prompt="p",
+            envelope={"must_contain": [["c++"]]},
+        )
+        assert check_envelope(item, "written in c++ today", None) == []
+        assert check_envelope(item, "the c++abc library", None) != []
+
     def test_score_floor(self):
         item = BenchItem(id="x", domain="f", prompt="p", envelope={"min_score": 0.5})
         assert check_envelope(item, "text", 0.6) == []
@@ -189,6 +199,38 @@ class TestRun:
         assert run.items_run == 1  # the item did run (cap is between-item)
         assert run.aborted and "per_run_cap" in run.aborted
         assert run.exit_code == 2  # not a silent 0
+
+    @pytest.mark.asyncio
+    async def test_unknown_items_id_raises(self, tmp_path):
+        # #508: a typo'd --items id must not silently produce a green 0/0 run.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "real")
+
+        async def runner(prompt):
+            return _fake_result("hello")
+
+        with pytest.raises(ValueError, match="unknown --items"):
+            await run_bench(
+                dataset_dir=d, runs_dir=tmp_path / "runs",
+                council_runner=runner, items_filter=["typo"],
+            )
+
+    @pytest.mark.asyncio
+    async def test_empty_dataset_is_rejected_not_green(self, tmp_path):
+        # #508: an empty dataset must not silently produce a green run. It is
+        # rejected at load (load_dataset raises); the run-level items_run==0
+        # guard is defence-in-depth for any other zero-item path.
+        d = tmp_path / "ds"
+        d.mkdir()  # no items
+
+        async def runner(prompt):
+            return _fake_result("hello")
+
+        with pytest.raises(ValueError):
+            await run_bench(
+                dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+            )
 
     def test_persist_run_unique_filenames_same_second(self, tmp_path):
         # #510: whole-second stamps collided (second run overwrote the first),
