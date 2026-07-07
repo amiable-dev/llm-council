@@ -96,6 +96,7 @@ class BenchRun:
     # The monthly guard sums THIS, not raw actuals (#439 r3) — unknown-cost
     # runs must not erode the guard.
     cap_charged_usd: float = 0.0
+    cap_usd: Optional[float] = None  # effective per-run cap (may be a --max-usd override)
     aborted: Optional[str] = None  # reason string when partial
     results: List[ItemResult] = field(default_factory=list)
 
@@ -186,13 +187,25 @@ def month_to_date_spend(runs_dir: Optional[Path] = None) -> float:
         for f in directory.glob("*.json"):
             try:
                 data = json.loads(f.read_text())
-                if str(data.get("started_at", "")).startswith(prefix):
-                    total += max(
-                        float(data.get("total_cost_usd", 0.0)),
-                        float(data.get("cap_charged_usd", 0.0)),
-                    )
-            except Exception:
+            except (OSError, ValueError) as exc:
+                # A corrupt/unreadable artefact must NOT silently drop its spend
+                # from a financial guard (that fails open, under-counting the
+                # month-to-date total). Surface it loudly so the gap is visible
+                # and actionable rather than invisible.
+                logger.warning("bench: skipping unreadable run artefact %s: %s", f.name, exc)
                 continue
+            if not str(data.get("started_at", "")).startswith(prefix):
+                continue
+            # The guard sums cap_charged_usd (actuals + conservative unknown-cost
+            # charges); fall back to total_cost_usd for pre-field artefacts. Guard
+            # non-numeric/null values rather than crashing the whole tally.
+            raw = data.get("cap_charged_usd")
+            if raw is None:
+                raw = data.get("total_cost_usd", 0.0)
+            try:
+                total += float(raw)
+            except (TypeError, ValueError):
+                logger.warning("bench: non-numeric spend in run artefact %s", f.name)
     except OSError:
         pass
     return total
@@ -350,6 +363,7 @@ async def run_bench(
     # 'fully known' means EVERY executed item reported a cost (#439 r2).
     run.cost_known = run.items_run > 0 and not any_unknown
     run.cap_charged_usd = cap_charged
+    run.cap_usd = cap
     _persist_run(run, runs_dir)
     return run
 
@@ -432,7 +446,9 @@ def format_report(run: BenchRun, comparison: Dict[str, Any], fmt: str = "md") ->
         f"(of {run.items_total} selected) — exit code {run.exit_code}"
     )
     cost = f"${run.total_cost_usd:.4f}" if run.cost_known else f"~${run.total_cost_usd:.4f} (cost not fully known)"
-    lines.append(f"Spend: {cost} (per-run cap ${bench_max_usd():.2f})")
+    # Show the EFFECTIVE cap (a --max-usd override), not the env default (#509).
+    effective_cap = run.cap_usd if run.cap_usd is not None else bench_max_usd()
+    lines.append(f"Spend: {cost} (per-run cap ${effective_cap:.2f})")
     if run.aborted:
         lines.append(f"ABORTED (partial results): {run.aborted}")
     if comparison.get("baseline"):

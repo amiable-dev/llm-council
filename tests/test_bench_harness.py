@@ -232,6 +232,40 @@ class TestRun:
                 dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
             )
 
+    def test_month_to_date_skips_unreadable_artefact_not_silent(self, tmp_path, caplog):
+        # Council critical: a corrupt artefact must not silently vanish from the
+        # financial guard — it's skipped WITH a warning, and readable spend still
+        # counts (no crash, no fail-open silence).
+        runs = tmp_path / "runs"
+        runs.mkdir()
+        prefix = __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc
+        ).strftime("%Y-%m")
+        (runs / "run-good.json").write_text(
+            json.dumps({"started_at": f"{prefix}-01T00:00:00+00:00", "cap_charged_usd": 1.5})
+        )
+        (runs / "run-corrupt.json").write_text("{not valid json")
+        # null spend must not crash the tally either
+        (runs / "run-null.json").write_text(
+            json.dumps({"started_at": f"{prefix}-02T00:00:00+00:00", "cap_charged_usd": None,
+                        "total_cost_usd": 0.5})
+        )
+        with caplog.at_level("WARNING"):
+            total = month_to_date_spend(runs)
+        assert total == 2.0  # 1.5 (good) + 0.5 (null→total fallback); corrupt skipped
+        assert any("unreadable" in r.message for r in caplog.records)
+
+    def test_format_report_shows_effective_cap(self):
+        from llm_council.bench.harness import BenchRun
+
+        run = BenchRun(
+            started_at="2026-07-07T00:00:00+00:00",
+            items_total=1, items_run=1, items_passed=1,
+            total_cost_usd=0.1, cost_known=True, cap_usd=0.75,
+        )
+        report = format_report(run, {"baseline": None}, "md")
+        assert "per-run cap $0.75" in report  # #509: effective, not env default
+
     def test_persist_run_unique_filenames_same_second(self, tmp_path):
         # #510: whole-second stamps collided (second run overwrote the first),
         # dropping the lost run's spend from the monthly ledger.
