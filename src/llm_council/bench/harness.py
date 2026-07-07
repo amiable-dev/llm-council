@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -130,6 +131,24 @@ def load_dataset(dataset_dir: Optional[Path] = None) -> List[BenchItem]:
     return items
 
 
+def _token_in_text(token: str, text: str) -> bool:
+    """Case-insensitive any-of token match on WORD BOUNDARIES (#506).
+
+    A bare substring test (the old behaviour) false-positives: ``"major"``
+    matched ``"majority"``, ``"66"`` matched ``"1966"`` — a wrong answer could
+    pass the envelope, silently weakening the drift guard. We anchor with ``\\b``
+    only at edges adjacent to a word character, so punctuation-only tokens
+    (``"?"``) and dotted tokens (``"os.system"``) still match by presence
+    without an impossible boundary. ``text`` is expected pre-lowercased.
+    """
+    t = token.lower()
+    if not t:
+        return False
+    left = r"\b" if t[0].isalnum() or t[0] == "_" else ""
+    right = r"\b" if t[-1].isalnum() or t[-1] == "_" else ""
+    return re.search(left + re.escape(t) + right, text) is not None
+
+
 def check_envelope(
     item: BenchItem,
     synthesis: str,
@@ -141,7 +160,7 @@ def check_envelope(
     text = (synthesis or "").lower()
     for group in item.envelope.get("must_contain", []):
         options = group if isinstance(group, list) else [group]
-        if not any(str(opt).lower() in text for opt in options):
+        if not any(_token_in_text(str(opt), text) for opt in options):
             failures.append(f"missing_any_of:{options}")
     min_score = item.envelope.get("min_score")
     if min_score is not None and apply_score_floor:

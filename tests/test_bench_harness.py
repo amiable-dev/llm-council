@@ -73,6 +73,42 @@ class TestEnvelope:
         fails = check_envelope(item, "only fizz here", None)
         assert len(fails) == 1 and "required" in fails[0]
 
+    def test_word_boundary_no_substring_false_positive(self):
+        # #506: "major" must NOT be satisfied by "majority" (substring bug).
+        item = BenchItem(
+            id="x", domain="factual", prompt="p",
+            envelope={"must_contain": [["major"]]},
+        )
+        fails = check_envelope(item, "the majority voted", None)
+        assert len(fails) == 1 and "major" in fails[0]
+        # but a real whole-word "major" still passes
+        assert check_envelope(item, "a major version bump", None) == []
+
+    def test_word_boundary_numeric_token(self):
+        # #506: "66" must not match "1966".
+        item = BenchItem(
+            id="x", domain="reasoning", prompt="p",
+            envelope={"must_contain": [["66"]]},
+        )
+        assert check_envelope(item, "released in 1966", None) != []
+        assert check_envelope(item, "the answer is 66 percent", None) == []
+
+    def test_punctuation_token_still_matches(self):
+        # #506: a token with no word boundary (e.g. "?") must still match by
+        # presence — word-boundary anchoring only applies at word-char edges.
+        item = BenchItem(
+            id="x", domain="coding", prompt="p",
+            envelope={"must_contain": [["?", "parameter"]]},
+        )
+        assert check_envelope(item, "use cur.execute(sql, (x,)) with a ?", None) == []
+        # dotted/punctuated multi-char token matches as a whole word
+        item2 = BenchItem(
+            id="y", domain="coding", prompt="p",
+            envelope={"must_contain": [["os.system"]]},
+        )
+        assert check_envelope(item2, "avoid os.system on user input", None) == []
+        assert check_envelope(item2, "the ecosystem is large", None) != []
+
     def test_score_floor(self):
         item = BenchItem(id="x", domain="f", prompt="p", envelope={"min_score": 0.5})
         assert check_envelope(item, "text", 0.6) == []
