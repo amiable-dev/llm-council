@@ -171,6 +171,46 @@ class TestRun:
         assert len(run.results) == 2
 
     @pytest.mark.asyncio
+    async def test_final_item_overshoot_not_silent_exit0(self, tmp_path):
+        # #510/#511 (Council critical): the between-item cap check never sees
+        # an overshoot caused by the FINAL item — a 1-item run over cap used to
+        # complete as a silent exit-0. It must signal exit 2 with a cap reason.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "only")
+
+        async def runner(prompt):
+            return _fake_result("hello", cost=5.00)  # single item blows the cap
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.00,
+        )
+        assert run.items_run == 1  # the item did run (cap is between-item)
+        assert run.aborted and "per_run_cap" in run.aborted
+        assert run.exit_code == 2  # not a silent 0
+
+    def test_persist_run_unique_filenames_same_second(self, tmp_path):
+        # #510: whole-second stamps collided (second run overwrote the first),
+        # dropping the lost run's spend from the monthly ledger.
+        from llm_council.bench.harness import BenchRun, _persist_run
+
+        runs = tmp_path / "runs"
+        r1 = BenchRun(
+            started_at="2026-07-07T08:21:26.111111+00:00",
+            items_total=1, items_run=1, items_passed=1,
+            total_cost_usd=0.5, cost_known=True,
+        )
+        r2 = BenchRun(
+            started_at="2026-07-07T08:21:26.999999+00:00",  # same second
+            items_total=1, items_run=1, items_passed=1,
+            total_cost_usd=0.7, cost_known=True,
+        )
+        _persist_run(r1, runs)
+        _persist_run(r2, runs)
+        assert len(list(runs.glob("*.json"))) == 2  # both preserved
+
+    @pytest.mark.asyncio
     async def test_monthly_guard_refuses_run(self, tmp_path, monkeypatch):
         d = tmp_path / "ds"
         d.mkdir()

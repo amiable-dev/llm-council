@@ -318,6 +318,17 @@ async def run_bench(
             )
         )
 
+    # The between-item cap check never sees an overshoot caused by the FINAL
+    # item (the loop just ends), so a run pushed over cap on its last item used
+    # to complete as a silent exit-0. A run that reached its spend ceiling is an
+    # aborted/partial outcome — record it so the breach is never silent (#510).
+    if run.aborted is None and cap_charged >= cap:
+        run.aborted = (
+            f"per_run_cap: charged spend ${cap_charged:.2f} >= ${cap:.2f} "
+            f"(LLM_COUNCIL_BENCH_MAX_USD; actuals ${run.total_cost_usd:.2f} + "
+            f"unknown-cost charges) reached on the final item "
+            f"({run.items_run}/{run.items_total} items)"
+        )
     # 'fully known' means EVERY executed item reported a cost (#439 r2).
     run.cost_known = run.items_run > 0 and not any_unknown
     run.cap_charged_usd = cap_charged
@@ -330,10 +341,16 @@ def _persist_run(run: BenchRun, runs_dir: Optional[Path] = None) -> None:
     directory = runs_dir if runs_dir is not None else DEFAULT_RUNS_DIR
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        stamp = run.started_at.replace(":", "-").split(".")[0]
+        # Keep microseconds and add the pid: a whole-second stamp collided so
+        # two runs in the same second (e.g. `bench matrix` running configs
+        # sequentially) wrote the same file — the second overwrote the first and
+        # its spend vanished from the monthly ledger this feeds (#510).
+        stamp = run.started_at.replace(":", "-").replace("+", "-")
         payload = asdict(run)
         payload["exit_code"] = run.exit_code
-        (directory / f"run-{stamp}.json").write_text(json.dumps(payload, indent=2))
+        (directory / f"run-{stamp}-{os.getpid()}.json").write_text(
+            json.dumps(payload, indent=2)
+        )
     except Exception as exc:
         logger.warning("bench run artefact not persisted (%s)", exc)
 
