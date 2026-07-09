@@ -9,7 +9,9 @@ import time
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 
 # ADR-032: Migrated to unified_config
-from llm_council.unified_config import get_api_key, get_config
+from llm_council.unified_config import get_api_key
+
+from llm_council.gateway.resolver import resolve_endpoint, resolve_model_name
 
 # Default OpenRouter API URL (can be overridden via gateways config)
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -50,6 +52,7 @@ def _extract_cache_write_tokens(usage: Dict[str, Any]) -> int:
        observed 2026-07-04, not vendor-documented — ADR-049 §Compliance
        drift guard re-probes quarterly).
     """
+
     def _count(value: Any) -> int:
         # Provider payloads are untrusted: a non-numeric value degrades to 0
         # rather than crashing usage capture (same posture as missing).
@@ -62,6 +65,7 @@ def _extract_cache_write_tokens(usage: Dict[str, Any]) -> int:
     if isinstance(sub, dict) and sub:
         return sum(_count(v) for k, v in sub.items() if k.endswith("_input_tokens"))
     return _count((usage.get("prompt_tokens_details") or {}).get("cache_write_tokens"))
+
 
 if TYPE_CHECKING:
     from llm_council.gateway.types import ReasoningParams
@@ -130,8 +134,11 @@ async def query_model_with_status(
     Returns:
         Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
     """
+    api_url, api_key, route = resolve_endpoint()
+    model = resolve_model_name(model, route)
+
     headers = {
-        "Authorization": f"Bearer {_get_openrouter_api_key()}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
@@ -149,7 +156,7 @@ async def query_model_with_status(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(OPENROUTER_API_URL, headers=headers, json=payload)
+            response = await client.post(api_url, headers=headers, json=payload)
             latency_ms = int((time.time() - start_time) * 1000)
 
             # Handle specific HTTP status codes (ADR-012 failure taxonomy)
@@ -194,7 +201,7 @@ async def query_model_with_status(
                 "content": message.get("content"),
                 "reasoning_details": message.get("reasoning_details"),
                 "latency_ms": latency_ms,
-                "route": "openrouter",
+                "route": route,
                 "session_id": cache_ctx.session_id if cache_ctx else None,
                 "usage": {
                     "prompt_tokens": usage.get("prompt_tokens", 0),

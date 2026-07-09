@@ -36,6 +36,14 @@ council:
 
   gateways:
     default: openrouter
+    # Per-provider overrides and per-gateway model-id translation
+    providers:
+      requesty:
+        enabled: true
+        base_url: https://router.requesty.ai/v1/chat/completions
+    model_name_map:
+      requesty:
+        "some/model:free": "some/model"  # Requesty rejects OpenRouter's ":free" suffix
 ```
 
 ## Environment Variables
@@ -47,6 +55,7 @@ council:
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 | `LLM_COUNCIL_MODELS` | Comma-separated model list |
 | `LLM_COUNCIL_CHAIRMAN` | Chairman model |
+| `LLM_COUNCIL_CHAIRMAN_DISABLED` | Skip chairman synthesis, return top-ranked response directly. **Never enable for `council-verify`/`council-gate`** — see [Verification guide](../guides/verify.md#reading-an-unclear-verdict-adr-047). |
 
 ### Feature Flags
 
@@ -73,5 +82,15 @@ LLM Council supports multiple gateways:
 | Direct | Control | Provider API keys |
 | Requesty | Analytics | `REQUESTY_API_KEY` |
 | Ollama | Local/Air-gapped | No key needed |
+
+Model IDs sometimes differ across gateways (e.g. Requesty rejects OpenRouter's
+`:free` suffix); use `gateways.model_name_map` in the YAML config above to
+translate a canonical model ID per gateway.
+
+> **Note:** `gateways.default` (above) is the config that actually routes
+> live traffic today. The class-based `GatewayRouter`/circuit-breaker
+> abstraction described in the [ADR-023 spec](../adr/ADR-023-multi-router-gateway-support.md)
+> is not currently reachable via configuration — see
+> [#524](https://github.com/amiable-dev/llm-council/issues/524).
 
 See [README](https://github.com/amiable-dev/llm-council#setup) for complete configuration reference.

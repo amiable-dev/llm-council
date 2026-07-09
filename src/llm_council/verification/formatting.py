@@ -100,6 +100,7 @@ def format_verification_result(result: Dict[str, Any]) -> str:
             "infra_failure": "chairman call errored — check billing/auth, then retry",
             "low_confidence": "deliberation completed below threshold — accept-and-audit per policy",
             "timeout": "global deadline fired — re-tier or reduce scope",
+            "chairman_disabled": "chairman synthesis was skipped by config — no verdict was computed",
         }
         hint = hints.get(unclear_reason, "")
         lines.append(f"| Unclear reason | {unclear_reason} ({hint}) |")

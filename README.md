@@ -175,6 +175,11 @@ export LLM_COUNCIL_MODELS="openai/gpt-4,anthropic/claude-3-opus,google/gemini-pr
 
 # Chairman model (synthesizes final response)
 export LLM_COUNCIL_CHAIRMAN="anthropic/claude-3-opus"
+
+# Skip chairman synthesis, return the top-ranked Stage 1 response directly
+# (cheaper/faster, but NEVER enable this for council-verify/council-gate --
+# no verdict is computed; see docs/guides/verify.md)
+export LLM_COUNCIL_CHAIRMAN_DISABLED=false
 ```
 
 #### Option 2: YAML Configuration (Recommended)
@@ -230,6 +235,17 @@ council:
       openrouter:
         enabled: true
         base_url: https://openrouter.ai/api/v1/chat/completions
+
+      requesty:
+        enabled: true
+        base_url: https://router.requesty.ai/v1/chat/completions
+        api_key: ${REQUESTY_API_KEY}
+
+    # Per-gateway model-id translation (e.g. Requesty rejects OpenRouter's
+    # ":free" suffix and uses provider-prefixed names for some models)
+    model_name_map:
+      requesty:
+        "some/model:free": "some/model"
 
   # Webhook notifications (ADR-025a)
   webhooks:
@@ -866,6 +882,17 @@ export LLM_COUNCIL_QUALITY_TIER=core
 
 ### Gateway Layer (ADR-023)
 
+> **Status note:** the `GatewayRouter` class-based abstraction below is real,
+> importable code, but it is **not currently reachable via configuration or
+> environment variables** — the "Enable the gateway layer" switch further
+> down does not exist in the codebase, and `GatewayConfig` has no `enabled`
+> field to turn on the `USE_GATEWAY_LAYER` flag that `llm_council.gateway_adapter`
+> checks. Live traffic is routed by the simpler `gateways.default` /
+> `gateways.providers.*` / `gateways.model_name_map` config documented under
+> [Option 2: YAML Configuration](#option-2-yaml-configuration-recommended)
+> above, via `llm_council.gateway.resolver`, not by the code on this page.
+> Tracked in [#524](https://github.com/amiable-dev/llm-council/issues/524).
+
 The gateway layer provides an abstraction over LLM API requests with multiple gateway options:
 
 **Available Gateways:**
@@ -913,10 +940,17 @@ response = await router.complete(request)
 
 **Enable the gateway layer:**
 
-```bash
-export LLM_COUNCIL_USE_GATEWAY=true
+There is currently no supported way to enable `GatewayRouter` for live
+council traffic (see the status note above) — the environment variable
+previously documented here does not exist in the codebase and setting it
+silently does nothing. To route council queries through Requesty or a
+custom OpenRouter endpoint today, use `gateways.default` /
+`gateways.providers.*` in the YAML config instead (see
+[Option 2: YAML Configuration](#option-2-yaml-configuration-recommended)).
 
-# Optional: Configure specific gateways
+```bash
+# Configure specific gateway credentials (read regardless of which
+# routing path is active):
 export REQUESTY_API_KEY=your-requesty-key    # For Requesty
 export ANTHROPIC_API_KEY=sk-ant-...           # For Direct (Anthropic)
 export OPENAI_API_KEY=sk-...                  # For Direct (OpenAI)
