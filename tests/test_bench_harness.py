@@ -9,6 +9,11 @@ from pathlib import Path
 
 import pytest
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+
 from llm_council.bench import (
     BenchItem,
     check_envelope,
@@ -265,6 +270,54 @@ class TestRun:
         )
         report = format_report(run, {"baseline": None}, "md")
         assert "per-run cap $0.75" in report  # #509: effective, not env default
+
+    @pytest.mark.asyncio
+    async def test_filtered_run_flag_and_baseline_refuses(self, tmp_path):
+        # #517: a --items-scoped run must be flagged, and set_baseline must
+        # refuse it (silently shrinking baseline coverage is a real gap, but
+        # a MAJOR one, not data-loss/security/crash-critical).
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        async def runner(prompt):
+            return _fake_result("hello")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, items_filter=["a"],
+        )
+        assert run.filtered is True
+        with pytest.raises(ValueError, match="filtered"):
+            set_baseline(run, tmp_path / "baseline.json")
+
+        # A full (unfiltered) run is NOT flagged and baselines normally.
+        full_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs2", council_runner=runner
+        )
+        assert full_run.filtered is False
+        set_baseline(full_run, tmp_path / "baseline2.json")  # must not raise
+
+    @pytest.mark.skipif(fcntl is None, reason="fcntl is Unix-only")
+    def test_monthly_guard_lock_is_exclusive(self, tmp_path):
+        # #516: the lock must be a REAL OS-level exclusive lock on a shared
+        # file, not just plumbing — probe it directly rather than relying on
+        # asyncio orchestration (which can't reliably force the TOCTOU race).
+        from llm_council.bench.harness import _monthly_guard_lock
+
+        with _monthly_guard_lock(tmp_path):
+            lock_path = tmp_path / ".monthly-guard.lock"
+            assert lock_path.exists()
+            # A second, independent open on the SAME lock file must fail to
+            # acquire non-blocking while the context manager holds it.
+            with open(lock_path, "a+") as probe:
+                with pytest.raises(BlockingIOError):
+                    fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Released on exit: the probe can now acquire it.
+        with open(lock_path, "a+") as probe:
+            fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
 
     def test_persist_run_unique_filenames_same_second(self, tmp_path):
         # #510: whole-second stamps collided (second run overwrote the first),

@@ -18,6 +18,7 @@ Exit codes: 0 within envelope, 1 drift beyond envelope, 2 aborted/partial.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -26,7 +27,16 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
+
+# File locking - use fcntl on Unix, fallback to no-op on Windows (same
+# precedent as triage/rollback_metrics.py).
+try:
+    import fcntl
+
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +47,33 @@ DEFAULT_RUNS_DIR = Path(".council") / "bench" / "runs"
 EXIT_OK = 0
 EXIT_DRIFT = 1
 EXIT_ABORTED = 2
+
+
+@contextlib.contextmanager
+def _monthly_guard_lock(runs_dir: Path) -> Iterator[None]:
+    """Serialize the monthly-guard check-through-persist section (#516).
+
+    Without this, two concurrent ``bench run`` invocations can both read the
+    same month-to-date spend, both pass the guard, then both write — jointly
+    exceeding ``LLM_COUNCIL_BENCH_MONTHLY_USD`` (a time-of-check-to-time-of-use
+    race). Concurrent bench runs aren't the documented usage ("on-demand or
+    nightly, never per-PR"), so full mutual exclusion for the run's duration is
+    an acceptable, simple fix rather than a partial/periodic re-check. Unix-only
+    (fcntl); a no-op on Windows, matching the existing precedent in
+    triage/rollback_metrics.py — the race is unclosed there but no worse than
+    before this fix.
+    """
+    if not _HAS_FCNTL:
+        yield
+        return
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = runs_dir / ".monthly-guard.lock"
+    with open(lock_path, "a+") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
 def bench_max_usd() -> float:
@@ -98,6 +135,10 @@ class BenchRun:
     cap_charged_usd: float = 0.0
     cap_usd: Optional[float] = None  # effective per-run cap (may be a --max-usd override)
     aborted: Optional[str] = None  # reason string when partial
+    # True when --items scoped this run to a subset of the dataset (#517):
+    # set_baseline must refuse a filtered run so the baseline never silently
+    # loses coverage of the omitted items.
+    filtered: bool = False
     results: List[ItemResult] = field(default_factory=list)
 
     @property
@@ -266,16 +307,8 @@ async def run_bench(
         items_passed=0,
         total_cost_usd=0.0,
         cost_known=False,
+        filtered=bool(items_filter),
     )
-
-    mtd = month_to_date_spend(runs_dir)
-    if mtd >= monthly_cap:
-        run.aborted = (
-            f"monthly_guard: month-to-date bench spend ${mtd:.2f} >= "
-            f"${monthly_cap:.2f} (LLM_COUNCIL_BENCH_MONTHLY_USD)"
-        )
-        _persist_run(run, runs_dir)
-        return run
 
     if council_runner is None:
         from llm_council.council import run_council_with_fallback
@@ -283,6 +316,32 @@ async def run_bench(
         async def council_runner(prompt: str) -> Dict[str, Any]:  # pragma: no cover
             return await run_council_with_fallback(prompt, bypass_cache=True)
 
+    resolved_runs_dir = runs_dir if runs_dir is not None else DEFAULT_RUNS_DIR
+    # Hold the monthly-guard lock across check-through-persist (#516): without
+    # this, two concurrent invocations can both read the same month-to-date
+    # spend, both pass the guard, then both write — jointly exceeding the cap.
+    with _monthly_guard_lock(resolved_runs_dir):
+        mtd = month_to_date_spend(runs_dir)
+        if mtd >= monthly_cap:
+            run.aborted = (
+                f"monthly_guard: month-to-date bench spend ${mtd:.2f} >= "
+                f"${monthly_cap:.2f} (LLM_COUNCIL_BENCH_MONTHLY_USD)"
+            )
+            _persist_run(run, runs_dir)
+            return run
+        return await _run_items(run, items, council_runner, cap, runs_dir, ignore_score_floor)
+
+
+async def _run_items(
+    run: "BenchRun",
+    items: List[BenchItem],
+    council_runner: Any,
+    cap: float,
+    runs_dir: Optional[Path],
+    ignore_score_floor: bool,
+) -> "BenchRun":
+    """Execute the per-item loop and persist (split out of run_bench so the
+    monthly-guard lock in run_bench wraps this whole section, #516)."""
     # Cap accounting = actuals + conservative charges for unknown-cost items.
     # NOTE (by design): the cap is checked BETWEEN items, never mid-item —
     # a single item may overshoot; the abort is graceful, not mid-completion.
@@ -391,10 +450,19 @@ def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
     """Snapshot the run as the committed baseline.
 
     Refuses aborted/partial runs (#439 r3): a truncated run would bake an
-    artificially narrow item set into the drift reference.
+    artificially narrow item set into the drift reference. Also refuses a
+    ``--items``-filtered run (#517): baselining a subset silently shrinks
+    coverage — the omitted items vanish from the drift reference and future
+    regressions on them go undetected.
     """
     if run.aborted:
         raise ValueError(f"refusing to baseline an aborted run: {run.aborted}")
+    if run.filtered:
+        raise ValueError(
+            "refusing to baseline a --items-filtered run "
+            f"({run.items_run}/{run.items_total} items) — baseline against "
+            "the full dataset so coverage never silently shrinks"
+        )
     path = baseline_path if baseline_path is not None else DEFAULT_BASELINE_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
