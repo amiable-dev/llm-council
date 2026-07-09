@@ -42,6 +42,12 @@ on top of:
 - **`low_confidence`** — deliberation completed below the confidence
   threshold. Common policy: accept-and-audit when `blocking_issues` is empty.
 - **`timeout`** — the tier deadline fired. Re-tier or reduce input scope.
+- **`chairman_disabled`** — `chairman_disabled=true` (config or
+  `LLM_COUNCIL_CHAIRMAN_DISABLED`) skipped chairman synthesis, so no verdict
+  was ever computed; `rationale` carries the top-ranked peer response for
+  reference only. **Never** treat this as a pass/fail review outcome —
+  disable `chairman_disabled` for any BINARY-verdict use (`council-verify`,
+  `council-gate`, CI approval).
 
 ## Calibrated confidence (ADR-047)
 
@@ -122,7 +128,7 @@ that ignore unknown fields keep working.
 | `exit_code` | int | `0` PASS · `1` FAIL · `2` UNCLEAR (CLI/`gate`). |
 | `confidence` | float | Raw council-agreement confidence, 0–1. |
 | `confidence_calibrated` | float? | `confidence` after the fitted monotonic mapping (ADR-047); equals raw until a mapping is fitted. |
-| `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` (see above); `None` for pass/fail. |
+| `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` \| `chairman_disabled` (see above); `None` for pass/fail. |
 | `rationale` | string | Chairman synthesis explanation. |
 | `transcript_location` | string | Path to the full `.council/logs/<id>/` transcript. |
 | `error` | string? | Non-verdict error marker (e.g. `input_too_large`); `None` for a real verdict (#357). |
@@ -144,9 +150,9 @@ A `Finding` has: `severity` (`critical` \| `major` \| `minor` \| `info`),
 
 | Field | Type | Meaning |
 |---|---|---|
-| `findings_source` | string | `structured` (clean parse) or `fallback` (missing/malformed → legacy path). |
+| `findings_source` | string | `structured` (clean parse), `fallback` (missing/malformed → legacy path), or `skipped` (`chairman_disabled=true` — no synthesis to parse). |
 | `fallback_reason` | string? | Why the fallback fired, when it did. |
-| `verdict_source` | string | `mechanical` = `policy(findings)`; `legacy` = prose parse. |
+| `verdict_source` | string | `mechanical` = `policy(findings)`; `legacy` = prose parse; `chairman_disabled` = synthesis skipped, no verdict computed. |
 | `findings_by_severity` | object | Count per severity — surfaces severity mis-labelling over time. |
 | `verdict_evidence_mismatch` | string? | Defensive invariant marker; `None` in normal operation (should never fire under the mechanical gate). |
 | `inner_verdict` | string? | Structured verdict **before** UNCLEAR softening (nested so consumers can't parse it to bypass the low-confidence gate). |

@@ -379,6 +379,35 @@ def build_verification_result(
     """
     rubric_scores = extract_rubric_scores_from_rankings(stage2_results)
 
+    # PR #519: when chairman synthesis is disabled, stage3_result carries the
+    # raw top-ranked Stage-1 answer (not a verdict) and verdict_result is
+    # always None. Neither the legacy regex extractor nor the ADR-051
+    # structured-findings parser were designed to score an arbitrary answer
+    # to the original query — running them here would silently fabricate a
+    # pass/fail verdict with a confidence number that has no relationship to
+    # an actual review. Report this state explicitly instead: an "unclear"
+    # verdict with a dedicated diagnostics/unclear_reason marker so BINARY
+    # callers (council-verify/council-gate) can't mistake it for a real
+    # deliberated decision.
+    if isinstance(stage3_result, dict) and stage3_result.get("chairman_disabled") is True:
+        return {
+            "verdict": "unclear",
+            "confidence": 0.0,
+            "confidence_calibrated": None,
+            "rubric_scores": rubric_scores,
+            "blocking_issues": [],
+            "rationale": (
+                "Chairman synthesis was disabled (chairman_disabled=true); the "
+                "returned response is the top-ranked peer answer, not a council "
+                "verdict, so no automated pass/fail decision was made."
+            ),
+            "findings": [],
+            "diagnostics": {
+                "findings_source": "skipped",
+                "verdict_source": "chairman_disabled",
+            },
+        }
+
     # ADR-051 C5 (#489): capture the pre-softening state whenever an
     # "approved @ c" is softened to "unclear" (c < threshold), for the
     # telemetry-only diagnostics block.
@@ -522,13 +551,16 @@ def derive_unclear_reason(
 ) -> Optional[str]:
     """ADR-047 P1: machine-readable cause for an UNCLEAR verdict (#413).
 
-    Returns one of {"infra_failure", "low_confidence", "timeout"} when the
-    verdict is "unclear", else None. Lets automation apply distinct policies
-    (retry infra, accept-and-audit low confidence, re-tier timeouts) instead
-    of treating every exit-code-2 identically.
+    Returns one of {"infra_failure", "low_confidence", "timeout",
+    "chairman_disabled"} when the verdict is "unclear", else None. Lets
+    automation apply distinct policies (retry infra, accept-and-audit low
+    confidence, re-tier timeouts, or skip entirely) instead of treating every
+    exit-code-2 identically.
 
     - timeout: the ADR-040 global deadline fired (checked first — a starved
       chairman is a scheduling problem, not an infra one)
+    - chairman_disabled: chairman synthesis was skipped by config (PR #519);
+      no verdict was ever computed, deliberate not incidental
     - infra_failure: the chairman call itself errored (#403 error_status —
       billing/auth/rate-limit/transport)
     - low_confidence: deliberation completed; confidence below threshold
@@ -537,6 +569,8 @@ def derive_unclear_reason(
         return None
     if timeout_fired:
         return "timeout"
+    if isinstance(stage3_result, dict) and stage3_result.get("chairman_disabled") is True:
+        return "chairman_disabled"
     if isinstance(stage3_result, dict) and stage3_result.get("error_status"):
         return "infra_failure"
     return "low_confidence"

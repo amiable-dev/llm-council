@@ -320,12 +320,16 @@ class VerifyDiagnostics(BaseModel):
     verdict_evidence_mismatch: Optional[str] = Field(
         default=None, description="Invariant assertion marker; None in normal operation"
     )
-    findings_source: Literal["structured", "fallback"] = Field(
+    findings_source: Literal["structured", "fallback", "skipped"] = Field(
         default="fallback", description="Where findings came from"
     )
     fallback_reason: Optional[str] = Field(default=None)
-    verdict_source: Literal["mechanical", "legacy"] = Field(
-        default="legacy", description="mechanical = policy(findings); legacy = prose parse"
+    verdict_source: Literal["mechanical", "legacy", "chairman_disabled"] = Field(
+        default="legacy",
+        description=(
+            "mechanical = policy(findings); legacy = prose parse; "
+            "chairman_disabled = chairman synthesis skipped (PR #519), no verdict computed"
+        ),
     )
     # ADR-051 C4 (#488): severity distribution — surfaces severity mis-labelling
     # (the mechanical gate's residual failure mode) over time.

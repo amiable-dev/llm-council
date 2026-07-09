@@ -1704,6 +1704,30 @@ class TestADR032EnvVarOverrides:
 
         assert config.council.chairman == "test/chairman-model"
 
+    def test_council_chairman_disabled_defaults_false(self, monkeypatch):
+        """chairman_disabled defaults to False (PR #519)."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.delenv("LLM_COUNCIL_CHAIRMAN_DISABLED", raising=False)
+        reload_config()
+        config = get_effective_config()
+
+        assert config.council.chairman_disabled is False
+
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [("true", True), ("1", True), ("yes", True), ("false", False), ("0", False)],
+    )
+    def test_council_chairman_disabled_env_override(self, monkeypatch, raw, expected):
+        """LLM_COUNCIL_CHAIRMAN_DISABLED env var should override chairman_disabled (PR #519)."""
+        from llm_council.unified_config import get_effective_config, reload_config
+
+        monkeypatch.setenv("LLM_COUNCIL_CHAIRMAN_DISABLED", raw)
+        reload_config()
+        config = get_effective_config()
+
+        assert config.council.chairman_disabled is expected
+
     def test_council_mode_env_override(self, monkeypatch):
         """LLM_COUNCIL_MODE env var should override synthesis_mode."""
         from llm_council.unified_config import get_effective_config, reload_config
