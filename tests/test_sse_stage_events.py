@@ -18,7 +18,10 @@ class TestEventVocabulary:
     def test_new_event_types_exist_with_adr_names(self):
         assert WebhookEventType.STAGE1_RESPONSE.value == "stage1.response"
         assert WebhookEventType.STAGE2_REVIEW.value == "stage2.review"
-        assert WebhookEventType.CONSENSUS_EARLY_TERMINATION.value == "consensus.early_termination"
+        assert (
+            WebhookEventType.CONSENSUS_EARLY_TERMINATION.value
+            == "consensus.early_termination"
+        )
         assert WebhookEventType.STAGE3_START.value == "stage3.start"
 
     def test_layer_mapping_covers_new_events(self):
@@ -51,16 +54,14 @@ class TestStage1PerModelCallback:
         async def fake_query(model, messages, **kwargs):
             return {"status": "ok", "content": f"resp-{model}", "latency_ms": 5}
 
-        with (
-            patch("llm_council.gateway_adapter.USE_GATEWAY_LAYER", False),
-            patch(
-                "llm_council.gateway_adapter._direct_query_models_with_progress",
-                new_callable=AsyncMock,
-            ) as direct,
-        ):
+        with patch(
+            "llm_council.gateway_adapter.USE_GATEWAY_LAYER", False
+        ), patch(
+            "llm_council.gateway_adapter._direct_query_models_with_progress",
+            new_callable=AsyncMock,
+        ) as direct:
             await query_models_with_progress(
-                ["m/a", "m/b"],
-                [{"role": "user", "content": "q"}],
+                ["m/a", "m/b"], [{"role": "user", "content": "q"}],
                 on_model_complete=on_model_complete,
             )
             # Direct path receives the callback (its own unit covers invocation).
@@ -130,7 +131,10 @@ class TestStage2ReviewCallback:
         monkeypatch.setattr(council_stages.random, "shuffle", lambda x: None)
 
         async def fake_query_models_parallel(models, messages, **kwargs):
-            return {m: {"content": "FINAL RANKING:\n1. Response A\n2. Response B"} for m in models}
+            return {
+                m: {"content": "FINAL RANKING:\n1. Response A\n2. Response B"}
+                for m in models
+            }
 
         parallel = AsyncMock(side_effect=fake_query_models_parallel)
         monkeypatch.setattr(council_stages, "query_models_parallel", parallel)
@@ -151,11 +155,15 @@ class TestEnvelope:
             on_event = kwargs.get("on_event")
             # Simulate bridge callbacks arriving in stage order.
             for name in ("stage1.response", "stage2.review", "stage3.start"):
-                on_event(mock.Mock(event=name, data={"payload": name}))
+                on_event(
+                    mock.Mock(event=name, data={"payload": name})
+                )
             await asyncio.sleep(0)
             return {"synthesis": "s", "metadata": {"status": "complete"}}
 
-        with patch.object(_council_runner, "run_council_with_fallback", side_effect=fake_council):
+        with patch.object(
+            _council_runner, "run_council_with_fallback", side_effect=fake_council
+        ):
             events = [e async for e in _council_runner.run_council("q")]
 
         assert all(e.get("v") == 1 for e in events)
@@ -183,7 +191,9 @@ class TestEnvelope:
             await asyncio.sleep(0)
             return {"synthesis": "s", "metadata": {"status": "complete"}}
 
-        with patch.object(_council_runner, "run_council_with_fallback", side_effect=fake_council):
+        with patch.object(
+            _council_runner, "run_council_with_fallback", side_effect=fake_council
+        ):
             names = [e["event"] async for e in _council_runner.run_council("q")]
 
         # Terminal event is last; rich stage events preserve emission order.
@@ -250,11 +260,15 @@ class TestOrchestratorWiring:
         async def fake_stage3(*a, **kw):
             return "synthesis", {"total_tokens": 1}, None
 
-        monkeypatch.setattr(council_stages, "query_models_with_progress", fake_qmwp)
+        monkeypatch.setattr(
+            council_stages, "query_models_with_progress", fake_qmwp
+        )
         monkeypatch.setattr(council_stages, "query_model", fake_query_model)
         monkeypatch.setattr(council_stages.random, "shuffle", lambda x: None)
         monkeypatch.setattr(council, "stage3_synthesize_final", fake_stage3)
-        monkeypatch.setattr(council, "_get_council_models", lambda: ["m/a", "m/b"])
+        monkeypatch.setattr(
+            council, "_get_council_models", lambda: ["m/a", "m/b"]
+        )
 
         await council.run_council_with_fallback(
             "q", bypass_cache=True, on_event=on_event, webhook_config=webhook_config
@@ -290,7 +304,9 @@ class TestCouncilRound1:
                 raise
             return {}
 
-        with patch.object(_council_runner, "run_council_with_fallback", side_effect=fake_council):
+        with patch.object(
+            _council_runner, "run_council_with_fallback", side_effect=fake_council
+        ):
             gen = _council_runner.run_council("q")
             first = await gen.__anext__()  # deliberation_start (pre-task)
             assert first["event"] == "council.deliberation_start"

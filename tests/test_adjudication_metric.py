@@ -26,22 +26,13 @@ def _reset(monkeypatch):
 class TestEmitAdjudication:
     def _capture(self, monkeypatch):
         sink = []
-        monkeypatch.setattr(
-            adj,
-            "emit",
-            lambda event, properties, distinct_id: sink.append((event, properties, distinct_id)),
-        )
+        monkeypatch.setattr(adj, "emit",
+                            lambda event, properties, distinct_id: sink.append((event, properties, distinct_id)))
         return sink
 
-    @pytest.mark.parametrize(
-        "disposition,value",
-        [
-            ("real", 1.0),
-            ("marginal", 0.5),
-            ("refuted", 0.0),
-            ("pass-clean", 1.0),
-        ],
-    )
+    @pytest.mark.parametrize("disposition,value", [
+        ("real", 1.0), ("marginal", 0.5), ("refuted", 0.0), ("pass-clean", 1.0),
+    ])
     def test_numeric_value_and_label(self, monkeypatch, disposition, value):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = self._capture(monkeypatch)
@@ -58,9 +49,8 @@ class TestEmitAdjudication:
     def test_notes_and_consumer(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = self._capture(monkeypatch)
-        adj.emit_adjudication(
-            "v1", "marginal", notes="borderline on edge case", consumer="opaque-7"
-        )
+        adj.emit_adjudication("v1", "marginal", notes="borderline on edge case",
+                              consumer="opaque-7")
         _, props, did = sink[0]
         assert props["adjudication_notes"] == "borderline on edge case"
         assert did == "opaque-7"
@@ -106,24 +96,21 @@ class TestEmitAdjudication:
 class TestEdgeCases:
     def test_whitespace_verification_id_raises(self):
         import pytest as _pytest
-
         with _pytest.raises(ValueError):
             adj.emit_adjudication("   ", "real")
 
     def test_blank_consumer_falls_back_to_default(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = []
-        monkeypatch.setattr(
-            adj, "emit", lambda event, properties, distinct_id: sink.append(distinct_id)
-        )
+        monkeypatch.setattr(adj, "emit",
+                            lambda event, properties, distinct_id: sink.append(distinct_id))
         adj.emit_adjudication("v1", "real", consumer="   ")
         assert sink == ["llm-council"]
 
     def test_whitespace_notes_omitted(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = []
-        monkeypatch.setattr(
-            adj, "emit", lambda event, properties, distinct_id: sink.append(properties)
-        )
+        monkeypatch.setattr(adj, "emit",
+                            lambda event, properties, distinct_id: sink.append(properties))
         adj.emit_adjudication("v1", "real", notes="   ")
         assert "adjudication_notes" not in sink[0]

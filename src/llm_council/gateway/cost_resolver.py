@@ -138,7 +138,9 @@ class CostResolver:
                 (cache_write_1h_tokens, "cache_write_1h"),
             ):
                 price = _safe_price(pricing.get(key))
-                cost += (max(count or 0, 0) / 1000.0) * (price if price is not None else fallback)
+                cost += (max(count or 0, 0) / 1000.0) * (
+                    price if price is not None else fallback
+                )
             # 8dp: sub-cent per-call costs must not round to zero.
             return round(cost, 8), "registry_estimate"
 

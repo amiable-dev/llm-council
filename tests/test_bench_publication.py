@@ -21,17 +21,8 @@ def _run():
         total_cost_usd=0.1234,
         cost_known=True,
         results=[
-            ItemResult(
-                item_id="a", domain="coding", ok=True, score=0.8, cost_usd=0.06, cost_known=True
-            ),
-            ItemResult(
-                item_id="b",
-                domain="factual",
-                ok=False,
-                failures=["missing_any_of:['x']"],
-                cost_usd=0.06,
-                cost_known=True,
-            ),
+            ItemResult(item_id="a", domain="coding", ok=True, score=0.8, cost_usd=0.06, cost_known=True),
+            ItemResult(item_id="b", domain="factual", ok=False, failures=["missing_any_of:['x']"], cost_usd=0.06, cost_known=True),
         ],
     )
 
@@ -43,18 +34,11 @@ class TestResultsPage:
             assert needle in page, needle
 
     def test_matrix_table_embedded_when_given(self):
-        rows = [
-            {
-                "config": "council",
-                "kind": "council",
-                "items_run": 2,
-                "pass_rate": 0.5,
-                "cost_usd": 0.12,
-                "cost_known": True,
-                "quality_per_dollar": 4.167,
-                "aborted": None,
-            }
-        ]
+        rows = [{
+            "config": "council", "kind": "council", "items_run": 2,
+            "pass_rate": 0.5, "cost_usd": 0.12, "cost_known": True,
+            "quality_per_dollar": 4.167, "aborted": None,
+        }]
         page = render_results_page(_run(), dataset_version="v1", matrix_rows=rows)
         assert "quality/$" in page
 
@@ -101,19 +85,12 @@ class TestCouncilRound1:
         # #441 r1: an unescaped '|' in a failure message splits the row.
         run = BenchRun(
             started_at="2026-07-03T14:00:00+00:00",
-            items_total=1,
-            items_run=1,
-            items_passed=0,
-            total_cost_usd=0.0,
-            cost_known=True,
-            results=[
-                ItemResult(
-                    item_id="a",
-                    domain="coding",
-                    ok=False,
-                    failures=["missing_any_of:['x|y']"],
-                )
-            ],
+            items_total=1, items_run=1, items_passed=0,
+            total_cost_usd=0.0, cost_known=True,
+            results=[ItemResult(
+                item_id="a", domain="coding", ok=False,
+                failures=["missing_any_of:['x|y']"],
+            )],
         )
         import re
 

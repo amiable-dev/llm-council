@@ -58,7 +58,8 @@ def emit_adjudication(
     # surface even when emission is disabled.
     if disposition not in ADJUDICATION_VALUES:
         raise ValueError(
-            f"disposition must be one of {sorted(ADJUDICATION_VALUES)}, " f"got {disposition!r}"
+            f"disposition must be one of {sorted(ADJUDICATION_VALUES)}, "
+            f"got {disposition!r}"
         )
     if not verification_id or not verification_id.strip():
         raise ValueError(

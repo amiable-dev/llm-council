@@ -11,15 +11,9 @@ class TestGateTier:
 
         async def fake_run_verification(request, store):
             captured["tier"] = request.tier
-            return {
-                "verdict": "pass",
-                "confidence": 0.9,
-                "exit_code": 0,
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "r",
-                "transcript_location": "/tmp/t",
-            }
+            return {"verdict": "pass", "confidence": 0.9, "exit_code": 0,
+                    "rubric_scores": {}, "blocking_issues": [], "rationale": "r",
+                    "transcript_location": "/tmp/t"}
 
         with (
             patch("llm_council.verification.api.run_verification", fake_run_verification),
@@ -34,16 +28,10 @@ class TestGateTier:
 
         async def fake_run_verification(request, store):
             captured["tier"] = request.tier
-            return {
-                "verdict": "unclear",
-                "confidence": 0.4,
-                "exit_code": 2,
-                "unclear_reason": "low_confidence",
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "r",
-                "transcript_location": "/tmp/t",
-            }
+            return {"verdict": "unclear", "confidence": 0.4, "exit_code": 2,
+                    "unclear_reason": "low_confidence",
+                    "rubric_scores": {}, "blocking_issues": [], "rationale": "r",
+                    "transcript_location": "/tmp/t"}
 
         with (
             patch("llm_council.verification.api.run_verification", fake_run_verification),
@@ -55,16 +43,10 @@ class TestGateTier:
 
     def test_text_output_surfaces_unclear_reason(self, capsys):
         async def fake_run_verification(request, store):
-            return {
-                "verdict": "unclear",
-                "confidence": 0.4,
-                "exit_code": 2,
-                "unclear_reason": "infra_failure",
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "r",
-                "transcript_location": "/tmp/t",
-            }
+            return {"verdict": "unclear", "confidence": 0.4, "exit_code": 2,
+                    "unclear_reason": "infra_failure",
+                    "rubric_scores": {}, "blocking_issues": [], "rationale": "r",
+                    "transcript_location": "/tmp/t"}
 
         with (
             patch("llm_council.verification.api.run_verification", fake_run_verification),

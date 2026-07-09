@@ -33,7 +33,9 @@ class TestStage2ProgressWiring:
             )
 
         with (
-            patch.object(council, "stage1_collect_responses_with_status", side_effect=fake_stage1),
+            patch.object(
+                council, "stage1_collect_responses_with_status", side_effect=fake_stage1
+            ),
             patch.object(council, "stage2_collect_rankings", new_callable=AsyncMock) as s2,
             patch.object(council, "stage3_synthesize_final", new_callable=AsyncMock) as s3,
             patch.object(council, "stage1_5_normalize_styles", new_callable=AsyncMock) as s15,
@@ -79,7 +81,9 @@ class TestStage2ProgressWiring:
             )
 
         with (
-            patch.object(council, "stage1_collect_responses_with_status", side_effect=fake_stage1),
+            patch.object(
+                council, "stage1_collect_responses_with_status", side_effect=fake_stage1
+            ),
             patch.object(council, "stage2_collect_rankings", new_callable=AsyncMock) as s2,
             patch.object(council, "stage3_synthesize_final", new_callable=AsyncMock) as s3,
             patch.object(council, "stage1_5_normalize_styles", new_callable=AsyncMock) as s15,

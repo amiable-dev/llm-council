@@ -19,7 +19,7 @@ from llm_council.cache_context import (
 )
 from llm_council.gateway.openrouter import build_openrouter_payload
 
-HEAD = "H" * 6000  # ~1500 est tokens
+HEAD = "H" * 6000      # ~1500 est tokens
 EVIDENCE = "E" * 2000  # head+evidence ~2000 tokens
 SUBJECT = "S" * 8000
 TAIL = "\nCommit under review: `abc1234`"
@@ -33,7 +33,10 @@ def _segments():
         ("subject", len(HEAD) + len(EVIDENCE), len(HEAD) + len(EVIDENCE) + len(SUBJECT)),
         ("volatile_tail", len(HEAD) + len(EVIDENCE) + len(SUBJECT), len(PROMPT)),
     ]
-    return [{"name": n, "start": a, "end": b, "est_tokens": (b - a) // 4} for n, a, b in bounds]
+    return [
+        {"name": n, "start": a, "end": b, "est_tokens": (b - a) // 4}
+        for n, a, b in bounds
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -49,13 +52,9 @@ def _messages():
 
 class TestInjection:
     def test_anthropic_payload_gets_breakpoints_at_boundaries(self):
-        set_cache_context(
-            CacheContext(
-                segments=_segments(),
-                session_id="verify:r:abc",
-                ttl="1h",
-            )
-        )
+        set_cache_context(CacheContext(
+            segments=_segments(), session_id="verify:r:abc", ttl="1h",
+        ))
         payload = build_openrouter_payload("anthropic/claude-opus-4.8", _messages())
         parts = payload["messages"][0]["content"]
         assert isinstance(parts, list)
@@ -101,13 +100,9 @@ class TestInjection:
 
     def test_same_length_different_head_skips_breakpoints(self):
         # Length collision alone must not trigger injection: head bytes differ.
-        set_cache_context(
-            CacheContext(
-                segments=_segments(),
-                session_id="s",
-                prompt_head=PROMPT[:64],
-            )
-        )
+        set_cache_context(CacheContext(
+            segments=_segments(), session_id="s", prompt_head=PROMPT[:64],
+        ))
         impostor = "X" + PROMPT[1:]  # same length, different first byte
         payload = build_openrouter_payload(
             "anthropic/claude-opus-4.8", [{"role": "user", "content": impostor}]
@@ -134,7 +129,8 @@ class TestInjection:
         segs = [
             {"name": "static_head", "start": 0, "end": 6000, "est_tokens": 1500},
             {"name": "evidence", "start": 6000, "end": 6000, "est_tokens": 0},
-            {"name": "subject", "start": 6000, "end": len(prompt), "est_tokens": 1},
+            {"name": "subject", "start": 6000, "end": len(prompt),
+             "est_tokens": 1},
         ]
         set_cache_context(CacheContext(segments=segs, session_id="s"))
         payload = build_openrouter_payload(
@@ -194,19 +190,11 @@ class TestPipelinePublishesContext:
         async def probe_pipeline(*a, **kw):
             ctx = get_cache_context()
             seen["ctx"] = ctx
-            return {
-                "verification_id": "x",
-                "verdict": "pass",
-                "confidence": 0.9,
-                "exit_code": 0,
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "r",
-                "transcript_location": "/tmp/t",
-                "partial": False,
-                "timeout_fired": False,
-                "completed_stages": ["stage1", "stage2", "stage3"],
-            }
+            return {"verification_id": "x", "verdict": "pass", "confidence": 0.9,
+                    "exit_code": 0, "rubric_scores": {}, "blocking_issues": [],
+                    "rationale": "r", "transcript_location": "/tmp/t",
+                    "partial": False, "timeout_fired": False,
+                    "completed_stages": ["stage1", "stage2", "stage3"]}
 
         segments = [{"name": "static_head", "start": 0, "end": 100, "est_tokens": 25}]
         with (
@@ -214,7 +202,8 @@ class TestPipelinePublishesContext:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value=("short prompt", {"kept": [], "warnings": [], "segments": segments}),
+                return_value=("short prompt", {"kept": [], "warnings": [],
+                                                "segments": segments}),
             ),
             patch(
                 "llm_council.verification.api._run_verification_pipeline",
@@ -229,13 +218,11 @@ class TestPipelinePublishesContext:
             mock_store.create_verification_directory.return_value = "/tmp/test"
 
             r1 = await run_verification(
-                VerifyRequest(snapshot_id="abc1234", tier="quick", target_paths=["src/x.py"]),
-                mock_store,
-            )
+                VerifyRequest(snapshot_id="abc1234", tier="quick",
+                              target_paths=["src/x.py"]), mock_store)
             r2 = await run_verification(
-                VerifyRequest(snapshot_id="fff9999", tier="quick", target_paths=["src/x.py"]),
-                mock_store,
-            )
+                VerifyRequest(snapshot_id="fff9999", tier="quick",
+                              target_paths=["src/x.py"]), mock_store)
 
         ctx = seen["ctx"]
         assert ctx is not None

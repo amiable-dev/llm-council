@@ -78,7 +78,9 @@ class TestDocumentedQuickstartShape:
             new_callable=AsyncMock,
             return_value={"synthesis": "", "metadata": {}, "model_responses": {}},
         ) as run:
-            await consult_council("q", verdict_type="binary", include_dissent=True, models=["m/a"])
+            await consult_council(
+                "q", verdict_type="binary", include_dissent=True, models=["m/a"]
+            )
         kwargs = run.call_args.kwargs
         assert kwargs["verdict_type"] == VerdictType.BINARY
         assert kwargs["include_dissent"] is True
@@ -102,7 +104,9 @@ class TestDocumentedQuickstartShape:
         monkeypatch.setattr(
             facade,
             "create_tier_contract",
-            lambda tier: SimpleNamespace(tier=tier, deadline_ms=None, per_model_timeout_ms=None),
+            lambda tier: SimpleNamespace(
+                tier=tier, deadline_ms=None, per_model_timeout_ms=None
+            ),
         )
         with patch(
             "llm_council.facade.run_council_with_fallback",

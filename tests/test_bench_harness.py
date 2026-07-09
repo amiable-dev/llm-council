@@ -66,9 +66,7 @@ class TestDataset:
 class TestEnvelope:
     def test_any_of_groups(self):
         item = BenchItem(
-            id="x",
-            domain="factual",
-            prompt="p",
+            id="x", domain="factual", prompt="p",
             envelope={"must_contain": [["fizz", "buzz"], ["required"]]},
         )
         assert check_envelope(item, "FIZZ and the REQUIRED word", None) == []
@@ -97,7 +95,9 @@ class TestRun:
         async def runner(prompt):
             return _fake_result("hello world")
 
-        run = await run_bench(dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner)
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
         assert run.exit_code == 0
         assert run.items_passed == 2
 
@@ -110,7 +110,9 @@ class TestRun:
         async def runner(prompt):
             return _fake_result("does not contain it")
 
-        run = await run_bench(dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner)
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
         assert run.exit_code == 1
 
     @pytest.mark.asyncio
@@ -124,10 +126,8 @@ class TestRun:
             return _fake_result("hello", cost=0.60)  # 2 items cross a $1 cap
 
         run = await run_bench(
-            dataset_dir=d,
-            runs_dir=tmp_path / "runs",
-            council_runner=runner,
-            max_usd=1.00,
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.00,
         )
         assert run.exit_code == 2
         assert run.aborted and "per_run_cap" in run.aborted
@@ -168,7 +168,9 @@ class TestRun:
         async def runner(prompt):
             raise RuntimeError("gateway down")
 
-        run = await run_bench(dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner)
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
         assert run.exit_code == 1
         assert "council_error" in run.results[0].failures[0]
 
@@ -201,9 +203,13 @@ class TestBaseline:
         async def bad(prompt):
             return _fake_result("nope")
 
-        base_run = await run_bench(dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=good)
+        base_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=good
+        )
         bp = set_baseline(base_run, tmp_path / "baseline.json")
-        drifted = await run_bench(dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=bad)
+        drifted = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=bad
+        )
         cmp = compare_to_baseline(drifted, bp)
         assert cmp["regressions"] == ["a"]
         text = format_report(drifted, cmp)
@@ -214,12 +220,8 @@ class TestBaseline:
         from llm_council.bench.harness import BenchRun
 
         run = BenchRun(
-            started_at="t",
-            items_total=0,
-            items_run=0,
-            items_passed=0,
-            total_cost_usd=0.0,
-            cost_known=False,
+            started_at="t", items_total=0, items_run=0,
+            items_passed=0, total_cost_usd=0.0, cost_known=False,
         )
         cmp = compare_to_baseline(run, tmp_path / "missing.json")
         assert cmp == {"baseline": None}
@@ -245,10 +247,8 @@ class TestCouncilRound1:
             return r
 
         run = await run_bench(
-            dataset_dir=d,
-            runs_dir=tmp_path / "runs",
-            council_runner=runner,
-            max_usd=1.00,
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.00,
         )
         # 2 x $0.50 conservative charges reach the $1 cap => abort partial.
         assert run.exit_code == 2
@@ -261,12 +261,8 @@ class TestCouncilRound1:
         bp = tmp_path / "baseline.json"
         bp.write_text("{corrupt")
         run = BenchRun(
-            started_at="t",
-            items_total=0,
-            items_run=0,
-            items_passed=0,
-            total_cost_usd=0.0,
-            cost_known=False,
+            started_at="t", items_total=0, items_run=0,
+            items_passed=0, total_cost_usd=0.0, cost_known=False,
         )
         cmp = compare_to_baseline(run, bp)
         assert cmp == {"baseline": None}
@@ -288,10 +284,8 @@ class TestCouncilRound2:
             raise RuntimeError("mid-run failure")
 
         run = await run_bench(
-            dataset_dir=d,
-            runs_dir=tmp_path / "runs",
-            council_runner=runner,
-            max_usd=1.00,
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.00,
         )
         assert run.exit_code == 2  # cap abort after 2 error charges
         assert run.items_run == 2
@@ -313,7 +307,9 @@ class TestCouncilRound2:
                 r["metadata"]["usage"]["total"] = {"cost_usd": 0.0}  # unknown
             return r
 
-        run = await run_bench(dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner)
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
         assert run.cost_known is False  # one unknown item => NOT fully known
 
 
@@ -347,10 +343,8 @@ class TestCouncilRound3:
             return _fake_result("hello", cost=2.0)
 
         run = await run_bench(
-            dataset_dir=d,
-            runs_dir=tmp_path / "runs",
-            council_runner=runner,
-            max_usd=1.0,
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=1.0,
         )
         assert run.aborted
         with pytest.raises(ValueError, match="aborted"):

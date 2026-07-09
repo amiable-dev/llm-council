@@ -69,9 +69,12 @@ class TestEnvReferenceDrift:
         )
 
     def test_no_phantom_vars_documented(self):
-        phantom = sorted(_documented_in_reference() - _env_reads_in_src() - DOC_ONLY_ALLOWED)
+        phantom = sorted(
+            _documented_in_reference() - _env_reads_in_src() - DOC_ONLY_ALLOWED
+        )
         assert not phantom, (
-            "documented env vars that no code reads (the #446 failure class): " f"{phantom}"
+            "documented env vars that no code reads (the #446 failure class): "
+            f"{phantom}"
         )
 
     def test_readme_mentions_only_real_vars(self):

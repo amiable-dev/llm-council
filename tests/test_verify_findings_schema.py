@@ -38,7 +38,8 @@ class TestFindingModel:
         assert f.location is None and f.dimension is None
 
     def test_full(self):
-        f = Finding(severity="major", description="d", location="x.py:10", dimension="correctness")
+        f = Finding(severity="major", description="d", location="x.py:10",
+                    dimension="correctness")
         assert f.location == "x.py:10"
 
     def test_severity_is_constrained(self):
@@ -62,12 +63,8 @@ class TestDiagnosticsModel:
 class TestVerifyResponseAdditive:
     def _base(self, **kw):
         base = dict(
-            verification_id="v1",
-            verdict="pass",
-            confidence=0.9,
-            exit_code=0,
-            rationale="ok",
-            transcript_location="/tmp/t",
+            verification_id="v1", verdict="pass", confidence=0.9, exit_code=0,
+            rationale="ok", transcript_location="/tmp/t",
         )
         base.update(kw)
         return VerifyResponse(**base)
@@ -87,10 +84,7 @@ class TestVerifyResponseAdditive:
 
     def test_existing_contract_unchanged(self):
         # A pre-C1 payload (no findings/diagnostics keys) still validates.
-        r = self._base(
-            verdict="fail",
-            exit_code=1,
-            blocking_issues=[{"severity": "critical", "description": "x"}],
-        )
+        r = self._base(verdict="fail", exit_code=1,
+                       blocking_issues=[{"severity": "critical", "description": "x"}])
         assert r.verdict == "fail"
         assert r.blocking_issues[0].severity == "critical"

@@ -276,7 +276,9 @@ async def run_bench(
         cost, cost_known = _extract_cost(result)
         # Solo matrix configs (ADR-048 P2) have no council consensus signal;
         # min_score floors are skipped for them by explicit opt-in.
-        failures = check_envelope(item, synthesis, score, apply_score_floor=not ignore_score_floor)
+        failures = check_envelope(
+            item, synthesis, score, apply_score_floor=not ignore_score_floor
+        )
         run.total_cost_usd = round(run.total_cost_usd + cost, 6)
         cap_charged = round(cap_charged + (cost if cost_known else bench_unknown_item_usd()), 6)
         if not cost_known:
@@ -330,7 +332,8 @@ def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
     payload = {
         "created_at": run.started_at,
         "items": {
-            r.item_id: {"ok": r.ok, "score": r.score, "cost_usd": r.cost_usd} for r in run.results
+            r.item_id: {"ok": r.ok, "score": r.score, "cost_usd": r.cost_usd}
+            for r in run.results
         },
         "pass_rate": round(run.items_passed / run.items_run, 3) if run.items_run else None,
         "total_cost_usd": run.total_cost_usd,
@@ -339,7 +342,9 @@ def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
     return path
 
 
-def compare_to_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Dict[str, Any]:
+def compare_to_baseline(
+    run: BenchRun, baseline_path: Optional[Path] = None
+) -> Dict[str, Any]:
     """Aggregate deltas vs the committed baseline; absent baseline => None."""
     path = baseline_path if baseline_path is not None else DEFAULT_BASELINE_PATH
     try:
@@ -372,11 +377,7 @@ def format_report(run: BenchRun, comparison: Dict[str, Any], fmt: str = "md") ->
         f"Items: {run.items_passed}/{run.items_run} within envelope "
         f"(of {run.items_total} selected) — exit code {run.exit_code}"
     )
-    cost = (
-        f"${run.total_cost_usd:.4f}"
-        if run.cost_known
-        else f"~${run.total_cost_usd:.4f} (cost not fully known)"
-    )
+    cost = f"${run.total_cost_usd:.4f}" if run.cost_known else f"~${run.total_cost_usd:.4f} (cost not fully known)"
     lines.append(f"Spend: {cost} (per-run cap ${bench_max_usd():.2f})")
     if run.aborted:
         lines.append(f"ABORTED (partial results): {run.aborted}")

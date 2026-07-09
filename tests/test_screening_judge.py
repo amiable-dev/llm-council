@@ -133,19 +133,11 @@ class TestWiring:
         request = VerifyRequest(snapshot_id="abc1234", tier="quick")
 
         async def instant_pipeline(*a, **kw):
-            return {
-                "verification_id": "x",
-                "verdict": "pass",
-                "confidence": 0.9,
-                "exit_code": 0,
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "r",
-                "transcript_location": "/tmp/t",
-                "partial": False,
-                "timeout_fired": False,
-                "completed_stages": ["stage1", "stage2", "stage3"],
-            }
+            return {"verification_id": "x", "verdict": "pass", "confidence": 0.9,
+                    "exit_code": 0, "rubric_scores": {}, "blocking_issues": [],
+                    "rationale": "r", "transcript_location": "/tmp/t",
+                    "partial": False, "timeout_fired": False,
+                    "completed_stages": ["stage1", "stage2", "stage3"]}
 
         with (
             patch("llm_council.verification.api.VerificationContextManager") as mock_ctx_mgr,
@@ -183,27 +175,19 @@ class TestWiring:
         from llm_council.verification.api import VerifyRequest, run_verification
 
         monkeypatch.setenv("LLM_COUNCIL_SCREENING", "shadow")
-        monkeypatch.setattr(screening_mod, "DEFAULT_DECISIONS_PATH", tmp_path / "d.jsonl")
+        monkeypatch.setattr(
+            screening_mod, "DEFAULT_DECISIONS_PATH", tmp_path / "d.jsonl"
+        )
         # api.py imported log_decision by name; patch where it's used.
         request = VerifyRequest(snapshot_id="abc1234", tier="quick")
-        perfect = {
-            d: 10.0 for d in ("accuracy", "relevance", "completeness", "conciseness", "clarity")
-        }
+        perfect = {d: 10.0 for d in ("accuracy", "relevance", "completeness", "conciseness", "clarity")}
 
         async def instant_pipeline(*a, **kw):
-            return {
-                "verification_id": "x",
-                "verdict": "fail",
-                "confidence": 0.9,
-                "exit_code": 1,
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "council ran",
-                "transcript_location": "/tmp/t",
-                "partial": False,
-                "timeout_fired": False,
-                "completed_stages": ["stage1", "stage2", "stage3"],
-            }
+            return {"verification_id": "x", "verdict": "fail", "confidence": 0.9,
+                    "exit_code": 1, "rubric_scores": {}, "blocking_issues": [],
+                    "rationale": "council ran", "transcript_location": "/tmp/t",
+                    "partial": False, "timeout_fired": False,
+                    "completed_stages": ["stage1", "stage2", "stage3"]}
 
         logged = []
         with (
@@ -250,9 +234,7 @@ class TestWiring:
 
         monkeypatch.setenv("LLM_COUNCIL_SCREENING", "active")
         request = VerifyRequest(snapshot_id="abc1234", tier="quick")
-        perfect = {
-            d: 9.5 for d in ("accuracy", "relevance", "completeness", "conciseness", "clarity")
-        }
+        perfect = {d: 9.5 for d in ("accuracy", "relevance", "completeness", "conciseness", "clarity")}
 
         pipeline = AsyncMock()
         with (
@@ -262,7 +244,9 @@ class TestWiring:
                 new_callable=AsyncMock,
                 return_value=("short prompt", {"kept": [], "warnings": []}),
             ),
-            patch("llm_council.verification.api._run_verification_pipeline", pipeline),
+            patch(
+                "llm_council.verification.api._run_verification_pipeline", pipeline
+            ),
             patch(
                 "llm_council.verification.screening.run_screen",
                 new_callable=AsyncMock,
@@ -307,19 +291,11 @@ class TestWiring:
         )
 
         async def instant_pipeline(*a, **kw):
-            return {
-                "verification_id": "x",
-                "verdict": "fail",
-                "confidence": 0.9,
-                "exit_code": 1,
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "council ran",
-                "transcript_location": "/tmp/t",
-                "partial": False,
-                "timeout_fired": False,
-                "completed_stages": ["stage1", "stage2", "stage3"],
-            }
+            return {"verification_id": "x", "verdict": "fail", "confidence": 0.9,
+                    "exit_code": 1, "rubric_scores": {}, "blocking_issues": [],
+                    "rationale": "council ran", "transcript_location": "/tmp/t",
+                    "partial": False, "timeout_fired": False,
+                    "completed_stages": ["stage1", "stage2", "stage3"]}
 
         screen = AsyncMock()
         with (
@@ -382,7 +358,9 @@ class TestCouncilRound1:
         from llm_council.verification import screening as sm
 
         perfect = {d: 10.0 for d in sm.SCREEN_DIMENSIONS}
-        with patch.object(sm, "run_screen", new_callable=AsyncMock, return_value=perfect):
+        with patch.object(
+            sm, "run_screen", new_callable=AsyncMock, return_value=perfect
+        ):
             decision = await sm.evaluate_screen(
                 verification_id="v1",
                 verification_query="q",

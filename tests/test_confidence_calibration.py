@@ -134,7 +134,9 @@ class TestFlagGate:
 
         stage3 = {"response": "VERDICT: PASS — looks good."}
         out = build_verification_result([], [], stage3, confidence_threshold=0.7)
-        out2 = build_verification_result([], [], stage3, confidence_threshold=0.7, calibrate=None)
+        out2 = build_verification_result(
+            [], [], stage3, confidence_threshold=0.7, calibrate=None
+        )
         assert out == out2
 
     def test_flag_on_threshold_uses_calibrated(self):
@@ -162,7 +164,9 @@ class TestFlagGate:
         else:
             # Raw already below threshold: calibrator can't resurrect it.
             assert calibrated["verdict"] == raw["verdict"]
-        assert calibrated["confidence_calibrated"] == mapping.calibrate(raw["confidence"])
+        assert calibrated["confidence_calibrated"] == mapping.calibrate(
+            raw["confidence"]
+        )
 
 
 class TestSchemaField:

@@ -74,7 +74,9 @@ def bench_command(
                 from .council import _get_council_models
 
                 for model in _get_council_models():
-                    matrix_configs.append(MatrixConfig(name=f"solo:{model}", kind="solo"))
+                    matrix_configs.append(
+                        MatrixConfig(name=f"solo:{model}", kind="solo")
+                    )
             elif name.startswith("solo:"):
                 matrix_configs.append(MatrixConfig(name=name, kind="solo"))
             elif name in ("council", "graduated"):
@@ -329,46 +331,21 @@ def main():
         help="Golden-dataset quality benchmark (ADR-048) — costs real API spend",
     )
     bench_parser.add_argument(
-        "action",
-        choices=["run", "baseline", "report", "matrix"],
+        "action", choices=["run", "baseline", "report", "matrix"],
         help="run: execute the dataset; baseline: snapshot last run as baseline; report: render last run",
     )
+    bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1", help="Dataset directory (default: bench/dataset/v1)")
+    bench_parser.add_argument("--items", type=str, default=None, help="Comma-separated item ids to run (default: all)")
+    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd", help="Per-run spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30)")
+    bench_parser.add_argument("--set", action="store_true", dest="set_baseline_flag",
+                              help="(baseline) write the snapshot")
+    bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format", help="Report format (default: md)")
     bench_parser.add_argument(
-        "--dataset",
-        type=str,
-        default="bench/dataset/v1",
-        help="Dataset directory (default: bench/dataset/v1)",
-    )
-    bench_parser.add_argument(
-        "--items", type=str, default=None, help="Comma-separated item ids to run (default: all)"
-    )
-    bench_parser.add_argument(
-        "--max-usd",
-        type=float,
-        default=None,
-        dest="max_usd",
-        help="Per-run spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30)",
-    )
-    bench_parser.add_argument(
-        "--set", action="store_true", dest="set_baseline_flag", help="(baseline) write the snapshot"
-    )
-    bench_parser.add_argument(
-        "--format",
-        choices=["md", "json"],
-        default="md",
-        dest="bench_format",
-        help="Report format (default: md)",
-    )
-    bench_parser.add_argument(
-        "--publish",
-        type=str,
-        default=None,
+        "--publish", type=str, default=None,
         help="(report) also regenerate the docs results page at this path",
     )
     bench_parser.add_argument(
-        "--configs",
-        type=str,
-        default="council",
+        "--configs", type=str, default="council",
         help="(matrix) comma list: council, graduated, solo:<model>, solo-members",
     )
 
@@ -398,10 +375,7 @@ def main():
         help="Where --fit writes the mapping",
     )
     cal_parser.add_argument(
-        "--format",
-        choices=["text", "json"],
-        default="text",
-        dest="cal_format",
+        "--format", choices=["text", "json"], default="text", dest="cal_format",
         help="Output format (default: text)",
     )
 
@@ -667,7 +641,9 @@ def bias_report(
         )
         report = amplification_report(records)
         if output_format == "json":
-            output = output.rstrip() + "\n" + _json.dumps({"amplification": report}, indent=2)
+            output = output.rstrip() + "\n" + _json.dumps(
+                {"amplification": report}, indent=2
+            )
         else:
             output = output.rstrip() + "\n\n" + format_amplification_report(report)
 

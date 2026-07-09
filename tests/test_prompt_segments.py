@@ -16,10 +16,8 @@ from llm_council.verification.api import _build_verification_prompt
 def _patch_files(content_by_call):
     """Patch file fetching to return supplied content per call."""
     side = [
-        (
-            content,
-            {"expanded_paths": ["src/x.py"], "paths_truncated": False, "expansion_warnings": []},
-        )
+        (content, {"expanded_paths": ["src/x.py"], "paths_truncated": False,
+                   "expansion_warnings": []})
         for content in content_by_call
     ]
     return patch(
@@ -49,7 +47,7 @@ class TestSegmentOrdering:
         assert names == ["static_head", "evidence", "subject", "volatile_tail"]
         tail = next(s for s in segments if s["name"] == "volatile_tail")
         # The SHA appears in the tail and NOWHERE before it.
-        assert "abc1234def" in prompt[tail["start"] : tail["end"]]
+        assert "abc1234def" in prompt[tail["start"]:tail["end"]]
         assert "abc1234def" not in prompt[: tail["start"]]
 
     @pytest.mark.asyncio
@@ -65,19 +63,14 @@ class TestSegmentOrdering:
 
     @pytest.mark.asyncio
     async def test_evidence_after_head_before_subject(self):
-        evidence = [
-            {
-                "id": "e1",
-                "source": "linter",
-                "strength": "informational",
-                "content": "unused import on line 3",
-            }
-        ]
+        evidence = [{
+            "id": "e1", "source": "linter", "strength": "informational",
+            "content": "unused import on line 3",
+        }]
         from llm_council.verification.schemas import EvidenceItem
 
         prompt, info = await _build(
-            "abc1234def",
-            "code\n",
+            "abc1234def", "code\n",
             evidence=[EvidenceItem(**e) for e in evidence],
         )
         head = next(s for s in info["segments"] if s["name"] == "static_head")
@@ -127,11 +120,9 @@ class TestExistingPinsPreserved:
         from llm_council.verification.schemas import EvidenceItem
 
         prompt, _ = await _build(
-            "abc1234def",
-            "body\n",
-            evidence=[
-                EvidenceItem(id="e1", source="s", strength="informational", content="finding-xyz")
-            ],
+            "abc1234def", "body\n",
+            evidence=[EvidenceItem(id="e1", source="s", strength="informational",
+                                   content="finding-xyz")],
         )
         # Anchor on the distinctive focus phrase — a bare "Security" could
         # false-positive on the instructions' "security vulnerabilities".

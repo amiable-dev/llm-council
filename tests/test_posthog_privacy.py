@@ -14,29 +14,13 @@ from llm_council.observability import posthog_emitter as pe
 
 # Every property key the emitter is allowed to produce (content keys absent).
 _ALLOWED_KEYS = {
-    "$ai_trace_id",
-    "$ai_model",
-    "$ai_provider",
-    "$ai_input_tokens",
-    "$ai_output_tokens",
-    "$ai_cache_read_input_tokens",
-    "$ai_cache_creation_input_tokens",
-    "$ai_total_cost_usd",
-    "tier",
-    "route",
-    "round",
-    "subject_sha",
-    "consumer",
+    "$ai_trace_id", "$ai_model", "$ai_provider", "$ai_input_tokens",
+    "$ai_output_tokens", "$ai_cache_read_input_tokens",
+    "$ai_cache_creation_input_tokens", "$ai_total_cost_usd",
+    "tier", "route", "round", "subject_sha", "consumer",
 }
-_FORBIDDEN_KEYS = {
-    "$ai_input",
-    "$ai_output_choices",
-    "$ai_output",
-    "prompt",
-    "content",
-    "messages",
-    "file_contents",
-}
+_FORBIDDEN_KEYS = {"$ai_input", "$ai_output_choices", "$ai_output", "prompt",
+                   "content", "messages", "file_contents"}
 
 
 @pytest.fixture(autouse=True)
@@ -51,23 +35,13 @@ class TestContentFree:
     def test_properties_never_carry_content(self):
         # Even a usage entry polluted with content-shaped keys yields only the
         # allowed metadata keys — the mapper is an allowlist, not a passthrough.
-        mu = {
-            "prompt_tokens": 100,
-            "completion_tokens": 10,
-            "cost_known": True,
-            "cost_usd": 0.01,
-            "cached_tokens": 0,
-            "$ai_input": [{"role": "user", "content": "SECRET CODE"}],
-            "prompt": "SECRET",
-            "content": "SECRET",
-        }
-        p = ag.build_generation_properties(
-            "anthropic/claude-opus-4.8",
-            mu,
-            verification_id="v",
-            tier="balanced",
-            subject_sha="deadbeef",
-        )
+        mu = {"prompt_tokens": 100, "completion_tokens": 10, "cost_known": True,
+              "cost_usd": 0.01, "cached_tokens": 0,
+              "$ai_input": [{"role": "user", "content": "SECRET CODE"}],
+              "prompt": "SECRET", "content": "SECRET"}
+        p = ag.build_generation_properties("anthropic/claude-opus-4.8", mu,
+                                           verification_id="v", tier="balanced",
+                                           subject_sha="deadbeef")
         assert set(p).issubset(_ALLOWED_KEYS)
         assert not (_FORBIDDEN_KEYS & set(p))
         assert "SECRET" not in repr(p)
@@ -75,27 +49,19 @@ class TestContentFree:
     def test_emitted_events_are_content_free(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = []
-        monkeypatch.setattr(
-            ag, "emit", lambda event, properties, distinct_id: sink.append(properties)
-        )
-        usage = {
-            "by_model": {
-                "m/x": {
-                    "prompt_tokens": 5,
-                    "completion_tokens": 1,
-                    "cost_known": True,
-                    "cost_usd": 0.0,
-                    "$ai_input": "leak",
-                }
-            }
-        }
+        monkeypatch.setattr(ag, "emit",
+                            lambda event, properties, distinct_id: sink.append(properties))
+        usage = {"by_model": {"m/x": {"prompt_tokens": 5, "completion_tokens": 1,
+                                      "cost_known": True, "cost_usd": 0.0,
+                                      "$ai_input": "leak"}}}
         ag.emit_generation_events(usage, verification_id="v1", subject_sha="sha1")
         assert sink and not (_FORBIDDEN_KEYS & set(sink[0]))
 
     def test_subject_sha_passes_through_opaque(self):
         # subject_sha is an opaque digest (a commit SHA); no raw path leaks.
         mu = {"prompt_tokens": 1, "completion_tokens": 1, "cost_known": False}
-        p = ag.build_generation_properties("m/x", mu, verification_id="v", subject_sha="abc123def")
+        p = ag.build_generation_properties("m/x", mu, verification_id="v",
+                                           subject_sha="abc123def")
         assert p["subject_sha"] == "abc123def"
         assert "/" not in p["subject_sha"]  # not a file path
 
@@ -112,7 +78,6 @@ class TestExceptionScrub:
 
     def test_emit_soft_fail_logs_scrubbed(self, monkeypatch, caplog):
         import logging
-
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
 
         class BadClient:

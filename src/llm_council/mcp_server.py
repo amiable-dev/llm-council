@@ -307,7 +307,9 @@ async def consult_council(
     # per-stage breakdown only under include_details (progressive disclosure).
     from .cost_summary import format_cost_summary
 
-    usage_summary = format_cost_summary(metadata.get("usage"), include_details=include_details)
+    usage_summary = format_cost_summary(
+        metadata.get("usage"), include_details=include_details
+    )
     if usage_summary:
         result += "\n### Cost & Tokens\n" + usage_summary + "\n"
 

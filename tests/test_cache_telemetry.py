@@ -129,26 +129,14 @@ class TestAggregation:
         total = {}
         _add_cost_to_usage(
             total,
-            {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15,
-                "cost": 0.01,
-                "cached_tokens": 4,
-                "cache_write_tokens": 6,
-            },
+            {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+             "cost": 0.01, "cached_tokens": 4, "cache_write_tokens": 6},
             model="anthropic/claude-opus-4.8",
         )
         _add_cost_to_usage(
             total,
-            {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15,
-                "cost": 0.01,
-                "cached_tokens": 0,
-                "cache_write_tokens": 9,
-            },
+            {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+             "cost": 0.01, "cached_tokens": 0, "cache_write_tokens": 9},
             model="anthropic/claude-opus-4.8",
         )
         assert total["cache_write_tokens"] == 15
@@ -162,46 +150,20 @@ class TestAggregation:
 
     def test_usage_summary_totals_cache_write_across_stages(self):
         by_stage = {
-            "stage1": {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15,
-                "cost_usd": 0.01,
-                "cached_tokens": 2,
-                "cache_write_tokens": 30,
-                "cost_known": True,
-                "by_model": {
-                    "m1": {
-                        "prompt_tokens": 10,
-                        "completion_tokens": 5,
-                        "total_tokens": 15,
-                        "cost_usd": 0.01,
-                        "cached_tokens": 2,
-                        "cache_write_tokens": 30,
-                        "cost_known": True,
-                    }
-                },
-            },
-            "stage3": {
-                "prompt_tokens": 20,
-                "completion_tokens": 10,
-                "total_tokens": 30,
-                "cost_usd": 0.02,
-                "cached_tokens": 8,
-                "cache_write_tokens": 12,
-                "cost_known": True,
-                "by_model": {
-                    "m1": {
-                        "prompt_tokens": 20,
-                        "completion_tokens": 10,
-                        "total_tokens": 30,
-                        "cost_usd": 0.02,
-                        "cached_tokens": 8,
-                        "cache_write_tokens": 12,
-                        "cost_known": True,
-                    }
-                },
-            },
+            "stage1": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15,
+                       "cost_usd": 0.01, "cached_tokens": 2, "cache_write_tokens": 30,
+                       "cost_known": True,
+                       "by_model": {"m1": {"prompt_tokens": 10, "completion_tokens": 5,
+                                            "total_tokens": 15, "cost_usd": 0.01,
+                                            "cached_tokens": 2, "cache_write_tokens": 30,
+                                            "cost_known": True}}},
+            "stage3": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30,
+                       "cost_usd": 0.02, "cached_tokens": 8, "cache_write_tokens": 12,
+                       "cost_known": True,
+                       "by_model": {"m1": {"prompt_tokens": 20, "completion_tokens": 10,
+                                            "total_tokens": 30, "cost_usd": 0.02,
+                                            "cached_tokens": 8, "cache_write_tokens": 12,
+                                            "cost_known": True}}},
         }
         summary = _build_usage_summary(by_stage)
         assert summary["total"]["cache_write_tokens"] == 42
@@ -209,15 +171,9 @@ class TestAggregation:
 
     def test_summary_tolerates_pre_d4_stage_buckets(self):
         # Old buckets without cache_write_tokens must not crash the summary.
-        by_stage = {
-            "stage1": {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15,
-                "cost_usd": 0.0,
-                "cached_tokens": 0,
-            }
-        }
+        by_stage = {"stage1": {"prompt_tokens": 10, "completion_tokens": 5,
+                               "total_tokens": 15, "cost_usd": 0.0,
+                               "cached_tokens": 0}}
         summary = _build_usage_summary(by_stage)
         assert summary["total"]["cache_write_tokens"] == 0
 
@@ -227,17 +183,9 @@ class TestVerifyInputMetrics:
         from llm_council.verification.evidence_render import _usage_input_metrics
 
         metrics = _usage_input_metrics(
-            {
-                "total": {
-                    "prompt_tokens": 100,
-                    "completion_tokens": 10,
-                    "total_tokens": 110,
-                    "cost_usd": 0.1,
-                    "cost_known": True,
-                    "cached_tokens": 40,
-                    "cache_write_tokens": 25,
-                }
-            }
+            {"total": {"prompt_tokens": 100, "completion_tokens": 10,
+                       "total_tokens": 110, "cost_usd": 0.1, "cost_known": True,
+                       "cached_tokens": 40, "cache_write_tokens": 25}}
         )
         assert metrics["cache_write_tokens"] == 25
         assert metrics["cached_tokens"] == 40
@@ -260,24 +208,14 @@ class TestHitRateReconstructionFromLogs:
         # (write tokens, no reads), round 2 reads it. Only result.json files
         # are consulted — the same shape store.write_stage persists.
         rounds = [
-            {
-                "verification_id": "r1",
-                "input_metrics": {
-                    "prompt_tokens": 1000,
-                    "cached_tokens": 0,
-                    "cache_write_tokens": 800,
-                    "cache_session_id": "verify:abc123def456",
-                },
-            },
-            {
-                "verification_id": "r2",
-                "input_metrics": {
-                    "prompt_tokens": 1000,
-                    "cached_tokens": 800,
-                    "cache_write_tokens": 0,
-                    "cache_session_id": "verify:abc123def456",
-                },
-            },
+            {"verification_id": "r1",
+             "input_metrics": {"prompt_tokens": 1000, "cached_tokens": 0,
+                               "cache_write_tokens": 800,
+                               "cache_session_id": "verify:abc123def456"}},
+            {"verification_id": "r2",
+             "input_metrics": {"prompt_tokens": 1000, "cached_tokens": 800,
+                               "cache_write_tokens": 0,
+                               "cache_session_id": "verify:abc123def456"}},
         ]
         for r in rounds:
             d = tmp_path / f"2026-07-04T12-00-00-{r['verification_id']}"
@@ -307,10 +245,9 @@ class TestMalformedProviderShapes:
         # Untrusted provider payloads: strings/None/bools never crash capture.
         assert _extract_cache_write_tokens({"cache_creation_input_tokens": "800"}) == 0
         assert _extract_cache_write_tokens({"cache_creation_input_tokens": None}) == 0
-        assert (
-            _extract_cache_write_tokens({"cache_creation": {"ephemeral_1h_input_tokens": "x"}}) == 0
-        )
-        assert (
-            _extract_cache_write_tokens({"prompt_tokens_details": {"cache_write_tokens": True}})
-            == 0
-        )
+        assert _extract_cache_write_tokens(
+            {"cache_creation": {"ephemeral_1h_input_tokens": "x"}}
+        ) == 0
+        assert _extract_cache_write_tokens(
+            {"prompt_tokens_details": {"cache_write_tokens": True}}
+        ) == 0

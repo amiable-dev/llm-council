@@ -34,13 +34,8 @@ def configured_budget_mode() -> BudgetMode:
         return BudgetMode.BALANCED
 
 
-def _emit(
-    decision: BudgetDecision,
-    mode: BudgetMode,
-    estimate: Optional[CostEstimate],
-    budget_remaining: Optional[float],
-    phase: str,
-) -> None:
+def _emit(decision: BudgetDecision, mode: BudgetMode, estimate: Optional[CostEstimate],
+          budget_remaining: Optional[float], phase: str) -> None:
     """Emit an auditable budget LayerEvent (soft — never breaks the caller)."""
     try:
         from ..layer_contracts import LayerEventType, emit_layer_event
@@ -89,9 +84,7 @@ class BudgetEnforcer:
         if mode == BudgetMode.STRICT:
             if estimate.high > budget_remaining:
                 decision = BudgetDecision.REJECT
-                message = (
-                    f"High estimate ${estimate.high:.4f} exceeds budget ${budget_remaining:.4f}"
-                )
+                message = f"High estimate ${estimate.high:.4f} exceeds budget ${budget_remaining:.4f}"
         elif mode == BudgetMode.BALANCED:
             if estimate.expected > budget_remaining:
                 decision = BudgetDecision.REJECT
@@ -119,13 +112,7 @@ class BudgetEnforcer:
     ) -> BudgetResult:
         """Between-stage check — abort GRACEFULLY (partial results), never mid-completion."""
         if budget_remaining is not None and spent_so_far > budget_remaining:
-            _emit(
-                BudgetDecision.ABORT_GRACEFULLY,
-                self._mode,
-                None,
-                budget_remaining,
-                phase="mid_query",
-            )
+            _emit(BudgetDecision.ABORT_GRACEFULLY, self._mode, None, budget_remaining, phase="mid_query")
             return BudgetResult(
                 BudgetDecision.ABORT_GRACEFULLY,
                 message=f"Budget exceeded (${spent_so_far:.4f} > ${budget_remaining:.4f}); returning partial results",

@@ -31,7 +31,9 @@ class MatrixConfig:
     runner: Optional[Callable[..., Any]] = None  # injectable; real by default
 
 
-def quality_per_dollar(*, pass_rate: float, cost_usd: float, cost_known: bool) -> Optional[float]:
+def quality_per_dollar(
+    *, pass_rate: float, cost_usd: float, cost_known: bool
+) -> Optional[float]:
     """Pass-rate per dollar of KNOWN spend; None when it cannot be honest.
 
     Unknown or zero cost yields None rather than a fabricated/infinite

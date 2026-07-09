@@ -47,7 +47,9 @@ def _add_cost_to_usage(
     cache_write = usage.get("cache_write_tokens", 0) or 0
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
-    total_usage["cache_write_tokens"] = total_usage.get("cache_write_tokens", 0) + cache_write
+    total_usage["cache_write_tokens"] = (
+        total_usage.get("cache_write_tokens", 0) + cache_write
+    )
     # Track whether ANY cost was reported so the summary can tell a genuine
     # $0 (free/local) from unknown cost (None) — a present cost, even 0.0, is
     # "known".
@@ -88,7 +90,9 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
         "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
         "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
-        "cache_write_tokens": sum(s.get("cache_write_tokens", 0) for s in by_stage.values()),
+        "cache_write_tokens": sum(
+            s.get("cache_write_tokens", 0) for s in by_stage.values()
+        ),
         "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
     }
     numeric_keys = (
@@ -119,3 +123,5 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             if model_usage.get("cost_known"):
                 agg["cost_known"] = True
     return {"by_stage": by_stage, "by_model": by_model, "total": grand_total}
+
+

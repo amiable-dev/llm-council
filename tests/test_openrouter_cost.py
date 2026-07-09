@@ -94,10 +94,7 @@ def test_extract_cached_tokens_keeps_reported_zero():
     from llm_council.openrouter import _extract_cached_tokens
 
     # A genuine reported 0 must NOT fall through to the details lookup.
-    assert (
-        _extract_cached_tokens({"cached_tokens": 0, "prompt_tokens_details": {"cached_tokens": 9}})
-        == 0
-    )
+    assert _extract_cached_tokens({"cached_tokens": 0, "prompt_tokens_details": {"cached_tokens": 9}}) == 0
     # Absent -> fall back to details, then 0.
     assert _extract_cached_tokens({"prompt_tokens_details": {"cached_tokens": 5}}) == 5
     assert _extract_cached_tokens({}) == 0

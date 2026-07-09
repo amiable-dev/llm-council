@@ -76,7 +76,9 @@ def write_results_page(
     """Regenerate the page at ``path`` (idempotent for identical runs)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        render_results_page(run, dataset_version=dataset_version, matrix_rows=matrix_rows),
+        render_results_page(
+            run, dataset_version=dataset_version, matrix_rows=matrix_rows
+        ),
         encoding="utf-8",
     )
     return path

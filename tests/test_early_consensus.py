@@ -148,7 +148,9 @@ async def test_shadow_mode_runs_everything_and_emits_nothing(monkeypatch):
     monkeypatch.setattr(council_mod.random, "shuffle", lambda x: None)
     reviewers = [f"r{i}" for i in range(1, 6)]
     calls, cancelled = [], []
-    monkeypatch.setattr(council_mod, "query_model", _mock_query_model({}, calls, cancelled))
+    monkeypatch.setattr(
+        council_mod, "query_model", _mock_query_model({}, calls, cancelled)
+    )
 
     async def _noop_progress(done, total, msg):
         return None

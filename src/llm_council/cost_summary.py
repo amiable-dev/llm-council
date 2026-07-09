@@ -28,7 +28,9 @@ def _fmt_cost(cost: float) -> str:
     return f"${cost:.4f}"
 
 
-def format_cost_summary(usage: Optional[Dict[str, Any]], *, include_details: bool = False) -> str:
+def format_cost_summary(
+    usage: Optional[Dict[str, Any]], *, include_details: bool = False
+) -> str:
     """Format a usage block for display.
 
     Returns an empty string when there is no usage data. The default (one-line)

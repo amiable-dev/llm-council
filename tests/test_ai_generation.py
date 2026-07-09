@@ -22,18 +22,11 @@ def _reset(monkeypatch):
 
 class TestBuildProperties:
     def test_core_mapping(self):
-        mu = {
-            "prompt_tokens": 1000,
-            "completion_tokens": 200,
-            "total_tokens": 1200,
-            "cost_usd": 0.05,
-            "cached_tokens": 0,
-            "cache_write_tokens": 0,
-            "cost_known": True,
-        }
-        p = ag.build_generation_properties(
-            "anthropic/claude-opus-4.8", mu, verification_id="v1", tier="balanced"
-        )
+        mu = {"prompt_tokens": 1000, "completion_tokens": 200, "total_tokens": 1200,
+              "cost_usd": 0.05, "cached_tokens": 0, "cache_write_tokens": 0,
+              "cost_known": True}
+        p = ag.build_generation_properties("anthropic/claude-opus-4.8", mu,
+                                           verification_id="v1", tier="balanced")
         assert p["$ai_trace_id"] == "v1"
         assert p["$ai_model"] == "anthropic/claude-opus-4.8"
         assert p["$ai_provider"] == "anthropic"
@@ -45,59 +38,39 @@ class TestBuildProperties:
 
     def test_cache_subtraction(self):
         # prompt includes cache reads (inclusive route) → input excludes them
-        mu = {
-            "prompt_tokens": 5000,
-            "completion_tokens": 100,
-            "cached_tokens": 4000,
-            "cache_write_tokens": 800,
-            "cost_known": True,
-            "cost_usd": 0.01,
-        }
-        p = ag.build_generation_properties("anthropic/claude-haiku-4.5", mu, verification_id="v")
+        mu = {"prompt_tokens": 5000, "completion_tokens": 100, "cached_tokens": 4000,
+              "cache_write_tokens": 800, "cost_known": True, "cost_usd": 0.01}
+        p = ag.build_generation_properties("anthropic/claude-haiku-4.5", mu,
+                                           verification_id="v")
         assert p["$ai_input_tokens"] == 1000  # 5000 - 4000
         assert p["$ai_cache_read_input_tokens"] == 4000
         assert p["$ai_cache_creation_input_tokens"] == 800
 
     def test_clamp_never_negative(self):
         # cached > prompt (anomaly / already-exclusive route) must clamp to 0
-        mu = {
-            "prompt_tokens": 100,
-            "completion_tokens": 0,
-            "cached_tokens": 500,
-            "cost_known": False,
-        }
+        mu = {"prompt_tokens": 100, "completion_tokens": 0, "cached_tokens": 500,
+              "cost_known": False}
         p = ag.build_generation_properties("m/x", mu, verification_id="v")
         assert p["$ai_input_tokens"] == 0
 
     def test_cost_omitted_when_unknown(self):
-        mu = {"prompt_tokens": 10, "completion_tokens": 5, "cost_known": False, "cost_usd": 0.0}
+        mu = {"prompt_tokens": 10, "completion_tokens": 5, "cost_known": False,
+              "cost_usd": 0.0}
         p = ag.build_generation_properties("m/x", mu, verification_id="v")
         assert "$ai_total_cost_usd" not in p  # never present a fabricated cost
 
     def test_cache_creation_omitted_when_zero(self):
-        mu = {
-            "prompt_tokens": 10,
-            "completion_tokens": 5,
-            "cached_tokens": 0,
-            "cache_write_tokens": 0,
-            "cost_known": True,
-            "cost_usd": 0.001,
-        }
+        mu = {"prompt_tokens": 10, "completion_tokens": 5, "cached_tokens": 0,
+              "cache_write_tokens": 0, "cost_known": True, "cost_usd": 0.001}
         p = ag.build_generation_properties("m/x", mu, verification_id="v")
         assert "$ai_cache_creation_input_tokens" not in p
 
     def test_custom_props_only_when_set(self):
-        mu = {"prompt_tokens": 1, "completion_tokens": 1, "cost_known": True, "cost_usd": 0.0}
+        mu = {"prompt_tokens": 1, "completion_tokens": 1, "cost_known": True,
+              "cost_usd": 0.0}
         p = ag.build_generation_properties(
-            "m/x",
-            mu,
-            verification_id="v",
-            tier="high",
-            route="openrouter",
-            round_index=2,
-            subject_sha="abc123",
-            consumer="opaque-1",
-        )
+            "m/x", mu, verification_id="v", tier="high", route="openrouter",
+            round_index=2, subject_sha="abc123", consumer="opaque-1")
         assert p["route"] == "openrouter"
         assert p["round"] == 2
         assert p["subject_sha"] == "abc123"
@@ -108,52 +81,30 @@ class TestBuildProperties:
 
     def test_provider_from_model_prefix(self):
         mu = {"prompt_tokens": 1, "completion_tokens": 1, "cost_known": False}
-        assert (
-            ag.build_generation_properties("openai/gpt-5.4", mu, verification_id="v")[
-                "$ai_provider"
-            ]
-            == "openai"
-        )
-        assert (
-            ag.build_generation_properties("localmodel", mu, verification_id="v")["$ai_provider"]
-            == "unknown"
-        )
+        assert ag.build_generation_properties("openai/gpt-5.4", mu,
+                                              verification_id="v")["$ai_provider"] == "openai"
+        assert ag.build_generation_properties("localmodel", mu,
+                                              verification_id="v")["$ai_provider"] == "unknown"
 
 
 class TestEmitGenerationEvents:
     def _usage(self):
-        return {
-            "by_model": {
-                "anthropic/claude-opus-4.8": {
-                    "prompt_tokens": 100,
-                    "completion_tokens": 10,
-                    "cached_tokens": 0,
-                    "cache_write_tokens": 0,
-                    "cost_usd": 0.02,
-                    "cost_known": True,
-                },
-                "openai/gpt-5.4": {
-                    "prompt_tokens": 200,
-                    "completion_tokens": 20,
-                    "cached_tokens": 50,
-                    "cache_write_tokens": 0,
-                    "cost_usd": 0.03,
-                    "cost_known": True,
-                },
-            }
-        }
+        return {"by_model": {
+            "anthropic/claude-opus-4.8": {"prompt_tokens": 100, "completion_tokens": 10,
+                                          "cached_tokens": 0, "cache_write_tokens": 0,
+                                          "cost_usd": 0.02, "cost_known": True},
+            "openai/gpt-5.4": {"prompt_tokens": 200, "completion_tokens": 20,
+                               "cached_tokens": 50, "cache_write_tokens": 0,
+                               "cost_usd": 0.03, "cost_known": True},
+        }}
 
     def test_one_event_per_member(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = []
-        monkeypatch.setattr(
-            ag,
-            "emit",
-            lambda event, properties, distinct_id: sink.append((event, properties, distinct_id)),
-        )
-        ag.emit_generation_events(
-            self._usage(), verification_id="v1", tier="balanced", consumer="opaque"
-        )
+        monkeypatch.setattr(ag, "emit",
+                            lambda event, properties, distinct_id: sink.append((event, properties, distinct_id)))
+        ag.emit_generation_events(self._usage(), verification_id="v1",
+                                  tier="balanced", consumer="opaque")
         assert len(sink) == 2
         assert all(e == "$ai_generation" for e, _, _ in sink)
         models = {p["$ai_model"] for _, p, _ in sink}
@@ -165,9 +116,8 @@ class TestEmitGenerationEvents:
     def test_distinct_id_defaults_to_llm_council(self, monkeypatch):
         monkeypatch.setenv("POSTHOG_API_KEY", "phc_x")
         sink = []
-        monkeypatch.setattr(
-            ag, "emit", lambda event, properties, distinct_id: sink.append(distinct_id)
-        )
+        monkeypatch.setattr(ag, "emit",
+                            lambda event, properties, distinct_id: sink.append(distinct_id))
         ag.emit_generation_events(self._usage(), verification_id="v1")
         assert all(did == "llm-council" for did in sink)
 

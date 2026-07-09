@@ -637,3 +637,5 @@ async def _fetch_files_for_verification_async_with_metadata(
                 )
 
     return "\n\n".join(sections), expansion_metadata
+
+

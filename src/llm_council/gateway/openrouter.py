@@ -136,7 +136,9 @@ def build_openrouter_payload(
                 # Affinity helps every vendor via OpenRouter sticky routing.
                 payload["session_id"] = cache_ctx.session_id
             if model.startswith("anthropic/"):
-                payload["messages"] = _apply_cache_breakpoints(messages, model, cache_ctx)
+                payload["messages"] = _apply_cache_breakpoints(
+                    messages, model, cache_ctx
+                )
     except Exception:  # pragma: no cover - defensive
         # Soft-fail (ADR-011/024 convention): caching changes price class,
         # never content — a bad segment map must never break the query.
@@ -369,7 +371,9 @@ class OpenRouterGateway(BaseRouter):
                         "cost": usage.get("cost"),
                         "cached_tokens": (
                             usage.get("cached_tokens")
-                            or (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
+                            or (usage.get("prompt_tokens_details") or {}).get(
+                                "cached_tokens", 0
+                            )
                             or 0
                         ),
                     },

@@ -10,11 +10,11 @@ from llm_council.verification.findings import parse_findings
 
 class TestParseFindings:
     def test_well_formed(self):
-        text = """{"verdict":"rejected","confidence":0.9,"rationale":"r",
+        text = '''{"verdict":"rejected","confidence":0.9,"rationale":"r",
           "findings":[
             {"severity":"critical","description":"null deref","location":"a.py:5"},
             {"severity":"minor","description":"nit"}
-          ]}"""
+          ]}'''
         findings, source, reason = parse_findings(text)
         assert source == "structured" and reason is None
         assert len(findings) == 2
@@ -23,17 +23,14 @@ class TestParseFindings:
         assert findings[1].severity == "minor" and findings[1].location is None
 
     def test_findings_in_fenced_json(self):
-        text = (
-            'prose\n```json\n{"verdict":"approved","confidence":0.8,"rationale":"r",'
-            '"findings":[{"severity":"major","description":"d"}]}\n```\ntrailing'
-        )
+        text = 'prose\n```json\n{"verdict":"approved","confidence":0.8,"rationale":"r",' \
+               '"findings":[{"severity":"major","description":"d"}]}\n```\ntrailing'
         findings, source, _ = parse_findings(text)
         assert source == "structured" and findings[0].severity == "major"
 
     def test_no_findings_key_is_fallback(self):
         findings, source, reason = parse_findings(
-            '{"verdict":"approved","confidence":0.8,"rationale":"r"}'
-        )
+            '{"verdict":"approved","confidence":0.8,"rationale":"r"}')
         assert findings == [] and source == "fallback" and reason == "no_findings_key"
 
     def test_unparseable_is_fallback(self):
@@ -43,8 +40,7 @@ class TestParseFindings:
 
     def test_findings_not_a_list_is_fallback(self):
         findings, source, reason = parse_findings(
-            '{"verdict":"approved","confidence":0.8,"rationale":"r","findings":"oops"}'
-        )
+            '{"verdict":"approved","confidence":0.8,"rationale":"r","findings":"oops"}')
         assert source == "fallback" and reason == "findings_not_list"
 
     def test_blocker_synonym_maps_to_critical_failsafe(self):
@@ -82,8 +78,7 @@ class TestParseFindings:
     def test_empty_findings_list_is_structured(self):
         # An explicit empty list means "reviewed, nothing found" — structured.
         findings, source, reason = parse_findings(
-            '{"verdict":"approved","confidence":0.9,"rationale":"r","findings":[]}'
-        )
+            '{"verdict":"approved","confidence":0.9,"rationale":"r","findings":[]}')
         assert findings == [] and source == "structured" and reason is None
 
 
@@ -94,30 +89,18 @@ class TestBuildResultWiring:
     def test_flag_off_no_findings(self, monkeypatch):
         monkeypatch.delenv("LLM_COUNCIL_STRUCTURED_FINDINGS", raising=False)
         from llm_council.verification.verdict_extractor import build_verification_result
-
-        r = build_verification_result(
-            [],
-            [],
-            self._stage3(
-                '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
-                '"findings":[{"severity":"critical","description":"d"}]}'
-            ),
-        )
+        r = build_verification_result([], [], self._stage3(
+            '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
+            '"findings":[{"severity":"critical","description":"d"}]}'))
         assert r["findings"] == []
         assert r["diagnostics"]["findings_source"] == "fallback"
 
     def test_flag_on_findings_flow_through(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
         from llm_council.verification.verdict_extractor import build_verification_result
-
-        r = build_verification_result(
-            [],
-            [],
-            self._stage3(
-                '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
-                '"findings":[{"severity":"critical","description":"boom","location":"a.py:1"}]}'
-            ),
-        )
+        r = build_verification_result([], [], self._stage3(
+            '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
+            '"findings":[{"severity":"critical","description":"boom","location":"a.py:1"}]}'))
         assert r["diagnostics"]["findings_source"] == "structured"
         assert len(r["findings"]) == 1
         assert r["findings"][0]["severity"] == "critical"
@@ -125,7 +108,6 @@ class TestBuildResultWiring:
     def test_flag_on_malformed_is_fallback(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
         from llm_council.verification.verdict_extractor import build_verification_result
-
         r = build_verification_result([], [], self._stage3("no json here"))
         assert r["diagnostics"]["findings_source"] == "fallback"
         assert "fallback_reason" in r["diagnostics"]
@@ -134,10 +116,8 @@ class TestBuildResultWiring:
 class TestExtractionRobustness:
     def test_braces_inside_string_values(self):
         # A description containing braces must not break brace-matching.
-        text = (
-            '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
-            '"findings":[{"severity":"critical","description":"use {x} and }{ here"}]}'
-        )
+        text = '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"use {x} and }{ here"}]}'
         findings, source, _ = parse_findings(text)
         assert source == "structured"
         assert findings[0].description == "use {x} and }{ here"
@@ -148,10 +128,8 @@ class TestExtractionRobustness:
         assert source == "structured" and '"quoted"' in findings[0].description
 
     def test_multiple_fenced_blocks_takes_first_object(self):
-        text = (
-            'first:\n```json\n{"findings":[{"severity":"info","description":"d"}]}\n```\n'
-            'second:\n```json\n{"other":1}\n```'
-        )
+        text = 'first:\n```json\n{"findings":[{"severity":"info","description":"d"}]}\n```\n' \
+               'second:\n```json\n{"other":1}\n```'
         findings, source, _ = parse_findings(text)
         assert source == "structured" and len(findings) == 1
 
@@ -159,7 +137,6 @@ class TestExtractionRobustness:
 class TestRound2Fixes:
     def test_unrecognized_flag_value_is_off(self, monkeypatch):
         from llm_council.verification.findings import structured_findings_enabled
-
         for v in ("maybe", "ture", "enabled", "2"):
             monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", v)
             assert structured_findings_enabled() is False  # opt-in requires explicit true
@@ -173,11 +150,9 @@ class TestRound2Fixes:
 class TestRound3Fixes:
     def test_prose_braces_before_real_json(self):
         # A natural-language {brace} before the real JSON must not abort the search.
-        text = (
-            "I considered {options} carefully. Result:\n"
-            '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
-            '"findings":[{"severity":"critical","description":"d"}]}'
-        )
+        text = 'I considered {options} carefully. Result:\n' \
+               '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"d"}]}'
         findings, source, _ = parse_findings(text)
         assert source == "structured" and findings[0].severity == "critical"
 
@@ -194,11 +169,9 @@ class TestC3Fixes:
     def test_prefers_findings_bearing_object_over_decoy(self):
         # A decoy JSON object before the real payload must not shadow it (a
         # silent empty-findings false pass).
-        text = (
-            '{"note":"thinking..."}\n'
-            '{"verdict":"rejected","confidence":0.9,"rationale":"r",'
-            '"findings":[{"severity":"critical","description":"real"}]}'
-        )
+        text = '{"note":"thinking..."}\n' \
+               '{"verdict":"rejected","confidence":0.9,"rationale":"r",' \
+               '"findings":[{"severity":"critical","description":"real"}]}'
         findings, source, _ = parse_findings(text)
         assert source == "structured"
         assert len(findings) == 1 and findings[0].description == "real"

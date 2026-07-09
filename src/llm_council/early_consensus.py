@@ -27,7 +27,9 @@ def early_consensus_enabled() -> bool:
     )
 
 
-def borda_update(points: Dict[str, float], ranking: List[str], num_candidates: int) -> None:
+def borda_update(
+    points: Dict[str, float], ranking: List[str], num_candidates: int
+) -> None:
     """Add one reviewer's Borda contribution: rank i gets (n-1-i) points."""
     for idx, label in enumerate(ranking[:num_candidates]):
         points[label] = points.get(label, 0.0) + float(num_candidates - 1 - idx)

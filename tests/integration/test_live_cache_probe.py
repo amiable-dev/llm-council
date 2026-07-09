@@ -56,25 +56,23 @@ async def test_second_call_hits_cache_with_discounted_cost():
     # and let build_openrouter_payload place the breakpoint + session_id.
     split = len(PROBE_PROMPT) - 40
     segments = [
-        {"name": "static_head", "start": 0, "end": split, "est_tokens": split // 4},
-        {"name": "subject", "start": split, "end": len(PROBE_PROMPT) - 20, "est_tokens": 5},
-        {
-            "name": "volatile_tail",
-            "start": len(PROBE_PROMPT) - 20,
-            "end": len(PROBE_PROMPT),
-            "est_tokens": 5,
-        },
+        {"name": "static_head", "start": 0, "end": split,
+         "est_tokens": split // 4},
+        {"name": "subject", "start": split, "end": len(PROBE_PROMPT) - 20,
+         "est_tokens": 5},
+        {"name": "volatile_tail", "start": len(PROBE_PROMPT) - 20,
+         "end": len(PROBE_PROMPT), "est_tokens": 5},
     ]
-    set_cache_context(
-        CacheContext(
-            segments=segments,
-            session_id="verify:live-probe",
-            ttl="5m",
-            prompt_head=PROBE_PROMPT[:64],
-        )
-    )
+    set_cache_context(CacheContext(
+        segments=segments,
+        session_id="verify:live-probe",
+        ttl="5m",
+        prompt_head=PROBE_PROMPT[:64],
+    ))
     try:
-        payload = build_openrouter_payload(PROBE_MODEL, [{"role": "user", "content": PROBE_PROMPT}])
+        payload = build_openrouter_payload(
+            PROBE_MODEL, [{"role": "user", "content": PROBE_PROMPT}]
+        )
     finally:
         clear_cache_context()
 
@@ -101,6 +99,6 @@ async def test_second_call_hits_cache_with_discounted_cost():
     cached = details.get("cached_tokens") or 0
     assert cached > 0, f"second call reported no cache reads: {second}"
     assert second.get("cost") is not None and first.get("cost") is not None
-    assert (
-        second["cost"] < first["cost"]
-    ), f"no discount on the cached call: first={first['cost']} second={second['cost']}"
+    assert second["cost"] < first["cost"], (
+        f"no discount on the cached call: first={first['cost']} second={second['cost']}"
+    )

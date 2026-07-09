@@ -79,7 +79,9 @@ def session_agreement_decomposition(
             # positions per reviewer — average them (last-write-wins would
             # silently drop the counterbalancing, #437 review).
             positions_by_model.setdefault(r.model_id, []).append(float(r.position))
-        position_by_model = {m: sum(ps) / len(ps) for m, ps in positions_by_model.items()}
+        position_by_model = {
+            m: sum(ps) / len(ps) for m, ps in positions_by_model.items()
+        }
 
         all_scores = [s for scores in scores_by_model.values() for s in scores]
         n = len(all_scores)
@@ -134,7 +136,9 @@ def amplification_report(records: List[BiasMetricRecord]) -> Dict[str, Any]:
         ),
         "suspect_session_ids": [s.session_id for s in suspects],
         "mean_agreement_index": (
-            round(sum(s.agreement_index for s in sessions) / len(sessions), 3) if sessions else None
+            round(sum(s.agreement_index for s in sessions) / len(sessions), 3)
+            if sessions
+            else None
         ),
         "report_only": True,  # ADR-047 P4 invariant: never gates anything
     }
@@ -145,7 +149,9 @@ def format_amplification_report(report: Dict[str, Any]) -> str:
     lines = ["## Reviewer-Agreement Decomposition (ADR-047 P4 — report-only)"]
     n = report["sessions_analyzed"]
     if n == 0:
-        lines.append("Insufficient data: no multi-reviewer sessions in the bias store.")
+        lines.append(
+            "Insufficient data: no multi-reviewer sessions in the bias store."
+        )
         return "\n".join(lines)
     lines.append(f"Sessions analyzed: {n}")
     lines.append(

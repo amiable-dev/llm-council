@@ -38,7 +38,9 @@ class TestStreamAdapter:
                     yield c
 
         monkeypatch.setattr(gateway_adapter, "USE_GATEWAY_LAYER", True)
-        monkeypatch.setattr(gateway_adapter, "_get_gateway_router", lambda: FakeRouter())
+        monkeypatch.setattr(
+            gateway_adapter, "_get_gateway_router", lambda: FakeRouter()
+        )
         seen = []
 
         async def on_delta(text):
@@ -100,7 +102,9 @@ class TestStage3Equality:
             raise RuntimeError("stream transport died")
 
         monkeypatch.setattr(council_stages, "query_model_with_status", fake_status)
-        monkeypatch.setattr(council_stages, "query_model_stream_with_status", broken_stream)
+        monkeypatch.setattr(
+            council_stages, "query_model_stream_with_status", broken_stream
+        )
         s1, s2 = self._inputs()
         result, usage, verdict = await council_stages.stage3_synthesize_final(
             "q", s1, s2, on_synthesis_delta=AsyncMock()
@@ -116,7 +120,9 @@ class TestStage3Equality:
 
         fallback = AsyncMock()
         monkeypatch.setattr(council_stages, "query_model_with_status", fallback)
-        monkeypatch.setattr(council_stages, "query_model_stream_with_status", cancelled_stream)
+        monkeypatch.setattr(
+            council_stages, "query_model_stream_with_status", cancelled_stream
+        )
         s1, s2 = self._inputs()
         with pytest.raises(asyncio.CancelledError):
             await council_stages.stage3_synthesize_final(
@@ -152,5 +158,10 @@ class TestOrchestratorOptIn:
             "run_council_with_fallback",
             side_effect=fake_council,
         ):
-            events = [e async for e in _council_runner.run_council("q", stream_tokens=True)]
+            events = [
+                e
+                async for e in _council_runner.run_council(
+                    "q", stream_tokens=True
+                )
+            ]
         assert events[-1]["event"] == "council.complete"

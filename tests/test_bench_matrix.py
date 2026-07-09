@@ -66,7 +66,9 @@ class TestMatrix:
             MatrixConfig(name="solo:m/a", kind="solo", runner=solo),
             MatrixConfig(name="council", kind="council", runner=council),
         ]
-        rows = await run_matrix(configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0)
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
         by_name = {r["config"]: r for r in rows}
         assert by_name["solo:m/a"]["pass_rate"] == 1.0  # floor skipped for solo
         assert by_name["council"]["pass_rate"] == 1.0

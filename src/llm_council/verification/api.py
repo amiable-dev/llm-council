@@ -79,6 +79,7 @@ router = APIRouter(tags=["verification"])
 # .schemas alongside the validators that use them; re-exported below.)
 
 
+
 # ============================================================================
 # #380: split into submodules (schemas / constants / evidence_render /
 # file_ops). Re-exported here verbatim for backward compatibility — many
@@ -134,7 +135,6 @@ from .file_ops import (  # noqa: F401
     _validate_file_path,
 )
 
-
 def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any]) -> None:
     """Best-effort persist of a final ``result.json`` for early-return paths.
 
@@ -181,7 +181,6 @@ def _emit_posthog_generations(
 
 
 # Maximum characters per file to include in prompt.
-
 
 async def _build_verification_prompt(
     snapshot_id: str,
@@ -289,7 +288,8 @@ Commit under review: `{snapshot_id}`"""
     ):
         end = cursor + len(text)
         segments.append(
-            {"name": name, "start": cursor, "end": end, "est_tokens": (end - cursor) // 4}
+            {"name": name, "start": cursor, "end": end,
+             "est_tokens": (end - cursor) // 4}
         )
         cursor = end
 
@@ -660,7 +660,9 @@ async def _run_verification_pipeline(
         # #355: prefer the chairman's structured BINARY verdict over a regex
         # over the synthesis prose. ``verdict_result`` is parsed in Stage 3.
         verdict_result=verdict_result,
-        calibrate=(calibration_mapping.calibrate if calibrated_confidence_enabled() else None),
+        calibrate=(
+            calibration_mapping.calibrate if calibrated_confidence_enabled() else None
+        ),
     )
 
     verdict = verification_output["verdict"]

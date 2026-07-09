@@ -39,25 +39,16 @@ class TestSerialization:
 class TestQualityPerCost:
     def test_ratio(self):
         idx = ModelPerformanceIndex(
-            model_id="m",
-            sample_size=5,
-            mean_borda_score=0.8,
-            p50_latency_ms=1,
-            p95_latency_ms=1,
-            parse_success_rate=1.0,
-            confidence_level="PRELIMINARY",
-            mean_cost_usd=0.02,
+            model_id="m", sample_size=5, mean_borda_score=0.8,
+            p50_latency_ms=1, p95_latency_ms=1, parse_success_rate=1.0,
+            confidence_level="PRELIMINARY", mean_cost_usd=0.02,
         )
         assert idx.quality_per_cost == 0.8 / 0.02
 
     def test_none_when_cost_unknown_or_zero(self):
         base = dict(
-            model_id="m",
-            sample_size=5,
-            mean_borda_score=0.8,
-            p50_latency_ms=1,
-            p95_latency_ms=1,
-            parse_success_rate=1.0,
+            model_id="m", sample_size=5, mean_borda_score=0.8,
+            p50_latency_ms=1, p95_latency_ms=1, parse_success_rate=1.0,
             confidence_level="PRELIMINARY",
         )
         assert ModelPerformanceIndex(**base, mean_cost_usd=None).quality_per_cost is None

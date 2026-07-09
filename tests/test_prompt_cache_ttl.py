@@ -60,7 +60,9 @@ class TestTtlRendersIntoDirective:
             {"name": "subject", "start": 6000, "end": 8000, "est_tokens": 500},
             {"name": "volatile_tail", "start": 8000, "end": 8040, "est_tokens": 10},
         ]
-        set_cache_context(CacheContext(segments=segments, session_id="s", ttl="5m"))
+        set_cache_context(
+            CacheContext(segments=segments, session_id="s", ttl="5m")
+        )
         payload = build_openrouter_payload(
             "anthropic/claude-opus-4.8", [{"role": "user", "content": prompt}]
         )
@@ -80,19 +82,11 @@ class TestVerifyPathDefault:
 
         async def probe_pipeline(*a, **kw):
             seen["ttl"] = get_cache_context().ttl
-            return {
-                "verification_id": "x",
-                "verdict": "pass",
-                "confidence": 0.9,
-                "exit_code": 0,
-                "rubric_scores": {},
-                "blocking_issues": [],
-                "rationale": "r",
-                "transcript_location": "/tmp/t",
-                "partial": False,
-                "timeout_fired": False,
-                "completed_stages": ["stage1", "stage2", "stage3"],
-            }
+            return {"verification_id": "x", "verdict": "pass", "confidence": 0.9,
+                    "exit_code": 0, "rubric_scores": {}, "blocking_issues": [],
+                    "rationale": "r", "transcript_location": "/tmp/t",
+                    "partial": False, "timeout_fired": False,
+                    "completed_stages": ["stage1", "stage2", "stage3"]}
 
         segments = [{"name": "static_head", "start": 0, "end": 100, "est_tokens": 25}]
         with (
@@ -100,7 +94,8 @@ class TestVerifyPathDefault:
             patch(
                 "llm_council.verification.api._build_verification_prompt",
                 new_callable=AsyncMock,
-                return_value=("short prompt", {"kept": [], "warnings": [], "segments": segments}),
+                return_value=("short prompt", {"kept": [], "warnings": [],
+                                                "segments": segments}),
             ),
             patch(
                 "llm_council.verification.api._run_verification_pipeline",
@@ -116,14 +111,12 @@ class TestVerifyPathDefault:
 
             monkeypatch.delenv("LLM_COUNCIL_PROMPT_CACHE_TTL", raising=False)
             await run_verification(
-                VerifyRequest(snapshot_id="abc1234", tier="quick", target_paths=["src/x.py"]),
-                mock_store,
-            )
+                VerifyRequest(snapshot_id="abc1234", tier="quick",
+                              target_paths=["src/x.py"]), mock_store)
             assert seen["ttl"] == "1h"  # verify default
 
             monkeypatch.setenv("LLM_COUNCIL_PROMPT_CACHE_TTL", "5m")
             await run_verification(
-                VerifyRequest(snapshot_id="abc1234", tier="quick", target_paths=["src/x.py"]),
-                mock_store,
-            )
+                VerifyRequest(snapshot_id="abc1234", tier="quick",
+                              target_paths=["src/x.py"]), mock_store)
             assert seen["ttl"] == "5m"  # knob overrides the path default

@@ -397,9 +397,7 @@ def build_verification_result(
         effective = calibrate(confidence) if calibrate is not None else confidence
         if verdict == "pass" and effective < confidence_threshold:
             inner_verdict, inner_confidence, inner_confidence_calibrated = (
-                "pass",
-                confidence,
-                effective,
+                "pass", confidence, effective,
             )
             verdict = "unclear"
     else:
@@ -411,9 +409,7 @@ def build_verification_result(
         effective = calibrate(confidence) if calibrate is not None else confidence
         if verdict == "pass" and effective < confidence_threshold:
             inner_verdict, inner_confidence, inner_confidence_calibrated = (
-                "pass",
-                confidence,
-                effective,
+                "pass", confidence, effective,
             )
             verdict = "unclear"
 

@@ -139,60 +139,14 @@ class TestPlanEscalation:
 class TestUsageMerge:
     def test_merges_totals_stages_and_models(self):
         a = {
-            "by_stage": {
-                "stage1": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 5,
-                    "total_tokens": 15,
-                    "cost_usd": 0.01,
-                    "cached_tokens": 0,
-                }
-            },
-            "by_model": {
-                "a": {
-                    "prompt_tokens": 10,
-                    "completion_tokens": 5,
-                    "total_tokens": 15,
-                    "cost_usd": 0.01,
-                    "cached_tokens": 0,
-                }
-            },
-            "total": {
-                "prompt_tokens": 10,
-                "completion_tokens": 5,
-                "total_tokens": 15,
-                "cost_usd": 0.01,
-                "cached_tokens": 0,
-                "cost_known": True,
-            },
+            "by_stage": {"stage1": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost_usd": 0.01, "cached_tokens": 0}},
+            "by_model": {"a": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost_usd": 0.01, "cached_tokens": 0}},
+            "total": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost_usd": 0.01, "cached_tokens": 0, "cost_known": True},
         }
         b = {
-            "by_stage": {
-                "stage1": {
-                    "prompt_tokens": 20,
-                    "completion_tokens": 10,
-                    "total_tokens": 30,
-                    "cost_usd": 0.02,
-                    "cached_tokens": 2,
-                }
-            },
-            "by_model": {
-                "b": {
-                    "prompt_tokens": 20,
-                    "completion_tokens": 10,
-                    "total_tokens": 30,
-                    "cost_usd": 0.02,
-                    "cached_tokens": 2,
-                }
-            },
-            "total": {
-                "prompt_tokens": 20,
-                "completion_tokens": 10,
-                "total_tokens": 30,
-                "cost_usd": 0.02,
-                "cached_tokens": 2,
-                "cost_known": False,
-            },
+            "by_stage": {"stage1": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30, "cost_usd": 0.02, "cached_tokens": 2}},
+            "by_model": {"b": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30, "cost_usd": 0.02, "cached_tokens": 2}},
+            "total": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30, "cost_usd": 0.02, "cached_tokens": 2, "cost_known": False},
         }
         merged = merge_usage_summaries(a, b)
         assert merged["total"]["total_tokens"] == 45

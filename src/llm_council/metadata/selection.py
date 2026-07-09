@@ -520,7 +520,9 @@ def select_tier_models(
             blended_scored.append(
                 (candidate.model_id, calculate_model_score(blended_candidate, tier))
             )
-        blended_selection = select_with_diversity(blended_scored, count=count, min_providers=2)
+        blended_selection = select_with_diversity(
+            blended_scored, count=count, min_providers=2
+        )
         if blended_selection != static_selection:
             try:
                 from ..layer_contracts import LayerEventType, emit_layer_event

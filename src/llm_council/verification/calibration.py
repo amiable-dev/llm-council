@@ -98,7 +98,9 @@ def analyze_corpus(records: List[CalibrationRecord]) -> Dict[str, Any]:
     summary: Dict[str, Any] = {
         "n": len(records),
         "verdicts": verdict_counts,
-        "mean_confidence": {v: round(sum(cs) / len(cs), 3) for v, cs in by_verdict.items() if cs},
+        "mean_confidence": {
+            v: round(sum(cs) / len(cs), 3) for v, cs in by_verdict.items() if cs
+        },
         # THE anomaly this ADR exists for: FAIL verdicts carrying no blocking
         # issue at all — high-confidence rejections with nothing to reject.
         "zero_blocking_fail_rate": round(zero_blocking_fails / fails, 3) if fails else None,

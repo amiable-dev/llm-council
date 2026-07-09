@@ -27,7 +27,6 @@ def cost_aware_selection_enabled() -> bool:
         "yes",
     )
 
-
 # Default store path
 DEFAULT_STORE_PATH = Path.home() / ".llm-council" / "performance_metrics.jsonl"
 

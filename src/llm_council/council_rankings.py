@@ -47,7 +47,6 @@ def _get_model_from_label_value(value):
         return value.get("model", "")
     return value
 
-
 def _coerce_score(value: Any) -> float:
     """Best-effort coercion of a model-emitted score to a float.
 
@@ -451,3 +450,5 @@ def emit_shadow_vote_events(
                 "ranking": vote.get("ranking", []),
             },
         )
+
+

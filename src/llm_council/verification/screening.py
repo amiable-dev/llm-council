@@ -89,7 +89,6 @@ def screen_eligibility(
     These are INVARIANTS, not tunables: a blocking-capable request is never
     screened silently (ADR-047 council feedback, operationalized).
     """
-
     def _strength(item: Any) -> Optional[str]:
         # Evidence arrives as dicts (HTTP/MCP JSON) OR Pydantic models
         # (validated VerifyRequest) — the invariant must catch both.

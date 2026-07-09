@@ -22,17 +22,9 @@ _VALID_SEVERITIES = {"critical", "major", "minor", "info"}
 # Explicit NON-critical synonyms → canonical. Everything NOT resolvable to one
 # of these (or a canonical value) fails safe to `critical` in _normalize_severity.
 _NONCRITICAL_SYNONYMS = {
-    "moderate": "major",
-    "medium": "major",
-    "warning": "major",
-    "warn": "major",
-    "low": "minor",
-    "nit": "minor",
-    "nitpick": "minor",
-    "trivial": "minor",
-    "informational": "info",
-    "note": "info",
-    "notice": "info",
+    "moderate": "major", "medium": "major", "warning": "major", "warn": "major",
+    "low": "minor", "nit": "minor", "nitpick": "minor", "trivial": "minor",
+    "informational": "info", "note": "info", "notice": "info",
 }
 
 
@@ -66,7 +58,9 @@ def verdict_policy(findings: "List[Finding]") -> str:
     outside ``parse_findings`` with a raw label, it must still fail closed.
     """
     return (
-        "fail" if any(_normalize_severity(f.severity) == "critical" for f in findings) else "pass"
+        "fail"
+        if any(_normalize_severity(f.severity) == "critical" for f in findings)
+        else "pass"
     )
 
 

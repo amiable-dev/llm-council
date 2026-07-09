@@ -36,12 +36,8 @@ def _stage3(findings_json, verdict="approved"):
     # The chairman's JSON: a verdict the mechanical gate should IGNORE, plus
     # the findings it derives from.
     import json
-
-    return {
-        "response": json.dumps(
-            {"verdict": verdict, "confidence": 0.9, "rationale": "r", "findings": findings_json}
-        )
-    }
+    return {"response": json.dumps(
+        {"verdict": verdict, "confidence": 0.9, "rationale": "r", "findings": findings_json})}
 
 
 class TestMechanicalGate:
@@ -49,14 +45,9 @@ class TestMechanicalGate:
         # The Yes-Man contradiction is impossible: chairman "approved" but a
         # critical finding ⇒ mechanical FAIL.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [],
-            [],
-            _stage3(
-                [{"severity": "critical", "description": "boom", "location": "a.py:1"}],
-                verdict="approved",
-            ),
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "critical", "description": "boom", "location": "a.py:1"}],
+            verdict="approved"))
         assert r["verdict"] == "fail"
         assert r["diagnostics"]["verdict_source"] == "mechanical"
         assert len(r["blocking_issues"]) == 1
@@ -65,12 +56,9 @@ class TestMechanicalGate:
     def test_no_critical_passes_with_empty_blocking(self, monkeypatch):
         # threshold 0.0 isolates the mechanical verdict from confidence softening.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [],
-            [],
-            _stage3([{"severity": "major", "description": "d"}], verdict="rejected"),
-            confidence_threshold=0.0,
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "major", "description": "d"}], verdict="rejected"),
+            confidence_threshold=0.0)
         assert r["verdict"] == "pass"
         assert r["blocking_issues"] == []
         assert r["diagnostics"]["verdict_source"] == "mechanical"
@@ -79,25 +67,18 @@ class TestMechanicalGate:
         # No critical ⇒ mechanical pass, but low confidence ⇒ softened to unclear
         # (same rule as the legacy path); still verdict_source=mechanical.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "minor", "description": "d"}]), confidence_threshold=0.99
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "d"}]), confidence_threshold=0.99)
         assert r["verdict"] == "unclear"
         assert r["blocking_issues"] == []  # no critical
         assert r["diagnostics"]["verdict_source"] == "mechanical"
 
     def test_findings_superset_of_blocking(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [],
-            [],
-            _stage3(
-                [
-                    {"severity": "critical", "description": "c"},
-                    {"severity": "minor", "description": "m"},
-                ]
-            ),
-        )
+        r = build_verification_result([], [], _stage3([
+            {"severity": "critical", "description": "c"},
+            {"severity": "minor", "description": "m"},
+        ]))
         assert len(r["findings"]) == 2
         assert len(r["blocking_issues"]) == 1  # critical subset only
 
@@ -109,18 +90,16 @@ class TestMechanicalGate:
 
     def test_flag_off_no_mechanical(self, monkeypatch):
         monkeypatch.delenv("LLM_COUNCIL_STRUCTURED_FINDINGS", raising=False)
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "critical", "description": "c"}])
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "critical", "description": "c"}]))
         assert r["diagnostics"]["verdict_source"] == "legacy"
         assert r["findings"] == []
 
     def test_355_regression_no_fabricated_criticals_on_fallback(self, monkeypatch):
         # Approval prose on the fallback path must not fabricate blocking issues.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], {"response": "The critical issues have all been resolved. Looks great."}
-        )
+        r = build_verification_result([], [], {
+            "response": "The critical issues have all been resolved. Looks great."})
         # No parseable JSON ⇒ fallback ⇒ legacy path; a pass has no blocking.
         assert r["diagnostics"]["verdict_source"] == "legacy"
 
@@ -128,41 +107,32 @@ class TestMechanicalGate:
 class TestC4ConsistencyAndTelemetry:
     def test_severity_distribution_emitted(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [],
-            [],
-            _stage3(
-                [
-                    {"severity": "critical", "description": "c"},
-                    {"severity": "minor", "description": "m1"},
-                    {"severity": "minor", "description": "m2"},
-                ]
-            ),
-        )
+        r = build_verification_result([], [], _stage3([
+            {"severity": "critical", "description": "c"},
+            {"severity": "minor", "description": "m1"},
+            {"severity": "minor", "description": "m2"},
+        ]))
         assert r["diagnostics"]["findings_by_severity"] == {"critical": 1, "minor": 2}
 
     def test_invariant_does_not_fire_on_fail(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "critical", "description": "c"}])
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "critical", "description": "c"}]))
         assert r["verdict"] == "fail"
         assert r["diagnostics"].get("verdict_evidence_mismatch") is None
 
     def test_invariant_does_not_fire_on_pass(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "minor", "description": "m"}]), confidence_threshold=0.0
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.0)
         assert r["verdict"] == "pass"
         assert r["diagnostics"].get("verdict_evidence_mismatch") is None
 
     def test_invariant_does_not_fire_on_softened_unclear(self, monkeypatch):
         # unclear (softened pass, no critical) is consistent — not a mismatch.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "minor", "description": "m"}]), confidence_threshold=0.99
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
         assert r["verdict"] == "unclear"
         assert r["diagnostics"].get("verdict_evidence_mismatch") is None
 
@@ -170,9 +140,8 @@ class TestC4ConsistencyAndTelemetry:
 class TestC5InnerVerdict:
     def test_softened_unclear_carries_inner_verdict_mechanical(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "minor", "description": "m"}]), confidence_threshold=0.99
-        )
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
         assert r["verdict"] == "unclear"
         d = r["diagnostics"]
         assert d["inner_verdict"] == "pass"
@@ -181,18 +150,16 @@ class TestC5InnerVerdict:
 
     def test_no_inner_verdict_when_not_softened(self, monkeypatch):
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result(
-            [], [], _stage3([{"severity": "critical", "description": "c"}])
-        )  # fail, no softening
+        r = build_verification_result([], [], _stage3(
+            [{"severity": "critical", "description": "c"}]))  # fail, no softening
         assert r["verdict"] == "fail"
         assert r["diagnostics"].get("inner_verdict") is None
 
     def test_inner_verdict_on_legacy_path(self, monkeypatch):
         # Softening on the legacy (flag-off) path also records inner state.
         monkeypatch.delenv("LLM_COUNCIL_STRUCTURED_FINDINGS", raising=False)
-        r = build_verification_result(
-            [], [], _stage3([], verdict="approved"), confidence_threshold=0.99
-        )
+        r = build_verification_result([], [], _stage3([], verdict="approved"),
+                                      confidence_threshold=0.99)
         # legacy verdict path: extract_verdict_from_synthesis; if it softens,
         # inner_verdict is recorded.
         if r["verdict"] == "unclear":
@@ -204,16 +171,9 @@ class TestC5ConfidenceConsistency:
         # chairman "approved @ 0.9" but a critical finding ⇒ mechanical FAIL;
         # the reported confidence must track the FAIL, not the discarded 0.9.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        stage3 = {
-            "response": __import__("json").dumps(
-                {
-                    "verdict": "approved",
-                    "confidence": 0.9,
-                    "rationale": "r",
-                    "findings": [{"severity": "critical", "description": "boom"}],
-                }
-            )
-        }
+        stage3 = {"response": __import__("json").dumps({
+            "verdict": "approved", "confidence": 0.9, "rationale": "r",
+            "findings": [{"severity": "critical", "description": "boom"}]})}
         r = build_verification_result([], [], stage3)
         assert r["verdict"] == "fail"
         # confidence is the recomputed agreement value, not the chairman's 0.9.

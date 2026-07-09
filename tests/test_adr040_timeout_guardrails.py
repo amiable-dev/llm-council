@@ -56,9 +56,7 @@ class TestStage2TierContractFix:
             {"model": "model-b", "response": "Answer B"},
         ]
 
-        with patch(
-            "llm_council.council_stages.query_models_parallel", new_callable=AsyncMock
-        ) as mock_qmp:
+        with patch("llm_council.council_stages.query_models_parallel", new_callable=AsyncMock) as mock_qmp:
             mock_qmp.return_value = {}
 
             await stage2_collect_rankings("test query", stage1_results, timeout=45.0)
@@ -79,9 +77,7 @@ class TestStage2TierContractFix:
             {"model": "model-a", "response": "Answer A"},
         ]
 
-        with patch(
-            "llm_council.council_stages.query_models_parallel", new_callable=AsyncMock
-        ) as mock_qmp:
+        with patch("llm_council.council_stages.query_models_parallel", new_callable=AsyncMock) as mock_qmp:
             mock_qmp.return_value = {}
 
             await stage2_collect_rankings("test query", stage1_results, models=custom_models)
@@ -101,9 +97,7 @@ class TestStage2TierContractFix:
         ]
 
         with (
-            patch(
-                "llm_council.council_stages.query_models_parallel", new_callable=AsyncMock
-            ) as mock_qmp,
+            patch("llm_council.council_stages.query_models_parallel", new_callable=AsyncMock) as mock_qmp,
             patch("llm_council.council._get_council_models") as mock_gcm,
         ):
             mock_gcm.return_value = ["default/model-1", "default/model-2"]
@@ -140,9 +134,7 @@ class TestStage3TimeoutFix:
         stage1_results = [{"model": "m1", "response": "Answer"}]
         stage2_results = [{"model": "m1", "ranking": "ranked"}]
 
-        with patch(
-            "llm_council.council_stages.query_model_with_status", new_callable=AsyncMock
-        ) as mock_qm:
+        with patch("llm_council.council_stages.query_model_with_status", new_callable=AsyncMock) as mock_qm:
             mock_qm.return_value = {
                 "content": "Synthesis",
                 "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
@@ -887,9 +879,7 @@ class TestStage2PerModelProgress:
             {"model": "model-a", "response": "Answer A"},
         ]
 
-        with patch(
-            "llm_council.council_stages.query_models_parallel", new_callable=AsyncMock
-        ) as mock_qmp:
+        with patch("llm_council.council_stages.query_models_parallel", new_callable=AsyncMock) as mock_qmp:
             mock_qmp.return_value = {}
 
             await stage2_collect_rankings("test query", stage1_results, models=["model-x"])

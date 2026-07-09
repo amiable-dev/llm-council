@@ -23,7 +23,6 @@ SOURCE_PATTERN = re.compile(r"^[A-Za-z0-9._@/\-+]{1,200}$")
 # since ids only need to disambiguate duplicate sources.
 EVIDENCE_ID_PATTERN = re.compile(r"^[A-Za-z0-9._\-]{1,64}$")
 
-
 class EvidenceItem(BaseModel):
     """Pre-computed analysis output from an upstream tool (ADR-042).
 
@@ -465,3 +464,5 @@ def _verdict_to_exit_code(verdict: str) -> int:
         return 1
     else:  # unclear
         return 2
+
+

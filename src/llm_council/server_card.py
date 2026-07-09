@@ -26,7 +26,9 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-SERVER_CARD_SCHEMA_URL = "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json"
+SERVER_CARD_SCHEMA_URL = (
+    "https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json"
+)
 META_NAMESPACE = "dev.amiable.llm-council"
 
 _REPO_URL = "https://github.com/amiable-dev/llm-council"
@@ -84,7 +86,8 @@ def build_server_card() -> Dict[str, Any]:
         "title": "LLM Council",
         # RC schema caps description at 100 chars.
         "description": (
-            "Multi-model deliberation council with anonymized peer review, " "exposed as MCP tools."
+            "Multi-model deliberation council with anonymized peer review, "
+            "exposed as MCP tools."
         ),
         "version": _get_version(),
         "websiteUrl": _REPO_URL,

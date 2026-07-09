@@ -37,10 +37,7 @@ class TestCardShape:
         assert card["$schema"] == SERVER_CARD_SCHEMA_URL
         assert card["name"] == "io.github.amiable-dev/llm-council"
         assert isinstance(card["version"], str) and card["version"]
-        assert (
-            "deliberation" in card["description"].lower()
-            or "council" in card["description"].lower()
-        )
+        assert "deliberation" in card["description"].lower() or "council" in card["description"].lower()
 
     def test_validates_against_rc_schema(self):
         _validate_against_rc_schema(build_server_card())
@@ -88,7 +85,9 @@ class TestHttpEndpoints:
 
         return TestClient(app)
 
-    @pytest.mark.parametrize("path", ["/.well-known/mcp/server-card.json", "/server-card"])
+    @pytest.mark.parametrize(
+        "path", ["/.well-known/mcp/server-card.json", "/server-card"]
+    )
     def test_served_at_discovery_paths(self, client, path):
         resp = client.get(path)
         assert resp.status_code == 200

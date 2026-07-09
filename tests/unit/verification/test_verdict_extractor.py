@@ -55,7 +55,9 @@ class TestExtractBlockingIssuesHandlesNone:
         assert extract_blocking_issues(stage3) == []
 
     def test_issues_still_extracted_from_text(self):
-        issues = extract_blocking_issues({"response": "CRITICAL: null deref in foo.py:10"})
+        issues = extract_blocking_issues(
+            {"response": "CRITICAL: null deref in foo.py:10"}
+        )
         assert len(issues) == 1
         assert issues[0]["severity"] == "critical"
 
@@ -107,10 +109,7 @@ class TestStructuredVerdictPreferred:
             )
         }
         result = build_verification_result(
-            [],
-            [],
-            stage3,
-            confidence_threshold=0.7,
+            [], [], stage3, confidence_threshold=0.7,
             verdict_result=_binary("approved", 0.95),
         )
         assert result["verdict"] == "pass"
@@ -120,20 +119,14 @@ class TestStructuredVerdictPreferred:
     def test_rejected_verdict_yields_fail(self):
         stage3 = {"response": "Rejected.\n- **CRITICAL**: data loss in sync.py:9"}
         result = build_verification_result(
-            [],
-            [],
-            stage3,
-            verdict_result=_binary("rejected", 0.9),
+            [], [], stage3, verdict_result=_binary("rejected", 0.9),
         )
         assert result["verdict"] == "fail"
         assert any(i["severity"] == "critical" for i in result["blocking_issues"])
 
     def test_approved_low_confidence_downgrades_to_unclear(self):
         result = build_verification_result(
-            [],
-            [],
-            {"response": "approved"},
-            confidence_threshold=0.7,
+            [], [], {"response": "approved"}, confidence_threshold=0.7,
             verdict_result=_binary("approved", 0.5),
         )
         assert result["verdict"] == "unclear"
@@ -146,8 +139,6 @@ class TestStructuredVerdictPreferred:
             {"rubric_scores": {"accuracy": 9, "completeness": 8, "clarity": 9}},
         ]
         result = build_verification_result(
-            [],
-            stage2,
-            {"response": "The implementation is APPROVED."},
+            [], stage2, {"response": "The implementation is APPROVED."},
         )
         assert result["verdict"] == "pass"

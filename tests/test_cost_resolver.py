@@ -341,7 +341,9 @@ class TestCachePriceClasses:
         import yaml
         from pathlib import Path
 
-        reg = yaml.safe_load(Path("src/llm_council/models/registry.yaml").read_text())
+        reg = yaml.safe_load(
+            Path("src/llm_council/models/registry.yaml").read_text()
+        )
         models = {m["id"]: m for m in reg["models"]}
         opus = models["anthropic/claude-opus-4.8"]["pricing"]
         assert opus["cache_read"] == round(opus["prompt"] * 0.1, 8)

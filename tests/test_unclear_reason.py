@@ -22,11 +22,8 @@ class TestDeriveUnclearReason:
         assert derive_unclear_reason("unclear", {}, timeout_fired=True) == "timeout"
 
     def test_infra_failure_from_stage3_error_status(self):
-        stage3 = {
-            "response": "Error: ...",
-            "error_status": "auth_error",
-            "error_detail": "Payment required (402)",
-        }
+        stage3 = {"response": "Error: ...", "error_status": "auth_error",
+                  "error_detail": "Payment required (402)"}
         assert derive_unclear_reason("unclear", stage3) == "infra_failure"
 
     def test_low_confidence_otherwise(self):

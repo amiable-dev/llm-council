@@ -31,9 +31,7 @@ class TestRequestTimeKey:
     async def test_key_resolved_at_request_time_honors_byok(self, monkeypatch):
         # No explicit key -> resolve via get_api_key at REQUEST time (so a
         # request-scoped BYOK key is honored, not a value frozen at import).
-        monkeypatch.setattr(
-            gw_mod, "get_api_key", lambda p: "reqkey" if p == "openrouter" else None
-        )
+        monkeypatch.setattr(gw_mod, "get_api_key", lambda p: "reqkey" if p == "openrouter" else None)
         captured = {}
 
         async def _post(url, headers=None, json=None):
