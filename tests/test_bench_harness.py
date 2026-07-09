@@ -197,6 +197,31 @@ class TestRun:
         assert len(run.results) == 2
 
     @pytest.mark.asyncio
+    async def test_max_usd_zero_short_circuits_before_any_item(self, tmp_path):
+        # #511 acceptance: --max-usd 0 (or negative) must spend $0 and abort
+        # immediately — the top-of-loop check (cap_charged=0.0 >= cap<=0) was
+        # already correct by the time this ticket was picked up; this locks
+        # it in as a regression test rather than "fixing" a non-defect.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        called = []
+
+        async def runner(prompt):
+            called.append(prompt)
+            return _fake_result("hello")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs",
+            council_runner=runner, max_usd=0.0,
+        )
+        assert called == []  # zero spend — the runner is never invoked
+        assert run.items_run == 0
+        assert run.exit_code == 2
+        assert run.aborted and "per_run_cap" in run.aborted
+
+    @pytest.mark.asyncio
     async def test_final_item_overshoot_not_silent_exit0(self, tmp_path):
         # #510/#511 (Council critical): the between-item cap check never sees
         # an overshoot caused by the FINAL item — a 1-item run over cap used to

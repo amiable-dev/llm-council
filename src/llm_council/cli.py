@@ -85,6 +85,17 @@ def bench_command(
                 sys.stdout.write(f"Unknown matrix config: {name}\n")
                 return 2
         items_filter = [i.strip() for i in items.split(",")] if items else None
+        # Shown BEFORE spending (#511 acceptance): max_usd is now the TOTAL
+        # ceiling shared across every config, not a per-config cap — make
+        # that bound visible up front rather than only discoverable by
+        # reading each row's cost after the fact.
+        from .bench.harness import bench_max_usd
+
+        effective_budget = max_usd if max_usd is not None else bench_max_usd()
+        sys.stdout.write(
+            f"Matrix budget: ${effective_budget:.2f} total across "
+            f"{len(matrix_configs)} config(s)\n"
+        )
         rows = asyncio.run(
             run_matrix(
                 matrix_configs,
@@ -322,7 +333,7 @@ def main():
     )
     bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1", help="Dataset directory (default: bench/dataset/v1)")
     bench_parser.add_argument("--items", type=str, default=None, help="Comma-separated item ids to run (default: all)")
-    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd", help="Per-run spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30)")
+    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd", help="Spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30). For `run`: per-run cap. For `matrix` (#511): TOTAL shared across every config, not per-config — a config starting with zero budget remaining is skipped.")
     bench_parser.add_argument("--set", action="store_true", dest="set_baseline_flag",
                               help="(baseline) write the snapshot")
     bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format", help="Report format (default: md)")

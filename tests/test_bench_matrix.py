@@ -102,6 +102,43 @@ class TestMatrix:
         assert by_name["council"]["pass_rate"] == 1.0
 
     @pytest.mark.asyncio
+    async def test_matrix_wide_budget_shared_across_configs(self, tmp_path):
+        # #511: max_usd is the TOTAL across every config, not per-config — the
+        # old behaviour passed the SAME cap to each config, so N configs
+        # could spend up to N x cap in one invocation. 3 configs at $1/item,
+        # budget $2 total: only the first 2 may spend; the 3rd must be
+        # skipped BEFORE it runs (its runner never called), not run-then-
+        # capped.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        call_log = []
+
+        def make_runner(name):
+            async def runner(prompt):
+                call_log.append(name)
+                return _result("hello", cost=1.0)
+            return runner
+
+        configs = [
+            MatrixConfig(name="one", kind="solo", runner=make_runner("one")),
+            MatrixConfig(name="two", kind="solo", runner=make_runner("two")),
+            MatrixConfig(name="three", kind="solo", runner=make_runner("three")),
+        ]
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
+        assert call_log == ["one", "two"]  # "three"'s runner never invoked
+        by_name = {r["config"]: r for r in rows}
+        assert by_name["one"]["cost_usd"] == 1.0
+        assert by_name["two"]["cost_usd"] == 1.0
+        assert by_name["three"]["items_run"] == 0
+        assert "matrix_budget_exhausted" in by_name["three"]["aborted"]
+        total_spent = sum(r["cost_usd"] for r in rows)
+        assert total_spent <= 2.0  # the whole point: bounded, not N x cap
+
+    @pytest.mark.asyncio
     async def test_pass_rate_excludes_infra_errors_from_denominator(self, tmp_path):
         # #507 follow-through (Council round-8 finding, in-diff): an
         # infra-errored item must not deflate pass_rate — items_scored

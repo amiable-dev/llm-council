@@ -113,22 +113,61 @@ async def run_matrix(
     max_usd: Optional[float] = None,
     items_filter: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """Run every configuration; each gets its own capped bench run.
+    """Run every configuration against a SHARED matrix-wide budget (#511).
+
+    ``max_usd`` is the TOTAL ceiling across every config, not a per-config
+    cap: passing the same cap to each of N configs (the old behaviour) could
+    spend up to N times the intended budget in one invocation, with only the
+    monthly guard bounding the total, and only between separate invocations.
+    Each config's own cap is now the REMAINING budget when it starts, so the
+    matrix as a whole can never exceed ``max_usd`` (bench_max_usd() when
+    unset). A config starting with zero (or negative, from float rounding)
+    remaining budget is skipped entirely rather than run — it would abort on
+    its own first item anyway (harness's own cap<=0 short-circuit), but
+    skipping makes the reason explicit in that config's row instead of a
+    bare zero-item aborted result.
 
     A config whose runner errors on every item simply scores 0 — one broken
     configuration never aborts the rest of the matrix.
     """
+    from .harness import bench_max_usd
+
+    total_budget = max_usd if max_usd is not None else bench_max_usd()
+    spent = 0.0
     rows: List[Dict[str, Any]] = []
     for config in configs:
+        remaining = round(total_budget - spent, 6)
+        if remaining <= 0:
+            rows.append(
+                {
+                    "config": config.name,
+                    "kind": config.kind,
+                    "items_run": 0,
+                    "pass_rate": 0.0,
+                    "cost_usd": 0.0,
+                    "cost_known": False,
+                    "quality_per_dollar": None,
+                    "aborted": (
+                        f"matrix_budget_exhausted: ${spent:.2f} of ${total_budget:.2f} "
+                        "total already spent by earlier configs — skipped, not run"
+                    ),
+                }
+            )
+            continue
         runner = config.runner or _default_runner(config)
         run = await run_bench(
             dataset_dir=dataset_dir,
             runs_dir=runs_dir,
-            max_usd=max_usd,
+            max_usd=remaining,
             items_filter=items_filter,
             council_runner=runner,
             ignore_score_floor=(config.kind == "solo"),
         )
+        # cap_charged_usd (actuals + conservative unknown-cost charges), not
+        # total_cost_usd — same convention as the monthly ledger (#439 r2/r3):
+        # an unknown-cost config must still count against the shared budget,
+        # not silently look free to the configs that follow it.
+        spent = round(spent + run.cap_charged_usd, 6)
         # Consistent with BenchRun.exit_code (#507): pass rate excludes
         # council/infra-errored items, which never had a chance to score — an
         # infra-heavy config must not look artificially worse in the
