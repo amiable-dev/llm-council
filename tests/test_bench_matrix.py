@@ -101,6 +101,58 @@ class TestMatrix:
         assert by_name["bad"]["pass_rate"] == 0.0
         assert by_name["council"]["pass_rate"] == 1.0
 
+    @pytest.mark.asyncio
+    async def test_config_validation_error_does_not_exhaust_budget(self, tmp_path):
+        # Round 5 review, against MY OWN round-3 fix: a config NAME TYPO is
+        # caught by _default_runner BEFORE run_bench is ever invoked — ZERO
+        # spend occurred, known for certain (not just assumed). Treating it
+        # like a genuine mid-run_bench failure (round 3's conservative
+        # spent=total_budget) was itself a bug: one config's typo would
+        # silently skip every OTHER config over $0 actually spent.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def good(prompt):
+            return _result("hello", cost=0.05)
+
+        configs = [
+            MatrixConfig(name="typo-no-colon", kind="solo"),  # no runner override
+            MatrixConfig(name="good", kind="solo", runner=good),
+        ]
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
+        by_name = {r["config"]: r for r in rows}
+        assert "config_error" in by_name["typo-no-colon"]["aborted"]
+        assert by_name["typo-no-colon"]["cap_charged_usd"] == 0.0
+        # The SUBSEQUENT config must run normally — not skipped as
+        # "budget exhausted" over a typo that spent nothing.
+        assert by_name["good"]["items_run"] == 1
+        assert by_name["good"]["cost_usd"] == 0.05
+        assert by_name["good"].get("aborted") in (None, "")
+
+    @pytest.mark.asyncio
+    async def test_solo_runner_none_response_marks_infra_not_empty_pass(
+        self, tmp_path, monkeypatch
+    ):
+        # Round 5 review: query_model_with_status returns None on failure
+        # (timeout/API error, graceful degradation). Silently defaulting to
+        # an empty-but-"successful"-looking result would mask an infra
+        # failure as a genuine quality miss. Must use the SAME
+        # metadata.status=="failed" convention #507 established.
+        import llm_council.gateway_adapter as gw
+        from llm_council.bench.matrix import _default_runner
+
+        async def failing(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr(gw, "query_model_with_status", failing)
+
+        runner = _default_runner(MatrixConfig(name="solo:some-model", kind="solo"))
+        result = await runner("q")
+        assert result["metadata"]["status"] == "failed"
+
     def test_solo_missing_colon_raises_explicit_value_error(self):
         # Round 3 review: an explicit, clear message instead of a bare
         # "list index out of range" IndexError.

@@ -75,9 +75,20 @@ def _default_runner(config: MatrixConfig) -> Callable[..., Any]:
             response = await query_model_with_status(
                 model, [{"role": "user", "content": prompt}], timeout=120.0
             )
-            usage = (response or {}).get("usage") or {}
+            if response is None:
+                # query_model_with_status returns None on failure (timeout,
+                # API error — graceful degradation per CLAUDE.md's Error
+                # handling policy). Round 5 review: silently defaulting to an
+                # empty-but-"successful"-looking synthesis/cost here would
+                # mask an infra failure as a genuine (if poor) quality result
+                # — harness's check_envelope would score it as a real miss.
+                # Use the SAME metadata.status=="failed" convention #507
+                # established for the council path, so it's correctly
+                # classified as an infra error (is_infra=True), not drift.
+                return {"synthesis": "", "metadata": {"status": "failed"}}
+            usage = response.get("usage") or {}
             return {
-                "synthesis": (response or {}).get("content") or "",
+                "synthesis": response.get("content") or "",
                 "metadata": {
                     "aggregate_rankings": [],
                     "usage": {
@@ -170,13 +181,38 @@ async def run_matrix(
         try:
             # _default_runner validates config.kind and parses config.name
             # (e.g. "solo:<model>") EAGERLY, before any item runs — a
-            # malformed name (no colon) or an unknown kind raises here, not
-            # inside harness's own per-item try/except. Uncaught, that would
-            # crash the WHOLE matrix mid-run and discard already-PAID-FOR
-            # results from every earlier config (round 1 review) — exactly
-            # the failure mode the docstring promises never happens ("one
-            # broken configuration never aborts the rest of the matrix").
+            # malformed name (no colon) or an unknown kind raises HERE,
+            # before run_bench is ever invoked. Uncaught, that would crash
+            # the WHOLE matrix mid-run and discard already-PAID-FOR results
+            # from every earlier config (round 1 review) — exactly the
+            # failure mode the docstring promises never happens ("one broken
+            # configuration never aborts the rest of the matrix").
             runner = config.runner or _default_runner(config)
+        except Exception as exc:
+            # Round 5 review, against MY OWN round-3 fix: this branch is
+            # UNREACHED run_bench — genuinely ZERO spend occurred (a config
+            # NAME TYPO never gets the chance to spend anything). Treating it
+            # the same as a mid-run_bench failure (round 3's conservative
+            # spent=total_budget) was itself a bug: one config's typo would
+            # silently skip every OTHER config over $0 actually spent — not
+            # much better than the pre-round-1 crash from the user's point of
+            # view. Only a genuine run_bench failure (below) needs the
+            # conservative worst-case charge.
+            rows.append(
+                {
+                    "config": config.name,
+                    "kind": config.kind,
+                    "items_run": 0,
+                    "pass_rate": 0.0,
+                    "cost_usd": 0.0,
+                    "cost_known": False,
+                    "cap_charged_usd": 0.0,  # nothing was spent — this is known, not assumed
+                    "quality_per_dollar": None,
+                    "aborted": f"config_error: {exc}",
+                }
+            )
+            continue
+        try:
             run = await run_bench(
                 dataset_dir=dataset_dir,
                 runs_dir=runs_dir,
@@ -195,9 +231,9 @@ async def run_matrix(
             # have consumed the entire remaining budget) rather than zero —
             # same conservative-charge philosophy as bench_unknown_item_usd
             # elsewhere in this epic — so a genuinely-unknown spend can never
-            # let a LATER config overspend on top of it.
-            # The amount conservatively treated as consumed by this failing
-            # config is whatever budget remained when it started.
+            # let a LATER config overspend on top of it. Unlike the
+            # _default_runner branch above, run_bench WAS actually invoked
+            # here, so "unknown, possibly real" is the honest state, not "zero".
             exhausted = remaining
             spent = total_budget
             rows.append(
