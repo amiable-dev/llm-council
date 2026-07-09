@@ -565,10 +565,18 @@ def compare_to_baseline(
         return {"baseline": None}
     regressions = []
     for r in run.results:
+        if r.is_infra:
+            # A council/infra error is NOT a quality regression (#507) — an
+            # `ok=False` infra item would otherwise show up as a false
+            # "regression vs baseline" here, exactly the drift-vs-infra
+            # conflation #507 exists to prevent.
+            continue
         base = baseline.get("items", {}).get(r.item_id)
         if base and base.get("ok") and not r.ok:
             regressions.append(r.item_id)
-    pass_rate = round(run.items_passed / run.items_run, 3) if run.items_run else None
+    # Consistent with exit_code (#507): pass rate excludes infra-errored
+    # items, which never had a chance to score.
+    pass_rate = round(run.items_passed / run.items_scored, 3) if run.items_scored else None
     return {
         "baseline": baseline.get("created_at"),
         "baseline_pass_rate": baseline.get("pass_rate"),

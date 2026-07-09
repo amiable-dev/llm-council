@@ -549,6 +549,33 @@ class TestBaseline:
         assert cmp == {"baseline": None}
         assert "No committed baseline" in format_report(run, cmp)
 
+    @pytest.mark.asyncio
+    async def test_infra_error_not_reported_as_regression(self, tmp_path):
+        # Council round-8 finding (in-diff, #507 follow-through): an item
+        # that previously passed but now infra-errors must NOT show up as a
+        # "regression" — that would re-conflate infra with quality drift,
+        # exactly what #507 exists to prevent.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def good(prompt):
+            return _fake_result("hello")
+
+        async def erroring(prompt):
+            raise RuntimeError("gateway down")
+
+        base_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=good
+        )
+        bp = set_baseline(base_run, tmp_path / "baseline.json")
+        infra_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs2", council_runner=erroring
+        )
+        cmp = compare_to_baseline(infra_run, bp)
+        assert cmp["regressions"] == []  # NOT ["a"]
+        assert cmp["pass_rate"] is None  # items_scored == 0
+
 
 class TestCouncilRound1:
     @pytest.mark.asyncio
