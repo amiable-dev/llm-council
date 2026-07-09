@@ -205,7 +205,10 @@ async def run_matrix(
                     "items_run": 0,
                     "pass_rate": 0.0,
                     "cost_usd": 0.0,
-                    "cost_known": False,
+                    # Round 6 review: $0 is KNOWN with certainty here (the
+                    # config never ran), not "unknown" — cost_known means "do
+                    # we have a reliable figure", and we do.
+                    "cost_known": True,
                     "cap_charged_usd": 0.0,  # nothing was spent — this is known, not assumed
                     "quality_per_dollar": None,
                     "aborted": f"config_error: {exc}",
@@ -235,7 +238,13 @@ async def run_matrix(
             # _default_runner branch above, run_bench WAS actually invoked
             # here, so "unknown, possibly real" is the honest state, not "zero".
             exhausted = remaining
-            spent = total_budget
+            # += exhausted, not "= total_budget" (round 6 review) — same
+            # accumulator pattern as the success path below, even though the
+            # arithmetic is equivalent here (spent + remaining == total_budget
+            # by construction): a future edit that adds another accumulation
+            # site is less likely to reintroduce a divergent "hardcode the
+            # total" pattern if there's only ever one style to follow.
+            spent = round(spent + exhausted, 6)
             rows.append(
                 {
                     "config": config.name,
