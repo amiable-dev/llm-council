@@ -25,7 +25,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -136,6 +136,11 @@ class ItemResult:
     cost_usd: float = 0.0
     cost_known: bool = False
     latency_ms: int = 0
+    # True when this item's failure is a council/infra error (runner raised, or
+    # the council itself reported status="failed" — no responses/no synthesis),
+    # not a genuine envelope/quality miss (#507). Keeps a rate-limit/billing
+    # lapse from reading as "quality collapsed".
+    is_infra: bool = False
 
 
 @dataclass
@@ -156,13 +161,32 @@ class BenchRun:
     # set_baseline must refuse a filtered run so the baseline never silently
     # loses coverage of the omitted items.
     filtered: bool = False
+    # Count of items whose failure was a council/infra error, not a genuine
+    # envelope miss (#507) — runner raised, or council reported status="failed"
+    # (no responses / no synthesis). Kept separate so a rate-limit/billing
+    # lapse can never read as "quality collapsed".
+    infra_errors: int = 0
     results: List[ItemResult] = field(default_factory=list)
+
+    @property
+    def items_scored(self) -> int:
+        """Items that actually ran through envelope scoring — excludes
+        infra-errored items, which never produced a scoreable result."""
+        return self.items_run - self.infra_errors
 
     @property
     def exit_code(self) -> int:
         if self.aborted:
             return EXIT_ABORTED
-        if self.items_passed < self.items_run:
+        # items_scored == 0 with items_run > 0 means EVERY attempted item was
+        # an infra error — an infra/abort outcome, never a green pass (0 < 0
+        # is False) and never drift (#507). _run_items already sets `aborted`
+        # for this case, so `self.aborted` above should already catch it; this
+        # is a defensive second layer in case a caller constructs a BenchRun
+        # directly without going through _run_items.
+        if self.items_run > 0 and self.items_scored == 0:
+            return EXIT_ABORTED
+        if self.items_passed < self.items_scored:
             return EXIT_DRIFT
         return EXIT_OK
 
@@ -195,21 +219,30 @@ def _token_in_text(token: str, text: str) -> bool:
 
     A bare substring test (the old behaviour) false-positives: ``"major"``
     matched ``"majority"``, ``"66"`` matched ``"1966"`` — a wrong answer could
-    pass the envelope, silently weakening the drift guard. We anchor with ``\\b``
-    only at edges adjacent to a word character, so punctuation-only tokens
-    (``"?"``) and dotted tokens (``"os.system"``) still match by presence
-    without an impossible boundary. ``text`` is expected pre-lowercased.
+    pass the envelope, silently weakening the drift guard. ``text`` is
+    expected pre-lowercased.
+
+    The boundary check is applied PER SIDE, conditional on whether that side's
+    edge character of the TOKEN itself is a word character (alnum/``_``) — not
+    unconditionally. A round-4 attempt at unconditional lookarounds
+    (``(?<!\\w)…(?!\\w)`` on both sides always) "fixed" a synthetic edge case
+    (``"c++"`` matching inside ``"c++abc"`` — not an actual dataset token) at
+    the cost of a real regression: ``"?"`` (a REAL v1 token,
+    ``code-sql-injection.json``) stopped matching its overwhelmingly common
+    real-world position — immediately after a word, as in "...use a
+    parameter?" — because requiring no word char *before* a trailing "?" is
+    wrong; punctuation routinely glues to the preceding word. Conditioning the
+    boundary on the token's own edge character restores that: ``"major"``/
+    ``"66"`` (word-char edges) get boundaries on both sides; ``"?"``
+    (punctuation edge) gets none and matches anywhere, exactly as real usage
+    needs.
     """
     t = token.lower()
     if not t:
         return False
-    # Lookarounds instead of \b so tokens whose edge char is non-word
-    # (``"?"``, ``"c++"``) are still bounded correctly: require no word char
-    # immediately adjacent on either side. \b would silently drop the boundary
-    # on a punctuation edge, letting ``"c++"`` match inside ``"c++abc"``.
-    return (
-        re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", text) is not None
-    )
+    left = r"(?<!\w)" if (t[0].isalnum() or t[0] == "_") else ""
+    right = r"(?!\w)" if (t[-1].isalnum() or t[-1] == "_") else ""
+    return re.search(left + re.escape(t) + right, text) is not None
 
 
 def check_envelope(
@@ -325,6 +358,10 @@ async def run_bench(
         total_cost_usd=0.0,
         cost_known=False,
         filtered=bool(items_filter),
+        # Round 11 review: set immediately, not only at the end of
+        # _run_items — a monthly-guard abort below returns before items ever
+        # run, and the effective cap should still be visible in the report.
+        cap_usd=cap,
     )
 
     if council_runner is None:
@@ -333,20 +370,27 @@ async def run_bench(
         async def council_runner(prompt: str) -> Dict[str, Any]:  # pragma: no cover
             return await run_council_with_fallback(prompt, bypass_cache=True)
 
+    # Resolve ONCE and reuse everywhere below (round 11 review: passing the
+    # raw, possibly-None `runs_dir` to month_to_date_spend/_run_items relied
+    # on each callee re-deriving the same default independently — harmless
+    # today since they use the identical fallback, but a maintainability trap
+    # if that ever drifts).
     resolved_runs_dir = runs_dir if runs_dir is not None else DEFAULT_RUNS_DIR
     # Hold the monthly-guard lock across check-through-persist (#516): without
     # this, two concurrent invocations can both read the same month-to-date
     # spend, both pass the guard, then both write — jointly exceeding the cap.
     async with _monthly_guard_lock(resolved_runs_dir):
-        mtd = month_to_date_spend(runs_dir)
+        mtd = month_to_date_spend(resolved_runs_dir)
         if mtd >= monthly_cap:
             run.aborted = (
                 f"monthly_guard: month-to-date bench spend ${mtd:.2f} >= "
                 f"${monthly_cap:.2f} (LLM_COUNCIL_BENCH_MONTHLY_USD)"
             )
-            _persist_run(run, runs_dir)
+            _persist_run(run, resolved_runs_dir)
             return run
-        return await _run_items(run, items, council_runner, cap, runs_dir, ignore_score_floor)
+        return await _run_items(
+            run, items, council_runner, cap, resolved_runs_dir, ignore_score_floor
+        )
 
 
 async def _run_items(
@@ -377,15 +421,20 @@ async def _run_items(
         try:
             result = await council_runner(item.prompt)
         except Exception as exc:
+            # An exception from the runner is unambiguously a council/infra
+            # error (gateway down, transport failure), never a quality
+            # signal (#507).
             run.results.append(
                 ItemResult(
                     item_id=item.id,
                     domain=item.domain,
                     ok=False,
                     failures=[f"council_error:{exc}"],
+                    is_infra=True,
                 )
             )
             run.items_run += 1
+            run.infra_errors += 1
             # An erroring item may already have spent (#439 r2): charge the
             # conservative default so failures cannot bypass the cap.
             cap_charged = round(cap_charged + bench_unknown_item_usd(), 6)
@@ -395,16 +444,28 @@ async def _run_items(
         synthesis = result.get("synthesis", "")
         score = _extract_score(result)
         cost, cost_known = _extract_cost(result)
-        # Solo matrix configs (ADR-048 P2) have no council consensus signal;
-        # min_score floors are skipped for them by explicit opt-in.
-        failures = check_envelope(
-            item, synthesis, score, apply_score_floor=not ignore_score_floor
-        )
+        # The council itself may report total failure without raising (all
+        # models errored/timed out — CLAUDE.md's graceful-degradation policy
+        # returns a result with no responses rather than an exception). That
+        # is ALSO a council/infra error, not a genuine envelope/quality miss
+        # (#507's empirically-observed rate-limit case: score_unavailable at
+        # $0.00 spend, every item failing — not a real quality regression).
+        is_infra = result.get("metadata", {}).get("status") == "failed"
+        if is_infra:
+            failures = ["council_status_failed"]
+        else:
+            # Solo matrix configs (ADR-048 P2) have no council consensus
+            # signal; min_score floors are skipped for them by explicit opt-in.
+            failures = check_envelope(
+                item, synthesis, score, apply_score_floor=not ignore_score_floor
+            )
         run.total_cost_usd = round(run.total_cost_usd + cost, 6)
         cap_charged = round(cap_charged + (cost if cost_known else bench_unknown_item_usd()), 6)
         if not cost_known:
             any_unknown = True
         run.items_run += 1
+        if is_infra:
+            run.infra_errors += 1
         if not failures:
             run.items_passed += 1
         run.results.append(
@@ -417,6 +478,7 @@ async def _run_items(
                 cost_usd=cost,
                 cost_known=cost_known,
                 latency_ms=latency_ms,
+                is_infra=is_infra,
             )
         )
 
@@ -425,6 +487,17 @@ async def _run_items(
     # reference — mark it aborted so exit is 2 and baselining refuses it (#508).
     if run.items_run == 0 and run.aborted is None:
         run.aborted = "no_items: 0 items ran (empty dataset or filter)"
+    # Every attempted item was a council/infra error (rate-limit, billing
+    # lapse, gateway down) — an infra/abort outcome, never a green pass
+    # (items_scored==0 items_passed==0 would otherwise read as OK) or a
+    # quality-drift signal (#507). A MIXED run (some infra, some genuinely
+    # scored) is NOT aborted here — its exit reflects only the
+    # genuinely-scored items via items_scored in exit_code.
+    elif run.items_run > 0 and run.items_scored == 0 and run.aborted is None:
+        run.aborted = (
+            f"infra_failure: {run.infra_errors}/{run.items_run} items errored "
+            "(council runner exception or status=failed) — not a quality signal"
+        )
     # The between-item cap check never sees an overshoot caused by the FINAL
     # item (the loop just ends), so a run pushed over cap on its last item used
     # to complete as a silent exit-0. A run that reached its spend ceiling is an
@@ -439,7 +512,9 @@ async def _run_items(
     # 'fully known' means EVERY executed item reported a cost (#439 r2).
     run.cost_known = run.items_run > 0 and not any_unknown
     run.cap_charged_usd = cap_charged
-    run.cap_usd = cap
+    # run.cap_usd is set once, in run_bench, immediately after construction
+    # (round 11 review) — visible even on a monthly-guard abort that returns
+    # before this function runs.
     _persist_run(run, runs_dir)
     return run
 
@@ -463,6 +538,34 @@ def _persist_run(run: BenchRun, runs_dir: Optional[Path] = None) -> None:
         logger.warning("bench run artefact not persisted (%s)", exc)
 
 
+def run_from_dict(data: Dict[str, Any]) -> BenchRun:
+    """Rebuild a BenchRun from a persisted run artefact (round 12 review).
+
+    The CLI (``report`` / ``baseline --set``) used to hand-list a fixed
+    subset of fields when reconstructing a ``BenchRun`` from a loaded
+    ``run-*.json``. Every field added since that whitelist was last updated —
+    ``cap_usd``, ``filtered``, ``infra_errors`` — was silently dropped on
+    reload, even though the persisted JSON (written by ``_persist_run`` via
+    ``asdict``) actually contains them. ``filtered`` defaulting back to
+    ``False`` was the worst case: it meant ``bench baseline --set`` could
+    NEVER actually refuse a filtered run once round-tripped through a
+    persisted artefact — a live bypass of #517's fix through the one code
+    path (the CLI) that exercises it. Building the kwargs from
+    ``dataclasses.fields()`` instead of a hand-maintained list means a future
+    new field is included automatically; ``exit_code`` (present in the JSON
+    payload as a computed convenience, never a constructor arg) is dropped
+    explicitly rather than by accident.
+    """
+    valid = {f.name for f in fields(BenchRun)} - {"results"}
+    kwargs: Dict[str, Any] = {k: v for k, v in data.items() if k in valid}
+    item_valid = {f.name for f in fields(ItemResult)}
+    kwargs["results"] = [
+        ItemResult(**{k: v for k, v in r.items() if k in item_valid})
+        for r in data.get("results", [])
+    ]
+    return BenchRun(**kwargs)
+
+
 def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
     """Snapshot the run as the committed baseline.
 
@@ -484,11 +587,23 @@ def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "created_at": run.started_at,
+        # Infra-errored items are excluded (round 10 review): r.ok is always
+        # False for an infra item (it has failures but no genuine envelope
+        # verdict), so baking it in as "ok: False" would permanently
+        # blindspot compare_to_baseline's regression check for that item —
+        # `if base.get("ok") and not r.ok` can never fire once base.get("ok")
+        # is frozen False, even after a REAL later regression. An absent
+        # baseline entry (None) is correctly ignored by that check instead.
         "items": {
             r.item_id: {"ok": r.ok, "score": r.score, "cost_usd": r.cost_usd}
             for r in run.results
+            if not r.is_infra
         },
-        "pass_rate": round(run.items_passed / run.items_run, 3) if run.items_run else None,
+        # Same denominator as compare_to_baseline (#507): a mixed run (not
+        # aborted, but with SOME infra-errored items — set_baseline only
+        # refuses fully-aborted/filtered runs) must not bake an
+        # infra-deflated pass_rate into the committed baseline.
+        "pass_rate": round(run.items_passed / run.items_scored, 3) if run.items_scored else None,
         "total_cost_usd": run.total_cost_usd,
     }
     path.write_text(json.dumps(payload, indent=2) + "\n")
@@ -512,10 +627,18 @@ def compare_to_baseline(
         return {"baseline": None}
     regressions = []
     for r in run.results:
+        if r.is_infra:
+            # A council/infra error is NOT a quality regression (#507) — an
+            # `ok=False` infra item would otherwise show up as a false
+            # "regression vs baseline" here, exactly the drift-vs-infra
+            # conflation #507 exists to prevent.
+            continue
         base = baseline.get("items", {}).get(r.item_id)
         if base and base.get("ok") and not r.ok:
             regressions.append(r.item_id)
-    pass_rate = round(run.items_passed / run.items_run, 3) if run.items_run else None
+    # Consistent with exit_code (#507): pass rate excludes infra-errored
+    # items, which never had a chance to score.
+    pass_rate = round(run.items_passed / run.items_scored, 3) if run.items_scored else None
     return {
         "baseline": baseline.get("created_at"),
         "baseline_pass_rate": baseline.get("pass_rate"),
@@ -532,9 +655,16 @@ def format_report(run: BenchRun, comparison: Dict[str, Any], fmt: str = "md") ->
         return json.dumps(payload, indent=2)
     lines = ["# Bench Report (ADR-048)"]
     lines.append(
-        f"Items: {run.items_passed}/{run.items_run} within envelope "
+        f"Items: {run.items_passed}/{run.items_scored} within envelope "
         f"(of {run.items_total} selected) — exit code {run.exit_code}"
     )
+    if run.infra_errors:
+        # Surfaced separately from envelope drift (#507) — routes nightly
+        # alerts to "check the gateway/billing" vs "quality regressed".
+        lines.append(
+            f"Council/infra errors: {run.infra_errors}/{run.items_run} "
+            "(NOT a quality signal — see items marked [INFRA] below)"
+        )
     cost = f"${run.total_cost_usd:.4f}" if run.cost_known else f"~${run.total_cost_usd:.4f} (cost not fully known)"
     # Show the EFFECTIVE cap (a --max-usd override), not the env default (#509).
     effective_cap = run.cap_usd if run.cap_usd is not None else bench_max_usd()
@@ -551,7 +681,7 @@ def format_report(run: BenchRun, comparison: Dict[str, Any], fmt: str = "md") ->
     else:
         lines.append("No committed baseline (run `llm-council bench baseline --set`).")
     for r in run.results:
-        marker = "PASS" if r.ok else "FAIL"
+        marker = "PASS" if r.ok else ("INFRA" if r.is_infra else "FAIL")
         detail = "" if r.ok else f" — {'; '.join(r.failures)}"
         lines.append(f"- [{marker}] {r.item_id} ({r.domain}){detail}")
     return "\n".join(lines)

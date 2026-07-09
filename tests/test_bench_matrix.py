@@ -101,6 +101,34 @@ class TestMatrix:
         assert by_name["bad"]["pass_rate"] == 0.0
         assert by_name["council"]["pass_rate"] == 1.0
 
+    @pytest.mark.asyncio
+    async def test_pass_rate_excludes_infra_errors_from_denominator(self, tmp_path):
+        # #507 follow-through (Council round-8 finding, in-diff): an
+        # infra-errored item must not deflate pass_rate — items_scored
+        # excludes it from the denominator, same as BenchRun.exit_code.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        calls = {"n": 0}
+
+        async def mixed(prompt):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("gateway down")
+            return _result("hello")
+
+        rows = await run_matrix(
+            [MatrixConfig(name="mixed", kind="solo", runner=mixed)],
+            dataset_dir=d,
+            runs_dir=tmp_path / "runs",
+            max_usd=2.0,
+        )
+        # 1 genuine pass, 1 infra error: NOT 50% (items_run) — 100% of what
+        # actually got scored.
+        assert rows[0]["pass_rate"] == 1.0
+
 
 class TestCouncilRound1:
     @pytest.mark.asyncio
