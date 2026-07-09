@@ -229,7 +229,12 @@ def format_matrix_table(rows: List[Dict[str, Any]]) -> str:
         cost = f"{r['cost_usd']:.4f}" if r["cost_known"] else f"~{r['cost_usd']:.4f} (unknown)"
         qpd = r["quality_per_dollar"]
         qpd_str = f"{qpd:.3f}" if qpd is not None else "n/a"
-        note = " (aborted)" if r.get("aborted") else ""
+        # Show the ACTUAL reason (config_error / matrix_budget_exhausted /
+        # per_run_cap / ...), not a generic "(aborted)" — the round-2 review
+        # correctly noted this silently discarded exactly the observability
+        # this session's own fixes (config_error, matrix_budget_exhausted)
+        # depend on to be useful in the table, not just the JSON.
+        note = f" ({r['aborted']})" if r.get("aborted") else ""
         lines.append(
             f"| {r['config']}{note} | {r['kind']} | {r['items_run']} "
             f"| {r['pass_rate']:.0%} | {cost} | {qpd_str} |"

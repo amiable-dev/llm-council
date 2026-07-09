@@ -148,6 +148,18 @@ class TestMatrix:
         assert by_name["council"]["cost_usd"] == 0.05
         assert "config_error" in by_name["bogus"]["aborted"]
 
+    def test_table_shows_actual_abort_reason_not_generic(self):
+        # Round 2 review: the table used to show a bare "(aborted)" suffix,
+        # discarding exactly the config_error/matrix_budget_exhausted reason
+        # this session's own fixes depend on being visible.
+        rows = [{
+            "config": "bad", "kind": "solo", "items_run": 0, "pass_rate": 0.0,
+            "cost_usd": 0.0, "cost_known": False, "quality_per_dollar": None,
+            "aborted": "config_error: bad config",
+        }]
+        table = format_matrix_table(rows)
+        assert "config_error: bad config" in table
+
     @pytest.mark.asyncio
     async def test_matrix_wide_budget_shared_across_configs(self, tmp_path):
         # #511: max_usd is the TOTAL across every config, not per-config — the
