@@ -136,6 +136,11 @@ class ItemResult:
     cost_usd: float = 0.0
     cost_known: bool = False
     latency_ms: int = 0
+    # True when this item's failure is a council/infra error (runner raised, or
+    # the council itself reported status="failed" — no responses/no synthesis),
+    # not a genuine envelope/quality miss (#507). Keeps a rate-limit/billing
+    # lapse from reading as "quality collapsed".
+    is_infra: bool = False
 
 
 @dataclass
@@ -156,13 +161,32 @@ class BenchRun:
     # set_baseline must refuse a filtered run so the baseline never silently
     # loses coverage of the omitted items.
     filtered: bool = False
+    # Count of items whose failure was a council/infra error, not a genuine
+    # envelope miss (#507) — runner raised, or council reported status="failed"
+    # (no responses / no synthesis). Kept separate so a rate-limit/billing
+    # lapse can never read as "quality collapsed".
+    infra_errors: int = 0
     results: List[ItemResult] = field(default_factory=list)
+
+    @property
+    def items_scored(self) -> int:
+        """Items that actually ran through envelope scoring — excludes
+        infra-errored items, which never produced a scoreable result."""
+        return self.items_run - self.infra_errors
 
     @property
     def exit_code(self) -> int:
         if self.aborted:
             return EXIT_ABORTED
-        if self.items_passed < self.items_run:
+        # items_scored == 0 with items_run > 0 means EVERY attempted item was
+        # an infra error — an infra/abort outcome, never a green pass (0 < 0
+        # is False) and never drift (#507). _run_items already sets `aborted`
+        # for this case, so `self.aborted` above should already catch it; this
+        # is a defensive second layer in case a caller constructs a BenchRun
+        # directly without going through _run_items.
+        if self.items_run > 0 and self.items_scored == 0:
+            return EXIT_ABORTED
+        if self.items_passed < self.items_scored:
             return EXIT_DRIFT
         return EXIT_OK
 
@@ -377,15 +401,20 @@ async def _run_items(
         try:
             result = await council_runner(item.prompt)
         except Exception as exc:
+            # An exception from the runner is unambiguously a council/infra
+            # error (gateway down, transport failure), never a quality
+            # signal (#507).
             run.results.append(
                 ItemResult(
                     item_id=item.id,
                     domain=item.domain,
                     ok=False,
                     failures=[f"council_error:{exc}"],
+                    is_infra=True,
                 )
             )
             run.items_run += 1
+            run.infra_errors += 1
             # An erroring item may already have spent (#439 r2): charge the
             # conservative default so failures cannot bypass the cap.
             cap_charged = round(cap_charged + bench_unknown_item_usd(), 6)
@@ -395,16 +424,28 @@ async def _run_items(
         synthesis = result.get("synthesis", "")
         score = _extract_score(result)
         cost, cost_known = _extract_cost(result)
-        # Solo matrix configs (ADR-048 P2) have no council consensus signal;
-        # min_score floors are skipped for them by explicit opt-in.
-        failures = check_envelope(
-            item, synthesis, score, apply_score_floor=not ignore_score_floor
-        )
+        # The council itself may report total failure without raising (all
+        # models errored/timed out — CLAUDE.md's graceful-degradation policy
+        # returns a result with no responses rather than an exception). That
+        # is ALSO a council/infra error, not a genuine envelope/quality miss
+        # (#507's empirically-observed rate-limit case: score_unavailable at
+        # $0.00 spend, every item failing — not a real quality regression).
+        is_infra = result.get("metadata", {}).get("status") == "failed"
+        if is_infra:
+            failures = ["council_status_failed"]
+        else:
+            # Solo matrix configs (ADR-048 P2) have no council consensus
+            # signal; min_score floors are skipped for them by explicit opt-in.
+            failures = check_envelope(
+                item, synthesis, score, apply_score_floor=not ignore_score_floor
+            )
         run.total_cost_usd = round(run.total_cost_usd + cost, 6)
         cap_charged = round(cap_charged + (cost if cost_known else bench_unknown_item_usd()), 6)
         if not cost_known:
             any_unknown = True
         run.items_run += 1
+        if is_infra:
+            run.infra_errors += 1
         if not failures:
             run.items_passed += 1
         run.results.append(
@@ -417,6 +458,7 @@ async def _run_items(
                 cost_usd=cost,
                 cost_known=cost_known,
                 latency_ms=latency_ms,
+                is_infra=is_infra,
             )
         )
 
@@ -425,6 +467,17 @@ async def _run_items(
     # reference — mark it aborted so exit is 2 and baselining refuses it (#508).
     if run.items_run == 0 and run.aborted is None:
         run.aborted = "no_items: 0 items ran (empty dataset or filter)"
+    # Every attempted item was a council/infra error (rate-limit, billing
+    # lapse, gateway down) — an infra/abort outcome, never a green pass
+    # (items_scored==0 items_passed==0 would otherwise read as OK) or a
+    # quality-drift signal (#507). A MIXED run (some infra, some genuinely
+    # scored) is NOT aborted here — its exit reflects only the
+    # genuinely-scored items via items_scored in exit_code.
+    elif run.items_run > 0 and run.items_scored == 0 and run.aborted is None:
+        run.aborted = (
+            f"infra_failure: {run.infra_errors}/{run.items_run} items errored "
+            "(council runner exception or status=failed) — not a quality signal"
+        )
     # The between-item cap check never sees an overshoot caused by the FINAL
     # item (the loop just ends), so a run pushed over cap on its last item used
     # to complete as a silent exit-0. A run that reached its spend ceiling is an
@@ -532,9 +585,16 @@ def format_report(run: BenchRun, comparison: Dict[str, Any], fmt: str = "md") ->
         return json.dumps(payload, indent=2)
     lines = ["# Bench Report (ADR-048)"]
     lines.append(
-        f"Items: {run.items_passed}/{run.items_run} within envelope "
+        f"Items: {run.items_passed}/{run.items_scored} within envelope "
         f"(of {run.items_total} selected) — exit code {run.exit_code}"
     )
+    if run.infra_errors:
+        # Surfaced separately from envelope drift (#507) — routes nightly
+        # alerts to "check the gateway/billing" vs "quality regressed".
+        lines.append(
+            f"Council/infra errors: {run.infra_errors}/{run.items_run} "
+            "(NOT a quality signal — see items marked [INFRA] below)"
+        )
     cost = f"${run.total_cost_usd:.4f}" if run.cost_known else f"~${run.total_cost_usd:.4f} (cost not fully known)"
     # Show the EFFECTIVE cap (a --max-usd override), not the env default (#509).
     effective_cap = run.cap_usd if run.cap_usd is not None else bench_max_usd()
@@ -551,7 +611,7 @@ def format_report(run: BenchRun, comparison: Dict[str, Any], fmt: str = "md") ->
     else:
         lines.append("No committed baseline (run `llm-council bench baseline --set`).")
     for r in run.results:
-        marker = "PASS" if r.ok else "FAIL"
+        marker = "PASS" if r.ok else ("INFRA" if r.is_infra else "FAIL")
         detail = "" if r.ok else f" — {'; '.join(r.failures)}"
         lines.append(f"- [{marker}] {r.item_id} ({r.domain}){detail}")
     return "\n".join(lines)

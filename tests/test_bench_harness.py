@@ -421,8 +421,80 @@ class TestRun:
         run = await run_bench(
             dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
         )
-        assert run.exit_code == 1
+        # #507: a run where EVERY item errored is an infra/abort outcome
+        # (exit 2), never envelope drift (exit 1) — a rate-limit/billing
+        # lapse must not read as "quality collapsed".
+        assert run.exit_code == 2
+        assert run.infra_errors == 1
+        assert run.items_scored == 0
+        assert run.aborted and "infra_failure" in run.aborted
+        assert run.results[0].is_infra is True
         assert "council_error" in run.results[0].failures[0]
+
+    @pytest.mark.asyncio
+    async def test_council_status_failed_counts_as_infra_not_drift(self, tmp_path):
+        # #507 empirically-observed case: the runner does NOT raise (graceful
+        # degradation — CLAUDE.md's "continue with whatever responses
+        # succeed" policy) but reports total failure via metadata.status.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def runner(prompt):
+            return {
+                "synthesis": "Error: All models failed to respond.",
+                "metadata": {"status": "failed"},
+            }
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
+        assert run.exit_code == 2  # infra/abort, not drift
+        assert run.infra_errors == 1
+        assert run.results[0].is_infra is True
+
+    @pytest.mark.asyncio
+    async def test_mixed_infra_and_drift_reports_both_separately(self, tmp_path):
+        # #507 acceptance: "mixed run reports both counts; drift exit
+        # reflects only genuinely-scored misses."
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")  # will infra-error
+        _write_item(d, "b")  # will genuinely fail its envelope
+
+        calls = {"n": 0}
+
+        async def runner(prompt):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("gateway down")
+            return _fake_result("wrong answer entirely")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
+        assert run.infra_errors == 1
+        assert run.items_run == 2
+        assert run.items_scored == 1  # only the genuinely-run item
+        assert run.items_passed == 0  # that one item failed its envelope
+        assert run.exit_code == 1  # DRIFT — a real miss, not infra-masked
+        assert not run.aborted  # a mixed run is not itself "aborted"
+
+    def test_format_report_surfaces_infra_errors(self):
+        from llm_council.bench.harness import BenchRun, ItemResult
+
+        run = BenchRun(
+            started_at="t", items_total=1, items_run=1, items_passed=0,
+            total_cost_usd=0.0, cost_known=False, infra_errors=1,
+            aborted="infra_failure: 1/1 items errored",
+            results=[ItemResult(
+                item_id="a", domain="f", ok=False,
+                failures=["council_error:boom"], is_infra=True,
+            )],
+        )
+        report = format_report(run, {"baseline": None}, "md")
+        assert "Council/infra errors: 1/1" in report
+        assert "[INFRA] a" in report
 
     @pytest.mark.asyncio
     async def test_run_artefact_persisted(self, tmp_path):
