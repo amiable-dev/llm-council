@@ -155,6 +155,10 @@ async def run_matrix(
                     "pass_rate": 0.0,
                     "cost_usd": 0.0,
                     "cost_known": False,
+                    # Nothing NEW consumed — this config never started at all
+                    # (distinct from the exception path, which conservatively
+                    # charges its whole remaining allotment).
+                    "cap_charged_usd": 0.0,
                     "quality_per_dollar": None,
                     "aborted": (
                         f"matrix_budget_exhausted: ${spent:.2f} of ${total_budget:.2f} "
@@ -192,6 +196,9 @@ async def run_matrix(
             # same conservative-charge philosophy as bench_unknown_item_usd
             # elsewhere in this epic — so a genuinely-unknown spend can never
             # let a LATER config overspend on top of it.
+            # The amount conservatively treated as consumed by this failing
+            # config is whatever budget remained when it started.
+            exhausted = remaining
             spent = total_budget
             rows.append(
                 {
@@ -201,6 +208,11 @@ async def run_matrix(
                     "pass_rate": 0.0,
                     "cost_usd": 0.0,
                     "cost_known": False,
+                    # Round 4 review: the row must not show cost_usd=0.0 while
+                    # the ledger silently charges the whole remaining budget
+                    # against this config elsewhere — surface the conservative
+                    # assumption explicitly instead of hiding it.
+                    "cap_charged_usd": exhausted,
                     "quality_per_dollar": None,
                     "aborted": f"config_error: {exc}",
                 }
@@ -226,6 +238,15 @@ async def run_matrix(
                 "pass_rate": pass_rate,
                 "cost_usd": run.total_cost_usd,
                 "cost_known": run.cost_known,
+                # Round 4 review: expose the guard's OWN conservative figure
+                # (actuals + unknown-cost charges) alongside the honest
+                # actual-cost figure above — they can legitimately differ
+                # (unknown-cost items charge a safety margin for the budget
+                # that isn't necessarily real spend), and that's by design
+                # (same distinction as month_to_date_spend's ledger), not a
+                # bug; showing both answers "why doesn't this add up?"
+                # instead of hiding one side of it.
+                "cap_charged_usd": run.cap_charged_usd,
                 "quality_per_dollar": quality_per_dollar(
                     pass_rate=pass_rate,
                     cost_usd=run.total_cost_usd,
@@ -235,6 +256,17 @@ async def run_matrix(
             }
         )
     return rows
+
+
+def _md_table_cell(value: str) -> str:
+    """Escape a value for embedding in a markdown table cell (round 4 review).
+
+    A `|` in an exception message (config_error's `str(exc)`) or a
+    user-supplied config name would otherwise split into extra columns and
+    corrupt the row; a newline would break it across lines. Both are
+    realistic here — `config_error` embeds an arbitrary exception message.
+    """
+    return str(value).replace("|", "\\|").replace("\n", " ").replace("\r", " ")
 
 
 def format_matrix_table(rows: List[Dict[str, Any]]) -> str:
@@ -254,10 +286,10 @@ def format_matrix_table(rows: List[Dict[str, Any]]) -> str:
         # correctly noted this silently discarded exactly the observability
         # this session's own fixes (config_error, matrix_budget_exhausted)
         # depend on to be useful in the table, not just the JSON.
-        note = f" ({r['aborted']})" if r.get("aborted") else ""
+        note = f" ({_md_table_cell(r['aborted'])})" if r.get("aborted") else ""
         lines.append(
-            f"| {r['config']}{note} | {r['kind']} | {r['items_run']} "
-            f"| {r['pass_rate']:.0%} | {cost} | {qpd_str} |"
+            f"| {_md_table_cell(r['config'])}{note} | {_md_table_cell(r['kind'])} "
+            f"| {r['items_run']} | {r['pass_rate']:.0%} | {cost} | {qpd_str} |"
         )
     lines.append("")
     lines.append(

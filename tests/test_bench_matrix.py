@@ -156,6 +156,10 @@ class TestMatrix:
         )
         by_name = {r["config"]: r for r in rows}
         assert "config_error" in by_name["broken"]["aborted"]
+        # Round 4 review: the row must not silently show cost_usd=0.0 while
+        # the ledger conservatively charges the whole remaining budget
+        # elsewhere — cap_charged_usd surfaces exactly what was assumed.
+        assert by_name["broken"]["cap_charged_usd"] == 2.0
         # "good" never actually ran — the failing config conservatively
         # consumed the whole budget, exactly like a real overspend would.
         assert by_name["good"]["items_run"] == 0
@@ -208,6 +212,23 @@ class TestMatrix:
         by_name = {r["config"]: r for r in rows}
         assert by_name["council"]["cost_usd"] == 0.05
         assert "config_error" in by_name["bogus"]["aborted"]
+
+    def test_table_escapes_pipe_in_abort_reason(self):
+        # Round 4 review: a `|` in an exception message (config_error embeds
+        # str(exc) verbatim) would otherwise split into extra columns and
+        # corrupt the table's structure.
+        rows = [{
+            "config": "bad", "kind": "solo", "items_run": 0, "pass_rate": 0.0,
+            "cost_usd": 0.0, "cost_known": False, "quality_per_dollar": None,
+            "aborted": "config_error: boom | evil | injection",
+        }]
+        table = format_matrix_table(rows)
+        # Escaped (\|), not a raw column-splitting pipe: a markdown renderer
+        # treats \| as a literal character, not a cell boundary, so the row
+        # still renders as ONE config cell instead of splitting into extra
+        # columns.
+        assert "boom \\| evil \\| injection" in table
+        assert "boom | evil | injection" not in table  # the unescaped form is gone
 
     def test_table_shows_actual_abort_reason_not_generic(self):
         # Round 2 review: the table used to show a bare "(aborted)" suffix,
