@@ -25,6 +25,7 @@ from llm_council.bench import (
     load_dataset,
     month_to_date_spend,
     run_bench,
+    run_from_dict,
     set_baseline,
 )
 
@@ -770,3 +771,68 @@ class TestCouncilRound3:
         assert run.aborted
         with pytest.raises(ValueError, match="aborted"):
             set_baseline(run, tmp_path / "baseline.json")
+
+
+class TestRunFromDict:
+    """Round 12 review: the CLI's report/baseline --set handlers used to
+    hand-list a fixed BenchRun field subset when reconstructing from a
+    persisted run-*.json, silently dropping every field added since —
+    cap_usd, filtered, infra_errors. `filtered` defaulting back to False was
+    the worst case: bench baseline --set could never actually refuse a
+    filtered run once round-tripped through a persisted artefact, a live
+    bypass of #517's fix through the one path (the CLI) that exercises it.
+    run_from_dict fixes this by deriving the accepted kwargs from
+    dataclasses.fields(), not a hand-maintained list.
+    """
+
+    @pytest.mark.asyncio
+    async def test_round_trip_preserves_new_fields(self, tmp_path):
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        async def mixed(prompt):
+            return _fake_result("hello")
+
+        runs = tmp_path / "runs"
+        run = await run_bench(
+            dataset_dir=d, runs_dir=runs, council_runner=mixed,
+            items_filter=["a"], max_usd=0.42,
+        )
+        assert run.filtered is True  # sanity: the live run is correctly flagged
+
+        persisted = json.loads(next(runs.glob("*.json")).read_text())
+        reloaded = run_from_dict(persisted)
+        assert reloaded.filtered is True  # NOT silently dropped back to False
+        assert reloaded.cap_usd == 0.42
+        assert reloaded.infra_errors == 0
+
+    def test_filtered_run_still_refused_after_cli_style_round_trip(self, tmp_path):
+        # The concrete #517 regression this closes: a filtered run, persisted
+        # then reloaded exactly as the CLI does, must still be refused by
+        # set_baseline — not silently accepted because `filtered` defaulted
+        # back to False.
+        from llm_council.bench.harness import BenchRun
+
+        run = BenchRun(
+            started_at="t", items_total=2, items_run=1, items_passed=1,
+            total_cost_usd=0.01, cost_known=True, filtered=True,
+        )
+        persisted = json.loads(json.dumps({**run.__dict__, "exit_code": run.exit_code}))
+        reloaded = run_from_dict(persisted)
+        assert reloaded.filtered is True
+        with pytest.raises(ValueError, match="filtered"):
+            set_baseline(reloaded, tmp_path / "baseline.json")
+
+    def test_tolerates_unknown_future_keys(self, tmp_path):
+        # Forward-compat: a key not in the current BenchRun/ItemResult schema
+        # (e.g. read by an older install after a downgrade) is ignored rather
+        # than raising a TypeError.
+        data = {
+            "started_at": "t", "items_total": 0, "items_run": 0,
+            "items_passed": 0, "total_cost_usd": 0.0, "cost_known": False,
+            "results": [], "exit_code": 0, "some_future_field": "unused",
+        }
+        run = run_from_dict(data)
+        assert run.items_total == 0

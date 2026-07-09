@@ -25,7 +25,7 @@ import logging
 import os
 import re
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -536,6 +536,34 @@ def _persist_run(run: BenchRun, runs_dir: Optional[Path] = None) -> None:
         )
     except Exception as exc:
         logger.warning("bench run artefact not persisted (%s)", exc)
+
+
+def run_from_dict(data: Dict[str, Any]) -> BenchRun:
+    """Rebuild a BenchRun from a persisted run artefact (round 12 review).
+
+    The CLI (``report`` / ``baseline --set``) used to hand-list a fixed
+    subset of fields when reconstructing a ``BenchRun`` from a loaded
+    ``run-*.json``. Every field added since that whitelist was last updated —
+    ``cap_usd``, ``filtered``, ``infra_errors`` — was silently dropped on
+    reload, even though the persisted JSON (written by ``_persist_run`` via
+    ``asdict``) actually contains them. ``filtered`` defaulting back to
+    ``False`` was the worst case: it meant ``bench baseline --set`` could
+    NEVER actually refuse a filtered run once round-tripped through a
+    persisted artefact — a live bypass of #517's fix through the one code
+    path (the CLI) that exercises it. Building the kwargs from
+    ``dataclasses.fields()`` instead of a hand-maintained list means a future
+    new field is included automatically; ``exit_code`` (present in the JSON
+    payload as a computed convenience, never a constructor arg) is dropped
+    explicitly rather than by accident.
+    """
+    valid = {f.name for f in fields(BenchRun)} - {"results"}
+    kwargs: Dict[str, Any] = {k: v for k, v in data.items() if k in valid}
+    item_valid = {f.name for f in fields(ItemResult)}
+    kwargs["results"] = [
+        ItemResult(**{k: v for k, v in r.items() if k in item_valid})
+        for r in data.get("results", [])
+    ]
+    return BenchRun(**kwargs)
 
 
 def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
