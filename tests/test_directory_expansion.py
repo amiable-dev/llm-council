@@ -576,6 +576,21 @@ class TestConstants:
         assert "yarn.lock" in GARBAGE_FILENAMES
         assert "poetry.lock" in GARBAGE_FILENAMES
 
+    def test_lock_extension_is_text(self):
+        """#533: .lock was missing from TEXT_EXTENSIONS, so uv.lock (not in
+        GARBAGE_FILENAMES -- unlike yarn.lock/poetry.lock/etc., which are
+        deliberately excluded as noise) was silently dropped as "non-text"
+        by _is_text_file, causing target_paths=["uv.lock"] to resolve to
+        zero files and raise SnapshotResolutionError."""
+        from llm_council.verification.api import _is_garbage_file, _is_text_file
+
+        assert _is_text_file("uv.lock") is True
+        # Deny-listed lock files must still be excluded -- via
+        # _is_garbage_file, checked before _is_text_file in
+        # _expand_target_paths -- not by this change.
+        assert _is_garbage_file("yarn.lock") is True
+        assert _is_garbage_file("poetry.lock") is True
+
     def test_max_files_expansion_defined(self):
         """MAX_FILES_EXPANSION should be 100."""
         from llm_council.verification.api import MAX_FILES_EXPANSION

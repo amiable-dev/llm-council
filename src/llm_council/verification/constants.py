@@ -119,6 +119,11 @@ TEXT_EXTENSIONS: Set[str] = frozenset(
         ".yaml",
         ".yml",
         ".toml",
+        # #533: .lock is TOML for uv (uv.lock) and plain text for several
+        # other ecosystems; deny-listed lockfiles (yarn.lock, poetry.lock,
+        # etc.) are excluded separately via GARBAGE_FILENAMES, checked
+        # before _is_text_file, so this only affects non-deny-listed ones.
+        ".lock",
         ".xml",
         ".xsd",
         ".xsl",
