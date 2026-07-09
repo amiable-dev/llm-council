@@ -411,10 +411,16 @@ class TestRun:
             called.append(prompt)
             return _fake_result("hello")
 
-        run = await run_bench(dataset_dir=d, runs_dir=runs, council_runner=runner)
+        run = await run_bench(
+            dataset_dir=d, runs_dir=runs, council_runner=runner, max_usd=0.55
+        )
         assert run.exit_code == 2
         assert "monthly_guard" in run.aborted
         assert called == []  # zero spend
+        # Round 11 review: cap_usd must be populated even though the run
+        # aborted before any items ran (previously only set at the end of
+        # _run_items, which this path never reaches).
+        assert run.cap_usd == 0.55
 
     @pytest.mark.asyncio
     async def test_council_error_marks_item_failed_not_crash(self, tmp_path):

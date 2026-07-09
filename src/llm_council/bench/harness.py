@@ -358,6 +358,10 @@ async def run_bench(
         total_cost_usd=0.0,
         cost_known=False,
         filtered=bool(items_filter),
+        # Round 11 review: set immediately, not only at the end of
+        # _run_items — a monthly-guard abort below returns before items ever
+        # run, and the effective cap should still be visible in the report.
+        cap_usd=cap,
     )
 
     if council_runner is None:
@@ -366,20 +370,27 @@ async def run_bench(
         async def council_runner(prompt: str) -> Dict[str, Any]:  # pragma: no cover
             return await run_council_with_fallback(prompt, bypass_cache=True)
 
+    # Resolve ONCE and reuse everywhere below (round 11 review: passing the
+    # raw, possibly-None `runs_dir` to month_to_date_spend/_run_items relied
+    # on each callee re-deriving the same default independently — harmless
+    # today since they use the identical fallback, but a maintainability trap
+    # if that ever drifts).
     resolved_runs_dir = runs_dir if runs_dir is not None else DEFAULT_RUNS_DIR
     # Hold the monthly-guard lock across check-through-persist (#516): without
     # this, two concurrent invocations can both read the same month-to-date
     # spend, both pass the guard, then both write — jointly exceeding the cap.
     async with _monthly_guard_lock(resolved_runs_dir):
-        mtd = month_to_date_spend(runs_dir)
+        mtd = month_to_date_spend(resolved_runs_dir)
         if mtd >= monthly_cap:
             run.aborted = (
                 f"monthly_guard: month-to-date bench spend ${mtd:.2f} >= "
                 f"${monthly_cap:.2f} (LLM_COUNCIL_BENCH_MONTHLY_USD)"
             )
-            _persist_run(run, runs_dir)
+            _persist_run(run, resolved_runs_dir)
             return run
-        return await _run_items(run, items, council_runner, cap, runs_dir, ignore_score_floor)
+        return await _run_items(
+            run, items, council_runner, cap, resolved_runs_dir, ignore_score_floor
+        )
 
 
 async def _run_items(
@@ -501,7 +512,9 @@ async def _run_items(
     # 'fully known' means EVERY executed item reported a cost (#439 r2).
     run.cost_known = run.items_run > 0 and not any_unknown
     run.cap_charged_usd = cap_charged
-    run.cap_usd = cap
+    # run.cap_usd is set once, in run_bench, immediately after construction
+    # (round 11 review) — visible even on a monthly-guard abort that returns
+    # before this function runs.
     _persist_run(run, runs_dir)
     return run
 
