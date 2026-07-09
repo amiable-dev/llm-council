@@ -154,15 +154,38 @@ async def run_matrix(
                 }
             )
             continue
-        runner = config.runner or _default_runner(config)
-        run = await run_bench(
-            dataset_dir=dataset_dir,
-            runs_dir=runs_dir,
-            max_usd=remaining,
-            items_filter=items_filter,
-            council_runner=runner,
-            ignore_score_floor=(config.kind == "solo"),
-        )
+        try:
+            # _default_runner validates config.kind and parses config.name
+            # (e.g. "solo:<model>") EAGERLY, before any item runs — a
+            # malformed name (no colon) or an unknown kind raises here, not
+            # inside harness's own per-item try/except. Uncaught, that would
+            # crash the WHOLE matrix mid-run and discard already-PAID-FOR
+            # results from every earlier config (round 1 review) — exactly
+            # the failure mode the docstring promises never happens ("one
+            # broken configuration never aborts the rest of the matrix").
+            runner = config.runner or _default_runner(config)
+            run = await run_bench(
+                dataset_dir=dataset_dir,
+                runs_dir=runs_dir,
+                max_usd=remaining,
+                items_filter=items_filter,
+                council_runner=runner,
+                ignore_score_floor=(config.kind == "solo"),
+            )
+        except Exception as exc:
+            rows.append(
+                {
+                    "config": config.name,
+                    "kind": config.kind,
+                    "items_run": 0,
+                    "pass_rate": 0.0,
+                    "cost_usd": 0.0,
+                    "cost_known": False,
+                    "quality_per_dollar": None,
+                    "aborted": f"config_error: {exc}",
+                }
+            )
+            continue
         # cap_charged_usd (actuals + conservative unknown-cost charges), not
         # total_cost_usd — same convention as the monthly ledger (#439 r2/r3):
         # an unknown-cost config must still count against the shared budget,

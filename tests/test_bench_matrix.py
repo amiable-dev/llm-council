@@ -102,6 +102,53 @@ class TestMatrix:
         assert by_name["council"]["pass_rate"] == 1.0
 
     @pytest.mark.asyncio
+    async def test_malformed_config_name_does_not_crash_matrix(self, tmp_path):
+        # Round-1 review (#511): _default_runner eagerly parses config.name
+        # ("solo:<model>") and validates config.kind BEFORE any item runs —
+        # unguarded, a colon-less name raised an uncaught IndexError that
+        # crashed the WHOLE matrix mid-loop, discarding already-PAID-FOR
+        # results from every earlier config. A later config's typo must not
+        # destroy prior configs' results.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def good(prompt):
+            return _result("hello", cost=0.05)
+
+        configs = [
+            MatrixConfig(name="council", kind="council", runner=good),
+            MatrixConfig(name="solo-missing-colon", kind="solo"),  # no runner override
+        ]
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
+        by_name = {r["config"]: r for r in rows}
+        assert by_name["council"]["cost_usd"] == 0.05  # prior result PRESERVED
+        assert by_name["solo-missing-colon"]["items_run"] == 0
+        assert "config_error" in by_name["solo-missing-colon"]["aborted"]
+
+    @pytest.mark.asyncio
+    async def test_unknown_kind_does_not_crash_matrix(self, tmp_path):
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def good(prompt):
+            return _result("hello", cost=0.05)
+
+        configs = [
+            MatrixConfig(name="council", kind="council", runner=good),
+            MatrixConfig(name="bogus", kind="not-a-real-kind"),
+        ]
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
+        by_name = {r["config"]: r for r in rows}
+        assert by_name["council"]["cost_usd"] == 0.05
+        assert "config_error" in by_name["bogus"]["aborted"]
+
+    @pytest.mark.asyncio
     async def test_matrix_wide_budget_shared_across_configs(self, tmp_path):
         # #511: max_usd is the TOTAL across every config, not per-config — the
         # old behaviour passed the SAME cap to each config, so N configs
