@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.2] - 2026-07-09
+
+### Fixed
+
+- **`verify()`/`council-gate` silently excluded `uv.lock` from review ([#533](https://github.com/amiable-dev/llm-council/issues/533))** — `.lock` was missing from `TEXT_EXTENSIONS`, so `_is_text_file("uv.lock")` returned `False` and a `target_paths=["uv.lock"]` call resolved to zero files, raising `SnapshotResolutionError` instead of reviewing the file. Discovered during the [epic #526](https://github.com/amiable-dev/llm-council/issues/526) Dependabot sweep, where every `uv.lock`-only PR had to fall back to the D10 manual-coverage path. Deny-listed lockfiles (`yarn.lock`, `poetry.lock`, etc.) remain excluded via the separate `GARBAGE_FILENAMES` check, unaffected by this change.
+
+### Security
+
+- **Filed [#540](https://github.com/amiable-dev/llm-council/issues/540)** — a Council review surfaced (pre-existing, unrelated to the fix above) that `.env`/`.env.example`/`.env.sample` in `TEXT_EXTENSIONS` means a `target_paths` directory scan can read real secrets into a verification prompt sent to third-party LLM providers. Not yet fixed — tracked as a design decision.
+
 ## [0.38.1] - 2026-07-09
 
 ### Security
