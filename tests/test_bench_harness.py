@@ -4,7 +4,10 @@ Unit-tested with mocked councils — NO live spend in CI. Spend-cap abort,
 monthly guard, envelope semantics, baseline drift, exit codes 0/1/2.
 """
 
+import asyncio
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -300,13 +303,14 @@ class TestRun:
         set_baseline(full_run, tmp_path / "baseline2.json")  # must not raise
 
     @pytest.mark.skipif(fcntl is None, reason="fcntl is Unix-only")
-    def test_monthly_guard_lock_is_exclusive(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_monthly_guard_lock_is_exclusive(self, tmp_path):
         # #516: the lock must be a REAL OS-level exclusive lock on a shared
         # file, not just plumbing — probe it directly rather than relying on
         # asyncio orchestration (which can't reliably force the TOCTOU race).
         from llm_council.bench.harness import _monthly_guard_lock
 
-        with _monthly_guard_lock(tmp_path):
+        async with _monthly_guard_lock(tmp_path):
             lock_path = tmp_path / ".monthly-guard.lock"
             assert lock_path.exists()
             # A second, independent open on the SAME lock file must fail to
@@ -318,6 +322,47 @@ class TestRun:
         with open(lock_path, "a+") as probe:
             fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+
+    @pytest.mark.asyncio
+    async def test_monthly_guard_lock_does_not_block_event_loop(self, tmp_path):
+        # Round 6 review: fcntl.flock is a blocking syscall; a naive
+        # synchronous acquire held across awaits would, on contention, freeze
+        # the WHOLE event loop (every task in the process), not just the
+        # calling coroutine. Prove a concurrent heartbeat task keeps ticking
+        # while _monthly_guard_lock waits on a lock held elsewhere.
+        from llm_council.bench.harness import _monthly_guard_lock
+
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        lock_path = tmp_path / ".monthly-guard.lock"
+        holder_fh = open(lock_path, "a+")
+        fcntl.flock(holder_fh.fileno(), fcntl.LOCK_EX)  # simulate another holder
+
+        def release_after_delay():
+            time.sleep(0.3)
+            fcntl.flock(holder_fh.fileno(), fcntl.LOCK_UN)
+            holder_fh.close()
+
+        threading.Thread(target=release_after_delay, daemon=True).start()
+
+        heartbeats = 0
+
+        async def heartbeat():
+            nonlocal heartbeats
+            while True:
+                heartbeats += 1
+                await asyncio.sleep(0.02)
+
+        hb_task = asyncio.create_task(heartbeat())
+        try:
+            async with _monthly_guard_lock(tmp_path):
+                pass
+        finally:
+            hb_task.cancel()
+
+        # ~0.3s of contention at a 0.02s heartbeat interval => many ticks if
+        # the event loop stayed responsive; a blocking flock() would have
+        # frozen it (heartbeats stuck at 0 or 1).
+        assert heartbeats >= 5
 
     def test_persist_run_unique_filenames_same_second(self, tmp_path):
         # #510: whole-second stamps collided (second run overwrote the first),

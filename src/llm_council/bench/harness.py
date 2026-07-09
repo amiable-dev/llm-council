@@ -18,6 +18,7 @@ Exit codes: 0 within envelope, 1 drift beyond envelope, 2 aborted/partial.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -27,7 +28,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, List, Optional
 
 # File locking - use fcntl on Unix, fallback to no-op on Windows (same
 # precedent as triage/rollback_metrics.py).
@@ -49,31 +50,47 @@ EXIT_DRIFT = 1
 EXIT_ABORTED = 2
 
 
-@contextlib.contextmanager
-def _monthly_guard_lock(runs_dir: Path) -> Iterator[None]:
+@contextlib.asynccontextmanager
+async def _monthly_guard_lock(runs_dir: Path) -> Any:
     """Serialize the monthly-guard check-through-persist section (#516).
 
-    Without this, two concurrent ``bench run`` invocations can both read the
-    same month-to-date spend, both pass the guard, then both write — jointly
-    exceeding ``LLM_COUNCIL_BENCH_MONTHLY_USD`` (a time-of-check-to-time-of-use
-    race). Concurrent bench runs aren't the documented usage ("on-demand or
-    nightly, never per-PR"), so full mutual exclusion for the run's duration is
-    an acceptable, simple fix rather than a partial/periodic re-check. Unix-only
+    Without this, two concurrent ``bench run`` invocations (separate
+    processes) can both read the same month-to-date spend, both pass the
+    guard, then both write — jointly exceeding
+    ``LLM_COUNCIL_BENCH_MONTHLY_USD`` (a time-of-check-to-time-of-use race).
+    Concurrent bench runs aren't the documented usage ("on-demand or nightly,
+    never per-PR"), so full mutual exclusion for the run's duration is an
+    acceptable, simple fix rather than a partial/periodic re-check. Unix-only
     (fcntl); a no-op on Windows, matching the existing precedent in
-    triage/rollback_metrics.py — the race is unclosed there but no worse than
-    before this fix.
+    triage/rollback_metrics.py.
+
+    ASYNC on purpose (round 6 review): ``fcntl.flock`` is a blocking syscall
+    held across the ``await``s inside the guarded section. A plain
+    synchronous acquire would, on contention, block the WHOLE event loop —
+    not just the calling coroutine — freezing every other task in the
+    process for as long as the lock is held (potentially minutes). No
+    current call site runs two ``run_bench`` coroutines concurrently in one
+    process (``bench matrix`` awaits them sequentially), so this cannot fire
+    today, but the failure mode (a full event-loop freeze, not a clean
+    queued wait) is bad enough to close categorically rather than leave as a
+    footgun for a future concurrent caller. ``asyncio.to_thread`` moves the
+    blocking acquire off the event loop thread so a contended lock merely
+    suspends the awaiting coroutine.
     """
     if not _HAS_FCNTL:
         yield
         return
     runs_dir.mkdir(parents=True, exist_ok=True)
     lock_path = runs_dir / ".monthly-guard.lock"
-    with open(lock_path, "a+") as fh:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+    fh = open(lock_path, "a+")
+    try:
+        await asyncio.to_thread(fcntl.flock, fh.fileno(), fcntl.LOCK_EX)
         try:
             yield
         finally:
             fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    finally:
+        fh.close()
 
 
 def bench_max_usd() -> float:
@@ -320,7 +337,7 @@ async def run_bench(
     # Hold the monthly-guard lock across check-through-persist (#516): without
     # this, two concurrent invocations can both read the same month-to-date
     # spend, both pass the guard, then both write — jointly exceeding the cap.
-    with _monthly_guard_lock(resolved_runs_dir):
+    async with _monthly_guard_lock(resolved_runs_dir):
         mtd = month_to_date_spend(runs_dir)
         if mtd >= monthly_cap:
             run.aborted = (
