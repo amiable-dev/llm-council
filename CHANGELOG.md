@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **Dependabot remediation sweep ([epic #526](https://github.com/amiable-dev/llm-council/issues/526))** — closed all 72 open Dependabot alerts (2 critical, 21 high, 28 medium, 21 low) across 19 packages, all resolved via `uv.lock` package bumps (no application code changes):
+  - `litellm` 1.80.11 → 1.91.1 ([#527](https://github.com/amiable-dev/llm-council/issues/527)) — 2 critical + 6 high, including an auth-bypass-via-Host-header-injection CVE. Optional `[ollama]`-extra dependency only.
+  - `starlette` 0.50.0 → 1.3.1, `python-multipart`, `cryptography`, `urllib3`, `pyjwt`, `vcrpy`, `mcp` ([#528](https://github.com/amiable-dev/llm-council/issues/528)) — 27 high-severity-bearing alerts across the HTTP/MCP request stack. Also bumps `fastapi` 0.123.0 → 0.139.0 (not itself flagged; required transitively to unblock the starlette fix version).
+  - `aiohttp` 3.13.2 → 3.14.1 ([#529](https://github.com/amiable-dev/llm-council/issues/529)) — 29 alerts, the single largest package in the sweep.
+  - `pydantic-settings`, `pymdown-extensions`, `idna`, `python-dotenv`, `pytest`, `requests`, `filelock`, `pygments` ([#530](https://github.com/amiable-dev/llm-council/issues/530)) — 8 remaining medium/low alerts.
+  - Verified via [#531](https://github.com/amiable-dev/llm-council/issues/531): zero open Dependabot alerts remain, no new alerts introduced by the resolution changes, full test suite green throughout.
+  - Also fixed in passing: `verify()`/`council-gate` silently excluded `uv.lock` from review (`.lock` missing from `TEXT_EXTENSIONS`) — tracked separately as [#533](https://github.com/amiable-dev/llm-council/issues/533).
+
 ## [0.38.0] - 2026-07-09
 
 **Gateway routing + optional chairman bypass ([#519](https://github.com/amiable-dev/llm-council/pull/519), external contribution from [@pczerkas](https://github.com/pczerkas)).**
