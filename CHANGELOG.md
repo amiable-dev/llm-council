@@ -5,12 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.38.0] - 2026-07-09
+
+**Gateway routing + optional chairman bypass ([#519](https://github.com/amiable-dev/llm-council/pull/519), external contribution from [@pczerkas](https://github.com/pczerkas)).**
 
 ### Added
 
-- **Gateway-aware endpoint resolution for council queries (#519)** — council model queries now honor `gateways.default` and `gateways.providers.<name>.base_url`/`.api_key` instead of always hitting OpenRouter, via a new `llm_council.gateway.resolver` module. Adds a per-gateway `gateways.model_name_map` config field so a single tier pool can serve gateways with different model-id conventions (e.g. Requesty rejects OpenRouter's `:free` suffix). OpenRouter remains the default/fallback; existing configs are unaffected. Note: this resolves routing on the code path that's actually live today (`gateway_adapter.py`'s direct-call fallback) rather than the ADR-023 `GatewayRouter`/`RequestyGateway` class abstraction, which is currently unreachable via config — see [#524](https://github.com/amiable-dev/llm-council/issues/524).
-- **`chairman_disabled` council option (#519)** — `chairman_disabled: true` (or `LLM_COUNCIL_CHAIRMAN_DISABLED=true`) skips Stage 3 chairman synthesis and returns the top-ranked Stage 1 response directly, for workflows where a chairman-synthesized answer isn't required. **Never enable this for BINARY-verdict use** (`council-verify`/`council-gate`, CI approval gates) — no verdict is computed; the verify API reports `verdict: "unclear"`, `unclear_reason: "chairman_disabled"` instead of a fabricated pass/fail. See [Verification guide](docs/guides/verify.md#reading-an-unclear-verdict-adr-047).
+- **Gateway-aware endpoint resolution for council queries** — council model queries now honor `gateways.default` and `gateways.providers.<name>.base_url`/`.api_key` instead of always hitting OpenRouter, via a new `llm_council.gateway.resolver` module. Adds a per-gateway `gateways.model_name_map` config field so a single tier pool can serve gateways with different model-id conventions (e.g. Requesty rejects OpenRouter's `:free` suffix). OpenRouter remains the default/fallback; existing configs are unaffected. Note: this resolves routing on the code path that's actually live today (`gateway_adapter.py`'s direct-call fallback) rather than the ADR-023 `GatewayRouter`/`RequestyGateway` class abstraction, which is currently unreachable via config — see [#524](https://github.com/amiable-dev/llm-council/issues/524).
+- **`chairman_disabled` council option** — `chairman_disabled: true` (or `LLM_COUNCIL_CHAIRMAN_DISABLED=true`) skips Stage 3 chairman synthesis and returns the top-ranked Stage 1 response directly, for workflows where a chairman-synthesized answer isn't required. **Never enable this for BINARY-verdict use** (`council-verify`/`council-gate`, CI approval gates) — no verdict is computed; the verify API reports `verdict: "unclear"`, `unclear_reason: "chairman_disabled"` instead of a fabricated pass/fail. See [Verification guide](docs/guides/verify.md#reading-an-unclear-verdict-adr-047).
+
+### Fixed
+
+- **`chairman_disabled` no longer corrupts BINARY verdicts** — pre-merge review caught that `build_verification_result()` was falling through to the legacy regex verdict-extractor on a `chairman_disabled` response, scraping a raw Stage-1 peer answer (never intended as a verdict) for approval/rejection language. Now short-circuits to an explicit `verdict: "unclear"` / `diagnostics.verdict_source: "chairman_disabled"` instead of a possible fabricated pass/fail.
+- **README documented a nonexistent `LLM_COUNCIL_USE_GATEWAY` env var** under "Enable the gateway layer" — the variable is never read anywhere in `src/`, so following that instruction silently did nothing. Replaced with a pointer to the config that actually routes live traffic (`gateways.default` / `gateways.providers.*`).
 
 ## [0.37.1] - 2026-07-05
 
