@@ -117,15 +117,22 @@ class TestEnvelope:
         assert check_envelope(item2, "avoid os.system on user input", None) == []
         assert check_envelope(item2, "the ecosystem is large", None) != []
 
-    def test_token_punctuation_edge_not_substring(self):
-        # #506 review: a token whose last char is non-word ("c++") must not
-        # match inside a longer token ("c++abc").
+    def test_punctuation_token_matches_after_a_word(self):
+        # Round 9 review: "?" (a REAL v1 token, code-sql-injection.json) is a
+        # LIVE regression from round 4's "fix" for a synthetic "c++abc" edge
+        # case — requiring no word char immediately BEFORE a trailing "?"
+        # broke the overwhelmingly common real position of "?": right after a
+        # word ("...use a parameter?"). Punctuation-edge tokens get no
+        # boundary requirement at all; a false-positive risk on a purely
+        # hypothetical token ("c++" is not in the dataset) is accepted in
+        # exchange for correct matching of the real one.
         item = BenchItem(
             id="x", domain="coding", prompt="p",
-            envelope={"must_contain": [["c++"]]},
+            envelope={"must_contain": [["?"]]},
         )
-        assert check_envelope(item, "written in c++ today", None) == []
-        assert check_envelope(item, "the c++abc library", None) != []
+        assert check_envelope(item, "should you use a parameter?", None) == []
+        assert check_envelope(item, "use a ? placeholder", None) == []
+        assert check_envelope(item, "no punctuation here at all", None) != []
 
     def test_score_floor(self):
         item = BenchItem(id="x", domain="f", prompt="p", envelope={"min_score": 0.5})

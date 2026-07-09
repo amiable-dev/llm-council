@@ -219,21 +219,30 @@ def _token_in_text(token: str, text: str) -> bool:
 
     A bare substring test (the old behaviour) false-positives: ``"major"``
     matched ``"majority"``, ``"66"`` matched ``"1966"`` — a wrong answer could
-    pass the envelope, silently weakening the drift guard. We anchor with ``\\b``
-    only at edges adjacent to a word character, so punctuation-only tokens
-    (``"?"``) and dotted tokens (``"os.system"``) still match by presence
-    without an impossible boundary. ``text`` is expected pre-lowercased.
+    pass the envelope, silently weakening the drift guard. ``text`` is
+    expected pre-lowercased.
+
+    The boundary check is applied PER SIDE, conditional on whether that side's
+    edge character of the TOKEN itself is a word character (alnum/``_``) — not
+    unconditionally. A round-4 attempt at unconditional lookarounds
+    (``(?<!\\w)…(?!\\w)`` on both sides always) "fixed" a synthetic edge case
+    (``"c++"`` matching inside ``"c++abc"`` — not an actual dataset token) at
+    the cost of a real regression: ``"?"`` (a REAL v1 token,
+    ``code-sql-injection.json``) stopped matching its overwhelmingly common
+    real-world position — immediately after a word, as in "...use a
+    parameter?" — because requiring no word char *before* a trailing "?" is
+    wrong; punctuation routinely glues to the preceding word. Conditioning the
+    boundary on the token's own edge character restores that: ``"major"``/
+    ``"66"`` (word-char edges) get boundaries on both sides; ``"?"``
+    (punctuation edge) gets none and matches anywhere, exactly as real usage
+    needs.
     """
     t = token.lower()
     if not t:
         return False
-    # Lookarounds instead of \b so tokens whose edge char is non-word
-    # (``"?"``, ``"c++"``) are still bounded correctly: require no word char
-    # immediately adjacent on either side. \b would silently drop the boundary
-    # on a punctuation edge, letting ``"c++"`` match inside ``"c++abc"``.
-    return (
-        re.search(r"(?<!\w)" + re.escape(t) + r"(?!\w)", text) is not None
-    )
+    left = r"(?<!\w)" if (t[0].isalnum() or t[0] == "_") else ""
+    right = r"(?!\w)" if (t[-1].isalnum() or t[-1] == "_") else ""
+    return re.search(left + re.escape(t) + right, text) is not None
 
 
 def check_envelope(
@@ -541,7 +550,11 @@ def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
             r.item_id: {"ok": r.ok, "score": r.score, "cost_usd": r.cost_usd}
             for r in run.results
         },
-        "pass_rate": round(run.items_passed / run.items_run, 3) if run.items_run else None,
+        # Same denominator as compare_to_baseline (#507): a mixed run (not
+        # aborted, but with SOME infra-errored items — set_baseline only
+        # refuses fully-aborted/filtered runs) must not bake an
+        # infra-deflated pass_rate into the committed baseline.
+        "pass_rate": round(run.items_passed / run.items_scored, 3) if run.items_scored else None,
         "total_cost_usd": run.total_cost_usd,
     }
     path.write_text(json.dumps(payload, indent=2) + "\n")
