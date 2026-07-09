@@ -58,6 +58,15 @@ def _default_runner(config: MatrixConfig) -> Callable[..., Any]:
     if config.kind not in ("solo", "council", "graduated"):
         raise ValueError(f"unknown matrix kind: {config.kind!r}")
     if config.kind == "solo":
+        # Explicit ValueError instead of a bare IndexError (round 3 review):
+        # safely caught by run_matrix's try/except either way, but a generic
+        # "list index out of range" is uninformative in the table's abort
+        # reason (which round 2's fix made visible specifically so this kind
+        # of message would be useful).
+        if ":" not in config.name:
+            raise ValueError(
+                f"solo config name {config.name!r} must be 'solo:<model>'"
+            )
         model = config.name.split(":", 1)[1]
 
         async def solo_runner(prompt: str) -> Dict[str, Any]:
@@ -173,6 +182,17 @@ async def run_matrix(
                 ignore_score_floor=(config.kind == "solo"),
             )
         except Exception as exc:
+            # Round 3 review, against MY OWN round-1 fix: before that fix, ANY
+            # exception here crashed the whole matrix (loud). Now it's caught
+            # silently — but run_bench may have already made real, costly API
+            # calls before failing partway through (e.g. mid-_run_items), and
+            # there is no reliable way to recover a partial cap_charged_usd
+            # from a call that raised. Assume the WORST CASE (this attempt may
+            # have consumed the entire remaining budget) rather than zero —
+            # same conservative-charge philosophy as bench_unknown_item_usd
+            # elsewhere in this epic — so a genuinely-unknown spend can never
+            # let a LATER config overspend on top of it.
+            spent = total_budget
             rows.append(
                 {
                     "config": config.name,

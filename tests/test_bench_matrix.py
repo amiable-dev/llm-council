@@ -101,6 +101,67 @@ class TestMatrix:
         assert by_name["bad"]["pass_rate"] == 0.0
         assert by_name["council"]["pass_rate"] == 1.0
 
+    def test_solo_missing_colon_raises_explicit_value_error(self):
+        # Round 3 review: an explicit, clear message instead of a bare
+        # "list index out of range" IndexError.
+        from llm_council.bench.matrix import _default_runner
+
+        with pytest.raises(ValueError, match="must be 'solo:<model>'"):
+            _default_runner(MatrixConfig(name="no-colon-here", kind="solo"))
+
+    @pytest.mark.asyncio
+    async def test_config_exception_conservatively_exhausts_budget(
+        self, tmp_path, monkeypatch
+    ):
+        # Round 3 review, against my OWN round-1 fix: before it, ANY
+        # exception from run_bench crashed the whole matrix (loud). Catching
+        # it silently assumed zero spend — but run_bench may have already
+        # made real, costly API calls before failing partway through (e.g. in
+        # the monthly-guard-lock exit path, after _run_items already spent),
+        # with no reliable way to recover a partial cost figure. A failing
+        # config must conservatively consume the WHOLE remaining budget so a
+        # later config can never overspend on top of an unknown cost.
+        #
+        # A plain runner exception does NOT reach this path — harness's own
+        # per-item loop (#507) already absorbs it as an infra_failure without
+        # run_bench raising. To exercise run_bench raising directly (the
+        # actual scenario the finding describes), patch it at the point
+        # matrix.py calls it.
+        import llm_council.bench.matrix as matrix_mod
+
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        call_count = {"n": 0}
+        real_run_bench = matrix_mod.run_bench
+
+        async def flaky_run_bench(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise RuntimeError("boom mid-run_bench")
+            return await real_run_bench(*args, **kwargs)
+
+        monkeypatch.setattr(matrix_mod, "run_bench", flaky_run_bench)
+
+        async def good(prompt):
+            return _result("hello", cost=0.05)
+
+        configs = [
+            MatrixConfig(name="broken", kind="solo", runner=good),
+            MatrixConfig(name="good", kind="solo", runner=good),
+        ]
+        rows = await run_matrix(
+            configs, dataset_dir=d, runs_dir=tmp_path / "runs", max_usd=2.0
+        )
+        by_name = {r["config"]: r for r in rows}
+        assert "config_error" in by_name["broken"]["aborted"]
+        # "good" never actually ran — the failing config conservatively
+        # consumed the whole budget, exactly like a real overspend would.
+        assert by_name["good"]["items_run"] == 0
+        assert "matrix_budget_exhausted" in by_name["good"]["aborted"]
+        assert call_count["n"] == 1  # good's run_bench call was never reached
+
     @pytest.mark.asyncio
     async def test_malformed_config_name_does_not_crash_matrix(self, tmp_path):
         # Round-1 review (#511): _default_runner eagerly parses config.name
