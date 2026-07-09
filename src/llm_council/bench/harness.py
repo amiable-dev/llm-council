@@ -485,8 +485,13 @@ def compare_to_baseline(
     path = baseline_path if baseline_path is not None else DEFAULT_BASELINE_PATH
     try:
         baseline = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        # Absent OR corrupt baseline (#439 review): report, never crash.
+    except OSError:
+        return {"baseline": None}  # no baseline committed yet — expected, silent
+    except json.JSONDecodeError as exc:
+        # Corrupt baseline is NOT the same as "no baseline yet" — a silently
+        # identical report for both hides real corruption from the operator
+        # (round-5 review, same shape as #509's month_to_date_spend fix).
+        logger.warning("bench: baseline file %s is corrupt: %s", path, exc)
         return {"baseline": None}
     regressions = []
     for r in run.results:

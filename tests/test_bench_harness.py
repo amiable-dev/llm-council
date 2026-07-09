@@ -460,7 +460,7 @@ class TestCouncilRound1:
         assert run.items_run == 2
         assert run.total_cost_usd == 0.0  # actuals never fabricated
 
-    def test_corrupt_baseline_reported_not_crash(self, tmp_path):
+    def test_corrupt_baseline_reported_not_crash(self, tmp_path, caplog):
         from llm_council.bench.harness import BenchRun
 
         bp = tmp_path / "baseline.json"
@@ -469,8 +469,26 @@ class TestCouncilRound1:
             started_at="t", items_total=0, items_run=0,
             items_passed=0, total_cost_usd=0.0, cost_known=False,
         )
-        cmp = compare_to_baseline(run, bp)
+        with caplog.at_level("WARNING"):
+            cmp = compare_to_baseline(run, bp)
         assert cmp == {"baseline": None}
+        # round-5 review: corrupt must be distinguishable from "no baseline
+        # yet" (below) — via a warning, not an identical silent report.
+        assert any("corrupt" in r.message for r in caplog.records)
+
+    def test_missing_baseline_is_silent(self, tmp_path, caplog):
+        # The "no baseline committed yet" case is expected/routine — NOT a
+        # warning (only genuine corruption should log).
+        from llm_council.bench.harness import BenchRun
+
+        run = BenchRun(
+            started_at="t", items_total=0, items_run=0,
+            items_passed=0, total_cost_usd=0.0, cost_known=False,
+        )
+        with caplog.at_level("WARNING"):
+            cmp = compare_to_baseline(run, tmp_path / "does-not-exist.json")
+        assert cmp == {"baseline": None}
+        assert not caplog.records
 
 
 class TestCouncilRound2:
