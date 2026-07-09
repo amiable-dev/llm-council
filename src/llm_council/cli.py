@@ -119,16 +119,11 @@ def bench_command(
         if not set_flag:
             sys.stdout.write("Pass --set to snapshot the latest run as baseline.\n")
             return 0
-        run = harness.BenchRun(
-            started_at=data["started_at"],
-            items_total=data["items_total"],
-            items_run=data["items_run"],
-            items_passed=data["items_passed"],
-            total_cost_usd=data["total_cost_usd"],
-            cost_known=data["cost_known"],
-            aborted=data.get("aborted"),
-            results=[harness.ItemResult(**r) for r in data.get("results", [])],
-        )
+        # run_from_dict (not a hand-listed field subset — round 12 review):
+        # the old whitelist silently dropped filtered/cap_usd/infra_errors on
+        # reload, so `bench baseline --set` could never actually refuse a
+        # filtered run once round-tripped through a persisted artefact.
+        run = harness.run_from_dict(data)
         path = harness.set_baseline(run)
         sys.stdout.write(f"Baseline written to {path}\n")
         return 0
@@ -137,16 +132,7 @@ def bench_command(
     data = _latest_run()
     if data is None:
         return 2
-    run = harness.BenchRun(
-        started_at=data["started_at"],
-        items_total=data["items_total"],
-        items_run=data["items_run"],
-        items_passed=data["items_passed"],
-        total_cost_usd=data["total_cost_usd"],
-        cost_known=data["cost_known"],
-        aborted=data.get("aborted"),
-        results=[harness.ItemResult(**r) for r in data.get("results", [])],
-    )
+    run = harness.run_from_dict(data)
     comparison = harness.compare_to_baseline(run)
     sys.stdout.write(harness.format_report(run, comparison, output_format) + "\n")
     if publish:

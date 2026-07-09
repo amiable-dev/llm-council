@@ -129,7 +129,13 @@ async def run_matrix(
             council_runner=runner,
             ignore_score_floor=(config.kind == "solo"),
         )
-        pass_rate = round(run.items_passed / run.items_run, 3) if run.items_run else 0.0
+        # Consistent with BenchRun.exit_code (#507): pass rate excludes
+        # council/infra-errored items, which never had a chance to score — an
+        # infra-heavy config must not look artificially worse in the
+        # quality-per-dollar comparison than one that simply ran cleanly.
+        pass_rate = (
+            round(run.items_passed / run.items_scored, 3) if run.items_scored else 0.0
+        )
         rows.append(
             {
                 "config": config.name,

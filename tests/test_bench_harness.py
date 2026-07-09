@@ -25,6 +25,7 @@ from llm_council.bench import (
     load_dataset,
     month_to_date_spend,
     run_bench,
+    run_from_dict,
     set_baseline,
 )
 
@@ -117,15 +118,22 @@ class TestEnvelope:
         assert check_envelope(item2, "avoid os.system on user input", None) == []
         assert check_envelope(item2, "the ecosystem is large", None) != []
 
-    def test_token_punctuation_edge_not_substring(self):
-        # #506 review: a token whose last char is non-word ("c++") must not
-        # match inside a longer token ("c++abc").
+    def test_punctuation_token_matches_after_a_word(self):
+        # Round 9 review: "?" (a REAL v1 token, code-sql-injection.json) is a
+        # LIVE regression from round 4's "fix" for a synthetic "c++abc" edge
+        # case — requiring no word char immediately BEFORE a trailing "?"
+        # broke the overwhelmingly common real position of "?": right after a
+        # word ("...use a parameter?"). Punctuation-edge tokens get no
+        # boundary requirement at all; a false-positive risk on a purely
+        # hypothetical token ("c++" is not in the dataset) is accepted in
+        # exchange for correct matching of the real one.
         item = BenchItem(
             id="x", domain="coding", prompt="p",
-            envelope={"must_contain": [["c++"]]},
+            envelope={"must_contain": [["?"]]},
         )
-        assert check_envelope(item, "written in c++ today", None) == []
-        assert check_envelope(item, "the c++abc library", None) != []
+        assert check_envelope(item, "should you use a parameter?", None) == []
+        assert check_envelope(item, "use a ? placeholder", None) == []
+        assert check_envelope(item, "no punctuation here at all", None) != []
 
     def test_score_floor(self):
         item = BenchItem(id="x", domain="f", prompt="p", envelope={"min_score": 0.5})
@@ -404,10 +412,16 @@ class TestRun:
             called.append(prompt)
             return _fake_result("hello")
 
-        run = await run_bench(dataset_dir=d, runs_dir=runs, council_runner=runner)
+        run = await run_bench(
+            dataset_dir=d, runs_dir=runs, council_runner=runner, max_usd=0.55
+        )
         assert run.exit_code == 2
         assert "monthly_guard" in run.aborted
         assert called == []  # zero spend
+        # Round 11 review: cap_usd must be populated even though the run
+        # aborted before any items ran (previously only set at the end of
+        # _run_items, which this path never reaches).
+        assert run.cap_usd == 0.55
 
     @pytest.mark.asyncio
     async def test_council_error_marks_item_failed_not_crash(self, tmp_path):
@@ -421,8 +435,80 @@ class TestRun:
         run = await run_bench(
             dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
         )
-        assert run.exit_code == 1
+        # #507: a run where EVERY item errored is an infra/abort outcome
+        # (exit 2), never envelope drift (exit 1) — a rate-limit/billing
+        # lapse must not read as "quality collapsed".
+        assert run.exit_code == 2
+        assert run.infra_errors == 1
+        assert run.items_scored == 0
+        assert run.aborted and "infra_failure" in run.aborted
+        assert run.results[0].is_infra is True
         assert "council_error" in run.results[0].failures[0]
+
+    @pytest.mark.asyncio
+    async def test_council_status_failed_counts_as_infra_not_drift(self, tmp_path):
+        # #507 empirically-observed case: the runner does NOT raise (graceful
+        # degradation — CLAUDE.md's "continue with whatever responses
+        # succeed" policy) but reports total failure via metadata.status.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def runner(prompt):
+            return {
+                "synthesis": "Error: All models failed to respond.",
+                "metadata": {"status": "failed"},
+            }
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
+        assert run.exit_code == 2  # infra/abort, not drift
+        assert run.infra_errors == 1
+        assert run.results[0].is_infra is True
+
+    @pytest.mark.asyncio
+    async def test_mixed_infra_and_drift_reports_both_separately(self, tmp_path):
+        # #507 acceptance: "mixed run reports both counts; drift exit
+        # reflects only genuinely-scored misses."
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")  # will infra-error
+        _write_item(d, "b")  # will genuinely fail its envelope
+
+        calls = {"n": 0}
+
+        async def runner(prompt):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("gateway down")
+            return _fake_result("wrong answer entirely")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=runner
+        )
+        assert run.infra_errors == 1
+        assert run.items_run == 2
+        assert run.items_scored == 1  # only the genuinely-run item
+        assert run.items_passed == 0  # that one item failed its envelope
+        assert run.exit_code == 1  # DRIFT — a real miss, not infra-masked
+        assert not run.aborted  # a mixed run is not itself "aborted"
+
+    def test_format_report_surfaces_infra_errors(self):
+        from llm_council.bench.harness import BenchRun, ItemResult
+
+        run = BenchRun(
+            started_at="t", items_total=1, items_run=1, items_passed=0,
+            total_cost_usd=0.0, cost_known=False, infra_errors=1,
+            aborted="infra_failure: 1/1 items errored",
+            results=[ItemResult(
+                item_id="a", domain="f", ok=False,
+                failures=["council_error:boom"], is_infra=True,
+            )],
+        )
+        report = format_report(run, {"baseline": None}, "md")
+        assert "Council/infra errors: 1/1" in report
+        assert "[INFRA] a" in report
 
     @pytest.mark.asyncio
     async def test_run_artefact_persisted(self, tmp_path):
@@ -476,6 +562,74 @@ class TestBaseline:
         cmp = compare_to_baseline(run, tmp_path / "missing.json")
         assert cmp == {"baseline": None}
         assert "No committed baseline" in format_report(run, cmp)
+
+    @pytest.mark.asyncio
+    async def test_infra_error_excluded_from_baseline_items(self, tmp_path):
+        # Round 10 review: set_baseline must NOT bake ok=False for an
+        # infra-errored item — base.get("ok") frozen False can never satisfy
+        # compare_to_baseline's "base.get('ok') and not r.ok" check, so a
+        # REAL future regression on that item would be permanently
+        # invisible. Excluding it (absent entry) is correctly ignored by
+        # that check instead — no false record either way.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        calls = {"n": 0}
+
+        async def mixed(prompt):
+            calls["n"] += 1
+            if calls["n"] == 2:  # "b" loads second (sorted glob) — infra-errors
+                raise RuntimeError("gateway down")
+            return _fake_result("hello")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=mixed
+        )
+        bp = set_baseline(run, tmp_path / "baseline.json")
+        baseline = json.loads(bp.read_text())
+        assert "b" not in baseline["items"]  # excluded, not baked in as False
+        assert "a" in baseline["items"]
+
+        # A later GENUINE regression on "a" (which WAS properly baselined)
+        # must still be detected — the fix doesn't affect non-infra items.
+        async def later(prompt):
+            return _fake_result("wrong answer")
+
+        later_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs2", council_runner=later
+        )
+        cmp = compare_to_baseline(later_run, bp)
+        assert "a" in cmp["regressions"]
+        assert "b" not in cmp["regressions"]  # no false record either way
+
+    @pytest.mark.asyncio
+    async def test_infra_error_not_reported_as_regression(self, tmp_path):
+        # Council round-8 finding (in-diff, #507 follow-through): an item
+        # that previously passed but now infra-errors must NOT show up as a
+        # "regression" — that would re-conflate infra with quality drift,
+        # exactly what #507 exists to prevent.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+
+        async def good(prompt):
+            return _fake_result("hello")
+
+        async def erroring(prompt):
+            raise RuntimeError("gateway down")
+
+        base_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=good
+        )
+        bp = set_baseline(base_run, tmp_path / "baseline.json")
+        infra_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs2", council_runner=erroring
+        )
+        cmp = compare_to_baseline(infra_run, bp)
+        assert cmp["regressions"] == []  # NOT ["a"]
+        assert cmp["pass_rate"] is None  # items_scored == 0
 
 
 class TestCouncilRound1:
@@ -617,3 +771,68 @@ class TestCouncilRound3:
         assert run.aborted
         with pytest.raises(ValueError, match="aborted"):
             set_baseline(run, tmp_path / "baseline.json")
+
+
+class TestRunFromDict:
+    """Round 12 review: the CLI's report/baseline --set handlers used to
+    hand-list a fixed BenchRun field subset when reconstructing from a
+    persisted run-*.json, silently dropping every field added since —
+    cap_usd, filtered, infra_errors. `filtered` defaulting back to False was
+    the worst case: bench baseline --set could never actually refuse a
+    filtered run once round-tripped through a persisted artefact, a live
+    bypass of #517's fix through the one path (the CLI) that exercises it.
+    run_from_dict fixes this by deriving the accepted kwargs from
+    dataclasses.fields(), not a hand-maintained list.
+    """
+
+    @pytest.mark.asyncio
+    async def test_round_trip_preserves_new_fields(self, tmp_path):
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        async def mixed(prompt):
+            return _fake_result("hello")
+
+        runs = tmp_path / "runs"
+        run = await run_bench(
+            dataset_dir=d, runs_dir=runs, council_runner=mixed,
+            items_filter=["a"], max_usd=0.42,
+        )
+        assert run.filtered is True  # sanity: the live run is correctly flagged
+
+        persisted = json.loads(next(runs.glob("*.json")).read_text())
+        reloaded = run_from_dict(persisted)
+        assert reloaded.filtered is True  # NOT silently dropped back to False
+        assert reloaded.cap_usd == 0.42
+        assert reloaded.infra_errors == 0
+
+    def test_filtered_run_still_refused_after_cli_style_round_trip(self, tmp_path):
+        # The concrete #517 regression this closes: a filtered run, persisted
+        # then reloaded exactly as the CLI does, must still be refused by
+        # set_baseline — not silently accepted because `filtered` defaulted
+        # back to False.
+        from llm_council.bench.harness import BenchRun
+
+        run = BenchRun(
+            started_at="t", items_total=2, items_run=1, items_passed=1,
+            total_cost_usd=0.01, cost_known=True, filtered=True,
+        )
+        persisted = json.loads(json.dumps({**run.__dict__, "exit_code": run.exit_code}))
+        reloaded = run_from_dict(persisted)
+        assert reloaded.filtered is True
+        with pytest.raises(ValueError, match="filtered"):
+            set_baseline(reloaded, tmp_path / "baseline.json")
+
+    def test_tolerates_unknown_future_keys(self, tmp_path):
+        # Forward-compat: a key not in the current BenchRun/ItemResult schema
+        # (e.g. read by an older install after a downgrade) is ignored rather
+        # than raising a TypeError.
+        data = {
+            "started_at": "t", "items_total": 0, "items_run": 0,
+            "items_passed": 0, "total_cost_usd": 0.0, "cost_known": False,
+            "results": [], "exit_code": 0, "some_future_field": "unused",
+        }
+        run = run_from_dict(data)
+        assert run.items_total == 0

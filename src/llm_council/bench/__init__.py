@@ -10,5 +10,6 @@ from .harness import (  # noqa: F401
     load_dataset,
     month_to_date_spend,
     run_bench,
+    run_from_dict,
     set_baseline,
 )
