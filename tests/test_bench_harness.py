@@ -557,6 +557,47 @@ class TestBaseline:
         assert "No committed baseline" in format_report(run, cmp)
 
     @pytest.mark.asyncio
+    async def test_infra_error_excluded_from_baseline_items(self, tmp_path):
+        # Round 10 review: set_baseline must NOT bake ok=False for an
+        # infra-errored item — base.get("ok") frozen False can never satisfy
+        # compare_to_baseline's "base.get('ok') and not r.ok" check, so a
+        # REAL future regression on that item would be permanently
+        # invisible. Excluding it (absent entry) is correctly ignored by
+        # that check instead — no false record either way.
+        d = tmp_path / "ds"
+        d.mkdir()
+        _write_item(d, "a")
+        _write_item(d, "b")
+
+        calls = {"n": 0}
+
+        async def mixed(prompt):
+            calls["n"] += 1
+            if calls["n"] == 2:  # "b" loads second (sorted glob) — infra-errors
+                raise RuntimeError("gateway down")
+            return _fake_result("hello")
+
+        run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs", council_runner=mixed
+        )
+        bp = set_baseline(run, tmp_path / "baseline.json")
+        baseline = json.loads(bp.read_text())
+        assert "b" not in baseline["items"]  # excluded, not baked in as False
+        assert "a" in baseline["items"]
+
+        # A later GENUINE regression on "a" (which WAS properly baselined)
+        # must still be detected — the fix doesn't affect non-infra items.
+        async def later(prompt):
+            return _fake_result("wrong answer")
+
+        later_run = await run_bench(
+            dataset_dir=d, runs_dir=tmp_path / "runs2", council_runner=later
+        )
+        cmp = compare_to_baseline(later_run, bp)
+        assert "a" in cmp["regressions"]
+        assert "b" not in cmp["regressions"]  # no false record either way
+
+    @pytest.mark.asyncio
     async def test_infra_error_not_reported_as_regression(self, tmp_path):
         # Council round-8 finding (in-diff, #507 follow-through): an item
         # that previously passed but now infra-errors must NOT show up as a

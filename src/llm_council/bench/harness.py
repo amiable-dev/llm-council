@@ -546,9 +546,17 @@ def set_baseline(run: BenchRun, baseline_path: Optional[Path] = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "created_at": run.started_at,
+        # Infra-errored items are excluded (round 10 review): r.ok is always
+        # False for an infra item (it has failures but no genuine envelope
+        # verdict), so baking it in as "ok: False" would permanently
+        # blindspot compare_to_baseline's regression check for that item —
+        # `if base.get("ok") and not r.ok` can never fire once base.get("ok")
+        # is frozen False, even after a REAL later regression. An absent
+        # baseline entry (None) is correctly ignored by that check instead.
         "items": {
             r.item_id: {"ok": r.ok, "score": r.score, "cost_usd": r.cost_usd}
             for r in run.results
+            if not r.is_infra
         },
         # Same denominator as compare_to_baseline (#507): a mixed run (not
         # aborted, but with SOME infra-errored items — set_baseline only
