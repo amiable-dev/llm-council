@@ -220,6 +220,25 @@ GARBAGE_FILENAMES: Set[str] = frozenset(
 # additionally salvages an advisory signal from completed stages (see below).
 VERIFICATION_TIMEOUT_MULTIPLIER = 2.0
 
+# Issue #545: seconds reserved for stage 3 (chairman synthesis) before stages 1
+# and 2 take their waterfall slices. Raising the multiplier above could never fix
+# stage-3 starvation on its own: the per-stage budget was only ever used to derive
+# a per-model `timeout=`, and that was handed to httpx, whose connect/read/write/
+# pool timeouts do not bound total elapsed time. Observed at tier=high: stage1
+# 233.7s + stage2 126.3s consumed 100.0% of the 360s deadline, the chairman was
+# given 1.0s, timed out, and the run returned unclear(infra_failure) — fully
+# billed, no verdict. A synthesis granted ~0s is strictly worse than one never
+# started, because it is billed either way.
+#
+# The reserve is min(STAGE3_MIN_BUDGET_SECONDS, remaining * STAGE3_MAX_RESERVE_FRACTION)
+# — proportional, not absolute. A flat 30s would consume half of `quick`'s 60s
+# global deadline and starve stage 1 instead of stage 3 (caught by
+# test_verify_tier_support::test_run_verification_uses_tier_timeout). At 15% every
+# tier still reaches its full per-model cap on the happy path: quick reserves 9s,
+# balanced 27s, high and reasoning 30s.
+STAGE3_MIN_BUDGET_SECONDS = 30.0
+STAGE3_MAX_RESERVE_FRACTION = 0.15
+
 # Per-tier maximum input characters (prompt size guardrails)
 TIER_MAX_CHARS: Dict[str, int] = {
     "quick": 15000,
