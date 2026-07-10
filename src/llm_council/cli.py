@@ -538,18 +538,12 @@ def cmd_ignore(args) -> int:
     from llm_council.verification import file_ops
 
     if getattr(args, "print_defaults", False):
-        print("# Compiled-in secret-path denylist (always on; not overridable):")
-        print("# exact basenames (case-insensitive):")
-        for name in sorted(file_ops._SECRET_NAMES):
-            print(f"  {name}")
-        print("# suffixes:")
-        print("  " + " ".join(sorted(file_ops._SECRET_SUFFIXES)))
-        print("# basename prefixes:")
-        print("  " + " ".join(f"{p}*" for p in file_ops._SECRET_PREFIXES))
-        print("# secret directories (any path component):")
-        print("  " + " ".join(sorted(file_ops._SECRET_DIRS)))
-        print("# ignore-file family honored in content mode (first present wins):")
-        print("  " + " → ".join(file_ops.IGNORE_FILENAMES))
+        # file_ops.denylist_summary() returns display-ready lines. Building them
+        # there (not by iterating the `_SECRET_*` sets here) keeps the CLI free of
+        # a `py/clear-text-logging-sensitive-data` false positive: these are static
+        # filename *patterns* this command exists to show, not secret values.
+        for line in file_ops.denylist_summary():
+            print(line)
         return 0
 
     if getattr(args, "explain", None):

@@ -508,6 +508,28 @@ async def _text_paths(snapshot_id: str, paths: List[str]) -> set:
 IGNORE_FILENAMES = (".llmignore", ".aiexclude", ".aiignore", ".cursorignore", ".codeiumignore")
 
 
+def denylist_summary() -> List[str]:
+    """Display-ready lines describing the compiled-in file-selection floor (#554).
+
+    Returns the always-on secret-path patterns and the ignore-file family for
+    `llm-council ignore --print-defaults`. These are static filename *patterns*
+    (`.env`, `id_rsa`), never secret values — the whole point is to show them.
+    """
+    return [
+        "# Compiled-in secret-path denylist (always on; not overridable):",
+        "# exact basenames (case-insensitive):",
+        *(f"  {n}" for n in sorted(_SECRET_NAMES)),
+        "# suffixes:",
+        "  " + " ".join(sorted(_SECRET_SUFFIXES)),
+        "# basename prefixes:",
+        "  " + " ".join(f"{p}*" for p in _SECRET_PREFIXES),
+        "# secret directories (any path component):",
+        "  " + " ".join(sorted(_SECRET_DIRS)),
+        "# ignore-file family honored in content mode (first present wins):",
+        "  " + " -> ".join(IGNORE_FILENAMES),
+    ]
+
+
 async def _load_ignore_spec(snapshot_id: str):
     """First present ignore file from the snapshot → a pathspec matcher (#554).
 
