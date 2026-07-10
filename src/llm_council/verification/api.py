@@ -94,6 +94,8 @@ from .constants import (  # noqa: F401
     MAX_TOTAL_CHARS,
     TEXT_EXTENSIONS,
     TIER_MAX_CHARS,
+    STAGE3_MAX_RESERVE_FRACTION,
+    STAGE3_MIN_BUDGET_SECONDS,
     VERIFICATION_TIMEOUT_MULTIPLIER,
 )
 from .schemas import (  # noqa: F401
@@ -338,6 +340,26 @@ def _build_preflight_info(content_chars: int, tier_contract: Any, tier: str) -> 
     return msg
 
 
+def _stage3_reserve(remaining: float) -> float:
+    """Seconds held back for stage 3 (#545). Proportional, so `quick` isn't starved."""
+    return min(STAGE3_MIN_BUDGET_SECONDS, max(remaining, 0.0) * STAGE3_MAX_RESERVE_FRACTION)
+
+
+def _stage_budget(remaining: float, fraction: float) -> float:
+    """Waterfall slice for a stage, reserving the stage-3 floor (#545, ADR-040).
+
+    ``remaining`` is wall-clock seconds left before the global deadline. Stages 1
+    and 2 divide up ``remaining - _stage3_reserve(remaining)`` so the chairman is
+    never handed a budget it cannot use but is still billed for. Clamped positive:
+    once the deadline is already blown, the pipeline's own ``asyncio.wait_for``
+    is what stops the run.
+    """
+    usable = remaining - _stage3_reserve(remaining)
+    if usable <= 0:
+        return max(remaining, 1.0)
+    return max(usable * fraction, 1.0)
+
+
 async def _run_verification_pipeline(
     request: VerifyRequest,
     store: TranscriptStore,
@@ -405,8 +427,9 @@ async def _run_verification_pipeline(
                 pass
 
     # ADR-040: Waterfall time budgeting - Stage 1 gets 50% of remaining time
+    # Issue #545: the slice is taken from (remaining - stage-3 floor).
     remaining = max(deadline_at - time.monotonic(), 1.0)
-    stage1_budget = remaining * 0.50
+    stage1_budget = _stage_budget(remaining, 0.50)
     stage1_per_model = min(stage1_budget, tier_timeout["per_model"])
 
     # Stage 1: Collect individual model responses with tier-appropriate models
@@ -461,8 +484,9 @@ async def _run_verification_pipeline(
                 pass
 
     # ADR-040: Waterfall - Stage 2 gets 70% of remaining time after Stage 1
+    # Issue #545: the slice is taken from (remaining - stage-3 floor).
     remaining = max(deadline_at - time.monotonic(), 1.0)
-    stage2_budget = remaining * 0.70
+    stage2_budget = _stage_budget(remaining, 0.70)
     stage2_per_model = min(stage2_budget, tier_timeout["per_model"])
 
     stage2_start = time.monotonic()

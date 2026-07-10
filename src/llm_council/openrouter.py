@@ -156,7 +156,18 @@ async def query_model_with_status(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(api_url, headers=headers, json=payload)
+            # Issue #545: httpx's `timeout=` sets four SEPARATE per-operation
+            # timeouts (connect/read/write/pool); `read` is the maximum gap
+            # BETWEEN chunks, not total elapsed, and httpx offers no
+            # total-wall-clock option. A provider that keeps the socket fed
+            # (streamed tokens, processing heartbeats) therefore ran unbounded,
+            # so ADR-040's per-stage waterfall budget never held. asyncio.wait_for
+            # is the actual elapsed-time bound. An OUTER cancellation (the ADR-040
+            # global deadline) still propagates: wait_for re-raises CancelledError,
+            # which derives from BaseException and is not caught below.
+            response = await asyncio.wait_for(
+                client.post(api_url, headers=headers, json=payload), timeout=timeout
+            )
             latency_ms = int((time.time() - start_time) * 1000)
 
             # Handle specific HTTP status codes (ADR-012 failure taxonomy)
@@ -217,7 +228,9 @@ async def query_model_with_status(
                 },
             }
 
-    except httpx.TimeoutException:
+    except (httpx.TimeoutException, asyncio.TimeoutError):
+        # #545: asyncio.TimeoutError is the wall-clock bound above; httpx's is a
+        # per-operation one. Both mean "this model did not answer in time".
         latency_ms = int((time.time() - start_time) * 1000)
         return {
             "status": STATUS_TIMEOUT,
