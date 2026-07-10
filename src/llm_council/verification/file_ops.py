@@ -502,6 +502,73 @@ async def _text_paths(snapshot_id: str, paths: List[str]) -> set:
     return result
 
 
+def review_svg_enabled() -> bool:
+    """ADR-053 Q2: `.svg` is noise-by-default in content mode; this opts back in."""
+    return os.getenv("LLM_COUNCIL_REVIEW_SVG", "").strip().lower() in ("true", "1", "yes")
+
+
+async def _reviewability_attrs(snapshot_id: str, paths: List[str]) -> Dict[str, str]:
+    """Map path → "generated"/"vendored" from the SNAPSHOT's linguist attributes.
+
+    One `git --attr-source=<sha> check-attr -z linguist-generated linguist-vendored`
+    call (#553, ADR-053 Q2). `-z` output is flat NUL triples `path\\0attr\\0value`;
+    a value of `set` means the attribute applies. `generated` wins if both are set.
+    """
+    if not paths:
+        return {}
+    git_root = await _get_git_root_async()
+    semaphore = await _get_git_semaphore()
+    async with semaphore:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", f"--attr-source={snapshot_id}", "check-attr", "-z",
+                "linguist-generated", "linguist-vendored", "--", *paths,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=git_root,
+            )
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
+        except Exception as e:
+            logger.warning("git check-attr raised: %s", e)
+            return {}
+    if proc.returncode != 0:
+        return {}
+    fields = stdout.decode("utf-8", errors="replace").split("\0")
+    out: Dict[str, str] = {}
+    # consume flat triples; ignore a trailing empty field from the final NUL
+    for i in range(0, len(fields) - 2, 3):
+        path, attr, value = fields[i], fields[i + 1], fields[i + 2]
+        if value != "set":
+            continue
+        if attr == "linguist-generated":
+            out[path] = "generated"  # generated wins over vendored
+        elif attr == "linguist-vendored":
+            out.setdefault(path, "vendored")
+    return out
+
+
+async def _classify_reviewable(
+    snapshot_id: str, candidates: List[Tuple[str, str]]
+) -> Tuple[List[Tuple[str, str]], List[Omission]]:
+    """Content-mode reviewability (ADR-053 Q2): drop generated/vendored/.svg noise.
+
+    Returns (survivors, omitted); survivors then go to decodability (Q1).
+    """
+    attrs = await _reviewability_attrs(snapshot_id, [p for p, _ in candidates])
+    survivors: List[Tuple[str, str]] = []
+    omitted: List[Omission] = []
+    svg_reviewable = review_svg_enabled()
+    for path, origin in candidates:
+        reason = attrs.get(path)
+        if reason:
+            omitted.append(Omission(path, reason, origin))
+        elif Path(path).suffix.lower() == ".svg" and not svg_reviewable:
+            omitted.append(Omission(path, "noise", origin))
+        else:
+            survivors.append((path, origin))
+    return survivors, omitted
+
+
 async def _classify_decodable(
     snapshot_id: str, candidates: List[Tuple[str, str]]
 ) -> Tuple[List[SelectedBlob], List[Omission]]:
@@ -552,9 +619,11 @@ async def select_blobs(
             survivors.append((path, origin))
 
     if mode == "content":
-        sel, om = await _classify_decodable(snapshot_id, survivors)
+        # Q2 reviewability (generated/vendored/.svg noise) then Q1 decodability.
+        reviewable, om_review = await _classify_reviewable(snapshot_id, survivors)
+        sel, om = await _classify_decodable(snapshot_id, reviewable)
         selected += sel
-        omitted += om
+        omitted += om_review + om
         return selected, omitted
 
     # allowlist (and the acted-on half of shadow): sync extension predicate.
@@ -566,7 +635,8 @@ async def select_blobs(
 
     if mode == "shadow" and survivors:
         try:
-            csel, _com = await _classify_decodable(snapshot_id, survivors)
+            creviewable, _cr = await _classify_reviewable(snapshot_id, survivors)
+            csel, _com = await _classify_decodable(snapshot_id, creviewable)
             allow_set = {b.path for b in selected}
             content_set = {b.path for b in csel}
             would_add = sorted(content_set - allow_set)
