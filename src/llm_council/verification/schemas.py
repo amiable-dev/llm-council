@@ -331,6 +331,24 @@ class VerifyDiagnostics(BaseModel):
             "chairman_disabled = chairman synthesis skipped (PR #519), no verdict computed"
         ),
     )
+    verdict_parse: Literal["ok", "error", "absent"] = Field(
+        default="absent",
+        description=(
+            "#544: how the chairman's ADR-025b BINARY verdict block parsed. "
+            "ok = parsed; error = malformed (see verdict_parse_error); "
+            "absent = no structured verdict expected (non-BINARY mode, chairman "
+            "error, or chairman disabled). Set independently of "
+            "LLM_COUNCIL_STRUCTURED_FINDINGS, and distinct from fallback_reason, "
+            "which describes the FINDINGS parser."
+        ),
+    )
+    verdict_parse_error: Optional[str] = Field(
+        default=None,
+        description=(
+            "#544: exception type and message when verdict_parse == 'error'. "
+            "Never contains the offending payload (cf. ADR-050 D3 scrub_exception)."
+        ),
+    )
     # ADR-051 C4 (#488): severity distribution — surfaces severity mis-labelling
     # (the mechanical gate's residual failure mode) over time.
     findings_by_severity: Dict[str, int] = Field(default_factory=dict)
