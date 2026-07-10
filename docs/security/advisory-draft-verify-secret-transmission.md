@@ -33,11 +33,18 @@ Two independent defects share one remediation. The advisory covers both.
 
 Proposed range: `>= 0.22.0, < <FIX_VERSION>`.
 
-> **Verify before publishing.** The commit archaeology above was done with
-> `git log -S` against `verification/api.py` and `file_ops.py`, and the
-> `#380` submodule split (`f6db229`) masks earlier history. Confirm that
-> v0.20.x / v0.21.x contain no earlier variant of the unfiltered path before
-> committing to `>= 0.22.0`.
+> **Affected range CONFIRMED by reading the code at each tag (2026-07-10):**
+> `>= 0.22.0`. At **v0.21.0** the verification path fetched no file contents at
+> all (`_build_verification_prompt` did not exist / embedded no `{file_contents}`),
+> so no leak was possible. **v0.22.0** introduced `_build_verification_prompt`,
+> which calls `_fetch_files_for_verification_async` and embeds `{file_contents}`
+> via the `git diff-tree` branch with **zero filtering** — a committed `.env`
+> touched by a commit was transmitted. `TEXT_EXTENSIONS` and the `.env` allowlist
+> entry (#540) arrived at **v0.23.0**; from v0.22.0 to v0.22.x the leak was
+> *broader* (no filter of any kind), narrowing to the #540 framing at v0.23.0.
+> Both collapse to the same advisory statement. Lower bound `>= 0.22.0` is not a
+> `git log -S` inference — it is the first release whose code embeds file
+> contents in the prompt.
 
 ## Severity
 
