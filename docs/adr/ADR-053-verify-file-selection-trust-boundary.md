@@ -12,6 +12,8 @@
 **Relates to:** ADR-034 (verification / directory expansion), ADR-042 (evidence injection), ADR-047 P1 (`unclear_reason` taxonomy), ADR-049 (prompt caching / prompt byte-stability), ADR-050 D3 (`scrub_exception`), ADR-051 (findings channel; verdict as a pure function of evidence), ADR-024 (config precedence, layer sovereignty)
 **Tracking:** [#543](https://github.com/amiable-dev/llm-council/issues/543) (Q0 — security, lands first), [#540](https://github.com/amiable-dev/llm-council/issues/540) (Q3), [#542](https://github.com/amiable-dev/llm-council/issues/542) (Q1/Q2 + coverage receipt)
 **Supersedes (in part):** ADR-034 v2.6 §"Directory Expansion Constants" — the `TEXT_EXTENSIONS` allowlist
+**Implementation spec:** [ADR-053-implementation-spec.md](ADR-053-implementation-spec.md) (delivery phases, disclosure sequencing, child breakdown)
+**Security advisory (draft):** [`docs/security/advisory-draft-verify-secret-transmission.md`](../security/advisory-draft-verify-secret-transmission.md)
 
 ---
 

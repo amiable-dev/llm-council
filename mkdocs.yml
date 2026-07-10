@@ -160,6 +160,7 @@ nav:
       - ADR-052 Structured-Findings Rollout: adr/ADR-052-structured-findings-rollout.md
       - ADR-052 Implementation Spec: adr/ADR-052-implementation-spec.md
       - ADR-053 Verify File Selection & Trust Boundary: adr/ADR-053-verify-file-selection-trust-boundary.md
+      - ADR-053 Implementation Spec: adr/ADR-053-implementation-spec.md
     - Roadmap 2026-H2: roadmap-2026-h2.md
     - Stateless Audit (ADR-045 P3): adr-045-p3-state-inventory.md
   - Contributing: contributing.md

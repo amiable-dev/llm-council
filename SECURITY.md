@@ -6,9 +6,12 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.19.x  | :white_check_mark: |
-| 0.18.x  | :white_check_mark: |
-| < 0.18  | :x:                |
+| 0.38.x  | :white_check_mark: |
+| 0.37.x  | :white_check_mark: |
+| < 0.37  | :x:                |
+
+Security fixes ship as patch releases on the latest minor. We do not backport to
+unsupported minors; upgrade to a supported version.
 
 ## Reporting a Vulnerability
 
@@ -20,7 +23,7 @@ We take security seriously. If you discover a security vulnerability, please rep
 
 Instead, please report vulnerabilities via one of these methods:
 
-1. **GitHub Security Advisories** (Preferred)
+1. **GitHub Private Vulnerability Reporting** (Preferred)
    - Go to the [Security tab](https://github.com/amiable-dev/llm-council/security)
    - Click "Report a vulnerability"
    - Fill out the private security advisory form
@@ -28,6 +31,9 @@ Instead, please report vulnerabilities via one of these methods:
 2. **Email**
    - Send details to: security@amiable.dev
    - Use our PGP key for sensitive information (available upon request)
+
+Private vulnerability reporting is enabled on this repository, so option 1 opens
+a private channel visible only to maintainers.
 
 ### What to Include
 
@@ -76,6 +82,45 @@ Please include:
 
 ## Known Security Considerations
 
+### `verify()` / `council-gate` is not a defense against malicious pull requests
+
+**This is a design non-goal, not a gap to be fixed** (see
+[ADR-053](docs/adr/ADR-053-verify-file-selection-trust-boundary.md),
+"Threat model and non-goals").
+
+`verify()` reads the contents of the files under review into an LLM prompt. An
+adversary who can commit code into the reviewed diff also controls those bytes,
+and can therefore attempt prompt injection against the reviewing models. No
+file-selection policy can prevent this. Any carve-out in the selection rules
+becomes the next bypass — the attacker writes the bytes.
+
+Accordingly:
+
+- **Do not use `council-gate` as a security control against hostile
+  contributions.** Use branch protection, `CODEOWNERS`, required human review,
+  and supply-chain scanning for that.
+- `verify()` is a **review aid**. Its coverage receipt tells you honestly which
+  files it read; it makes no claim that an adversary could not have influenced
+  the verdict.
+
+What ADR-053 *does* guarantee: confidentiality against accident (credential files
+are never transmitted), and coverage honesty (a `pass` is never returned over a
+file the council did not read).
+
+### Verification reads only committed content
+
+Files under review are read exclusively from git object storage
+(`git cat-file` / `git show <sha>:<path>`). Untracked and `.gitignore`d files —
+including a typical local `.env` — are never read and never transmitted.
+
+### What is sent to third-party LLM providers
+
+Running `verify` transmits the **contents of the files under review** to your
+configured provider(s) (OpenRouter, Anthropic, OpenAI, …). Treat the reviewed
+snapshot as disclosed to that provider under its data-retention terms. Credential
+files are excluded by a compiled-in, non-overridable denylist that a repository
+cannot re-admit.
+
 ### Prompt Injection
 
 The council uses XML sandboxing in Stage 2 to prevent prompt injection attacks during peer review. However, users should still:
@@ -83,6 +128,8 @@ The council uses XML sandboxing in Stage 2 to prevent prompt injection attacks d
 - Sanitize user inputs before sending to the council
 - Review synthesized outputs before automated actions
 - Use binary verdict mode for security-critical decisions
+- **Never** treat a `verify` verdict as an authorization decision over
+  attacker-controlled content (see the non-goal above)
 
 ### Data Privacy
 
