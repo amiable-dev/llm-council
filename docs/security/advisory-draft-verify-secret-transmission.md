@@ -1,168 +1,70 @@
-# DRAFT — GitHub Security Advisory: verify() transmits committed credential files to third-party LLM providers
+# GitHub Security Advisory (record): verify() transmits committed credential files to third-party LLM providers
 
 > **Status: DRAFT ADVISORY CREATED on GitHub 2026-07-10 — not yet published.**
-> [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp),
-> severity Medium (CVSS 5.3, `CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:H/I:N/A:N`),
-> CWE-200, affected `>= 0.22.0, < 0.39.0`, patched `0.39.0`.
+> [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp).
+>
+> This file is the repo-side record of the advisory. The **Form fields** below map
+> to the discrete GHSA form inputs; the **Description** section is verbatim what is
+> published in the advisory's Description field (canonical Impact / Patches /
+> Workarounds / References template).
 >
 > Fix released in **v0.39.0** (2026-07-10). Remaining maintainer steps: review the
 > draft in the Security tab, **request a CVE** (GitHub is a CNA; ~72h), then
-> **publish**. Publishing a GHSA without a `patched_versions` entry would alert
-> downstream users with no safe upgrade — the patched version is already set, so
-> publishing is safe.
->
-> Tracking: #543, #540, #551. Delivery plan: `docs/adr/ADR-053-implementation-spec.md`.
+> **publish** (safe — the patched version is already set, so downstream Dependabot
+> alerts point at a real upgrade). Tracking: #543, #540, #551.
 
 ---
 
-## Title
+## Form fields
 
-`llm-council-core` verification pipeline transmits committed credential files to third-party LLM providers
+| Field | Value |
+|---|---|
+| **Title** | verify() transmits committed credential files (.env, .npmrc, .yarnrc) to third-party LLM providers |
+| **Ecosystem** | pip (PyPI) |
+| **Package** | `llm-council-core` |
+| **Affected versions** | `>= 0.22.0, < 0.39.0` |
+| **Patched versions** | `0.39.0` |
+| **Severity** | Medium — **CVSS 5.3** (`CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:H/I:N/A:N`) |
+| **Weakness (CWE)** | CWE-200 — Exposure of Sensitive Information to an Unauthorized Actor |
 
-## Ecosystem / package
+### Severity note
 
-- **Ecosystem:** pip (PyPI)
-- **Package:** `llm-council-core`
+Scored **5.3 (Medium)** deliberately conservatively: two independent preconditions
+must both hold (credentials already committed to git **and** a `verify`/`gate` run
+over a commit touching them), and the run is victim-initiated — there is no remote
+attacker. The alternative reading `AC:L/UI:N` scores **6.5**, still Medium, so the
+bucket (and therefore Dependabot severity) is unchanged either way. `S:C` (scope
+changed) is the load-bearing metric: the data crosses out of the tool's authority
+to a third-party provider.
 
-## Affected versions
+### Affected-range confirmation
 
-Two independent defects share one remediation. The advisory covers both.
+Range `>= 0.22.0` confirmed by **reading the code at each tag** (not `git log -S`):
+**v0.21.0** fetched no file contents at all (`_build_verification_prompt` embedded
+no `{file_contents}`), so no leak was possible. **v0.22.0** introduced
+`_build_verification_prompt`, which embeds `{file_contents}` via the unfiltered
+`git diff-tree` branch — a committed `.env` touched by a commit was transmitted.
+`TEXT_EXTENSIONS` and the `.env` allowlist entry (#540) arrived at **v0.23.0**;
+from v0.22.0–v0.22.x the leak was broader (no filter of any kind), narrowing to the
+#540 framing at v0.23.0.
 
-| Defect | Introduced | First released in | Fixed in |
-|---|---|---|---|
-| `target_paths=None` applies no file filter at all (#543) | `0005fe7` | **v0.22.0** | `0.39.0` |
-| `.env`, `.npmrc`, `.yarnrc` on the `TEXT_EXTENSIONS` allowlist (#540) | `1f91c08` | **v0.23.0** | `0.39.0` |
+---
 
-Proposed range: `>= 0.22.0, < 0.39.0`.
+## Description (published verbatim)
 
-> **Affected range CONFIRMED by reading the code at each tag (2026-07-10):**
-> `>= 0.22.0`. At **v0.21.0** the verification path fetched no file contents at
-> all (`_build_verification_prompt` did not exist / embedded no `{file_contents}`),
-> so no leak was possible. **v0.22.0** introduced `_build_verification_prompt`,
-> which calls `_fetch_files_for_verification_async` and embeds `{file_contents}`
-> via the `git diff-tree` branch with **zero filtering** — a committed `.env`
-> touched by a commit was transmitted. `TEXT_EXTENSIONS` and the `.env` allowlist
-> entry (#540) arrived at **v0.23.0**; from v0.22.0 to v0.22.x the leak was
-> *broader* (no filter of any kind), narrowing to the #540 framing at v0.23.0.
-> Both collapse to the same advisory statement. Lower bound `>= 0.22.0` is not a
-> `git log -S` inference — it is the first release whose code embeds file
-> contents in the prompt.
+### Impact
 
-## Severity
+`llm-council-core`'s `verify()` assembles a prompt from file contents read out of a git snapshot and sends it to the configured third-party LLM provider(s) (OpenRouter, Anthropic, OpenAI, …). Two independent defects caused **committed credential files to be included in that prompt**, and therefore transmitted off-machine (CWE-200).
 
-**Maintainer to score.** Do not inflate this. The honest characterisation:
+**1. `target_paths=None` bypassed all filtering (#543).** The text/garbage filters ran only when a caller passed an explicit `target_paths`. With `target_paths` omitted — the **default** at both `run_verification()` and the MCP `verify` tool — the pipeline ran `git diff-tree --name-only` and passed the result straight to the file fetcher: no text check, no garbage check, no warning. **Any commit that merely touched a `.env` transmitted its full contents**, along with binary blobs and lockfiles.
 
-- Requires credentials **already committed to the git repository**.
-- Requires a `council-verify` / `council-gate` / MCP `verify` run over a commit
-  that touches those files.
-- **Not remotely triggerable.** There is no attacker who initiates this; the
-  disclosure is caused by the victim's own invocation.
-- Anyone affected had already committed secrets to version control, so those
-  secrets were arguably compromised before Council touched them.
+**2. Credential files on the text allowlist (#540).** `TEXT_EXTENSIONS` contained `.env`, `.env.example`, `.env.sample`, and — not identified in the original report — **`.npmrc`** and **`.yarnrc`** (which routinely hold `//registry.npmjs.org/:_authToken=…`). `secrets.yaml`/`secrets.yml` rode in via the `.yaml`/`.yml` entries.
 
-Suggested starting vector for discussion (**not** an assertion):
-`CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:C/C:H/I:N/A:N` — scope-changed because the data
-leaves the trust boundary to a third party. Adjust or discard.
+**Who is impacted — and the bound.** Only content **committed to git** is reachable: every byte is read via `git cat-file` / `git show <sha>:<path>`, never the filesystem. An untracked or `.gitignore`d `.env` — the common case, holding a developer's real keys — was never readable. There is no remote attacker; disclosure is caused by the operator's own `verify`/`gate` invocation. So the affected party is anyone who **committed a credential file and then ran `verify`/`gate`/MCP `verify` over a commit that touched it**.
 
-## Weakness
+**> If that is you, rotate the affected credentials.** They were already in your git history (which is not a secret store) and were arguably compromised before Council read them; Council widened the exposure, it did not create it.
 
-**CWE-200: Exposure of Sensitive Information to an Unauthorized Actor.**
-The unauthorized actor is the third-party LLM provider (OpenRouter, Anthropic,
-OpenAI, etc., depending on gateway configuration).
-
-Nearest precedent in shape: [CVE-2025-30066](https://github.com/advisories/ghsa-mrrh-fwg8-r2c3)
-(`tj-actions/changed-files`) — secrets rendered readable in a location outside
-the intended trust boundary; guidance was "assume leaked, rotate".
-
-## Description
-
-`verify()` assembles a prompt from file contents read out of a git snapshot and
-sends it to the configured LLM provider(s). Which files are included was decided
-by `verification/file_ops.py::_is_text_file()`, backed by the hardcoded
-`TEXT_EXTENSIONS` allowlist. Two defects caused credential files to be included.
-
-### 1. `target_paths=None` bypasses all filtering (#543)
-
-`_is_text_file()` and `_is_garbage_file()` are called from exactly one place:
-inside `_expand_target_paths()`. That function is only reached on the
-`if target_paths:` branch of
-`_fetch_files_for_verification_async_with_metadata()`. The `else` branch — taken
-whenever `target_paths` is omitted, which is the **default** at both
-`run_verification()` and the MCP `verify` tool — runs
-`git diff-tree --no-commit-id --name-only -r <sha>` and passes the result
-directly to the file fetcher.
-
-No text check. No garbage check. No warning. `expansion_warnings` is empty.
-
-Consequently **any commit that touches a `.env` file causes that file's full
-contents to be transmitted**, along with binary blobs (decoded with
-`errors="replace"`) and deny-listed lockfiles.
-
-### 2. Credential files on the text allowlist (#540)
-
-Independently, `TEXT_EXTENSIONS` contained `.env`, `.env.example`, and
-`.env.sample`, so a `.env` inside a directory passed via `target_paths` was
-treated as reviewable source. Also on the list, and not identified in the
-original report:
-
-- **`.npmrc`** and **`.yarnrc`** — routinely contain
-  `//registry.npmjs.org/:_authToken=…`
-- **`secrets.yaml` / `secrets.yml`** — matched via the `.yaml` / `.yml` entries
-
-Note that `.env.local`, `.env.production`, `id_rsa`, `*.pem`,
-`terraform.tfvars`, and `kubeconfig` were excluded only **by accident** —
-`Path(".env.local").suffix` is `.local`, which is not on the list. No policy
-protected them.
-
-## Impact — bounded
-
-**Only content committed to git is reachable.** Every byte is read via
-`git cat-file` / `git show <sha>:<path>`. There is no filesystem read of target
-files anywhere in `verification/`. An untracked or `.gitignore`d `.env` — the
-common case, and the one holding a developer's real API keys — was never
-readable and is not affected.
-
-Exposure is therefore confined to credential files **committed to the
-repository**, on a commit that a `verify` run touched.
-
-## Patches
-
-Fixed in **`0.39.0`**:
-
-- All candidate-path producers, including the `git diff-tree` branch, are routed
-  through a single selector; an unfiltered path is no longer representable.
-- A compiled-in, non-overridable secret-path denylist (case-insensitive) excludes
-  `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.npmrc`, `.yarnrc`, `.pypirc`,
-  `.git-credentials`, `.aws/credentials`, `kubeconfig`, `secrets.y*ml`,
-  `terraform.tfvars`, and others, before any blob is fetched.
-
-Design rationale: `docs/adr/ADR-053-verify-file-selection-trust-boundary.md`.
-
-## Workarounds
-
-For users who cannot upgrade immediately:
-
-1. Always pass an explicit `target_paths` naming only the files to review. This
-   avoids the unfiltered `diff-tree` path (defect 1) but **not** defect 2.
-2. Ensure credential files are not committed. `git ls-files | grep -E '^\.env|\.npmrc|\.yarnrc'`
-3. Do not run `verify` / `gate` over commit ranges that touch credential files.
-
-## Remediation for affected users — rotate
-
-> **If you committed credentials to your repository and ran `council-verify`,
-> `council-gate`, or the MCP `verify` tool over a commit that touched them,
-> those credentials were transmitted to your configured LLM provider and may be
-> retained under that provider's terms. Rotate them.**
-
-Context, so the advice is proportionate: if you are in this position, those
-secrets were already in your git history, and git history is not a secret store.
-They were arguably compromised before Council read them. Rotation is warranted
-regardless; Council widened the exposure, it did not create it.
-
-### How to check whether you were affected
-
-We **cannot** enumerate affected users — the prompts went to third parties and
-we collect no telemetry on their contents. You can check your own history:
+**How to check whether you were affected** (affected users cannot be enumerated — the prompts went to third parties and no telemetry is collected on their contents):
 
 ```bash
 # 1. Were credential files ever committed?
@@ -174,19 +76,42 @@ git log --all --diff-filter=A --name-only --pretty=format: \
 ls .council/logs/ 2>/dev/null && grep -rl "snapshot_id" .council/logs/ | head
 ```
 
-Then check your LLM provider's data-retention and zero-retention settings for
-the relevant period.
+Then review your LLM provider's data-retention / zero-retention settings for the relevant period.
 
-## Credit
+### Patches
 
-Discovered during maintainer triage while drafting ADR-053, prompted by a
-Council review of PR #539.
+Fixed in **`llm-council-core` 0.39.0**. Upgrade to `>= 0.39.0`.
 
-## Process note (for maintainers — not part of the published advisory)
+- Every candidate-path producer — including the `git diff-tree` branch — is routed through a single non-bypassable selector; an unfiltered fetch is no longer representable (enforced by an architecture test).
+- A compiled-in, case-insensitive, non-overridable secret-path denylist excludes `.env*`, `*.pem`, `*.key`, `id_rsa*`, `.npmrc`, `.yarnrc`, `.pypirc`, `.git-credentials`, `.aws/credentials`, `kubeconfig`, `secrets.y*ml`, `terraform.tfvars`, and others **before any blob is fetched**.
+
+Affected range `>= 0.22.0, < 0.39.0`. v0.21.0 fetched no file contents (no leak possible); v0.22.0 introduced the prompt-building path that embeds file contents via the unfiltered `diff-tree` branch, and `.env`-on-the-allowlist (#540) followed at v0.23.0. Confirmed by reading the code at each tag.
+
+### Workarounds
+
+If you cannot upgrade immediately:
+
+1. Always pass an explicit `target_paths` naming only the files to review (avoids defect 1, not defect 2).
+2. Ensure credential files are not committed to the repository.
+3. Do not run `verify` / `gate` over commit ranges that touch credential files.
+
+### References
+
+- Design rationale: [ADR-053 — Verify File Selection & Trust Boundary](https://github.com/amiable-dev/llm-council/blob/master/docs/adr/ADR-053-verify-file-selection-trust-boundary.md)
+- Fix release: [v0.39.0](https://github.com/amiable-dev/llm-council/releases/tag/v0.39.0)
+- Tracking issues: [#543](https://github.com/amiable-dev/llm-council/issues/543) (unfiltered default path), [#540](https://github.com/amiable-dev/llm-council/issues/540) (credential files on the text allowlist)
+- CWE-200: Exposure of Sensitive Information to an Unauthorized Actor
+- Precedent (secrets rendered readable outside the trust boundary; guidance "assume leaked, rotate"): [CVE-2025-30066 / GHSA-mrrh-fwg8-r2c3](https://github.com/advisories/GHSA-mrrh-fwg8-r2c3)
+
+_Found during maintainer triage while drafting ADR-053, prompted by a Council review of PR #539._
+
+---
+
+## Process note (for maintainers — NOT part of the published advisory)
 
 `SECURITY.md` states "Do NOT open a public GitHub issue for security
 vulnerabilities." #543 was nevertheless filed publicly before this advisory
-existed. Private vulnerability reporting was also **disabled** on the repository
-at the time, so the documented reporting channel did not function. Both are
-corrected in the same change as the fix. Because the issue is public, there is
-no private-fix window; publish the advisory promptly once the fix ships.
+existed. Private vulnerability reporting was also **disabled** on the repository at
+the time, so the documented reporting channel did not function. Both were corrected
+alongside the fix (PVR enabled 2026-07-10; `SECURITY.md` rewritten). Because the
+issue is public there is no private-fix window; publish the advisory promptly.
