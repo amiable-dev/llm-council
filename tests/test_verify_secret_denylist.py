@@ -12,6 +12,8 @@ the `*.example`/`*.sample` templates are preserved by NAME PATTERN, not by a
 fake extension entry.
 """
 
+import asyncio
+
 import pytest
 
 from llm_council.verification import file_ops
@@ -111,7 +113,7 @@ def test_allowed_paths_are_not_secrets(path):
 
 class TestSelectBlobsAppliesTheBoundary:
     def test_secret_is_omitted_with_denied_secret_reason(self):
-        selected, omitted = file_ops.select_blobs([(".env", "explicit")])
+        selected, omitted = asyncio.run(file_ops.select_blobs("0" * 40, [(".env", "explicit")]))
         assert selected == []
         assert len(omitted) == 1
         assert omitted[0].reason == "denied_secret"
@@ -119,13 +121,13 @@ class TestSelectBlobsAppliesTheBoundary:
 
     def test_boundary_runs_before_text_check(self):
         # `.env` is text; it must be denied as a SECRET, not admitted as text.
-        selected, omitted = file_ops.select_blobs([(".env", "discovered")])
+        selected, omitted = asyncio.run(file_ops.select_blobs("0" * 40, [(".env", "discovered")]))
         assert not selected
         assert omitted[0].reason == "denied_secret"
 
     def test_omission_records_path_only_never_a_value(self):
         # mirrors ADR-050 D3 scrub_exception — no content, just the path.
-        _sel, omitted = file_ops.select_blobs([("private.key", "explicit")])
+        _sel, omitted = asyncio.run(file_ops.select_blobs("0" * 40, [("private.key", "explicit")]))
         o = omitted[0]
         assert o.path == "private.key"
         assert o.reason == "denied_secret"
@@ -133,8 +135,10 @@ class TestSelectBlobsAppliesTheBoundary:
         assert set(vars(o)) == {"path", "reason", "origin"}
 
     def test_template_and_source_pass(self):
-        selected, omitted = file_ops.select_blobs(
-            [(".env.example", "explicit"), ("src/app.py", "explicit")]
+        selected, omitted = asyncio.run(
+            file_ops.select_blobs(
+                "0" * 40, [(".env.example", "explicit"), ("src/app.py", "explicit")]
+            )
         )
         assert {b.path for b in selected} == {".env.example", "src/app.py"}
         assert omitted == []

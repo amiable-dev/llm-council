@@ -21,6 +21,11 @@ MAX_TOTAL_CHARS = 50000
 # Maximum files to include after directory expansion (Issue #309)
 MAX_FILES_EXPANSION = 100
 
+# #552 (ADR-053 Q1): content-mode size cap. A blob larger than this is omitted
+# as `too_large` before any fetch, so a pathological blob is never streamed just
+# to sniff it. Generous: tier char budgets truncate anything reviewable anyway.
+MAX_BLOB_SIZE_BYTES = 5_000_000
+
 # Text file extensions to include (whitelist approach per council decision)
 # 80+ extensions covering common source code, config, and documentation files
 TEXT_EXTENSIONS: Set[str] = frozenset(
