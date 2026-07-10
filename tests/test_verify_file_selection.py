@@ -67,19 +67,15 @@ def redteam_repo(tmp_path, monkeypatch):
     return repo, sha
 
 
-# Split by which ticket is responsible. #547 installs the chokepoint but
-# deliberately does NOT change the predicates, so `.env` — which really is on
-# TEXT_EXTENSIONS — still passes the filter. Closing that is #548's job (the
-# compiled-in secret denylist). Keeping both sets here, with the secret ones
-# xfail-strict, means the coverage is written down now and flips green the moment
-# #548 lands, rather than being forgotten.
+# #547 installed the chokepoint; #548 added the secret boundary. As of #548 every
+# item below is blocked on every path (default / directory / explicit).
 BLOCKED_BY_CHOKEPOINT = {
     "REDTEAMBINARY": "binary blob",
     "redteam-lock-data": "deny-listed lockfile",
-    "REDTEAMKEY": "private key (excluded only because `id_rsa` is not a text extension)",
 }
 BLOCKED_BY_DENYLIST = {
-    "sk-REDTEAM-SECRET-abc123": ".env secret (#548: `.env` is on TEXT_EXTENSIONS)",
+    "sk-REDTEAM-SECRET-abc123": ".env secret (#548 secret boundary)",
+    "REDTEAMKEY": "id_rsa private key (#548 secret boundary)",
 }
 
 
@@ -107,15 +103,14 @@ def test_no_binary_or_lockfile_ever_reaches_the_prompt(redteam_repo, target_path
     assert not leaked, f"{label}: leaked {leaked} into the verification prompt"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="#548: `.env` is on TEXT_EXTENSIONS until the denylist lands"
-)
 @pytest.mark.parametrize(
     "target_paths",
     [None, [""], [".env", "src/app.py"]],
     ids=["default", "directory", "explicit"],
 )
 def test_env_secret_never_reaches_the_prompt(redteam_repo, target_paths):
+    # #548 landed: `.env` is denied by the compiled-in secret boundary (not merely
+    # dropped as non-text), on the explicit path too.
     _repo, sha = redteam_repo
     prompt = asyncio.run(_prompt_for(sha, target_paths))
     leaked = [why for needle, why in BLOCKED_BY_DENYLIST.items() if needle in prompt]
