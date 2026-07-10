@@ -808,6 +808,17 @@ async def run_verification(
     Returns:
         Verification result dictionary
     """
+    # #549: validate the snapshot at THIS boundary. Defense in depth, NOT a live
+    # hole: production callers build a VerifyRequest (Pydantic rejects a malformed
+    # SHA), and the VerificationContextManager below re-validates before any git
+    # argv call. This makes the guarantee explicit and independent of the context
+    # manager keeping its position, and fails fast (before transcript setup) for a
+    # caller that bypassed construction (VerifyRequest.model_construct, a future
+    # caller). Shell injection is already precluded (argv arrays, no shell=True);
+    # the residual class is ARGUMENT injection, which matters once P3.1 adds
+    # pathspec-style `git ... -- <paths>` calls.
+    validate_snapshot_id(request.snapshot_id)
+
     verification_id = str(uuid.uuid4())[:8]
 
     # Create isolated context for this verification
