@@ -699,7 +699,9 @@ async def _run_verification_pipeline(
             confidence_calibrated = None  # calibration never fails a run
     exit_code = _verdict_to_exit_code(verdict)
     # ADR-047 P1 (#413): disambiguate UNCLEAR for automation.
-    unclear_reason = derive_unclear_reason(verdict, stage3_result)
+    unclear_reason = derive_unclear_reason(
+        verdict, stage3_result, diagnostics=verification_output.get("diagnostics")
+    )
 
     # ADR-041: Build timing summary
     total_elapsed_ms = int((time.monotonic() - pipeline_start) * 1000)

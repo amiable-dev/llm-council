@@ -12,6 +12,8 @@ import json
 import os
 from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
+from llm_council.json_extract import extract_json_object, matching_brace
+
 if TYPE_CHECKING:
     from .schemas import Finding
 
@@ -75,84 +77,11 @@ def _as_text(value: Any) -> str:
         return str(value)
 
 
-def _matching_brace(text: str, start: int) -> int:
-    """Index of the ``}`` matching the ``{`` at ``start``, string-aware, or -1.
-
-    Braces inside JSON string values and escaped quotes are ignored, so a
-    description like ``"use {x}"`` doesn't miscount.
-    """
-    depth = 0
-    in_string = False
-    escaped = False
-    for i in range(start, len(text)):
-        c = text[i]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif c == "\\":
-                escaped = True
-            elif c == '"':
-                in_string = False
-            continue
-        if c == '"':
-            in_string = True
-        elif c == "{":
-            depth += 1
-        elif c == "}":
-            depth -= 1
-            if depth == 0:
-                return i
-    return -1
-
-
-def _extract_json_object(text: str, preferred_key: Optional[str] = None) -> Any:
-    """Extract a JSON object from chairman text (LLM-resilient).
-
-    Unlike the flat verdict extractor (`verdict._extract_json_from_text`, whose
-    `\\{[^{}]*\\}` pattern breaks on nested arrays), this tries the whole string,
-    then walks EVERY ``{`` position with string-aware brace matching. When
-    ``preferred_key`` is given it returns the first parsed dict that CONTAINS
-    that key (so a decoy object before the real verdict payload — which would
-    cause a silent empty-findings false pass, Council C3 finding — is skipped);
-    if none has the key, it returns the first dict. Raises when nothing parses.
-    """
-    stripped = text.strip()
-    first_dict: Any = None
-
-    def _consider(obj: Any) -> Optional[Any]:
-        nonlocal first_dict
-        if not isinstance(obj, dict):
-            return None
-        if preferred_key is None or preferred_key in obj:
-            return obj
-        if first_dict is None:
-            first_dict = obj
-        return None
-
-    try:
-        hit = _consider(json.loads(stripped))  # fast path: the whole thing is JSON
-        if hit is not None:
-            return hit
-    except json.JSONDecodeError:
-        pass
-    idx = stripped.find("{")
-    while idx != -1:
-        end = _matching_brace(stripped, idx)
-        if end != -1:
-            try:
-                hit = _consider(json.loads(stripped[idx : end + 1]))
-                if hit is not None:
-                    return hit
-            except json.JSONDecodeError:
-                pass
-            # Advance PAST this whole object, not to idx+1 (which would rescan
-            # its nested braces — an O(n^2) walk).
-            idx = stripped.find("{", end + 1)
-        else:
-            idx = stripped.find("{", idx + 1)  # unbalanced from here: step by one
-    if first_dict is not None:
-        return first_dict
-    raise ValueError("no JSON object found")
+# #561: the extractor moved to `llm_council.json_extract` so the ADR-025b
+# verdict parser and this findings parser read the same payload with the SAME
+# rules. Private aliases retained for the existing tests.
+_matching_brace = matching_brace
+_extract_json_object = extract_json_object
 
 
 def structured_findings_enabled() -> bool:

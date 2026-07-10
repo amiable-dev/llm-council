@@ -155,6 +155,8 @@ A `Finding` has: `severity` (`critical` \| `major` \| `minor` \| `info`),
 | `verdict_source` | string | `mechanical` = `policy(findings)`; `legacy` = prose parse; `chairman_disabled` = synthesis skipped, no verdict computed. |
 | `verdict_parse` | string | How the chairman's BINARY verdict block parsed: `ok`, `error` (malformed — see `verdict_parse_error`), or `absent` (no structured verdict expected). Reported **regardless** of `LLM_COUNCIL_STRUCTURED_FINDINGS`. Distinct from `fallback_reason`, which describes the *findings* parser. |
 | `verdict_parse_error` | string? | Exception type and message when `verdict_parse == "error"`. Never contains the offending payload. |
+| `deliberation_agreement` | float? | Stage-2 reviewer agreement, published under its real name. Measures how well the council **reviewed**, not how sure we are of the verdict. **Gates nothing.** |
+| `pass_blocked_by` | string? | Why a mechanical `pass` was downgraded to `unclear`: `deliberation_invalid` (no well-formed chairman verdict, fewer than `MIN_STAGE1_REVIEWERS`, or a stage-3 error) or `chairman_contradicts_findings` (chairman rejected but labelled no finding `critical`). `None` otherwise. |
 | `findings_by_severity` | object | Count per severity — surfaces severity mis-labelling over time. |
 | `verdict_evidence_mismatch` | string? | Defensive invariant marker; `None` in normal operation (should never fire under the mechanical gate). |
 | `inner_verdict` | string? | Structured verdict **before** UNCLEAR softening (nested so consumers can't parse it to bypass the low-confidence gate). |

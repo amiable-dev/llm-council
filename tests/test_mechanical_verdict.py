@@ -63,13 +63,22 @@ class TestMechanicalGate:
         assert r["blocking_issues"] == []
         assert r["diagnostics"]["verdict_source"] == "mechanical"
 
-    def test_pass_softens_to_unclear_below_threshold(self, monkeypatch):
-        # No critical ⇒ mechanical pass, but low confidence ⇒ softened to unclear
-        # (same rule as the legacy path); still verdict_source=mechanical.
+    def test_confidence_never_softens_the_mechanical_verdict(self, monkeypatch):
+        # CHANGED by #560. This test previously asserted that a low confidence
+        # softened a mechanical `pass` to `unclear`, "same rule as the legacy path".
+        #
+        # It no longer does. Across 539 local transcripts that rule turned 21 of 22
+        # chairman-approved mechanical runs into `unclear` (4.5% pass vs 81% on the
+        # legacy path), because the confidence fed to it was
+        # `calculate_confidence_from_agreement` — a DIRECTIONAL score of how well
+        # the council's *reviews* were written, not a confidence in the verdict.
+        # The verdict is now `policy(findings)` and nothing else, which is what
+        # ADR-051 C3 said it was. A `pass` is instead gated on the deliberation
+        # having actually happened (see TestPassRequiresValidDeliberation).
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
         r = build_verification_result([], [], _stage3(
             [{"severity": "minor", "description": "d"}]), confidence_threshold=0.99)
-        assert r["verdict"] == "unclear"
+        assert r["verdict"] == "pass"
         assert r["blocking_issues"] == []  # no critical
         assert r["diagnostics"]["verdict_source"] == "mechanical"
 
@@ -128,20 +137,27 @@ class TestC4ConsistencyAndTelemetry:
         assert r["verdict"] == "pass"
         assert r["diagnostics"].get("verdict_evidence_mismatch") is None
 
-    def test_invariant_does_not_fire_on_softened_unclear(self, monkeypatch):
-        # unclear (softened pass, no critical) is consistent — not a mismatch.
+    def test_invariant_does_not_fire_on_a_pass_blocked_by_invalid_deliberation(self, monkeypatch):
+        # #560: confidence no longer softens, so the old "softened unclear" fixture
+        # is now a plain pass. The remaining way a mechanical `pass` becomes
+        # `unclear` is a degraded run — and that is still not a policy mismatch.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result([], [], _stage3(
-            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
+        s3 = _stage3([{"severity": "minor", "description": "m"}])
+        s3["error_status"] = "timeout"
+        r = build_verification_result([], [], s3, confidence_threshold=0.0)
         assert r["verdict"] == "unclear"
+        assert r["diagnostics"]["pass_blocked_by"] == "deliberation_invalid"
         assert r["diagnostics"].get("verdict_evidence_mismatch") is None
 
 
 class TestC5InnerVerdict:
-    def test_softened_unclear_carries_inner_verdict_mechanical(self, monkeypatch):
+    def test_blocked_pass_carries_inner_verdict_mechanical(self, monkeypatch):
+        # #560: the C5 pre-softening capture survives — it now records a `pass`
+        # blocked by a degraded deliberation rather than by a confidence threshold.
         monkeypatch.setenv("LLM_COUNCIL_STRUCTURED_FINDINGS", "true")
-        r = build_verification_result([], [], _stage3(
-            [{"severity": "minor", "description": "m"}]), confidence_threshold=0.99)
+        s3 = _stage3([{"severity": "minor", "description": "m"}])
+        s3["error_status"] = "timeout"
+        r = build_verification_result([], [], s3, confidence_threshold=0.0)
         assert r["verdict"] == "unclear"
         d = r["diagnostics"]
         assert d["inner_verdict"] == "pass"

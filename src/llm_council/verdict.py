@@ -25,6 +25,8 @@ Example Usage:
 """
 
 import json
+
+from llm_council.json_extract import extract_json_object
 import logging
 import re
 from dataclasses import dataclass, field, asdict
@@ -205,11 +207,15 @@ def parse_binary_verdict(chairman_response: str) -> VerdictResult:
     Raises:
         ValueError: If response cannot be parsed or verdict is invalid
     """
-    json_str = _extract_json_from_text(chairman_response)
-
+    # #561: use the LLM-resilient extractor, not the legacy regex. The old
+    # `_extract_json_from_text` fell back to `\{[^{}]*\}` — the first BRACE-FREE
+    # object — which, since ADR-051 made the payload findings-first, is
+    # `findings[0]`, not the verdict. Well-formed chairman output that merely
+    # omitted the closing code fence raised "Missing required field: verdict".
+    # `preferred_key` skips any decoy object that precedes the real payload.
     try:
-        data = json.loads(json_str)
-    except json.JSONDecodeError as e:
+        data = extract_json_object(chairman_response, preferred_key="verdict")
+    except ValueError as e:
         raise ValueError(f"Failed to parse binary verdict JSON: {e}")
 
     # Validate required fields
@@ -243,11 +249,10 @@ def parse_tie_breaker_verdict(chairman_response: str) -> VerdictResult:
     Raises:
         ValueError: If response cannot be parsed
     """
-    json_str = _extract_json_from_text(chairman_response)
-
+    # #561: same robust extractor as the binary parser.
     try:
-        data = json.loads(json_str)
-    except json.JSONDecodeError as e:
+        data = extract_json_object(chairman_response, preferred_key="winner")
+    except ValueError as e:
         raise ValueError(f"Failed to parse tie-breaker verdict JSON: {e}")
 
     verdict = data.get("verdict", "").lower()

@@ -349,6 +349,25 @@ class VerifyDiagnostics(BaseModel):
             "Never contains the offending payload (cf. ADR-050 D3 scrub_exception)."
         ),
     )
+    deliberation_agreement: Optional[float] = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "#560: the stage-2 reviewer-agreement figure, published under its real "
+            "name. It measures how well the council REVIEWED, not how sure we are of "
+            "the verdict, and it no longer gates anything."
+        ),
+    )
+    pass_blocked_by: Optional[str] = Field(
+        default=None,
+        description=(
+            "#560: why a mechanical `pass` was downgraded to `unclear` — "
+            "'deliberation_invalid' (no well-formed chairman verdict, too few "
+            "reviewers, or a stage-3 error) or 'chairman_contradicts_findings' "
+            "(chairman rejected but labelled no finding critical). None otherwise."
+        ),
+    )
     # ADR-051 C4 (#488): severity distribution — surfaces severity mis-labelling
     # (the mechanical gate's residual failure mode) over time.
     findings_by_severity: Dict[str, int] = Field(default_factory=dict)

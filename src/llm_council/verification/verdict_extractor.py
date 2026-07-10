@@ -12,6 +12,7 @@ import re
 import statistics
 from typing import Any, Dict, List, Optional, Tuple
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -499,19 +500,85 @@ def build_verification_result(
                 # locals first, then mutate `result` atomically at the end — so a
                 # mid-computation exception leaves the legacy result intact rather
                 # than a half-updated verdict/confidence (Council C5 round 2).
-                mechanical = verdict_policy(parsed)
-                # Confidence must correspond to the mechanical verdict it
-                # accompanies, not the discarded legacy one (Council C5 round 1).
-                mech_conf = calculate_confidence_from_agreement(stage2_results, mechanical)
+                # #560: the verdict is `policy(findings)` and NOTHING else. It is
+                # no longer softened by a confidence heuristic. Across 539 local
+                # transcripts that softening turned 21 of 22 chairman-approved
+                # mechanical runs into `unclear` (4.5% pass vs 81% on the legacy
+                # path) because `calculate_confidence_from_agreement` scores the
+                # QUALITY OF THE COUNCIL'S REVIEWS, directionally -- so a
+                # well-argued FAIL was reported at the 0.3 floor. Neither that
+                # number nor the chairman's self-report (min 0.85, stdev 0.034 --
+                # saturated, non-discriminating) is a usable gate input.
+                policy_verdict = verdict_policy(parsed)
+                has_critical = any(f.severity == "critical" for f in parsed)
+
+                # Invariant is asserted on the PURE function, before any gating,
+                # so a gate-induced `unclear` can't mask a policy violation.
+                mismatch = None
+                if (policy_verdict == "fail") != has_critical:
+                    mismatch = (
+                        "fail_without_critical"
+                        if policy_verdict == "fail"
+                        else "nonfail_with_critical"
+                    )
+
+                # #560(c): report a confidence that corresponds to the verdict.
+                # The chairman's self-report is used only when its own verdict
+                # CONCORDS with policy(findings) (the C5 round-1 concern); the
+                # agreement heuristic is retained, honestly named, as fallback.
+                deliberation_agreement = calculate_confidence_from_agreement(
+                    stage2_results, policy_verdict
+                )
+                chairman_verdict = getattr(verdict_result, "verdict", None)
+                chairman_conf = getattr(verdict_result, "confidence", None)
+                concordant = (
+                    None
+                    if chairman_verdict is None
+                    else ((chairman_verdict == "approved") == (policy_verdict == "pass"))
+                )
+                if concordant and isinstance(chairman_conf, (int, float)):
+                    mech_conf = round(float(chairman_conf), 2)
+                else:
+                    mech_conf = deliberation_agreement
                 # Calibrate ONCE, here in the compute section — the apply block
-                # below must contain no throwing calls, so it reuses this local
-                # rather than calling calibrate() again (Council C5 round 3).
+                # below must contain no throwing calls (Council C5 round 3).
                 mech_calibrated = calibrate(mech_conf) if calibrate is not None else None
-                mech_eff = mech_calibrated if mech_calibrated is not None else mech_conf
+
+                # #560(b): a `pass` requires a deliberation that actually happened.
+                # This replaces the confidence veto, which was accidentally doing
+                # double duty as a degenerate-output backstop.
+                #
+                # DELIBERATELY NARROW. Both conditions are evidence that the run
+                # itself was degraded — NOT judgements about the artifact:
+                #   * verdict_parse == "error": the chairman's JSON violated the
+                #     ADR-025b schema (#544). `absent` does not block: a missing
+                #     verdict channel is not evidence of degradation, and ADR-051
+                #     made that channel non-authoritative on purpose.
+                #   * stage-3 error_status (#403): the chairman call itself failed.
+                #
+                # NOT gated on chairman/findings concordance. A chairman that says
+                # "rejected" while labelling no finding `critical` is overruled by
+                # policy(findings) — that is ADR-051's central decision, pinned by
+                # test_mechanical_verdict::test_no_critical_passes_with_empty_blocking.
+                # The contradiction is recorded as a marker below (it was previously
+                # invisible: 0 of 4 real occurrences flagged) but changing the verdict
+                # on it would re-establish the chairman's authority that ADR-051
+                # removed, and belongs in an ADR revision, not a bug fix.
+                deliberation_valid = diagnostics.get("verdict_parse") != "error" and not (
+                    stage3_result or {}
+                ).get("error_status")
+
+                if chairman_verdict is not None and concordant is False:
+                    mismatch = mismatch or "chairman_contradicts_findings"
+
+                mechanical = policy_verdict
+                pass_blocked_by: Optional[str] = None
                 _inner: Optional[Tuple[str, float, Optional[float]]] = None
-                if mechanical == "pass" and mech_eff < confidence_threshold:
-                    _inner = ("pass", mech_conf, mech_eff)
+                if policy_verdict == "pass" and not deliberation_valid:
+                    pass_blocked_by = "deliberation_invalid"
+                    _inner = ("pass", mech_conf, mech_calibrated)
                     mechanical = "unclear"
+
                 mech_blocking = [
                     {"severity": f.severity, "description": f.description, "location": f.location}
                     for f in parsed
@@ -520,12 +587,6 @@ def build_verification_result(
                 by_sev: Dict[str, int] = {}
                 for f in parsed:
                     by_sev[f.severity] = by_sev.get(f.severity, 0) + 1
-                has_critical = any(f.severity == "critical" for f in parsed)
-                mismatch = None
-                if (mechanical == "fail") != has_critical:
-                    mismatch = (
-                        "fail_without_critical" if mechanical == "fail" else "nonfail_with_critical"
-                    )
 
                 # --- all computed; apply atomically (no throwing calls below) ---
                 result["verdict"] = mechanical
@@ -534,6 +595,11 @@ def build_verification_result(
                 result["blocking_issues"] = mech_blocking
                 diagnostics["verdict_source"] = "mechanical"
                 diagnostics["findings_by_severity"] = by_sev
+                # #560(c): publish the agreement number under its real name — it
+                # measures how well the council REVIEWED, not how sure we are.
+                diagnostics["deliberation_agreement"] = deliberation_agreement
+                if pass_blocked_by is not None:
+                    diagnostics["pass_blocked_by"] = pass_blocked_by
                 # Discard any inner-verdict captured during the (now-overridden)
                 # legacy softening; re-set only if the mechanical verdict softened.
                 inner_verdict = inner_confidence = inner_confidence_calibrated = None
@@ -564,6 +630,7 @@ def derive_unclear_reason(
     verdict: str,
     stage3_result: Any,
     timeout_fired: bool = False,
+    diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     """ADR-047 P1: machine-readable cause for an UNCLEAR verdict (#413).
 
@@ -588,5 +655,12 @@ def derive_unclear_reason(
     if isinstance(stage3_result, dict) and stage3_result.get("chairman_disabled") is True:
         return "chairman_disabled"
     if isinstance(stage3_result, dict) and stage3_result.get("error_status"):
+        return "infra_failure"
+    # #560: a mechanical `pass` blocked by the validity precondition or by the
+    # chairman contradicting its own findings is NOT "the artifact is borderline".
+    # Routing it as low_confidence tells automation "accept and audit" (ADR-047 P1)
+    # for a run that should be retried or escalated.
+    blocked = (diagnostics or {}).get("pass_blocked_by")
+    if blocked == "deliberation_invalid":
         return "infra_failure"
     return "low_confidence"
