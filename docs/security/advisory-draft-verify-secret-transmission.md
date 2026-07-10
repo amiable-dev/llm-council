@@ -1,15 +1,17 @@
 # DRAFT — GitHub Security Advisory: verify() transmits committed credential files to third-party LLM providers
 
-> **Status: DRAFT. Do not publish until the fix is released.**
+> **Status: DRAFT ADVISORY CREATED on GitHub 2026-07-10 — not yet published.**
+> [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp),
+> severity Medium (CVSS 5.3, `CVSS:3.1/AV:L/AC:H/PR:L/UI:R/S:C/C:H/I:N/A:N`),
+> CWE-200, affected `>= 0.22.0, < 0.39.0`, patched `0.39.0`.
 >
-> Publishing a GHSA without a `patched_versions` entry causes Dependabot to
-> alert downstream users with **no safe version to upgrade to**. Sequence:
-> merge the fix → tag & publish the release → set the fixed version on the
-> draft advisory → request a CVE → publish.
+> Fix released in **v0.39.0** (2026-07-10). Remaining maintainer steps: review the
+> draft in the Security tab, **request a CVE** (GitHub is a CNA; ~72h), then
+> **publish**. Publishing a GHSA without a `patched_versions` entry would alert
+> downstream users with no safe upgrade — the patched version is already set, so
+> publishing is safe.
 >
-> Paste the sections below into the GHSA form at
-> `https://github.com/amiable-dev/llm-council/security/advisories/new`.
-> Tracking: #543, #540. Delivery plan: `docs/adr/ADR-053-implementation-spec.md`.
+> Tracking: #543, #540, #551. Delivery plan: `docs/adr/ADR-053-implementation-spec.md`.
 
 ---
 
@@ -28,10 +30,10 @@ Two independent defects share one remediation. The advisory covers both.
 
 | Defect | Introduced | First released in | Fixed in |
 |---|---|---|---|
-| `target_paths=None` applies no file filter at all (#543) | `0005fe7` | **v0.22.0** | `<FIX_VERSION>` |
-| `.env`, `.npmrc`, `.yarnrc` on the `TEXT_EXTENSIONS` allowlist (#540) | `1f91c08` | **v0.23.0** | `<FIX_VERSION>` |
+| `target_paths=None` applies no file filter at all (#543) | `0005fe7` | **v0.22.0** | `0.39.0` |
+| `.env`, `.npmrc`, `.yarnrc` on the `TEXT_EXTENSIONS` allowlist (#540) | `1f91c08` | **v0.23.0** | `0.39.0` |
 
-Proposed range: `>= 0.22.0, < <FIX_VERSION>`.
+Proposed range: `>= 0.22.0, < 0.39.0`.
 
 > **Affected range CONFIRMED by reading the code at each tag (2026-07-10):**
 > `>= 0.22.0`. At **v0.21.0** the verification path fetched no file contents at
@@ -125,7 +127,7 @@ repository**, on a commit that a `verify` run touched.
 
 ## Patches
 
-Fixed in **`<FIX_VERSION>`**:
+Fixed in **`0.39.0`**:
 
 - All candidate-path producers, including the `git diff-tree` branch, are routed
   through a single selector; an unfiltered path is no longer representable.
