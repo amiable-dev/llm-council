@@ -240,9 +240,31 @@ Per `CLAUDE.md`: the published docs site is part of DoD, not an afterthought.
 - [ ] One release per epic, not per PR (git-tag driven) — **exception: P0 gets
       its own patch release**, because P1 cannot proceed without it
 
+## Tracking
+
+| | Issue |
+|---|---|
+| **Epic** | [#546](https://github.com/amiable-dev/llm-council/issues/546) |
+| P0 | [#547](https://github.com/amiable-dev/llm-council/issues/547) selector · [#548](https://github.com/amiable-dev/llm-council/issues/548) denylist · [#549](https://github.com/amiable-dev/llm-council/issues/549) argv/garbage · [#550](https://github.com/amiable-dev/llm-council/issues/550) **release** |
+| P1 | [#551](https://github.com/amiable-dev/llm-council/issues/551) GHSA + CVE + rotation |
+| P2 | [#544](https://github.com/amiable-dev/llm-council/issues/544) verdict parse · [#545](https://github.com/amiable-dev/llm-council/issues/545) waterfall |
+| P3 | [#552](https://github.com/amiable-dev/llm-council/issues/552) Q1 · [#553](https://github.com/amiable-dev/llm-council/issues/553) Q2 · [#554](https://github.com/amiable-dev/llm-council/issues/554) ignore-family · [#555](https://github.com/amiable-dev/llm-council/issues/555) receipt · [#556](https://github.com/amiable-dev/llm-council/issues/556) clamp *(blocked)* · [#557](https://github.com/amiable-dev/llm-council/issues/557) shadow + flip |
+| Closed by | [#543](https://github.com/amiable-dev/llm-council/issues/543), [#540](https://github.com/amiable-dev/llm-council/issues/540) (P0) · [#542](https://github.com/amiable-dev/llm-council/issues/542) (P3) |
+
 ## Scheduled follow-up
 
-A recurring reminder is registered to remove the temporary README security
-notice once two material releases have shipped past `<FIX_VERSION>`, and to
-confirm the advisory is published with a fixed version. Permanent surfaces
-(`SECURITY.md`, `CHANGELOG.md`, release notes, `verify.md`) stay.
+A durable monthly cloud routine is registered to remove the temporary README
+security notice once two material (minor) releases have shipped past
+`<FIX_VERSION>`, and to confirm the advisory is published with a fixed version.
+Permanent surfaces (`SECURITY.md`, `CHANGELOG.md`, release notes, `verify.md`)
+stay.
+
+- **Routine:** `trig_01N5A86XTtq3jSzNWJHDXb2k` — "ADR-053 — retire temporary
+  README security notice"
+- **Schedule:** `17 9 1 * *` UTC (1st of each month); first run 2026-08-01
+- **Manage:** <https://claude.ai/code/routines/trig_01N5A86XTtq3jSzNWJHDXb2k>
+
+It is designed to **do nothing in most months**: it stops early if the README
+notice is already gone, if the fix version cannot be determined, if fewer than
+two material releases have shipped, or if the advisory is still a draft (in which
+case it comments on #551 rather than removing anything).
