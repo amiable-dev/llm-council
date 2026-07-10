@@ -502,6 +502,70 @@ async def _text_paths(snapshot_id: str, paths: List[str]) -> set:
     return result
 
 
+# ADR-053 Q3b: AI-ignore family, highest precedence first. Vendor-neutral
+# `.llmignore` leads; the rest interoperate (JetBrains AI reads .cursorignore/
+# .codeiumignore/.aiexclude, Gemini's .aiexclude is gitignore syntax).
+IGNORE_FILENAMES = (".llmignore", ".aiexclude", ".aiignore", ".cursorignore", ".codeiumignore")
+
+
+def denylist_summary() -> List[str]:
+    """Display-ready lines describing the compiled-in file-selection floor (#554).
+
+    Returns the always-on secret-path patterns and the ignore-file family for
+    `llm-council ignore --print-defaults`. These are static filename *patterns*
+    (`.env`, `id_rsa`), never secret values — the whole point is to show them.
+    """
+    return [
+        "# Compiled-in secret-path denylist (always on; not overridable):",
+        "# exact basenames (case-insensitive):",
+        *(f"  {n}" for n in sorted(_SECRET_NAMES)),
+        "# suffixes:",
+        "  " + " ".join(sorted(_SECRET_SUFFIXES)),
+        "# basename prefixes:",
+        "  " + " ".join(f"{p}*" for p in _SECRET_PREFIXES),
+        "# secret directories (any path component):",
+        "  " + " ".join(sorted(_SECRET_DIRS)),
+        "# ignore-file family honored in content mode (first present wins):",
+        "  " + " -> ".join(IGNORE_FILENAMES),
+    ]
+
+
+async def _load_ignore_spec(snapshot_id: str):
+    """First present ignore file from the snapshot → a pathspec matcher (#554).
+
+    Returns ``(spec, filename)`` or ``(None, None)``. Read via ``git show`` so the
+    rules come from the snapshot, not the worktree. Only the highest-precedence
+    file present is consulted (like the vendors, not merged).
+    """
+    git_root = await _get_git_root_async()
+    semaphore = await _get_git_semaphore()
+    for fname in IGNORE_FILENAMES:
+        async with semaphore:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "show", f"{snapshot_id}:{fname}",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=git_root,
+                )
+                stdout, _ = await asyncio.wait_for(
+                    proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+                )
+            except Exception:
+                continue
+        if proc.returncode != 0:
+            continue  # not present at this snapshot
+        try:
+            import pathspec
+
+            spec = pathspec.PathSpec.from_lines(
+                "gitwildmatch", stdout.decode("utf-8", errors="replace").splitlines()
+            )
+            return spec, fname
+        except Exception as e:  # a malformed ignore file must never break selection
+            logger.warning("failed to parse %s: %s", fname, e)
+            return None, None
+    return None, None
+
+
 def review_svg_enabled() -> bool:
     """ADR-053 Q2: `.svg` is noise-by-default in content mode; this opts back in."""
     return os.getenv("LLM_COUNCIL_REVIEW_SVG", "").strip().lower() in ("true", "1", "yes")
@@ -545,6 +609,23 @@ async def _reviewability_attrs(snapshot_id: str, paths: List[str]) -> Dict[str, 
         elif attr == "linguist-vendored":
             out.setdefault(path, "vendored")
     return out
+
+
+async def _apply_ignore(
+    snapshot_id: str, candidates: List[Tuple[str, str]]
+) -> Tuple[List[Tuple[str, str]], List[Omission]]:
+    """Drop paths matched by the snapshot's ignore file (#554). Returns (kept, omitted)."""
+    spec, _fname = await _load_ignore_spec(snapshot_id)
+    if spec is None:
+        return candidates, []
+    kept: List[Tuple[str, str]] = []
+    omitted: List[Omission] = []
+    for path, origin in candidates:
+        if spec.match_file(path):
+            omitted.append(Omission(path, "ignored", origin))
+        else:
+            kept.append((path, origin))
+    return kept, omitted
 
 
 async def _classify_reviewable(
@@ -619,11 +700,13 @@ async def select_blobs(
             survivors.append((path, origin))
 
     if mode == "content":
-        # Q2 reviewability (generated/vendored/.svg noise) then Q1 decodability.
-        reviewable, om_review = await _classify_reviewable(snapshot_id, survivors)
+        # Q3b repo-owner ignore file (additive narrowing — Q3 secret already ran,
+        # so a `!.env` cannot re-admit it), then Q2 reviewability, then Q1 decode.
+        kept, om_ignore = await _apply_ignore(snapshot_id, survivors)
+        reviewable, om_review = await _classify_reviewable(snapshot_id, kept)
         sel, om = await _classify_decodable(snapshot_id, reviewable)
         selected += sel
-        omitted += om_review + om
+        omitted += om_ignore + om_review + om
         return selected, omitted
 
     # allowlist (and the acted-on half of shadow): sync extension predicate.
@@ -635,7 +718,8 @@ async def select_blobs(
 
     if mode == "shadow" and survivors:
         try:
-            creviewable, _cr = await _classify_reviewable(snapshot_id, survivors)
+            ckept, _ci = await _apply_ignore(snapshot_id, survivors)
+            creviewable, _cr = await _classify_reviewable(snapshot_id, ckept)
             csel, _com = await _classify_decodable(snapshot_id, creviewable)
             allow_set = {b.path for b in selected}
             content_set = {b.path for b in csel}
