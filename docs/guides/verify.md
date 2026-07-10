@@ -172,7 +172,16 @@ A `Finding` has: `severity` (`critical` \| `major` \| `minor` \| `info`),
 | `completed_stages` | list? | Stages completed before a timeout (e.g. `["stage1","stage2"]`). |
 | `expanded_paths` | list? | Files included after directory expansion (#311). |
 | `paths_truncated` | bool? | `MAX_FILES_EXPANSION` limit was reached. |
-| `expansion_warnings` | list? | Warnings from directory expansion (skipped files, etc.). |
+| `expansion_warnings` | list? | Warnings from directory expansion (skipped files, etc.). Human-readable; prefer `coverage` for machine use. |
+| `coverage` | object? | **#555 structural coverage receipt** — which requested paths were reviewed vs omitted, typed. Additive; **no verdict effect** (the clamp is #556). Fields below. |
+| `coverage.requested` | list? | Verbatim `target_paths` (`None` when the changed set was used). |
+| `coverage.reviewed` | list | Paths whose contents entered the prompt. |
+| `coverage.omitted` | list | Each omitted path as `{path, reason, origin}`. |
+| `coverage.omitted[].reason` | string | `denied_secret` \| `garbage` \| `non-text` \| `binary` \| `generated` \| `vendored` \| `noise` \| `ignored` \| `too_large` \| `not_found`. `denied_secret` records the path only, never the matched value. |
+| `coverage.omitted[].origin` | string | `explicit` (caller named it) or `discovered` (directory/diff-tree expansion). |
+| `coverage.explicit_omitted` | bool | True if a caller-named path was omitted — the load-bearing signal that a `pass` covers less than asked. |
+| `coverage.truncated` | bool | `MAX_FILES_EXPANSION` capped directory expansion. |
+| `coverage.conservation_ok` | bool | Invariant marker: `reviewed` and `omitted` are disjoint (ADR-051 C4 pattern; should always be true). |
 | `timing` | object? | Per-stage and total timing in ms (ADR-041). |
 | `input_metrics` | object? | Input-size metrics (`content_chars`, `tier_max_chars`, `num_models`, `num_reviewers`, `tier`, cache fields). |
 | `screening` | object? | Screening-judge audit trail (ADR-047); present only when `LLM_COUNCIL_SCREENING` is shadow/active. |

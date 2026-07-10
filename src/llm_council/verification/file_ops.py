@@ -777,7 +777,7 @@ def _is_garbage_file(file_path: str) -> bool:
 async def _expand_target_paths(
     snapshot_id: str,
     target_paths: List[str],
-) -> Tuple[List[str], bool, List[str]]:
+) -> Tuple[List[str], bool, List[str], List[Omission]]:
     """
     Expand directories in target_paths to their constituent text files.
 
@@ -792,9 +792,11 @@ async def _expand_target_paths(
         - expanded_files: List of file paths after expansion
         - was_truncated: True if MAX_FILES_EXPANSION was hit
         - warnings: List of warning messages
+        - omissions: structured Omission list (#555 coverage receipt)
     """
     expanded_files: List[str] = []
     warnings: List[str] = []
+    omissions: List[Omission] = []
     truncated = False
 
     for path in target_paths:
@@ -806,19 +808,24 @@ async def _expand_target_paths(
 
         if obj_type is None:
             warnings.append(f"Path not found or invalid: {path}")
+            omissions.append(Omission(path, "not_found", "explicit"))
             continue
 
         if obj_type == "blob":
             # An explicitly-named file. Same gate as everything else.
             selected, omitted = await select_blobs(snapshot_id, [(path, "explicit")])
             warnings.extend(o.as_warning() for o in omitted)
+            omissions.extend(omitted)
             expanded_files.extend(b.path for b in selected)
 
         elif obj_type == "tree":
             # A directory — expand, then gate. Discoveries are omitted quietly
             # (the caller did not name them); explicit paths are warned about.
             tree_files = await _git_ls_tree_z_name_only(snapshot_id, path)
-            selected, _omitted = await select_blobs(snapshot_id, [(f, "discovered") for f in tree_files])
+            selected, tree_omitted = await select_blobs(
+                snapshot_id, [(f, "discovered") for f in tree_files]
+            )
+            omissions.extend(tree_omitted)
 
             for blob in selected:
                 expanded_files.append(blob.path)
@@ -835,13 +842,14 @@ async def _expand_target_paths(
 
         else:
             warnings.append(f"Unknown object type '{obj_type}' for path: {path}")
+            omissions.append(Omission(path, "not_found", "explicit"))
 
         # Check limit after each path
         if len(expanded_files) >= MAX_FILES_EXPANSION:
             truncated = True
             break
 
-    return expanded_files, truncated, warnings
+    return expanded_files, truncated, warnings, omissions
 
 
 # =============================================================================
@@ -1014,6 +1022,7 @@ async def _fetch_files_for_verification_async_with_metadata(
         "paths_truncated": False,
         "expansion_warnings": [],
     }
+    all_omissions: List[Omission] = []
     git_root = await _get_git_root_async()
 
     # Issue #342: derive per-file and per-batch caps from the tier so the
@@ -1025,7 +1034,9 @@ async def _fetch_files_for_verification_async_with_metadata(
 
     # ADR-034 v2.6: Expand directories in target_paths
     if target_paths:
-        files_to_fetch, truncated, warnings = await _expand_target_paths(snapshot_id, target_paths)
+        files_to_fetch, truncated, warnings, all_omissions = await _expand_target_paths(
+            snapshot_id, target_paths
+        )
         expansion_metadata["expanded_paths"] = files_to_fetch
         expansion_metadata["paths_truncated"] = truncated
         expansion_metadata["expansion_warnings"] = list(warnings)
@@ -1057,14 +1068,41 @@ async def _fetch_files_for_verification_async_with_metadata(
                     # `target_paths=None` (the default at run_verification and the
                     # MCP verify tool) transmitted secrets, binaries and lockfiles.
                     # Every candidate producer goes through the selector now.
-                    selected, omitted = await select_blobs(snapshot_id, [(f, "discovered") for f in changed])
+                    selected, omitted = await select_blobs(
+                        snapshot_id, [(f, "discovered") for f in changed]
+                    )
                     files_to_fetch = [b.path for b in selected]
+                    all_omissions = omitted
                     expansion_metadata["expanded_paths"] = files_to_fetch
                     expansion_metadata["expansion_warnings"] = [
                         o.as_warning() for o in omitted
                     ]
         except Exception:
             pass
+
+    # #555 coverage receipt: typed omissions + conservation invariant. Built here
+    # so every path select_blobs saw is accounted for, whichever branch produced
+    # it. `reviewed ∪ omitted == candidates` (disjoint) holds by construction —
+    # the invariant is a defensive marker (ADR-051 C4), never a crash.
+    reviewed_set = list(dict.fromkeys(files_to_fetch))  # de-dup, order-stable
+    omitted_records = [
+        {"path": o.path, "reason": o.reason, "origin": o.origin} for o in all_omissions
+    ]
+    rset, oset = set(reviewed_set), {o["path"] for o in omitted_records}
+    conservation_ok = rset.isdisjoint(oset)
+    if not conservation_ok:
+        logger.error(
+            "coverage conservation violated: %d paths in both reviewed and omitted",
+            len(rset & oset),
+        )
+    expansion_metadata["coverage"] = {
+        "requested": list(target_paths) if target_paths else None,
+        "reviewed": reviewed_set,
+        "omitted": omitted_records,
+        "explicit_omitted": any(o.origin == "explicit" for o in all_omissions),
+        "truncated": bool(expansion_metadata.get("paths_truncated")),
+        "conservation_ok": conservation_ok,
+    }
 
     if not files_to_fetch:
         return "[No files specified and could not determine changed files]", expansion_metadata

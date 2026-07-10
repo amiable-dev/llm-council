@@ -765,6 +765,8 @@ async def _run_verification_pipeline(
         "expanded_paths": expansion.get("expanded_paths") or None,
         "paths_truncated": expansion.get("paths_truncated"),
         "expansion_warnings": expansion.get("expansion_warnings") or None,
+        # #555: structural coverage receipt (additive; no verdict effect).
+        "coverage": expansion.get("coverage"),
     }
 
     # Persist result
@@ -1125,6 +1127,12 @@ async def run_verification(
                     .get("expansion", {})
                     .get("expansion_warnings")
                     or None
+                ),
+                # #555: coverage receipt survives the timeout path too.
+                "coverage": (
+                    (partial_state.get("evidence_render_info") or {})
+                    .get("expansion", {})
+                    .get("coverage")
                 ),
             }
             # #356: persist the partial/timeout result so timeouts (the dominant
