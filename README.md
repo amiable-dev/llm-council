@@ -22,6 +22,9 @@
   <em>A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.</em>
 </p>
 
+> [!WARNING]
+> **Security advisory (2026-07-10) — upgrade to `>= 0.39.0`.** Versions `0.22.0`–`0.38.2` could transmit credential files (`.env`, `.npmrc`, `.yarnrc`, …) **that were committed to your git repository** to your configured LLM provider during `verify` / `gate` runs. Untracked and `.gitignore`d files were never affected. If you committed credentials and ran a verification over a commit touching them, **rotate those credentials**. See [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp).
+
 ## What is This?
 
 Instead of asking a single LLM for answers, this MCP server:
