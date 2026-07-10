@@ -1,6 +1,6 @@
 # ADR-053: Verify File Selection — Decodability, Reviewability, and the Trust Boundary
 
-**Status:** Proposed 2026-07-10
+**Status:** Proposed 2026-07-10 (rev 2: revised after a council review of rev 1 — `verify` at tier=high, rubric-focus=Security, `verification_id` `bff6de55`, verdict **fail**, 1 critical / 1 major / 1 minor, all three accepted. The critical finding was a **verification-bypass introduced by rev 1's own design** — see "Self-exclusion".)
 **Date:** 2026-07-10
 **Decision Makers:** llm-council maintainers (review requested)
 **Proposed by:** maintainer triage of [#540](https://github.com/amiable-dev/llm-council/issues/540) (`.env` in `TEXT_EXTENSIONS`) and [#542](https://github.com/amiable-dev/llm-council/issues/542) (allowlist drops unlisted languages; explicit-path omissions buried in `expansion_warnings`); [#543](https://github.com/amiable-dev/llm-council/issues/543) (`target_paths=None` bypasses all filtering) was discovered while drafting this ADR and is scoped as its Q0
@@ -185,6 +185,22 @@ selection convention must be structural, not conventional.
 Because the CLI, HTTP, and MCP surfaces all funnel through `run_verification()`,
 one chokepoint covers all three.
 
+**Argument hygiene for the new git calls.** The council review (round 1, `minor`)
+flagged command injection. Shell injection is already precluded — all six git
+invocations use `asyncio.create_subprocess_exec` with argv arrays and there are
+zero `shell=True`/`create_subprocess_shell` calls in the package. Two real gaps
+remain, and the new `git grep` / `git ls-tree` pathspec calls widen the second:
+
+- `validate_snapshot_id()` (`GIT_SHA_PATTERN`, 7–40 hex) is enforced on the
+  Pydantic `VerificationRequest` and in the HTTP handler, but **not** at the
+  `run_verification()` boundary itself (`api.py:760`), which MCP and `gate` call
+  directly. Validate there too, defense in depth.
+- **No `--` separator appears anywhere in `file_ops.py`.** Today's calls embed
+  the path in a `<sha>:<path>` token, so a leading `-` cannot be read as a flag.
+  The pathspec-style calls this ADR adds (`git ls-tree … -- <paths>`,
+  `git grep … -- <paths>`) have no such protection and **must** pass `--` before
+  any path. Argument injection, not shell injection, is the live risk.
+
 ### Q1 — Decodability: content sniffing, reusing git's own heuristic
 
 Replace extension matching with the rule git itself uses in `git diff` and
@@ -256,12 +272,26 @@ This is where #540 lives, and it must **not** be an entry in an extension list.
 **(3a) A curated, high-precision secret-path denylist**, checked before any blob
 is fetched, applied to explicit and discovered paths alike:
 
-`.env` and `.env.*` (except `*.example`, `*.sample`, `*.template`), `*.pem`,
-`*.key`, `*.p12`, `*.pfx`, `*.keystore`, `*.jks`, `id_rsa*`, `id_ecdsa*`,
-`id_ed25519*`, `.netrc`, `_netrc`, `.pgpass`, `.htpasswd`, `.npmrc`, `.yarnrc`,
-`.pypirc`, `.dockercfg`, `docker/config.json`, `credentials`, `kubeconfig`,
-`*.kubeconfig`, `terraform.tfvars`, `*.auto.tfvars`, `secrets.yaml`,
-`secrets.yml`.
+- **Env**: `.env` and `.env.*` (except `*.example`, `*.sample`, `*.template`), `.envrc`
+- **Keys / certs**: `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.keystore`, `*.jks`, `*.ovpn`, `*.asc`
+- **SSH / GPG**: `id_rsa*`, `id_ecdsa*`, `id_ed25519*`, `.ssh/**`, `.gnupg/**`
+- **Package registries**: `.npmrc`, `.yarnrc`, `.pypirc`, `.gem/credentials`, `.cargo/credentials*`
+- **Cloud**: `.aws/credentials`, `.aws/config`, `*service-account*.json`, `.config/gcloud/**`, `.azure/**`, `kubeconfig`, `*.kubeconfig`, `.kube/config`
+- **Git / Docker**: `.git-credentials`, `.dockercfg`, `.docker/config.json`
+- **Unix classics**: `.netrc`, `_netrc`, `.pgpass`, `.htpasswd`, `.s3cfg`, `.boto`
+- **IaC / misc**: `terraform.tfvars`, `*.auto.tfvars`, `.terraformrc`, `secrets.yaml`, `secrets.yml`, `.databrickscfg`
+
+Additions above the original draft (`.git-credentials`, `.aws/credentials`,
+GCP service-account JSON, and the rest) come from the council review, round 1,
+`major`.
+
+**Matching is case-insensitive**, a deliberate divergence from gitignore's
+case-sensitive semantics: `Secrets.yaml` and `.Env` are real files on
+case-preserving filesystems, and for a security floor **over-matching is the
+safe direction**. A legitimate `Credentials.md` excluded by this rule shows up
+in the coverage receipt as `denied_secret` and is diagnosable in one command —
+whereas an under-match is a silent leak. The existing `_is_text_file()` already
+lowercases, so this is consistent with the codebase.
 
 Note this **removes `.env`, `.env.example`, `.env.sample`, `.npmrc`, `.yarnrc`
 from `TEXT_EXTENSIONS` regardless of anything else in this ADR.** `.npmrc` and
@@ -374,26 +404,72 @@ is what makes a `.zig` drop *distinguishable* from a `.png` drop — and therefo
 actionable. `expansion_warnings` is retained, additive, and demoted from
 load-bearing signal to human-readable prose.
 
-**An explicitly-named path that was dropped must never yield a silent `pass`.**
-Default behavior: the mechanical clamp, `pass` is not representable when
-`coverage.explicit_omitted` is true → `unclear` with a new
-`unclear_reason="incomplete_coverage"` (extending ADR-047 P1's
-`infra_failure|low_confidence|timeout`). Exit code stays 2; automation already
-routes on `unclear_reason`.
+#### Self-exclusion: what may an omission hide?
+
+An earlier draft clamped the verdict on `explicit_omitted` — i.e. keyed on
+**who asked for the file**. The council review (round 1, `critical`) showed this
+is the wrong axis and opens a **verification bypass**:
+
+> An attacker commits `evil.py` *and* a line adding `evil.py` to `.llmignore`
+> (or `evil.py -diff` to `.gitattributes`). A CI gate calls `verify()` with
+> `target_paths=None`, so every path is `origin=discovered`. `evil.py` is
+> omitted by a repo-attested rule, the `explicit_omitted` clamp never fires, and
+> the council returns a confident **PASS** over a diff it never saw.
+
+Note this attack **does not exist on `master` today** — with `target_paths=None`
+no filter runs at all (#543), so no ignore file is consulted. Q0 and Q3b
+*together introduce it*. It must be closed in the same change that creates it.
+
+The correct axis is **whether the omission was attested by the artifact under
+review**:
+
+| Class | Reasons | Can it hide a change? |
+|---|---|---|
+| **Intrinsic** | `binary`, `too_large`, `not_found`, `truncated` | No — determined by the bytes or by git |
+| **Council policy** | `denied_secret` | No — determined by our compiled-in denylist |
+| **Repo-attested** | `ignored`, `generated`, `vendored`, `-diff`/`binary` attribute | **Yes** — an assertion the code makes *about itself* |
+
+**Rule: any file in the changed set that is omitted for a repo-attested reason
+clamps the verdict**, regardless of `origin`. That is exactly the
+"I marked my own malicious file as not-worth-reviewing" move, and it is
+independent of whether the caller enumerated paths.
+
+Three mechanisms, all required:
+
+1. **Reason-class clamp.** `pass` is not representable when any changed file was
+   omitted for a repo-attested reason → `unclear` with a new
+   `unclear_reason="incomplete_coverage"` (extending ADR-047 P1's
+   `infra_failure|low_confidence|timeout`). Exit code stays 2; automation
+   already routes on `unclear_reason`. Explicit paths omitted for *any* reason
+   also clamp — an explicit request is still a caller contract.
+2. **Policy files are read from the base ref, not the head.** `run_verification()`
+   gains an optional `policy_snapshot` (defaulting to `snapshot_id`); CI gates
+   pass the merge target. A PR then **cannot introduce an ignore rule that takes
+   effect on its own review.** This is precisely why GitHub Actions runs
+   `pull_request` workflows from the base ref rather than the PR head, and the
+   precedent is worth following rather than reinventing.
+3. **Policy files can never exclude themselves.** `.llmignore`, `.aiexclude`,
+   `.aiignore`, `.cursorignore`, `.codeiumignore`, and `.gitattributes` are
+   always reviewed when present in the changed set, and a change to any of them
+   is surfaced as a finding. Compare GitHub's treatment of `CODEOWNERS` and
+   `.github/workflows` changes.
+
+And, as before, the Q3 denylist is compiled in and **never overridable by an
+in-repo file** — an ignore file may narrow what is reviewed, never re-admit a
+denied secret. A repo cannot `!.env` its way through the boundary.
 
 Governed by `LLM_COUNCIL_COVERAGE_POLICY`:
 
 | Value | Behavior |
 |---|---|
-| `clamp` (default) | `pass` → `unclear(incomplete_coverage)` when an explicit path was omitted |
-| `fail` | Raise `SnapshotResolutionError` (422) — extends today's "zero resolved" rule to "any explicit path unresolved" |
-| `warn` | Receipt only; verdict untouched (today's behavior) |
+| `clamp` (default) | `pass` → `unclear(incomplete_coverage)` on a repo-attested omission of a changed file, or on any omission of an explicit path |
+| `fail` | Raise `SnapshotResolutionError` (422) in those same cases |
+| `warn` | Receipt only; verdict untouched. **Unsafe for gates** — documented as such |
 
 `clamp` is preferred over `fail` as the default because `fail` breaks the
 legitimate mixed call `target_paths=["src/", "assets/logo.png"]`, and because
 `clamp` composes with the existing `unclear_reason` routing contract instead of
-introducing a new error path. See "Open questions" — this is the one choice in
-this ADR I do not think is obvious.
+introducing a new error path.
 
 ### How we guarantee the convention is actually applied
 
@@ -504,11 +580,10 @@ you why, and you fix it in your own repo."*
   file in an expanded directory — including files a repo never intended for an
   LLM. Q3 and the `.llmignore` family are the mitigation, and `shadow` mode
   exists to measure the delta on real repos first.
-- **`.gitattributes` and `.llmignore` are attacker-controlled inputs** in the
-  untrusted-repo case: a hostile repo can mark files `-diff` to hide them from
-  review. Acceptable — the same repo controls the file contents anyway — but it
-  means these files must never be able to *widen* the Q3 denylist, only narrow
-  what is reviewed. Q3 is not overridable by in-repo files.
+- **Repo-attested omissions are an attack surface** — see "Self-exclusion" below.
+  This was originally dismissed here as "acceptable, the repo controls its own
+  contents anyway." That reasoning is wrong for the gate use case and the
+  council review caught it.
 - **Extending the `unclear_reason` enum** is a contract change for automation
   matching it exhaustively (epic-loop routes on it).
 - **`pathspec` becomes a runtime dependency** (pure-Python, no transitive deps).
@@ -600,13 +675,21 @@ caller depends on a `pass` verdict over a partially-omitted explicit path (the
 1. **`clamp` vs `fail` as the `LLM_COUNCIL_COVERAGE_POLICY` default.** `clamp`
    is recommended, but `fail` is more honest and matches what #533 did by
    accident. `fail` breaks `target_paths=["src/", "assets/logo.png"]`.
-2. **Does `origin=discovered` + `reason=binary` deserve any verdict effect?**
-   Recommended: no — the caller never asked for that file by name.
+2. **~~Does `origin=discovered` + `reason=binary` deserve any verdict effect?~~**
+   **Resolved by council review, round 1.** The question was mis-posed: `origin`
+   is the wrong axis. *Repo-attested* omissions (`ignored`, `generated`,
+   `vendored`, `-diff`) clamp regardless of origin, because they are the
+   self-exclusion bypass; *intrinsic* omissions (`binary`, `too_large`) do not.
+   See "Self-exclusion".
 3. **Should `content` mode's default flip in the same release as the Q3
    boundary, or one release later after `shadow`-mode telemetry?** Recommended:
    one later.
 4. **Is `.env.example` worth preserving at all**, given it now costs a
    name-pattern carve-out in the trust boundary? #540 assumed yes.
+5. **Does `policy_snapshot` (base-ref policy reading) belong in this ADR or its
+   own?** It changes the `run_verification()` signature and requires every CI
+   gate to pass a base SHA. The self-exclusion clamp closes the bypass without
+   it; `policy_snapshot` is defense in depth. *New, from the council fix.*
 
 ---
 
