@@ -156,7 +156,7 @@ class TestFetchFilesUsesTierLimit:
             return "stub-content", False
 
         async def fake_expand(snapshot_id, target_paths):
-            return list(target_paths), False, []
+            return list(target_paths), False, [], []
 
         with (
             patch.object(api, "_fetch_file_at_commit_async", side_effect=fake_fetch),
@@ -188,7 +188,7 @@ class TestFetchFilesUsesTierLimit:
             return "stub", False
 
         async def fake_expand(snapshot_id, target_paths):
-            return list(target_paths), False, []
+            return list(target_paths), False, [], []
 
         with (
             patch.object(api, "_fetch_file_at_commit_async", side_effect=fake_fetch),
@@ -226,7 +226,7 @@ class TestPerFileTruncationSurfacesAsWarning:
             return ("content..." + "[truncated]"), True
 
         async def fake_expand(snapshot_id, target_paths):
-            return list(target_paths), False, []
+            return list(target_paths), False, [], []
 
         with (
             patch.object(api, "_fetch_file_at_commit_async", side_effect=fake_fetch),
@@ -259,7 +259,7 @@ class TestPerFileTruncationSurfacesAsWarning:
             return "small", False
 
         async def fake_expand(snapshot_id, target_paths):
-            return list(target_paths), False, []
+            return list(target_paths), False, [], []
 
         with (
             patch.object(api, "_fetch_file_at_commit_async", side_effect=fake_fetch),

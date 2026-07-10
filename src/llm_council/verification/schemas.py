@@ -373,6 +373,53 @@ class VerifyDiagnostics(BaseModel):
     findings_by_severity: Dict[str, int] = Field(default_factory=dict)
 
 
+class CoverageOmission(BaseModel):
+    """One path the verify pipeline did not review, and why (#555, ADR-053)."""
+
+    path: str = Field(description="Repo-relative path that was omitted")
+    reason: str = Field(
+        description=(
+            "Why it was omitted: denied_secret | garbage | non-text | binary | "
+            "generated | vendored | noise | ignored | too_large | not_found. "
+            "denied_secret records the path only, never the matched value."
+        )
+    )
+    origin: str = Field(
+        description="explicit (caller named it) or discovered (directory/diff-tree expansion)"
+    )
+
+
+class CoverageReport(BaseModel):
+    """Structural coverage receipt for a verify run (#555, ADR-053).
+
+    Makes #542's silent-partial-omission failure visible: a caller can tell a
+    `.zig` drop (`non-text`) from a `.png` (`binary`) from a secret
+    (`denied_secret`) without parsing prose. Additive, no verdict effect — the
+    coverage clamp is #556.
+    """
+
+    requested: Optional[List[str]] = Field(
+        default=None, description="Verbatim target_paths (None when the changed set was used)"
+    )
+    reviewed: List[str] = Field(
+        default_factory=list, description="Paths whose contents entered the prompt"
+    )
+    omitted: List[CoverageOmission] = Field(
+        default_factory=list, description="Every candidate path that was not reviewed, typed"
+    )
+    explicit_omitted: bool = Field(
+        default=False,
+        description="True if a caller-named (origin=explicit) path was omitted — the load-bearing signal",
+    )
+    truncated: bool = Field(
+        default=False, description="True if MAX_FILES_EXPANSION capped directory expansion"
+    )
+    conservation_ok: bool = Field(
+        default=True,
+        description="Invariant: reviewed and omitted are disjoint (ADR-051 C4 defensive marker)",
+    )
+
+
 class VerifyResponse(BaseModel):
     """Response body for POST /v1/council/verify."""
 
@@ -469,6 +516,14 @@ class VerifyResponse(BaseModel):
     expansion_warnings: Optional[List[str]] = Field(
         default=None,
         description="Warnings from directory expansion (skipped files, etc.)",
+    )
+    coverage: Optional["CoverageReport"] = Field(
+        default=None,
+        description=(
+            "#555 (ADR-053): structural coverage receipt — which requested paths "
+            "were reviewed vs omitted (with a typed reason/origin per omission). "
+            "Additive; no verdict effect (the clamp is #556)."
+        ),
     )
     # ADR-041: Verification telemetry fields
     timing: Optional[Dict[str, Any]] = Field(

@@ -238,7 +238,7 @@ class TestExpandTargetPaths:
         """Single file path should pass through unchanged."""
         from llm_council.verification.api import _expand_target_paths
 
-        files, truncated, warnings = await _expand_target_paths("HEAD", ["pyproject.toml"])
+        files, truncated, warnings, _ = await _expand_target_paths("HEAD", ["pyproject.toml"])
         assert "pyproject.toml" in files
         assert truncated is False
 
@@ -247,7 +247,7 @@ class TestExpandTargetPaths:
         """Single directory should expand to constituent files."""
         from llm_council.verification.api import _expand_target_paths
 
-        files, truncated, warnings = await _expand_target_paths(
+        files, truncated, warnings, _ = await _expand_target_paths(
             "HEAD", ["src/llm_council/verification"]
         )
         assert len(files) > 0
@@ -261,7 +261,7 @@ class TestExpandTargetPaths:
         """Mixed file and directory paths should be handled correctly."""
         from llm_council.verification.api import _expand_target_paths
 
-        files, truncated, warnings = await _expand_target_paths(
+        files, truncated, warnings, _ = await _expand_target_paths(
             "HEAD", ["pyproject.toml", "src/llm_council/verification"]
         )
         assert "pyproject.toml" in files
@@ -284,7 +284,7 @@ class TestExpandTargetPaths:
             with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
-                files, _, _ = await _expand_target_paths("HEAD", ["docs"])
+                files, _, _, _ = await _expand_target_paths("HEAD", ["docs"])
 
                 # Should include text files
                 assert "docs/file.md" in files
@@ -309,7 +309,7 @@ class TestExpandTargetPaths:
             with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
-                files, _, _ = await _expand_target_paths("HEAD", ["src"])
+                files, _, _, _ = await _expand_target_paths("HEAD", ["src"])
 
                 # Should include normal files
                 assert "src/index.js" in files
@@ -335,7 +335,7 @@ class TestExpandTargetPaths:
             with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
-                files, truncated, warnings = await _expand_target_paths("HEAD", ["src"])
+                files, truncated, warnings, _ = await _expand_target_paths("HEAD", ["src"])
 
                 assert len(files) == MAX_FILES_EXPANSION
                 assert truncated is True
@@ -346,7 +346,7 @@ class TestExpandTargetPaths:
         """Should add warning for nonexistent paths."""
         from llm_council.verification.api import _expand_target_paths
 
-        files, truncated, warnings = await _expand_target_paths(
+        files, truncated, warnings, _ = await _expand_target_paths(
             "HEAD", ["nonexistent/path/file.txt"]
         )
 
@@ -364,7 +364,7 @@ class TestExpandTargetPaths:
             with patch("llm_council.verification.file_ops._get_git_object_type") as mock_type:
                 mock_type.return_value = "tree"
 
-                files, truncated, warnings = await _expand_target_paths("HEAD", ["empty_dir"])
+                files, truncated, warnings, _ = await _expand_target_paths("HEAD", ["empty_dir"])
 
                 assert files == []
                 assert truncated is False
@@ -481,7 +481,7 @@ class TestDocsDirectoryIntegration:
         )
 
         # Expand docs/ directory
-        files, truncated, warnings = await _expand_target_paths("HEAD", ["docs"])
+        files, truncated, warnings, _ = await _expand_target_paths("HEAD", ["docs"])
 
         # Should have found files
         assert len(files) > 0
@@ -522,7 +522,7 @@ class TestDocsDirectoryIntegration:
         """Verify docs/ expansion only includes text files."""
         from llm_council.verification.api import _expand_target_paths, TEXT_EXTENSIONS
 
-        files, _, _ = await _expand_target_paths("HEAD", ["docs"])
+        files, _, _, _ = await _expand_target_paths("HEAD", ["docs"])
 
         for f in files:
             # All files should have text extensions
@@ -539,7 +539,7 @@ class TestDocsDirectoryIntegration:
         """Verify src/ expands to Python files."""
         from llm_council.verification.api import _expand_target_paths
 
-        files, _, _ = await _expand_target_paths("HEAD", ["src/llm_council/verification"])
+        files, _, _, _ = await _expand_target_paths("HEAD", ["src/llm_council/verification"])
 
         # Should have Python files
         py_files = [f for f in files if f.endswith(".py")]
