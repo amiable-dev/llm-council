@@ -132,9 +132,10 @@ TEXT_EXTENSIONS: Set[str] = frozenset(
         ".ini",
         ".cfg",
         ".conf",
-        ".env",
-        ".env.example",
-        ".env.sample",
+        # #540/#548: `.env`, `.env.example`, `.env.sample` removed. `.env` is a
+        # secret (denied by the ADR-053 Q3a boundary in file_ops); the templates
+        # are preserved there by NAME PATTERN (`*.example`/`*.sample`), not by a
+        # non-extension entry in a set of extensions.
         ".properties",
         ".plist",
         # Documentation
@@ -174,8 +175,8 @@ TEXT_EXTENSIONS: Set[str] = frozenset(
         ".prettierrc",
         ".stylelintrc",
         ".babelrc",
-        ".npmrc",
-        ".yarnrc",
+        # #540/#548: `.npmrc`/`.yarnrc` removed — they routinely hold
+        # `//registry.npmjs.org/:_authToken=…` and are denied as secrets.
         ".dockerignore",
     }
 )

@@ -295,6 +295,111 @@ class Omission:
         return f"Skipped {self.reason} file: {self.path}"
 
 
+# =============================================================================
+# ADR-053 Q3a (#540, #548): compiled-in secret-path trust boundary.
+#
+# Checked BEFORE the text/garbage predicates and BEFORE any blob is fetched, on
+# explicit and discovered paths alike. Case-insensitive on purpose: `Secrets.yaml`
+# and `.Env` are real files, and for a security floor over-matching is the safe
+# direction (an over-match is a diagnosable `denied_secret` in the receipt; an
+# under-match is a silent leak). NOT overridable by any in-repo file.
+# =============================================================================
+
+# Exact basenames (compared lowercased).
+_SECRET_NAMES = frozenset(
+    {
+        ".env",
+        ".envrc",
+        ".npmrc",
+        ".yarnrc",
+        ".pypirc",
+        ".git-credentials",
+        ".dockercfg",
+        ".netrc",
+        "_netrc",
+        ".pgpass",
+        ".htpasswd",
+        ".s3cfg",
+        ".boto",
+        ".terraformrc",
+        ".databrickscfg",
+        "kubeconfig",
+        "credentials",  # .aws/credentials, .gem/credentials (dir-qualified below too)
+        "config.json",  # only under a docker/gcloud/azure dir — guarded below
+        "terraform.tfvars",
+        "secrets.yaml",
+        "secrets.yml",
+    }
+)
+
+# Suffixes (lowercased). `.env.local`, `.env.production`, etc. are caught by the
+# `.env.` prefix rule, not here.
+_SECRET_SUFFIXES = (
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",
+    ".keystore",
+    ".jks",
+    ".ovpn",
+    ".asc",
+    ".kubeconfig",
+    ".auto.tfvars",
+)
+
+# Basename prefixes (lowercased).
+_SECRET_PREFIXES = ("id_rsa", "id_ecdsa", "id_ed25519")
+
+# Any path component equal to one of these ⇒ secret (dir-scoped secret stores).
+_SECRET_DIRS = frozenset({".ssh", ".gnupg", ".aws", ".azure", ".kube", ".cargo", ".gem"})
+
+# `<dir>/**` secret trees keyed by a leading component (broader than a basename
+# match — everything under `.config/gcloud/` is a credential).
+_SECRET_DIR_PREFIXES = (
+    (".config", "gcloud"),
+)
+
+# Template suffixes that are conventionally secret-free and are explicitly kept.
+_TEMPLATE_SUFFIXES = (".example", ".sample", ".template")
+
+
+def _is_secret_path(file_path: str) -> bool:
+    """True if a path must never be transmitted (ADR-053 Q3a). Case-insensitive."""
+    p = Path(file_path.lower())
+    name = p.name
+    parts = p.parts
+
+    # Templates win: `.env.example` is not a secret even though `.env.` matches.
+    if name.endswith(_TEMPLATE_SUFFIXES):
+        return False
+
+    if any(part in _SECRET_DIRS for part in parts):
+        return True
+    for lead, sub in _SECRET_DIR_PREFIXES:
+        if lead in parts and sub in parts:
+            return True
+
+    # `.env` and `.env.<anything-but-a-template>`
+    if name == ".env" or name.startswith(".env."):
+        return True
+
+    if name in _SECRET_NAMES:
+        # `config.json` is only a secret when directory-qualified, to avoid
+        # denying an ordinary top-level `config.json` source file.
+        if name == "config.json":
+            return any(d in parts for d in (".docker", "docker"))
+        return True
+
+    if name.startswith(_SECRET_PREFIXES):
+        return True
+    if name.endswith(_SECRET_SUFFIXES):
+        return True
+    # `*service-account*.json` (GCP)
+    if name.endswith(".json") and "service-account" in name:
+        return True
+    return False
+
+
 def select_blobs(
     candidates: List[Tuple[str, str]],
 ) -> Tuple[List[SelectedBlob], List[Omission]]:
@@ -312,7 +417,10 @@ def select_blobs(
     selected: List[SelectedBlob] = []
     omitted: List[Omission] = []
     for path, origin in candidates:
-        if _is_garbage_file(path):
+        # Trust boundary first: a secret is denied even if it is text (#540/#548).
+        if _is_secret_path(path):
+            omitted.append(Omission(path, "denied_secret", origin))
+        elif _is_garbage_file(path):
             omitted.append(Omission(path, "garbage", origin))
         elif not _is_text_file(path):
             omitted.append(Omission(path, "non-text", origin))
@@ -337,6 +445,12 @@ def _is_text_file(file_path: str) -> bool:
 
     # Special case: files without extension that are likely text
     if not suffix and name in {"makefile", "dockerfile", "jenkinsfile", "cmakelists"}:
+        return True
+
+    # #548: config templates (`.env.example`, `foo.conf.sample`) are reviewable —
+    # this is the convention #540 wanted to preserve. `.env` itself never reaches
+    # here (the secret boundary denies it first, in select_blobs).
+    if name.endswith(_TEMPLATE_SUFFIXES):
         return True
 
     return False
