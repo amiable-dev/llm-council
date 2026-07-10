@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .constants import (
     ASYNC_SUBPROCESS_TIMEOUT,
     GARBAGE_FILENAMES,
+    MAX_BLOB_SIZE_BYTES,
     MAX_FILE_CHARS,
     MAX_FILES_EXPANSION,
     MAX_TOTAL_CHARS,
@@ -400,32 +401,184 @@ def _is_secret_path(file_path: str) -> bool:
     return False
 
 
-def select_blobs(
+def file_selection_mode() -> str:
+    """ADR-053 Q1: `LLM_COUNCIL_FILE_SELECTION` in {allowlist,content,shadow}.
+
+    Invalid / unset ⇒ `allowlist` (the safe, byte-identical default).
+    """
+    val = os.getenv("LLM_COUNCIL_FILE_SELECTION", "allowlist").strip().lower()
+    return val if val in ("allowlist", "content", "shadow") else "allowlist"
+
+
+async def _blob_sizes(snapshot_id: str, paths: List[str]) -> Dict[str, int]:
+    """Byte size per path in the snapshot, via one `git ls-tree` call (#552).
+
+    Serves the size cap AND empty-file disambiguation (an empty blob is text but
+    `git grep` never lists it). Missing ⇒ absent from the returned map.
+    """
+    if not paths:
+        return {}
+    git_root = await _get_git_root_async()
+    semaphore = await _get_git_semaphore()
+    for fmt in ("--format=%(objectsize) %(path)", None):
+        args = ["git", "ls-tree", "-rz"]
+        if fmt:
+            args.append(fmt)
+        else:
+            args.insert(2, "-l")  # `-rl`: long listing, size in a fixed column
+        args += [snapshot_id, "--", *paths]
+        async with semaphore:
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    cwd=git_root,
+                )
+                stdout, _ = await asyncio.wait_for(
+                    proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+                )
+            except Exception as e:
+                logger.warning("git ls-tree (sizes) raised: %s", e)
+                return {}
+        if proc.returncode != 0:
+            continue  # try the fallback format
+        out = stdout.decode("utf-8", errors="replace")
+        sizes: Dict[str, int] = {}
+        for entry in out.split("\0"):
+            if not entry.strip():
+                continue
+            if fmt:
+                size_str, _, path = entry.partition(" ")
+            else:
+                # "<mode> <type> <hash> <size>\t<path>"
+                meta, _, path = entry.partition("\t")
+                size_str = meta.split()[-1]
+            try:
+                sizes[path] = int(size_str)
+            except ValueError:
+                continue
+        return sizes
+    return {}
+
+
+async def _text_paths(snapshot_id: str, paths: List[str]) -> set:
+    """Subset of `paths` git classifies as text (NUL rule + `.gitattributes`).
+
+    `git --attr-source=<sha> grep -Iz --name-only -e '' <sha> -- <paths>`:
+    `-I` applies git's own binary heuristic (NUL in first 8000 bytes), and
+    `--attr-source=<sha>` honours `binary`/`-diff` from the SNAPSHOT's
+    `.gitattributes` (a top-level git option, not a grep flag — verified 2.50.1).
+    Exit 1 = "no text file matched", not an error. Empty blobs never appear here
+    (they are recovered via `_blob_sizes` size==0 by the caller).
+    """
+    if not paths:
+        return set()
+    git_root = await _get_git_root_async()
+    semaphore = await _get_git_semaphore()
+    async with semaphore:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git", f"--attr-source={snapshot_id}", "grep", "-Iz", "--name-only",
+                "-e", "", snapshot_id, "--", *paths,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=git_root,
+            )
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
+        except Exception as e:
+            logger.warning("git grep (text sniff) raised: %s", e)
+            return set()
+    # rc 0 = matches, 1 = no matches (not an error), >1 = real failure.
+    if proc.returncode not in (0, 1):
+        logger.warning("git grep (text sniff) rc=%s", proc.returncode)
+        return set()
+    out = stdout.decode("utf-8", errors="replace")
+    result = set()
+    for entry in out.split("\0"):
+        if not entry:
+            continue
+        # output is "<sha>:<path>"; strip the "<sha>:" prefix.
+        _, _, path = entry.partition(":")
+        result.add(path or entry)
+    return result
+
+
+async def _classify_decodable(
+    snapshot_id: str, candidates: List[Tuple[str, str]]
+) -> Tuple[List[SelectedBlob], List[Omission]]:
+    """Content-mode decodability (ADR-053 Q1): size cap → binary/text via git."""
+    paths = [p for p, _ in candidates]
+    sizes = await _blob_sizes(snapshot_id, paths)
+    text = await _text_paths(snapshot_id, paths)
+    selected: List[SelectedBlob] = []
+    omitted: List[Omission] = []
+    for path, origin in candidates:
+        size = sizes.get(path)
+        if size is not None and size > MAX_BLOB_SIZE_BYTES:
+            omitted.append(Omission(path, "too_large", origin))
+        elif path in text or size == 0:  # size==0 recovers empty blobs grep omits
+            selected.append(SelectedBlob(path, origin))
+        else:
+            omitted.append(Omission(path, "binary", origin))
+    return selected, omitted
+
+
+async def select_blobs(
+    snapshot_id: str,
     candidates: List[Tuple[str, str]],
 ) -> Tuple[List[SelectedBlob], List[Omission]]:
-    """The single place selection policy is evaluated (#543, ADR-053 Q0).
+    """The single place selection policy is evaluated (#543, ADR-053 Q0/Q1).
 
     ``candidates`` are ``(path, origin)`` pairs. Origin is a property of each
     CANDIDATE, not of the call: one request mixes explicitly-named paths with
     directory-expanded discoveries.
 
-    Before this existed, ``_is_text_file`` / ``_is_garbage_file`` were called only
-    from ``_expand_target_paths``, which the ``git diff-tree`` branch never
-    reached. ``target_paths=None`` — the default — therefore applied no filter at
-    all, and a commit touching ``.env`` transmitted it.
+    Order: Q3 secret boundary → Q2 garbage → Q1 decodability. Q3/Q2 are path-only
+    and always run. Q1 depends on ``LLM_COUNCIL_FILE_SELECTION`` (#552):
+    ``allowlist`` (default) uses the extension predicate and makes NO git call —
+    byte-identical to pre-#552; ``content`` sniffs blob bytes via git; ``shadow``
+    acts on the allowlist but logs what content would have changed.
     """
+    mode = file_selection_mode()
     selected: List[SelectedBlob] = []
     omitted: List[Omission] = []
+    # Q3 + Q2 first — a secret is denied even if it is text (#540/#548).
+    survivors: List[Tuple[str, str]] = []
     for path, origin in candidates:
-        # Trust boundary first: a secret is denied even if it is text (#540/#548).
         if _is_secret_path(path):
             omitted.append(Omission(path, "denied_secret", origin))
         elif _is_garbage_file(path):
             omitted.append(Omission(path, "garbage", origin))
-        elif not _is_text_file(path):
-            omitted.append(Omission(path, "non-text", origin))
         else:
+            survivors.append((path, origin))
+
+    if mode == "content":
+        sel, om = await _classify_decodable(snapshot_id, survivors)
+        selected += sel
+        omitted += om
+        return selected, omitted
+
+    # allowlist (and the acted-on half of shadow): sync extension predicate.
+    for path, origin in survivors:
+        if _is_text_file(path):
             selected.append(SelectedBlob(path, origin))
+        else:
+            omitted.append(Omission(path, "non-text", origin))
+
+    if mode == "shadow" and survivors:
+        try:
+            csel, _com = await _classify_decodable(snapshot_id, survivors)
+            allow_set = {b.path for b in selected}
+            content_set = {b.path for b in csel}
+            would_add = sorted(content_set - allow_set)
+            would_drop = sorted(allow_set - content_set)
+            if would_add or would_drop:
+                logger.info(
+                    "LLM_COUNCIL_FILE_SELECTION=shadow: content would add %s, drop %s",
+                    would_add, would_drop,
+                )
+        except Exception:  # shadow telemetry must never break selection
+            logger.debug("shadow content classification failed", exc_info=True)
+
     return selected, omitted
 
 
@@ -503,7 +656,7 @@ async def _expand_target_paths(
 
         if obj_type == "blob":
             # An explicitly-named file. Same gate as everything else.
-            selected, omitted = select_blobs([(path, "explicit")])
+            selected, omitted = await select_blobs(snapshot_id, [(path, "explicit")])
             warnings.extend(o.as_warning() for o in omitted)
             expanded_files.extend(b.path for b in selected)
 
@@ -511,7 +664,7 @@ async def _expand_target_paths(
             # A directory — expand, then gate. Discoveries are omitted quietly
             # (the caller did not name them); explicit paths are warned about.
             tree_files = await _git_ls_tree_z_name_only(snapshot_id, path)
-            selected, _omitted = select_blobs([(f, "discovered") for f in tree_files])
+            selected, _omitted = await select_blobs(snapshot_id, [(f, "discovered") for f in tree_files])
 
             for blob in selected:
                 expanded_files.append(blob.path)
@@ -750,7 +903,7 @@ async def _fetch_files_for_verification_async_with_metadata(
                     # `target_paths=None` (the default at run_verification and the
                     # MCP verify tool) transmitted secrets, binaries and lockfiles.
                     # Every candidate producer goes through the selector now.
-                    selected, omitted = select_blobs([(f, "discovered") for f in changed])
+                    selected, omitted = await select_blobs(snapshot_id, [(f, "discovered") for f in changed])
                     files_to_fetch = [b.path for b in selected]
                     expansion_metadata["expanded_paths"] = files_to_fetch
                     expansion_metadata["expansion_warnings"] = [

@@ -130,6 +130,7 @@
 | `LLM_COUNCIL_SCREEN_MAX_CHARS` | Screening eligibility: max content chars | 5000 |
 | `LLM_COUNCIL_SCREEN_MIN_SCORE` | Screening unanimity minimum per dimension | 9 |
 | `LLM_COUNCIL_STRUCTURED_FINDINGS` | ADR-051 structured findings channel: the chairman emits severity-tagged findings and the verdict is derived from them (`blocking_issues` = critical subset). Off by default — additive/opt-in until a later breaking default-ON flip | false |
+| `LLM_COUNCIL_FILE_SELECTION` | ADR-053 Q1 verify file classification: `allowlist` (extension `TEXT_EXTENSIONS` — byte-identical to pre-#552), `content` (git's NUL heuristic + snapshot `.gitattributes`, reviews any text file incl. unlisted languages), or `shadow` (acts on allowlist, logs what content would change). Invalid ⇒ allowlist. The secret denylist (#548) and garbage filter always run first regardless | allowlist |
 | `LLM_COUNCIL_TIMEOUT_MULTIPLIER` | Verification global-deadline multiplier (ADR-040) | 2.0 |
 | `LLM_COUNCIL_TRANSCRIPT_PATH` | Verification transcript root | .council/logs |
 
