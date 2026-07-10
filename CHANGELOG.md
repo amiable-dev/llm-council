@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.0] - 2026-07-10
+
+**Verify file-selection trust boundary + verdict-integrity fixes (ADR-053, epic [#546](https://github.com/amiable-dev/llm-council/issues/546))** — closes a credential-transmission defect in `verify()` and repairs three verdict-integrity bugs found while fixing it. Minor release (not patch) because it changes user-facing behaviour on several paths and carries a security advisory; see the "Changed" notes before upgrading a gate you depend on.
+
+### Security
+
+- **`verify()` could transmit committed credential files to third-party LLM providers** ([#543](https://github.com/amiable-dev/llm-council/issues/543), [#540](https://github.com/amiable-dev/llm-council/issues/540); advisory forthcoming). With `target_paths` omitted — the **default** at `run_verification()` and the MCP `verify` tool — no file filter ran at all: any commit that merely *touched* a `.env` sent its contents to the configured provider, along with binary blobs and lockfiles, with an **empty** `expansion_warnings`. Independently, `.env`, `.npmrc`, and `.yarnrc` were on the `TEXT_EXTENSIONS` allowlist (`.npmrc`/`.yarnrc` routinely hold `_authToken`). **Only committed content was ever reachable** — files are read via `git show <sha>:<path>`, never the filesystem, so untracked/`.gitignore`d files were never affected. Affected `>= 0.22.0` (the first release whose verification path embedded file contents; verified by reading the code at each tag, not `git log -S`). Fixed by routing every candidate path through a single non-bypassable selector and adding a compiled-in, case-insensitive, non-overridable secret-path denylist that excludes credential files before any blob is read.
+  - **If you committed credentials to your repository and ran `council-verify`, `council-gate`, or the MCP `verify` tool over a commit that touched them, those credentials were transmitted to your LLM provider and may be retained under its terms. Rotate them.** Anyone affected had already committed secrets to git, so those secrets were arguably compromised before Council read them; rotation is warranted regardless.
+- **`snapshot_id` is now validated at the `run_verification()` boundary** ([#549](https://github.com/amiable-dev/llm-council/issues/549)), not only in the Pydantic model. Defense in depth — the context manager already re-validated before any git argv call, so this was not a live hole — closing the argument-injection class ahead of the pathspec-style git calls a later release will add.
+
+### Changed
+
+- **`verify()` no longer softens a mechanical verdict with a review-quality heuristic** ([#560](https://github.com/amiable-dev/llm-council/issues/560), behind `LLM_COUNCIL_STRUCTURED_FINDINGS`). Under the structured-findings gate the verdict is now purely `policy(findings)`; a `pass` is downgraded to `unclear` only when the deliberation itself was degraded (`pass_blocked_by=deliberation_invalid`), not when reviewers scored the artifact merely good. Across 539 local transcripts the old behaviour turned 21 of 22 chairman-approved runs into `unclear` (4.5% pass vs 81% on the legacy path). **A gate you tuned against the old, over-conservative behaviour will now return `pass` where it previously returned `unclear`.** The review-agreement figure is still reported, renamed `diagnostics.deliberation_agreement`.
+- **The `target_paths=None` path now filters.** Binaries, lockfiles, and (per the Security note) credential files stop appearing in prompts, so some verdicts will move. That is the fix, not a regression.
+- **Verify timeouts are now enforced as wall-clock deadlines** ([#545](https://github.com/amiable-dev/llm-council/issues/545)). ADR-040's per-stage waterfall budget was only ever applied as an `httpx` per-operation timeout, which does not bound total elapsed time, so a slow stage could starve the chairman to a 1-second budget and return `unclear(infra_failure)` with no verdict. Runs that previously timed out with no result now complete; a small stage-3 budget is reserved so synthesis is never starved.
+
+### Fixed
+
+- **Binary-verdict parse failures are now visible** ([#544](https://github.com/amiable-dev/llm-council/issues/544)) — `diagnostics.verdict_parse` (`ok`/`error`/`absent`) and `verdict_parse_error` distinguish a malformed chairman verdict from a disabled findings flag, instead of silently falling back to prose parsing.
+- **The binary-verdict JSON extractor no longer grabs `findings[0]`** ([#561](https://github.com/amiable-dev/llm-council/issues/561)). Its legacy regex matched the first brace-free object, which — since ADR-051 made the payload findings-first — is a finding, not the verdict, so well-formed chairman output that omitted a closing code fence raised "Missing required field: verdict". The verdict and findings parsers now share one LLM-resilient extractor (`llm_council.json_extract`).
+- **`GARBAGE_FILENAMES` directory entries now match.** `node_modules`, `__pycache__`, and `.git` were compared against the basename only, so committed `node_modules` was reviewed; every path component is checked now.
+
+### Notes
+
+- ADR-053's design work beyond the security fix (content-sniffing file classification, the coverage receipt, the coverage clamp, `.llmignore` support) is **deferred** to later releases and tracked under epic [#546](https://github.com/amiable-dev/llm-council/issues/546). The verdict-confidence calibration question this epic surfaced is tracked in [#563](https://github.com/amiable-dev/llm-council/issues/563).
+
 ## [0.38.2] - 2026-07-09
 
 ### Fixed
