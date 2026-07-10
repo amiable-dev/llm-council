@@ -6,6 +6,7 @@ Verbatim move — no logic changes. Back-compat re-exports live in api.py.
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -266,6 +267,60 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
             return []
 
 
+@dataclass(frozen=True)
+class SelectedBlob:
+    """A path that has passed selection. Only ``select_blobs`` mints these.
+
+    The batch fetcher accepts nothing else, so "a path nobody filtered" cannot be
+    fetched by forgetting a call. (The low-level ``_fetch_file_at_commit_async``
+    still takes a ``str``: it is the raw ``git show <sha>:<path>`` primitive and
+    has no notion of policy. The enforced invariant — pinned by an AST test — is
+    that it has exactly one caller, inside the batch fetcher, which only ever
+    iterates ``SelectedBlob``.)
+    """
+
+    path: str
+    origin: str  # "explicit" (caller named it) | "discovered" (expansion/diff-tree)
+
+
+@dataclass(frozen=True)
+class Omission:
+    """A candidate path that selection rejected, and why."""
+
+    path: str
+    reason: str  # binary | garbage | not_found | unknown_object
+    origin: str
+
+    def as_warning(self) -> str:
+        return f"Skipped {self.reason} file: {self.path}"
+
+
+def select_blobs(
+    candidates: List[Tuple[str, str]],
+) -> Tuple[List[SelectedBlob], List[Omission]]:
+    """The single place selection policy is evaluated (#543, ADR-053 Q0).
+
+    ``candidates`` are ``(path, origin)`` pairs. Origin is a property of each
+    CANDIDATE, not of the call: one request mixes explicitly-named paths with
+    directory-expanded discoveries.
+
+    Before this existed, ``_is_text_file`` / ``_is_garbage_file`` were called only
+    from ``_expand_target_paths``, which the ``git diff-tree`` branch never
+    reached. ``target_paths=None`` — the default — therefore applied no filter at
+    all, and a commit touching ``.env`` transmitted it.
+    """
+    selected: List[SelectedBlob] = []
+    omitted: List[Omission] = []
+    for path, origin in candidates:
+        if _is_garbage_file(path):
+            omitted.append(Omission(path, "garbage", origin))
+        elif not _is_text_file(path):
+            omitted.append(Omission(path, "non-text", origin))
+        else:
+            selected.append(SelectedBlob(path, origin))
+    return selected, omitted
+
+
 def _is_text_file(file_path: str) -> bool:
     """Check if file has a text extension."""
     path = Path(file_path)
@@ -288,9 +343,14 @@ def _is_text_file(file_path: str) -> bool:
 
 
 def _is_garbage_file(file_path: str) -> bool:
-    """Check if file is a garbage file that should be excluded."""
-    name = Path(file_path).name
-    return name in GARBAGE_FILENAMES
+    """Check if a path is deny-listed noise (lockfiles, generated dirs).
+
+    #543: this compared only ``Path(p).name``, so the DIRECTORY entries in
+    ``GARBAGE_FILENAMES`` (``node_modules``, ``__pycache__``, ``.git``) never
+    matched — ``Path("node_modules/react/index.js").name`` is ``index.js`` — and
+    committed ``node_modules`` was reviewed. Every path component is checked now.
+    """
+    return any(part in GARBAGE_FILENAMES for part in Path(file_path).parts)
 
 
 async def _expand_target_paths(
@@ -328,29 +388,19 @@ async def _expand_target_paths(
             continue
 
         if obj_type == "blob":
-            # It's a file - check if it passes filters
-            if _is_garbage_file(path):
-                warnings.append(f"Skipped garbage file: {path}")
-                continue
-            if not _is_text_file(path):
-                warnings.append(f"Skipped non-text file: {path}")
-                continue
-            expanded_files.append(path)
+            # An explicitly-named file. Same gate as everything else.
+            selected, omitted = select_blobs([(path, "explicit")])
+            warnings.extend(o.as_warning() for o in omitted)
+            expanded_files.extend(b.path for b in selected)
 
         elif obj_type == "tree":
-            # It's a directory - expand it
+            # A directory — expand, then gate. Discoveries are omitted quietly
+            # (the caller did not name them); explicit paths are warned about.
             tree_files = await _git_ls_tree_z_name_only(snapshot_id, path)
+            selected, _omitted = select_blobs([(f, "discovered") for f in tree_files])
 
-            for file_path in tree_files:
-                # Apply filters
-                if _is_garbage_file(file_path):
-                    continue
-                if not _is_text_file(file_path):
-                    continue
-
-                expanded_files.append(file_path)
-
-                # Check if we've hit the limit
+            for blob in selected:
+                expanded_files.append(blob.path)
                 if len(expanded_files) >= MAX_FILES_EXPANSION:
                     truncated = True
                     warnings.append(
@@ -580,8 +630,18 @@ async def _fetch_files_for_verification_async_with_metadata(
                 )
 
                 if proc.returncode == 0:
-                    files_to_fetch = [f for f in stdout.decode("utf-8").strip().split("\n") if f]
+                    changed = [f for f in stdout.decode("utf-8").strip().split("\n") if f]
+                    # #543: THIS is the bug. These paths went straight to the
+                    # fetcher — no text check, no garbage check, no warning — so
+                    # `target_paths=None` (the default at run_verification and the
+                    # MCP verify tool) transmitted secrets, binaries and lockfiles.
+                    # Every candidate producer goes through the selector now.
+                    selected, omitted = select_blobs([(f, "discovered") for f in changed])
+                    files_to_fetch = [b.path for b in selected]
                     expansion_metadata["expanded_paths"] = files_to_fetch
+                    expansion_metadata["expansion_warnings"] = [
+                        o.as_warning() for o in omitted
+                    ]
         except Exception:
             pass
 
