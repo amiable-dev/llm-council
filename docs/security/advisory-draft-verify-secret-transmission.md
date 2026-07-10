@@ -1,17 +1,15 @@
 # GitHub Security Advisory (record): verify() transmits committed credential files to third-party LLM providers
 
-> **Status: DRAFT ADVISORY CREATED on GitHub 2026-07-10 — not yet published.**
-> [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp).
+> **Status: PUBLISHED 2026-07-10.** [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp)
+> — CVE **pending** (GitHub CNA review; the advisory records the CVE id once assigned).
 >
 > This file is the repo-side record of the advisory. The **Form fields** below map
-> to the discrete GHSA form inputs; the **Description** section is verbatim what is
-> published in the advisory's Description field (canonical Impact / Patches /
-> Workarounds / References template).
+> to the discrete GHSA form inputs; the **Description** section is verbatim the
+> advisory's published Description field (canonical Impact / Patches / Workarounds /
+> References template).
 >
-> Fix released in **v0.39.0** (2026-07-10). Remaining maintainer steps: review the
-> draft in the Security tab, **request a CVE** (GitHub is a CNA; ~72h), then
-> **publish** (safe — the patched version is already set, so downstream Dependabot
-> alerts point at a real upgrade). Tracking: #543, #540, #551.
+> Fix released in **v0.39.0** (2026-07-10). Disclosure complete: advisory published,
+> CVE requested, README notice added. Tracking: #543, #540, #551.
 
 ---
 
