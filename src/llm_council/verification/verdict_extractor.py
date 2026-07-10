@@ -470,6 +470,22 @@ def build_verification_result(
 
     findings_dicts: List[Dict[str, Any]] = []
     diagnostics: Dict[str, Any] = {"findings_source": "fallback", "verdict_source": "legacy"}
+
+    # #544: record how the chairman's ADR-025b BINARY verdict block fared. This is
+    # set UNCONDITIONALLY — outside the structured-findings flag — because a
+    # malformed verdict is exactly as informative when the flag is off, and
+    # `verdict_source="legacy"` cannot otherwise be told apart from "flag off".
+    # `fallback_reason` describes the FINDINGS parser and is a different signal.
+    _verdict_parse_error = (stage3_result or {}).get("verdict_parse_error")
+    if _verdict_parse_error:
+        diagnostics["verdict_parse"] = "error"
+        diagnostics["verdict_parse_error"] = _verdict_parse_error
+    elif verdict_result is not None:
+        diagnostics["verdict_parse"] = "ok"
+    else:
+        # No structured verdict and no parse error: a non-BINARY run, a chairman
+        # error, or a disabled chairman. Not a degradation signal.
+        diagnostics["verdict_parse"] = "absent"
     if structured_findings_enabled():
         try:
             parsed, source, reason = parse_findings((stage3_result or {}).get("response") or "")

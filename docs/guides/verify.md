@@ -153,6 +153,8 @@ A `Finding` has: `severity` (`critical` \| `major` \| `minor` \| `info`),
 | `findings_source` | string | `structured` (clean parse), `fallback` (missing/malformed → legacy path), or `skipped` (`chairman_disabled=true` — no synthesis to parse). |
 | `fallback_reason` | string? | Why the fallback fired, when it did. |
 | `verdict_source` | string | `mechanical` = `policy(findings)`; `legacy` = prose parse; `chairman_disabled` = synthesis skipped, no verdict computed. |
+| `verdict_parse` | string | How the chairman's BINARY verdict block parsed: `ok`, `error` (malformed — see `verdict_parse_error`), or `absent` (no structured verdict expected). Reported **regardless** of `LLM_COUNCIL_STRUCTURED_FINDINGS`. Distinct from `fallback_reason`, which describes the *findings* parser. |
+| `verdict_parse_error` | string? | Exception type and message when `verdict_parse == "error"`. Never contains the offending payload. |
 | `findings_by_severity` | object | Count per severity — surfaces severity mis-labelling over time. |
 | `verdict_evidence_mismatch` | string? | Defensive invariant marker; `None` in normal operation (should never fire under the mechanical gate). |
 | `inner_verdict` | string? | Structured verdict **before** UNCLEAR softening (nested so consumers can't parse it to bypass the low-confidence gate). |

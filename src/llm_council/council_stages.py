@@ -826,6 +826,23 @@ Now provide your evaluation and ranking:"""
     return stage2_results, label_to_model, total_usage
 
 
+def _record_verdict_parse_error(response: Dict[str, Any], exc: BaseException) -> None:
+    """Persist why the chairman's structured verdict failed to parse (#544).
+
+    The parse failure was previously only a WARNING log line, so nothing in the
+    response distinguished "the chairman emitted a clean verdict" from "the
+    verdict JSON was malformed and the verdict was scraped out of prose".
+
+    Records the exception TYPE and message only — never the offending payload,
+    which is model output and may embed reviewed file content (cf. ADR-050 D3
+    `scrub_exception`). Diagnostics must never raise.
+    """
+    try:
+        response["verdict_parse_error"] = f"{type(exc).__name__}: {exc}"
+    except Exception:  # pragma: no cover - defensive; telemetry never raises
+        pass
+
+
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
@@ -1071,6 +1088,11 @@ STAGE 2 - Peer Rankings:
             import logging
 
             logging.getLogger(__name__).warning(f"Failed to parse binary verdict: {e}")
+            # #544: a log line is not a signal. Record the reason on the result so
+            # build_verification_result can surface it in `diagnostics`; otherwise
+            # `verdict_source="legacy"` is indistinguishable from "structured
+            # findings are simply disabled", and a degrading chairman is invisible.
+            _record_verdict_parse_error(response, e)
     elif verdict_type == VerdictType.TIE_BREAKER:
         try:
             verdict_result = parse_tie_breaker_verdict(response_content)
@@ -1085,6 +1107,7 @@ STAGE 2 - Peer Rankings:
             import logging
 
             logging.getLogger(__name__).warning(f"Failed to parse tie-breaker verdict: {e}")
+            _record_verdict_parse_error(response, e)
 
     return (
         {"model": _get_chairman_model(), "response": response_content},
