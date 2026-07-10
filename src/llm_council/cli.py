@@ -421,6 +421,28 @@ def main():
         help="Output format (default: text)",
     )
 
+    ignore_parser = subparsers.add_parser(
+        "ignore",
+        help="Inspect the verify file-selection trust boundary (ADR-053 Q3)",
+    )
+    ignore_parser.add_argument(
+        "--print-defaults",
+        action="store_true",
+        dest="print_defaults",
+        help="Print the compiled-in secret-path denylist (the always-on floor)",
+    )
+    ignore_parser.add_argument(
+        "--init",
+        action="store_true",
+        help="Write a commented starter .llmignore (never overwrites an existing one)",
+    )
+    ignore_parser.add_argument(
+        "--explain",
+        type=str,
+        metavar="PATH",
+        help="Explain which selection layer and rule decides a given path",
+    )
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -484,9 +506,79 @@ def main():
             tier=args.tier,
         )
         sys.exit(exit_code)
+    elif args.command == "ignore":
+        sys.exit(cmd_ignore(args))
     else:
         # Default: MCP server
         serve_mcp()
+
+
+_LLMIGNORE_STARTER = """\
+# .llmignore — files LLM Council's verify()/gate should NOT review (ADR-053 Q3b).
+# gitignore syntax. Additive narrowing only: it can exclude more, never re-admit
+# a path denied by the compiled-in secret boundary (`llm-council ignore
+# --print-defaults`). Commit this file so it takes effect for the reviewed snapshot.
+#
+# Examples:
+# build/
+# dist/
+# *.generated.*
+# vendor/
+"""
+
+
+def cmd_ignore(args) -> int:
+    """`llm-council ignore` — inspect the verify file-selection trust boundary.
+
+    Ergonomics only; NOT the security mechanism. The denylist is compiled in and
+    always on regardless of this command (ADR-053 "Do we seed the ignore file? No").
+    """
+    from pathlib import Path
+
+    from llm_council.verification import file_ops
+
+    if getattr(args, "print_defaults", False):
+        print("# Compiled-in secret-path denylist (always on; not overridable):")
+        print("# exact basenames (case-insensitive):")
+        for name in sorted(file_ops._SECRET_NAMES):
+            print(f"  {name}")
+        print("# suffixes:")
+        print("  " + " ".join(sorted(file_ops._SECRET_SUFFIXES)))
+        print("# basename prefixes:")
+        print("  " + " ".join(f"{p}*" for p in file_ops._SECRET_PREFIXES))
+        print("# secret directories (any path component):")
+        print("  " + " ".join(sorted(file_ops._SECRET_DIRS)))
+        print("# ignore-file family honored in content mode (first present wins):")
+        print("  " + " → ".join(file_ops.IGNORE_FILENAMES))
+        return 0
+
+    if getattr(args, "explain", None):
+        path = args.explain
+        if file_ops._is_secret_path(path):
+            print(f"{path}: DENIED (secret) — compiled-in trust boundary, not overridable.")
+        elif file_ops._is_garbage_file(path):
+            print(f"{path}: OMITTED (garbage) — deny-listed generated/noise path.")
+        elif file_ops._is_text_file(path):
+            print(f"{path}: REVIEWED in allowlist mode (on TEXT_EXTENSIONS); "
+                  "in content mode, decided by NUL sniff + .gitattributes + ignore files.")
+        else:
+            print(f"{path}: OMITTED (non-text) in allowlist mode; "
+                  "in content mode, decided by content sniffing.")
+        return 0
+
+    if getattr(args, "init", False):
+        target = Path.cwd() / ".llmignore"
+        if target.exists():
+            print(f"{target} already exists — not overwriting.")
+            return 0
+        target.write_text(_LLMIGNORE_STARTER)
+        print(f"Wrote {target}. Review it and `git add` + commit so it takes effect.")
+        return 0
+
+    # No action flag: explain what the command does, write nothing.
+    print("Usage: llm-council ignore [--print-defaults | --explain PATH | --init]")
+    print("Inspect the verify file-selection trust boundary. Writes nothing without --init.")
+    return 0
 
 
 def serve_http(host: str = "0.0.0.0", port: int = 8000):
