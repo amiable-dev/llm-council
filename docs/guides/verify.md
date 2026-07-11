@@ -48,6 +48,12 @@ on top of:
   reference only. **Never** treat this as a pass/fail review outcome —
   disable `chairman_disabled` for any BINARY-verdict use (`council-verify`,
   `council-gate`, CI approval).
+- **`incomplete_coverage`** (#556) — the coverage clamp fired: a `pass` was
+  downgraded because a changed-or-explicitly-named file was **not reviewed** (see
+  `coverage.clamped`). The council's verdict on what it *did* see was `pass`;
+  it simply did not see everything. Review `coverage.clamped`, then either switch
+  to `content` file selection so the file is reviewed, acknowledge its reason via
+  `LLM_COUNCIL_COVERAGE_ACK_REASONS`, or accept the partial coverage.
 
 ## Calibrated confidence (ADR-047)
 
@@ -128,7 +134,7 @@ that ignore unknown fields keep working.
 | `exit_code` | int | `0` PASS · `1` FAIL · `2` UNCLEAR (CLI/`gate`). |
 | `confidence` | float | Raw council-agreement confidence, 0–1. |
 | `confidence_calibrated` | float? | `confidence` after the fitted monotonic mapping (ADR-047); equals raw until a mapping is fitted. |
-| `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` \| `chairman_disabled` (see above); `None` for pass/fail. |
+| `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` \| `chairman_disabled` \| `incomplete_coverage` (#556, see above); `None` for pass/fail. |
 | `rationale` | string | Chairman synthesis explanation. |
 | `transcript_location` | string | Path to the full `.council/logs/<id>/` transcript. |
 | `error` | string? | Non-verdict error marker (e.g. `input_too_large`); `None` for a real verdict (#357). |
@@ -182,6 +188,8 @@ A `Finding` has: `severity` (`critical` \| `major` \| `minor` \| `info`),
 | `coverage.explicit_omitted` | bool | True if a caller-named path was omitted — the load-bearing signal that a `pass` covers less than asked. |
 | `coverage.truncated` | bool | `MAX_FILES_EXPANSION` capped directory expansion. |
 | `coverage.conservation_ok` | bool | Invariant marker: `reviewed` and `omitted` are disjoint (ADR-051 C4 pattern; should always be true). |
+| `coverage.policy` | string? | Active `LLM_COUNCIL_COVERAGE_POLICY` (`clamp` \| `fail` \| `warn`) — #556. |
+| `coverage.clamped` | list? | Omissions that clamped the verdict to `unclear(incomplete_coverage)` — present only when the clamp fired (#556). |
 | `timing` | object? | Per-stage and total timing in ms (ADR-041). |
 | `input_metrics` | object? | Input-size metrics (`content_chars`, `tier_max_chars`, `num_models`, `num_reviewers`, `tier`, cache fields). |
 | `screening` | object? | Screening-judge audit trail (ADR-047); present only when `LLM_COUNCIL_SCREENING` is shadow/active. |

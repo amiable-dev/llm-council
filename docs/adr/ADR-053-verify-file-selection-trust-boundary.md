@@ -500,10 +500,19 @@ Governed by `LLM_COUNCIL_COVERAGE_POLICY`:
 | `fail` | Raise `SnapshotResolutionError` (422) in the same cases |
 | `warn` | Receipt only; verdict untouched. **`llm-council gate` hard-errors on this value** — a CI gate that ignores coverage is a foot-gun, and documenting it as unsafe is not a mechanism (council review, round 2, `major`). Available to library callers only, and always stamped into `coverage.policy` on the response |
 
-`clamp` is preferred over `fail` as the default because `fail` breaks the
-legitimate mixed call `target_paths=["src/", "assets/logo.png"]`, and because
-`clamp` composes with the existing `unclear_reason` routing contract instead of
-introducing a new error path.
+`clamp` is preferred over `fail` as the *eventual* default because `fail`
+breaks the legitimate mixed call `target_paths=["src/", "assets/logo.png"]`, and
+because `clamp` composes with the existing `unclear_reason` routing contract
+instead of introducing a new error path.
+
+**Rollout of the clamp (#556, decided 2026-07-11).** To stay consistent with this
+codebase's byte-identical-default discipline, the clamp ships **opt-in**: the
+code default is `warn` (receipt only, no verdict change), so an upgrade changes no
+verdict. A later release flips the default to `clamp` after
+`LLM_COUNCIL_FILE_SELECTION=shadow` telemetry (#557) — a one-line change to
+`coverage._DEFAULT_POLICY` that also activates `gate`'s refusal of an explicit
+`warn`. Until the flip, `warn`-as-default is the pre-clamp status quo, not a
+foot-gun, so `gate` runs on it.
 
 **Usability note.** Under the uniform rule, a commit that touches a `.png` will
 clamp to `unclear`. That is *literally true* — the council did not review the
