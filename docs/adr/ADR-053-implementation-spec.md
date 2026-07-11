@@ -253,6 +253,10 @@ is still auditable.
 - **The clamp yields `unclear(incomplete_coverage)`** (not a hard error); the
   `fail` policy stays available for callers who want the 422.
 
+**Rollout: opt-in.** `coverage._DEFAULT_POLICY = "warn"` — byte-identical
+default; the clamp fires only when an operator sets `clamp`/`fail`. The flip to a
+`clamp` default (one-line change) is #557, gated on shadow telemetry.
+
 **Layer 1 (`LLM_COUNCIL_COVERAGE_ACK_REASONS`) ships with the clamp; layers 2/3
 (`.council/coverage-ack` baseline, per-call list) follow when the tail needs
 them** — the ADR's own build order.

@@ -703,6 +703,41 @@ async def _run_verification_pipeline(
         verdict, stage3_result, diagnostics=verification_output.get("diagnostics")
     )
 
+    # #556 (ADR-053): coverage clamp. A `pass` may not stand over a changed-or-
+    # explicit file the council did not review, unless acknowledged. Runs on the
+    # #555 receipt; `pass` → `unclear(incomplete_coverage)` under the default
+    # `clamp` policy, a hard raise under `fail`, no-op under `warn`. The default
+    # ack reason-set (binary/generated/vendored/too_large/ignored/noise) means
+    # only surprising omissions (non-text = #542, not_found, truncated,
+    # denied_secret) clamp; explicit-origin omissions clamp regardless.
+    from llm_council.verification.coverage import (
+        coverage_ack_reasons,
+        coverage_clamp_decision,
+        coverage_policy,
+    )
+
+    _coverage = (evidence_render_info.get("expansion") or {}).get("coverage")
+    _policy = coverage_policy()
+    if _coverage is not None:
+        _coverage["policy"] = _policy
+    _clampers = coverage_clamp_decision(verdict, _coverage, _policy, coverage_ack_reasons())
+    if _clampers:
+        if _policy == "fail":
+            raise SnapshotResolutionError(
+                snapshot_id=request.snapshot_id,
+                unresolved_paths=[c["path"] for c in _clampers],
+                expansion_warnings=[
+                    f"coverage: {c['path']} ({c['reason']}) not reviewed "
+                    f"[LLM_COUNCIL_COVERAGE_POLICY=fail]"
+                    for c in _clampers
+                ],
+            )
+        verdict = "unclear"
+        unclear_reason = "incomplete_coverage"
+        exit_code = _verdict_to_exit_code(verdict)
+        if _coverage is not None:
+            _coverage["clamped"] = _clampers
+
     # ADR-041: Build timing summary
     total_elapsed_ms = int((time.monotonic() - pipeline_start) * 1000)
     global_deadline_ms = int(

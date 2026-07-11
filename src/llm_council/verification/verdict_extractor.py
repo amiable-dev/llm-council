@@ -635,7 +635,9 @@ def derive_unclear_reason(
     """ADR-047 P1: machine-readable cause for an UNCLEAR verdict (#413).
 
     Returns one of {"infra_failure", "low_confidence", "timeout",
-    "chairman_disabled"} when the verdict is "unclear", else None. Lets
+    "chairman_disabled", "incomplete_coverage"} when the verdict is "unclear",
+    else None. (`incomplete_coverage` is set by the #556 coverage clamp in
+    api.py, not derived here.) Lets
     automation apply distinct policies (retry infra, accept-and-audit low
     confidence, re-tier timeouts, or skip entirely) instead of treating every
     exit-code-2 identically.

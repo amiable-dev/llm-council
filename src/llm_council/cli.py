@@ -844,6 +844,20 @@ def run_gate(
     import asyncio
     import json
 
+    # #556: a CI gate must not silently ignore coverage. `warn` (receipt only, no
+    # verdict effect) is a foot-gun in a gate — documenting it as unsafe is not a
+    # mechanism, so `gate` refuses it outright. Library callers may still use it.
+    from llm_council.verification.coverage import gate_rejects_warn
+
+    if gate_rejects_warn():
+        print(
+            "Error: LLM_COUNCIL_COVERAGE_POLICY=warn is unsafe for `gate` — it lets a "
+            "pass be returned over files that were never reviewed. Use `clamp` or "
+            "`fail`, or acknowledge omissions via LLM_COUNCIL_COVERAGE_ACK_REASONS.",
+            file=sys.stderr,
+        )
+        return 2
+
     # Check for FastAPI dependency (required for verification module)
     try:
         import fastapi  # noqa: F401
