@@ -12,7 +12,7 @@ It is a single Python package (`src/llm_council/`) exposing a CLI, an HTTP/REST 
 
 - Install / setup: `make setup` (deps + `.env`), or `make install` (deps only).
 - Run the HTTP API: `llm-council serve [--host H] [--port 8000]` (default port **8000**). Entry point is `llm_council.cli:main`; the FastAPI app lives in `src/llm_council/http_server.py`.
-- Other CLI subcommands: `setup-key` (store API key in keychain, ADR-013), `bias-report` (cross-session bias analysis, ADR-018), `install-skills`, `gate`.
+- Other CLI subcommands: `setup-key` (store API key in keychain, ADR-013), `bias-report` (cross-session bias analysis, ADR-018), `install-skills`, `gate`, `ignore` (inspect the verify file-selection trust boundary — `--print-defaults`/`--explain`/`--init`, ADR-053).
 - Quality gates: `make test` / `make test-fast` / `make test-cov`, `make lint` (ruff), `make typecheck` (mypy), `make check` (lint+typecheck), `make fix`. ~120 test files in `tests/`.
 - `tests/test_openrouter.py` verifies OpenRouter connectivity and that a model identifier resolves before you add it to the council.
 - **Relative imports**: modules import siblings as `from .unified_config import …`. Keep imports relative within the package.
@@ -97,7 +97,7 @@ Streaming (ADR-046)
 Observability & telemetry
 - `observability/` (ADR-030 metrics export — StatsD/Prometheus/NoOp), `telemetry.py` / `telemetry_client.py`, `webhooks/`.
 
-Verification (ADR-034/040/041) — `verification/api.py`
+Verification (ADR-034/040/041/053) — `verification/api.py`, `verification/file_ops.py`, `verification/coverage.py`
 - `run_verification()` wraps `_run_verification_pipeline()` (stages 1–3) in `asyncio.wait_for()` with a global deadline = `tier_contract.deadline_ms/1000 × 2.0` (`VERIFICATION_TIMEOUT_MULTIPLIER`; raised from 1.5 so stage 3 isn't starved on slow days — balanced 180s, high 360s). On timeout, if stage 2 completed, the partial result salvages an advisory rubric/confidence signal (verdict stays `unclear`).
 - **Waterfall time budget (ADR-040):** stage1 = 50% of remaining, stage2 = 70% of what's left, stage3 = the rest; each capped by `tier_timeout["per_model"]`.
 - **Durable partial state:** `partial_state` is updated after each stage and survives `CancelledError`, so a timeout still returns `completed_stages`. `VerifyResponse` carries `timeout_fired`, `completed_stages`, and (ADR-041) `timing` / `input_metrics`.
@@ -107,6 +107,8 @@ Verification (ADR-034/040/041) — `verification/api.py`
 - **Screening judge (ADR-047 P3, #415):** `verification/screening.py` — three-state `LLM_COUNCIL_SCREENING` (off default/shadow/active); eligibility INVARIANTS (blocking evidence — dicts AND Pydantic models — security focus, risk globs, 5K cap) checked before any model call; unanimity rule ≥`LLM_COUNCIL_SCREEN_MIN_SCORE` (9) on every dimension; decisions logged to `.council/screening/decisions.jsonl`; active-pass returns PASS-with-audit-note (`screening.acted=true`, council never ran). Soft-fail ⇒ full council.
 - **Confidence calibration (ADR-047 P2, #414):** `verification/calibration.py` — corpus loader/analyzer over `.council/logs`, PAV isotonic fit against human dispositions (`.council/calibration/dispositions.jsonl` → `mapping.json`), piecewise-linear `CalibrationMapping` (identity fallback, monotonicity enforced on load). `confidence_calibrated` reported on every response; PASS threshold uses it ONLY behind `LLM_COUNCIL_CALIBRATED_CONFIDENCE` (default off). CLI: `llm-council calibration-report [--fit]`.
 - **UNCLEAR disambiguation (ADR-047 P1, #413):** `unclear_reason ∈ {infra_failure, low_confidence, timeout}` on every unclear verdict (`derive_unclear_reason` in `verdict_extractor.py`; timeout checked first, then #403 `error_status`, else low_confidence). Exit code stays 2 — automation routes on the reason: retry infra, accept-and-audit low confidence, re-tier timeouts. None when `error` marker is set (non-deliberated cap results).
+
+**File selection & coverage (ADR-053, epic #546 — v0.39.0 security slice + v0.40.0 P3).** `file_ops.select_blobs(snapshot_id, candidates)` is the SOLE selection chokepoint (every candidate producer — blob/tree/`diff-tree` branches — routes through it; an unfiltered fetch is unrepresentable, AST-test-pinned). Layered, in order: **Q3 secret boundary** (`_is_secret_path`, compiled-in, case-insensitive, NOT overridable — closed the #540/#543 leak, shipped v0.39.0), **Q2 garbage** (path-component match), then **Q1 decodability** gated by `LLM_COUNCIL_FILE_SELECTION` (`allowlist` default = the `TEXT_EXTENSIONS` predicate, byte-identical; `content` = git NUL heuristic + snapshot `.gitattributes` via `git --attr-source=<sha> grep -I` + linguist attrs + `.svg`-noise + the `.llmignore` family via `pathspec`; `shadow` logs the delta). Content-mode helpers make one git call each and pass `--` before pathspecs. **Coverage receipt** (`expansion_metadata["coverage"]` → `CoverageReport`): typed `{path,reason,origin}` omissions + conservation invariant, additive/default-ON. **Coverage clamp** (`verification/coverage.py`, #556): `coverage_policy()`/`coverage_ack_reasons()`/`coverage_clamp_decision()` — a `pass` over an unreviewed changed/explicit file → `unclear(incomplete_coverage)`. **Opt-in: `coverage._DEFAULT_POLICY="warn"`** (byte-identical); the ONE-LINE flip to `clamp` is #557, gated on shadow telemetry, and also activates `gate_rejects_warn()`. ADR ERRATUM: Q1's example list wrongly includes `.envrc`, which Q3a correctly denies (security wins; #573).
 
 ## Key design decisions
 
@@ -140,6 +142,10 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 | `LLM_COUNCIL_MCP_TASKS` | ADR-045 P1 kill-switch: disable MCP Tasks exposure even on a task-capable SDK (default enabled-when-supported) |
 | `LLM_COUNCIL_PROMPT_CACHING` | ADR-049 D2 kill-switch: Anthropic cache_control breakpoints + OpenRouter session_id on the verify path (default ON — price-class-only; `false` ⇒ byte-identical payloads) |
 | `LLM_COUNCIL_PROMPT_CACHE_TTL` (`5m`\|`1h`) | ADR-049 D5: prompt-cache TTL override; verify defaults 1h, interactive 5m; invalid ⇒ path default. NOT `LLM_COUNCIL_CACHE_TTL` (response cache) |
+| `LLM_COUNCIL_FILE_SELECTION` (`allowlist`\|`content`\|`shadow`) | ADR-053 Q1 verify file classification; default `allowlist` (byte-identical). `content` = NUL heuristic + snapshot `.gitattributes` + linguist + `.llmignore` |
+| `LLM_COUNCIL_REVIEW_SVG` | ADR-053 Q2: review `.svg` in content mode instead of omitting it as noise (default off) |
+| `LLM_COUNCIL_COVERAGE_POLICY` (`warn`\|`clamp`\|`fail`) | ADR-053 #556 coverage clamp; **default `warn` (opt-in, byte-identical)** — flips to `clamp` in a later release (#557). `clamp` ⇒ pass over an unreviewed changed/explicit file → `unclear(incomplete_coverage)` |
+| `LLM_COUNCIL_COVERAGE_ACK_REASONS` | ADR-053 #556: omission reasons the clamp ignores; default `binary,generated,vendored,too_large,ignored,noise` |
 | `LLM_COUNCIL_MODEL_INTELLIGENCE=true` | Enable dynamic model selection (ADR-026) |
 | `LLM_COUNCIL_OFFLINE=true` | Force offline / static provider |
 | `LLM_COUNCIL_DISCOVERY_ENABLED` / `_INTERVAL` (300) / `_MIN_CANDIDATES` (3) | Background discovery (ADR-028) |

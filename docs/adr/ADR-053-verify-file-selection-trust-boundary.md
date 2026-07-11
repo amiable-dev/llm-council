@@ -1,6 +1,6 @@
 # ADR-053: Verify File Selection — Decodability, Reviewability, and the Trust Boundary
 
-**Status:** Partially implemented 2026-07-10 (rev 3) — the security slice (Q0 chokepoint #543, Q3a secret denylist #540, argv hygiene #549) shipped in v0.39.0 as epic [#546](https://github.com/amiable-dev/llm-council/issues/546) P0, together with the P2 verdict-integrity fixes (#544/#545/#560/#561). Q1 content-sniffing, Q2 reviewability, Q3b `.llmignore`, the coverage receipt and the coverage clamp are **deferred** to later P3 work.
+**Status:** Implemented — the security slice (Q0 #543, Q3a #540, argv #549) + P2 verdict-integrity fixes shipped in **v0.39.0** (2026-07-10); the P3 design work (Q1 content-sniffing #552, Q2 reviewability #553, Q3b `.llmignore` #554, coverage receipt #555, coverage clamp #556) shipped **opt-in** in **v0.40.0** (2026-07-11). The coverage-clamp default flips `warn`→`clamp` in a later release (#557) after shadow telemetry.
 
 **Review history:**
 - **rev 1** — initial draft.
