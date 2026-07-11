@@ -246,13 +246,16 @@ the threat-model hole rev 3 closed. Three layers, in build order:
 Every ack is stamped on `coverage.acked`, so a would-have-clamped-but-acked run
 is still auditable.
 
-**Two sub-decisions block implementation — maintainer sign-off needed:**
-- **Default ack set** — does `non-text` clamp? Recommended **yes** (it is #542).
-- **`fail` vs `unclear`** — recommended **`unclear(incomplete_coverage)`**
-  (route/retry), consistent with ADR-047 P1.
+**Both sub-decisions settled 2026-07-11 — P3.5 is unblocked:**
+- **Default ack set = `binary,generated,vendored,too_large,ignored,noise`.**
+  `non-text` clamps (it is #542); so do `not_found`, `truncated`, and
+  `denied_secret` of a changed file.
+- **The clamp yields `unclear(incomplete_coverage)`** (not a hard error); the
+  `fail` policy stays available for callers who want the 422.
 
-Do not implement P3.5 until those two are confirmed. Everything else about the
-mechanism is decided.
+**Layer 1 (`LLM_COUNCIL_COVERAGE_ACK_REASONS`) ships with the clamp; layers 2/3
+(`.council/coverage-ack` baseline, per-call list) follow when the tail needs
+them** — the ADR's own build order.
 
 ---
 

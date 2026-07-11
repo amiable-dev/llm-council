@@ -557,15 +557,14 @@ Every acknowledgement is **recorded on the receipt** (`coverage.acked: [...]`
 with the layer that acked each path), so an `unclear` that *would* have fired but
 was acknowledged is still auditable — the ack is visible, never silent.
 
-Two sub-decisions the maintainer confirms before P3.5 implements (both stated as
-recommendations, not settled):
-- **Default ack set.** Recommended: `binary,generated,vendored,too_large,ignored,noise`
-  — i.e. clamp only on `non-text` / `not_found` / `truncated` / `denied_secret`.
-  The crux is whether `non-text` (an unlisted language) is alarming enough to
-  clamp on; the recommendation says yes, because that *is* #542.
-- **`fail` vs `unclear`.** Recommended: `unclear(incomplete_coverage)` (route and
-  retry) over a hard `SnapshotResolutionError`, consistent with ADR-047 P1's
-  `unclear_reason` routing.
+Two sub-decisions, **both settled 2026-07-11**:
+- **Default ack set = `binary,generated,vendored,too_large,ignored,noise`.** So
+  `non-text` **does** clamp — an unlisted language the allowlist silently dropped
+  is exactly the #542 bug, and the gate should say so. Also clamping:
+  `not_found`, `truncated`, `denied_secret` of a changed file.
+- **The clamp yields `unclear(incomplete_coverage)`** (route and retry via the
+  ADR-047 P1 `unclear_reason`), not a hard `SnapshotResolutionError`. The `fail`
+  policy remains available for callers who want the hard error.
 
 ### How we guarantee the convention is actually applied
 
@@ -768,7 +767,8 @@ caller depends on a `pass` verdict over a partially-omitted explicit path (the
 
 ## Open questions for the decision makers
 
-1. **~~What shape is `coverage_ack`?~~** **Resolved (2026-07-11).** Three
+1. **~~What shape is `coverage_ack`? / default ack set / fail-vs-unclear~~**
+   **All resolved (2026-07-11).** Three
    composable layers, caller-owned and auditable so the uniform-clamp constraint
    holds: (1) `LLM_COUNCIL_COVERAGE_ACK_REASONS` reason-set (ship first, kills the
    ~90% "binary" noise); (2) a committed `.council/coverage-ack` glob baseline
