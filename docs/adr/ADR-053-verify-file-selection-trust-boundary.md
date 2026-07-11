@@ -508,10 +508,63 @@ introducing a new error path.
 **Usability note.** Under the uniform rule, a commit that touches a `.png` will
 clamp to `unclear`. That is *literally true* — the council did not review the
 PNG — but it is noisy, and a noisy gate gets disabled, which is worse than no
-gate. The escape must be explicit and auditable rather than a global `warn`: a
-caller-supplied `coverage_ack` list naming paths accepted as unreviewed, stamped
-into the receipt. This is the baseline pattern from mypy, Semgrep, and
-`.gitleaksignore`. Its exact shape is Open Question 1.
+gate. The escape must be explicit and auditable rather than a global `warn`.
+That escape is `coverage_ack`, resolved below.
+
+#### `coverage_ack` — the acknowledgement mechanism (resolves Open Question 1)
+
+**Constraint that rules the design.** The clamp is *uniform, no reason-based
+carve-outs* ("The clamp", above), because any hardcoded carve-out is an attacker's
+hiding spot. So the escape cannot be "the pipeline auto-forgives binaries." It
+must be **caller-owned and auditable**: the operator explicitly accepts what goes
+unreviewed and takes responsibility for it. A caller-set acknowledgement is
+categorically different from a silent built-in carve-out — that is why it does
+not reopen the threat-model hole rev 3 closed. Prior art: mypy baselines,
+`.gitleaksignore`, Semgrep `--exclude`, ESLint disable-directives.
+
+Three composable layers, shipped in this order:
+
+**(1) `LLM_COUNCIL_COVERAGE_ACK_REASONS` — the sensible default (ship first).**
+A comma-separated set of omission *reasons* the operator pre-accepts, e.g.
+`binary,generated,vendored,too_large,ignored`. The clamp ignores omissions whose
+reason is on the set. This kills ~90% of the noise (nobody expects a `.png`
+reviewed) with one setting, and it is caller-owned — an explicit env choice, not a
+pipeline default — so it satisfies the uniform-clamp constraint. The clamp then
+fires only on the **surprising** residue:
+
+| reason | clamps by default? | why |
+|---|---|---|
+| `binary`, `generated`, `vendored`, `too_large`, `ignored`, `noise` | **no** (recommended default ack set) | expected-unreviewed; the operator knows |
+| `non-text` | **yes** | an *unlisted language the allowlist silently dropped* — the actual #542 bug; you want to hear about it |
+| `not_found` | **yes** | a typo'd or moved path |
+| `truncated` | **yes** | the char budget cut coverage short |
+| `denied_secret` (of a changed file) | **yes** | "we refused to read it" is not "we reviewed it" |
+
+**(2) `.council/coverage-ack` — a committed baseline (add when the tail needs it).**
+A committed, gitignore-syntax file of path globs accepted as permanently
+unreviewed (`vendor/**`, `*.generated.*`). Read **from the snapshot** for
+reproducibility. It travels with the repo, is reviewable in PR diffs, and its
+drift is visible — the `.gitleaksignore` / mypy-baseline pattern. A PR that adds
+an ack shows the ack in its own diff; that is acceptable because the clamp is
+*honesty, not adversarial defense* (see "Threat model and non-goals"), so a
+contributor acknowledging their own omission is in scope, an attacker is not.
+
+**(3) `coverage_ack=[...]` on `run_verification` — the library primitive.** A
+per-call path/glob list for programmatic callers. Offered, not led with: an
+in-code list drifts from repo reality because nothing keeps it synced.
+
+Every acknowledgement is **recorded on the receipt** (`coverage.acked: [...]`
+with the layer that acked each path), so an `unclear` that *would* have fired but
+was acknowledged is still auditable — the ack is visible, never silent.
+
+Two sub-decisions, **both settled 2026-07-11**:
+- **Default ack set = `binary,generated,vendored,too_large,ignored,noise`.** So
+  `non-text` **does** clamp — an unlisted language the allowlist silently dropped
+  is exactly the #542 bug, and the gate should say so. Also clamping:
+  `not_found`, `truncated`, `denied_secret` of a changed file.
+- **The clamp yields `unclear(incomplete_coverage)`** (route and retry via the
+  ADR-047 P1 `unclear_reason`), not a hard `SnapshotResolutionError`. The `fail`
+  policy remains available for callers who want the hard error.
 
 ### How we guarantee the convention is actually applied
 
@@ -714,12 +767,16 @@ caller depends on a `pass` verdict over a partially-omitted explicit path (the
 
 ## Open questions for the decision makers
 
-1. **What shape is `coverage_ack`?** The uniform clamp means any commit touching
-   a `.png` returns `unclear`. A noisy gate gets disabled. Options: a
-   caller-supplied path list, a committed `.council/coverage-baseline`, or an
-   omission-reason allowlist per invocation. **This is the highest-risk open
-   item** — get it wrong and either the gate is unusable or the clamp is
-   vacuous.
+1. **~~What shape is `coverage_ack`? / default ack set / fail-vs-unclear~~**
+   **All resolved (2026-07-11).** Three
+   composable layers, caller-owned and auditable so the uniform-clamp constraint
+   holds: (1) `LLM_COUNCIL_COVERAGE_ACK_REASONS` reason-set (ship first, kills the
+   ~90% "binary" noise); (2) a committed `.council/coverage-ack` glob baseline
+   read from the snapshot; (3) a per-call `coverage_ack=[...]` library primitive.
+   Every ack is stamped on the receipt. See "`coverage_ack` — the acknowledgement
+   mechanism". Two sub-decisions still need the maintainer's sign-off before P3.5
+   implements: the **default ack set** (does `non-text` clamp?) and **`fail` vs
+   `unclear`** — both carry recommendations there.
 2. **~~Does `origin=discovered` + `reason=binary` deserve any verdict effect?~~**
    **Dissolved in rev 3.** Both `origin` and `reason` are the wrong axis; every
    unreviewed changed file clamps. See "The clamp".

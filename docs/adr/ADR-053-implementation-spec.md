@@ -211,21 +211,51 @@ default `allowlist`, byte-identical when off.
   `pathspec`. **No seeding** — the built-in denylist is the floor, not a
   template. `ignore --print-defaults` / `--init` / `--explain` as ergonomics.
 - **P3.4 — Coverage receipt.** Additive, default-ON, no type break. Conservation
-  invariant + `TestVerifyResponseFieldDrift` (ADR-051 C6 precedent).
-- **P3.5 — The clamp.** `pass` not representable over an unreviewed changed or
-  explicitly-named file → `unclear(incomplete_coverage)`.
-  `llm-council gate` hard-errors on `LLM_COUNCIL_COVERAGE_POLICY=warn`.
-  **Blocked on Open Question 1** — see below.
+  invariant + `TestVerifyResponseFieldDrift` (ADR-051 C6 precedent). **SHIPPED
+  (#555, PR #572).**
+- **P3.5 — The clamp + `coverage_ack`.** `pass` not representable over an
+  unreviewed changed or explicitly-named file → `unclear(incomplete_coverage)`,
+  UNLESS acknowledged. `llm-council gate` hard-errors on
+  `LLM_COUNCIL_COVERAGE_POLICY=warn`. **`coverage_ack` shape resolved** (ADR-053
+  Open Question 1); two sub-decisions await the maintainer — see below.
 - **P3.6 — Shadow-mode telemetry**, then flip `content` on in a later release.
 
-### P3.5 is blocked, and should stay blocked
+### P3.5 — the clamp, and its `coverage_ack` escape
 
-ADR-053 Open Question 1 (`coverage_ack`) is the highest-risk open item. Under the
-uniform clamp, *any commit touching a `.png` returns `unclear`*. That is
-literally true and completely unusable — and **a noisy gate gets switched off,
-which is worse than no gate**. Do not ship P3.5 until the acknowledgement
-mechanism is designed. P3.4 (the receipt) is independently valuable and can ship
-first: it makes the omission *visible* without making the gate noisy.
+The clamp is what turns the #555 receipt's `explicit_omitted` signal into a
+verdict. Without an acknowledgement mechanism it is unusable: under the uniform
+rule *any commit touching a `.png` returns `unclear`*, and a noisy gate gets
+switched off — worse than no gate. So P3.5 ships the clamp **and**
+`coverage_ack` together; the receipt (P3.4) already shipped the *visibility*
+without the verdict risk.
+
+**`coverage_ack` design (ADR-053 Open Question 1, resolved 2026-07-11).**
+Caller-owned and auditable — never a pipeline auto-carve-out, which would reopen
+the threat-model hole rev 3 closed. Three layers, in build order:
+
+1. `LLM_COUNCIL_COVERAGE_ACK_REASONS` — a reason-set the operator pre-accepts
+   (recommended default `binary,generated,vendored,too_large,ignored,noise`).
+   Ship first: one setting removes the ~90% "binary" noise. The clamp then fires
+   only on `non-text` (an unlisted language — the #542 bug), `not_found`,
+   `truncated`, and `denied_secret` of a changed file.
+2. `.council/coverage-ack` — a committed gitignore-syntax glob baseline, read
+   from the snapshot (reproducible, PR-reviewable, drift-visible). Add when the
+   long tail needs it. Reuses the `pathspec` matcher from P3.3.
+3. `coverage_ack=[...]` on `run_verification` — a per-call library primitive.
+
+Every ack is stamped on `coverage.acked`, so a would-have-clamped-but-acked run
+is still auditable.
+
+**Both sub-decisions settled 2026-07-11 — P3.5 is unblocked:**
+- **Default ack set = `binary,generated,vendored,too_large,ignored,noise`.**
+  `non-text` clamps (it is #542); so do `not_found`, `truncated`, and
+  `denied_secret` of a changed file.
+- **The clamp yields `unclear(incomplete_coverage)`** (not a hard error); the
+  `fail` policy stays available for callers who want the 422.
+
+**Layer 1 (`LLM_COUNCIL_COVERAGE_ACK_REASONS`) ships with the clamp; layers 2/3
+(`.council/coverage-ack` baseline, per-call list) follow when the tail needs
+them** — the ADR's own build order.
 
 ---
 
