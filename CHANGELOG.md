@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0] - 2026-07-11
+
+**Content-aware verify file selection + coverage accounting (ADR-053, epic [#546](https://github.com/amiable-dev/llm-council/issues/546) P3).** Completes the file-selection redesign begun in v0.39.0's security fix. Everything here is **opt-in and byte-identical by default** — no verify verdict changes on upgrade. Closes [#542](https://github.com/amiable-dev/llm-council/issues/542) (unlisted languages silently dropped).
+
+> [!IMPORTANT]
+> **Upcoming default change — the coverage clamp will become the default.** Today the clamp is opt-in (`LLM_COUNCIL_COVERAGE_POLICY=warn` by default — receipt only, no verdict effect). **In a future minor release the default flips to `clamp`**, so a `verify`/`gate` `pass` over a changed-or-explicitly-named file the council did **not** review (in the default `allowlist` file selection, that means any unlisted-extension text file — a `.zig`, `.tf`, `.dart`, …) will return `unclear(incomplete_coverage)` instead, and `llm-council gate` will refuse an explicit `LLM_COUNCIL_COVERAGE_POLICY=warn`. **To prepare now:** set `LLM_COUNCIL_COVERAGE_POLICY=clamp` to adopt it early, and/or run `LLM_COUNCIL_FILE_SELECTION=shadow` to see which files content-mode selection would review that the allowlist drops. The flip will ship as its own `### Changed` release with no fewer than two minor releases' notice from this one.
+
+### Added
+
+- **Content-aware file classification (ADR-053 Q1, [#552](https://github.com/amiable-dev/llm-council/issues/552))** — `LLM_COUNCIL_FILE_SELECTION=content` replaces the ~140-entry `TEXT_EXTENSIONS` allowlist with git's own rule (a blob is text iff its first 8000 bytes contain no NUL), read via `git --attr-source=<sha> grep -I`, which also honours the snapshot's `.gitattributes` `binary`/`-diff`. Reviews any text file — `.zig`, `.tf`, `.dart`, `.sol`, `.gleam`, `LICENSE`, `CODEOWNERS`, shebang scripts — with no per-language list edit. `shadow` mode logs what content selection would change while acting on the allowlist; `allowlist` (default) is byte-identical.
+- **Reviewability filtering (ADR-053 Q2, [#553](https://github.com/amiable-dev/llm-council/issues/553))** — in content mode, `linguist-generated`/`linguist-vendored` paths (from the snapshot's `.gitattributes`) are omitted, and `.svg` is treated as noise unless `LLM_COUNCIL_REVIEW_SVG=true`.
+- **`.llmignore` family support (ADR-053 Q3b, [#554](https://github.com/amiable-dev/llm-council/issues/554))** — content mode honours the first present of `.llmignore` → `.aiexclude` → `.aiignore` → `.cursorignore` → `.codeiumignore` (read from the snapshot, gitignore syntax via `pathspec`). Additive narrowing only — the compiled-in secret boundary always wins. New `llm-council ignore` command (`--print-defaults` / `--explain PATH` / `--init`) — ergonomics only; it never writes a file without `--init`.
+- **Coverage receipt (ADR-053, [#555](https://github.com/amiable-dev/llm-council/issues/555))** — every `verify` response carries a typed `coverage` object: which requested paths were `reviewed` vs `omitted` (each with a `{path, reason, origin}` — `denied_secret` records the path only, never the value), an `explicit_omitted` flag, and a `conservation_ok` invariant marker. Machine-readable replacement for parsing `expansion_warnings` prose.
+- **Coverage clamp, opt-in (ADR-053, [#556](https://github.com/amiable-dev/llm-council/issues/556))** — `LLM_COUNCIL_COVERAGE_POLICY` in `clamp` / `fail` / `warn` (**default `warn` — see the upcoming-change note above**). Under `clamp`, a `pass` over an unreviewed changed-or-explicit file becomes `unclear(incomplete_coverage)`; `LLM_COUNCIL_COVERAGE_ACK_REASONS` (default `binary,generated,vendored,too_large,ignored,noise`) acknowledges expected omissions so the clamp fires only on the surprising ones (`non-text`, `not_found`, `truncated`, `denied_secret`). Adds `incomplete_coverage` to the `unclear_reason` taxonomy.
+
+### Fixed
+
+- **Unlisted languages are no longer silently dropped ([#542](https://github.com/amiable-dev/llm-council/issues/542))** — via content-mode selection (they are reviewed) and the coverage receipt/clamp (their omission is visible/actionable). The #533/#539 "add one extension per release" treadmill is over.
+- **`pathspec>=0.12.0`** added as a runtime dependency (pure-Python; used for `.llmignore` matching).
+
 ## [0.39.0] - 2026-07-10
 
 **Verify file-selection trust boundary + verdict-integrity fixes (ADR-053, epic [#546](https://github.com/amiable-dev/llm-council/issues/546))** — closes a credential-transmission defect in `verify()` and repairs three verdict-integrity bugs found while fixing it. Minor release (not patch) because it changes user-facing behaviour on several paths and carries a security advisory; see the "Changed" notes before upgrading a gate you depend on.
