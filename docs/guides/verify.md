@@ -119,6 +119,73 @@ decouple from `findings`.
 `major`". This is the durable contract; the flag defaults **off** and this
 epic is non-breaking, but the legacy prose-scrape is the path being retired.
 
+## Controlling what gets reviewed (ADR-053)
+
+`verify` decides which files enter the prompt through a layered filter. A
+compiled-in **secret boundary** always runs first and is never overridable:
+credential files (`.env*`, `*.pem`, `id_rsa*`, `.npmrc`, `.aws/credentials`,
+`kubeconfig`, `secrets.y*ml`, …) are never transmitted, even if you name one
+explicitly. Inspect it with `llm-council ignore --print-defaults`, or ask why a
+given path is or isn't reviewed with `llm-council ignore --explain <path>`.
+
+**File classification** — `LLM_COUNCIL_FILE_SELECTION`:
+
+- `allowlist` (default) — the historical `TEXT_EXTENSIONS` list. Byte-identical
+  to older releases. A file whose extension isn't on the list (`.zig`, `.tf`,
+  `.dart`, …) is dropped.
+- `content` — git's own text detection (a blob is text iff its first 8000 bytes
+  contain no NUL), honouring the snapshot's `.gitattributes`. **Reviews any text
+  file regardless of extension** — unlisted languages, `LICENSE`, `CODEOWNERS`,
+  shebang scripts. Also omits `linguist-generated`/`linguist-vendored` paths and
+  (unless `LLM_COUNCIL_REVIEW_SVG=true`) `.svg`.
+- `shadow` — acts on the allowlist but logs what `content` would add or drop, so
+  you can measure the change before adopting it.
+
+**Repo-owned exclusions** — in `content` mode, `verify` honours the first present
+of `.llmignore` → `.aiexclude` → `.aiignore` → `.cursorignore` → `.codeiumignore`
+(read from the snapshot, gitignore syntax). It can only *narrow* what is reviewed;
+it can never re-admit a denied secret. `llm-council ignore --init` writes a
+commented starter file (it never overwrites an existing one, and never runs
+unless you ask).
+
+## Coverage accounting (ADR-053)
+
+Every response carries a `coverage` receipt so a gate can tell **what was
+reviewed vs skipped, and why**, instead of parsing prose:
+
+```json
+"coverage": {
+  "reviewed": ["src/app.py"],
+  "omitted": [{"path": "main.zig", "reason": "non-text", "origin": "discovered"},
+              {"path": ".env",     "reason": "denied_secret", "origin": "discovered"}],
+  "explicit_omitted": false
+}
+```
+
+`reason` distinguishes a dropped source file (`non-text`) from a binary
+(`binary`) from a secret (`denied_secret` — the value is never recorded). Key CI
+logic on `coverage`, not on `expansion_warnings`.
+
+**The coverage clamp** — `LLM_COUNCIL_COVERAGE_POLICY`:
+
+- `warn` (**current default**) — receipt only, no verdict effect. Byte-identical.
+- `clamp` — a `pass` over a changed-or-explicitly-named file the council did
+  **not** review becomes `unclear(incomplete_coverage)` (see `coverage.clamped`).
+  `LLM_COUNCIL_COVERAGE_ACK_REASONS` (default
+  `binary,generated,vendored,too_large,ignored,noise`) acknowledges expected
+  omissions, so the clamp fires only on the surprising ones (`non-text`,
+  `not_found`, `truncated`, `denied_secret`).
+- `fail` — the same condition raises a hard 422 instead.
+
+> **Upcoming default change.** The clamp default will flip from `warn` to `clamp`
+> in a future minor release (with ≥2 releases' notice). When it does, a
+> `verify`/`gate` `pass` over an unreviewed changed/explicit file — in the default
+> `allowlist` selection, any unlisted-extension source file — returns
+> `unclear(incomplete_coverage)`, and `gate` refuses an explicit `warn`. **Adopt
+> early** with `LLM_COUNCIL_COVERAGE_POLICY=clamp`; **preview** the impact with
+> `LLM_COUNCIL_FILE_SELECTION=shadow`. Switching to `content` selection reviews
+> the dropped files so they no longer clamp.
+
 ## Response fields
 
 Every field on the `verify` response (`VerifyResponse`), the nested `Finding`,
