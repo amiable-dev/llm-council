@@ -300,9 +300,16 @@ regardless of the checked-out tree.
 
 **This dissolves the extensionless-file question entirely.** `LICENSE`,
 `CODEOWNERS`, `Makefile`, `Dockerfile`, `Jenkinsfile`, `Procfile`, `BUILD`,
-`.envrc`, and shebang scripts are all NUL-free and are simply included. No
-filename list, no shebang parser, no `{"makefile", "dockerfile", "jenkinsfile",
-"cmakelists"}` special case. The existing special case is deleted, not extended.
+and shebang scripts are all NUL-free and are simply included. No filename list,
+no shebang parser, no `{"makefile", "dockerfile", "jenkinsfile", "cmakelists"}`
+special case. The existing special case is deleted, not extended.
+
+> **Erratum (#573).** An earlier draft of this list also named `.envrc`. That is
+> wrong: `.envrc` is a direnv shell file that routinely holds `export SECRET=…`,
+> so Q3a (below) denies it, and the Q3 secret boundary runs *before* this Q1
+> step — security wins over the illustrative list. `.envrc` is **not** reviewed;
+> it is a `denied_secret`, pinned by
+> `test_issue552_content_sniffing::test_envrc_stays_denied_adr_erratum`.
 
 **Known blind spot, stated plainly:** UTF-16 source files are full of NUL bytes
 and will be classified binary. Git has the identical blind spot and repos work
