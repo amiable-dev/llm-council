@@ -1,7 +1,10 @@
 # ADR-054: What `confidence` Means in verify() — and How to Calibrate It
 
-**Status:** Proposed 2026-07-11
+**Status:** Proposed 2026-07-11 (rev 2 — council review 2026-07-12)
 **Date:** 2026-07-11
+
+**Review history:**
+- **rev 2** — council review of rev 1 (`verify`, tier=reasoning, structured findings, `b270c7f3`, **fail**, 1 critical / 1 major / 1 info) on v0.40.0 code. Accepted both substantive findings: (critical) the `verdict_source` table described the *pre-#562* mechanical confidence while a later section described *post-#562* — a self-contradiction, now reconciled (the table states the current conditional, the corpus is labelled pre-#562); (major) **D2** was mislabelled "additive" when it is a value-semantics change (identity-passthrough → `None`) — reworded, with the note that the field is already `Optional[float]` so it is not a type-break. The `info` finding (the doc is a proposal with an open fork) is by design. **Meta:** the review verdict was itself `fail @ confidence 0.26` on the mechanical path — a live instance of this ADR's thesis (a mechanical `fail` carrying a saturated-agreement confidence that means nothing). It also confirmed the v0.40.0 fixes in production: `verdict_source=mechanical`, all stages completed, stage 3 got 16.7s of the deadline (no starvation — #545), and the verdict came from `policy(findings)` not a collapsed confidence (#560/#562).
 **Decision Makers:** llm-council maintainers (review requested)
 **Proposed by:** maintainer triage of [#563](https://github.com/amiable-dev/llm-council/issues/563), surfaced while fixing [#560](https://github.com/amiable-dev/llm-council/issues/560) (mechanical-gate confidence)
 **Relates to:** ADR-047 P2 (confidence calibration), ADR-051 (mechanical gate — verdict as a pure function of findings), ADR-016 (rubric scoring), ADR-025b (BINARY verdict)
@@ -24,15 +27,24 @@ ADR-047 calibrates is a category error.**
 
 Depending on which path produced the verdict, `confidence` is:
 
-| `verdict_source` | what `confidence` actually is |
+| `verdict_source` | what `confidence` actually is (current, post-#562) |
 |---|---|
 | structured verdict parsed | the **chairman's self-reported** confidence |
-| `mechanical` (ADR-051) | `calculate_confidence_from_agreement` — a **stage-2 reviewer-agreement heuristic** scored from rubric means |
+| `mechanical` (ADR-051, as of #562) | **conditional**: the chairman's self-report when its verdict concords with `policy(findings)`, **else** `calculate_confidence_from_agreement` — a stage-2 reviewer-agreement heuristic over rubric means |
 | `legacy` (prose fallback) | `0.4 × prose-regex signal + 0.6 × the agreement heuristic` |
+
+This is *worse* than one heuristic per path, not better: the mechanical path is
+itself a **conditional between two of these quantities** (self-report or
+agreement), chosen per-run by whether the chairman happened to concord — so its
+distribution is bimodal by construction. Before #562 the mechanical path was
+purely the agreement heuristic; that is the state the corpus below was collected
+under, and it is what makes the pre/post-#562 distinction load-bearing (see
+"#560/#562 moved the target again").
 
 These are not the same measurement lightly rescaled — they are different
 quantities with different supports. Measured across **539 local verify
-transcripts** (the corpus from the #560 investigation), for the **same verdict**
+transcripts** (the **pre-#562** corpus from the #560 investigation, when the
+mechanical path was purely the agreement heuristic), for the **same verdict**
 (`fail`, chairman said `rejected`):
 
 - median reported confidence on the **legacy** path: **0.95**
@@ -57,11 +69,11 @@ from a category error, so the safe default is to not use it.
 ### #560/#562 moved the target again
 
 The mechanical-gate fix ([#560](https://github.com/amiable-dev/llm-council/issues/560)/[#562](https://github.com/amiable-dev/llm-council/issues/562))
-changed what `confidence` means on the mechanical path (it now prefers the
-chairman's self-report when it concords with `policy(findings)`, else the
-agreement figure, published separately as `diagnostics.deliberation_agreement`).
-So any corpus collected before #562 is on a *different distribution* from one
-collected after. Fortunately `.council/calibration/dispositions.jsonl` is empty
+replaced the mechanical path's pure agreement heuristic with the **conditional**
+described in the table above (self-report when concordant, else agreement; the raw
+agreement figure is still published as `diagnostics.deliberation_agreement`). So
+the 539-transcript corpus below, collected *before* #562, is on a different — and
+simpler, unimodal-per-verdict — distribution than one collected after. Fortunately `.council/calibration/dispositions.jsonl` is empty
 everywhere today — nothing is lost, and this is the cheapest possible moment to
 fix the schema.
 
@@ -104,10 +116,20 @@ deciding what confidence means.
 
 ### D2 — `confidence_calibrated = None`, not an identity passthrough (do now)
 
-Today `confidence_calibrated` echoes the raw value when no mapping is fitted,
-which reads as "calibrated" when nothing calibrated it. Report **`None`** when no
-valid mapping exists for the active `confidence_source`. A consumer can then tell
-"calibrated to X" from "not calibrated". Additive, no verdict effect.
+Today `confidence_calibrated` echoes the raw value when the loaded mapping is the
+identity fallback — which reads as "calibrated" when nothing calibrated it. Report
+**`None`** when no valid mapping exists for the active `confidence_source`, so a
+consumer can tell "calibrated to X" from "not calibrated".
+
+This is a **value-semantics change, not an additive one** — flagged so it is not
+undersold (council review, `major`). The field is *already* `Optional[float]` and
+*already* `None` in some paths today (`schemas.py`; `verdict_extractor.py`), so it
+is type-compatible and introduces no new nullability. But it changes the *value*
+in the identity-mapping case from `raw_confidence` to `None`, which breaks a
+consumer that assumes `confidence_calibrated` is always numeric. It is not a
+type-break; it *is* a behavior change, and it ships as a `### Changed` entry with
+a migration note ("`confidence_calibrated` may be `None`; fall back to
+`confidence`"). No verdict effect.
 
 ### D3 — The fork: demote, or redefine (maintainer decides)
 
