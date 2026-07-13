@@ -124,6 +124,34 @@ def test_the_default_invocation_still_reviews_real_source(redteam_repo):
     assert "src/app.py" in prompt
 
 
+def test_denylist_summary_includes_dir_prefix_rules():
+    """#584: `denylist_summary()` (backs `llm-council ignore --print-defaults`,
+    a security-transparency feature) lists secret basenames/suffixes/prefixes
+    /directories but omits `_SECRET_DIR_PREFIXES` (compound rules like
+    `.config/gcloud/**`) entirely — a user auditing "what's denied" would not
+    see that this path is blocked."""
+    summary = file_ops.denylist_summary()
+    joined = "\n".join(summary)
+    for lead, sub in file_ops._SECRET_DIR_PREFIXES:
+        assert lead in joined and sub in joined, (
+            f"denylist_summary() does not mention the {lead}/{sub} compound rule"
+        )
+
+
+def test_empty_target_paths_list_fetches_zero_files(redteam_repo):
+    """#584: `target_paths=[]` (explicitly "review nothing") is a non-empty-looking
+    falsy value in Python. A bare `if target_paths:` treats it the same as `None`
+    and falls through to the diff-tree "no target_paths given" branch, silently
+    fetching every changed file instead of the zero files the caller asked for.
+    """
+    _repo, sha = redteam_repo
+    content, meta = asyncio.run(
+        file_ops._fetch_files_for_verification_async_with_metadata(sha, [])
+    )
+    assert meta["expanded_paths"] == []
+    assert "src/app.py" not in content
+
+
 def test_default_invocation_records_its_omissions(redteam_repo):
     """#543: `expansion_warnings` was empty on this path — omissions were invisible."""
     _repo, sha = redteam_repo

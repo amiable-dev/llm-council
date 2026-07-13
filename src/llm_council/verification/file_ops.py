@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .constants import (
     ASYNC_SUBPROCESS_TIMEOUT,
     GARBAGE_FILENAMES,
+    GIT_ARGV_BATCH_SIZE,
     MAX_BLOB_SIZE_BYTES,
     MAX_FILE_CHARS,
     MAX_FILES_EXPANSION,
@@ -85,8 +86,14 @@ def _validate_file_path(file_path: str) -> bool:
     if file_path.startswith("/") or file_path.startswith("\\"):
         return False
 
-    # Reject path traversal attempts
-    if ".." in file_path:
+    # Reject path traversal attempts. #584: a substring check (`".." in
+    # file_path`) over-rejects legitimate filenames that merely contain the
+    # two characters (e.g. "version..txt") without being an actual ".."
+    # path COMPONENT. Check components instead — this is strictly more
+    # correct, not more permissive: it still catches ".." anywhere in the
+    # path (leading, trailing, or nested), just not as a false positive on
+    # an unrelated filename.
+    if any(part == ".." for part in Path(file_path).parts):
         return False
 
     # Reject null bytes (path injection)
@@ -411,13 +418,26 @@ def file_selection_mode() -> str:
 
 
 async def _blob_sizes(snapshot_id: str, paths: List[str]) -> Dict[str, int]:
-    """Byte size per path in the snapshot, via one `git ls-tree` call (#552).
+    """Byte size per path in the snapshot, via `git ls-tree` (#552).
 
     Serves the size cap AND empty-file disambiguation (an empty blob is text but
     `git grep` never lists it). Missing ⇒ absent from the returned map.
+
+    #584: chunks `paths` across multiple git calls (`GIT_ARGV_BATCH_SIZE` per
+    call) so a large candidate list cannot exceed the OS ARG_MAX and fail the
+    whole call — which previously meant every one of those paths silently
+    dropped out of the returned map with no error.
     """
     if not paths:
         return {}
+    sizes: Dict[str, int] = {}
+    for i in range(0, len(paths), GIT_ARGV_BATCH_SIZE):
+        sizes.update(await _blob_sizes_chunk(snapshot_id, paths[i : i + GIT_ARGV_BATCH_SIZE]))
+    return sizes
+
+
+async def _blob_sizes_chunk(snapshot_id: str, paths: List[str]) -> Dict[str, int]:
+    """One `git ls-tree` call's worth of `_blob_sizes` (caller chunks paths)."""
     git_root = await _get_git_root_async()
     semaphore = await _get_git_semaphore()
     for fmt in ("--format=%(objectsize) %(path)", None):
@@ -469,9 +489,20 @@ async def _text_paths(snapshot_id: str, paths: List[str]) -> set:
     `.gitattributes` (a top-level git option, not a grep flag — verified 2.50.1).
     Exit 1 = "no text file matched", not an error. Empty blobs never appear here
     (they are recovered via `_blob_sizes` size==0 by the caller).
+
+    #584: chunks `paths` (`GIT_ARGV_BATCH_SIZE` per call) to stay under the
+    OS ARG_MAX on large candidate lists — see `_blob_sizes`.
     """
     if not paths:
         return set()
+    result: set = set()
+    for i in range(0, len(paths), GIT_ARGV_BATCH_SIZE):
+        result |= await _text_paths_chunk(snapshot_id, paths[i : i + GIT_ARGV_BATCH_SIZE])
+    return result
+
+
+async def _text_paths_chunk(snapshot_id: str, paths: List[str]) -> set:
+    """One `git grep` call's worth of `_text_paths` (caller chunks paths)."""
     git_root = await _get_git_root_async()
     semaphore = await _get_git_semaphore()
     async with semaphore:
@@ -525,6 +556,8 @@ def denylist_summary() -> List[str]:
         "  " + " ".join(f"{p}*" for p in _SECRET_PREFIXES),
         "# secret directories (any path component):",
         "  " + " ".join(sorted(_SECRET_DIRS)),
+        "# secret directory trees (compound path components):",
+        "  " + " ".join(f"{lead}/{sub}/**" for lead, sub in _SECRET_DIR_PREFIXES),
         "# ignore-file family honored in content mode (first present wins):",
         "  " + " -> ".join(IGNORE_FILENAMES),
     ]
@@ -574,12 +607,25 @@ def review_svg_enabled() -> bool:
 async def _reviewability_attrs(snapshot_id: str, paths: List[str]) -> Dict[str, str]:
     """Map path → "generated"/"vendored" from the SNAPSHOT's linguist attributes.
 
-    One `git --attr-source=<sha> check-attr -z linguist-generated linguist-vendored`
-    call (#553, ADR-053 Q2). `-z` output is flat NUL triples `path\\0attr\\0value`;
+    `git --attr-source=<sha> check-attr -z linguist-generated linguist-vendored`
+    (#553, ADR-053 Q2). `-z` output is flat NUL triples `path\\0attr\\0value`;
     a value of `set` means the attribute applies. `generated` wins if both are set.
+
+    #584: chunks `paths` (`GIT_ARGV_BATCH_SIZE` per call) to stay under the
+    OS ARG_MAX on large candidate lists — see `_blob_sizes`.
     """
     if not paths:
         return {}
+    out: Dict[str, str] = {}
+    for i in range(0, len(paths), GIT_ARGV_BATCH_SIZE):
+        out.update(
+            await _reviewability_attrs_chunk(snapshot_id, paths[i : i + GIT_ARGV_BATCH_SIZE])
+        )
+    return out
+
+
+async def _reviewability_attrs_chunk(snapshot_id: str, paths: List[str]) -> Dict[str, str]:
+    """One `git check-attr` call's worth of `_reviewability_attrs` (caller chunks)."""
     git_root = await _get_git_root_async()
     semaphore = await _get_git_semaphore()
     async with semaphore:
@@ -841,8 +887,11 @@ async def _expand_target_paths(
                 break
 
         else:
+            # #584: a real (if unusual) object type — e.g. `commit` for a
+            # submodule gitlink, or `tag` — is not the same as "not found".
+            # `Omission.reason` already documents `unknown_object` for this.
             warnings.append(f"Unknown object type '{obj_type}' for path: {path}")
-            omissions.append(Omission(path, "not_found", "explicit"))
+            omissions.append(Omission(path, "unknown_object", "explicit"))
 
         # Check limit after each path
         if len(expanded_files) >= MAX_FILES_EXPANSION:
@@ -994,7 +1043,12 @@ async def _fetch_file_at_commit_async(
                         stderr_data = await asyncio.wait_for(proc.stderr.read(1024), timeout=1)
                     except Exception:
                         pass
-                return f"[Error: Could not read {file_path} at {snapshot_id}]", False
+                # #584: stderr_data was read but never used — the error message
+                # was a generic "could not read", discarding git's own (often
+                # much more specific) explanation of what went wrong.
+                detail = stderr_data.decode("utf-8", errors="replace").strip()
+                suffix = f": {detail}" if detail else ""
+                return f"[Error: Could not read {file_path} at {snapshot_id}{suffix}]", False
 
             # Combine chunks and decode
             content_bytes = b"".join(chunks)
@@ -1078,7 +1132,13 @@ async def _fetch_files_for_verification_async_with_metadata(
     per_batch_budget = tier_budget
 
     # ADR-034 v2.6: Expand directories in target_paths
-    if target_paths:
+    #
+    # #584: `target_paths` must be gated on `is not None`, not truthiness. An
+    # explicit `target_paths=[]` means "review zero files" — a bare `if
+    # target_paths:` treats that the same as `None` and falls through to the
+    # "no target_paths given" branch below, silently fetching every changed
+    # file instead of the zero files the caller asked for.
+    if target_paths is not None:
         files_to_fetch, truncated, warnings, all_omissions = await _expand_target_paths(
             snapshot_id, target_paths
         )
@@ -1122,8 +1182,18 @@ async def _fetch_files_for_verification_async_with_metadata(
                     expansion_metadata["expansion_warnings"] = [
                         o.as_warning() for o in omitted
                     ]
-        except Exception:
-            pass
+        except Exception as e:
+            # #584: this used to be a bare `except Exception: pass` — a real
+            # failure (missing git binary, corrupt repo, timeout) left
+            # `files_to_fetch` at its initial empty list with no signal at
+            # all. verify() would silently review zero files and report
+            # clean coverage rather than surfacing that discovery itself
+            # failed (a fail-open exactly where ADR-053's coverage-receipt
+            # invariant says it must not be silent).
+            logger.warning("git diff-tree discovery failed: %s", e)
+            expansion_metadata["expansion_warnings"].append(
+                f"git diff-tree discovery failed ({e}); reviewing zero changed files"
+            )
 
     # #555 coverage receipt: typed omissions + conservation invariant. Built here
     # so every path select_blobs saw is accounted for, whichever branch produced
@@ -1161,13 +1231,11 @@ async def _fetch_files_for_verification_async_with_metadata(
     # Fetch in batches of up to 5 files at a time
     BATCH_SIZE = 5
     files_fetched = 0
+    budget_exceeded = False
 
     for i in range(0, len(files_to_fetch), BATCH_SIZE):
         # Check limit before fetching next batch
-        if total_chars >= per_batch_budget:
-            sections.append(
-                f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
-            )
+        if budget_exceeded:
             break
 
         batch = files_to_fetch[i : i + BATCH_SIZE]
@@ -1179,10 +1247,17 @@ async def _fetch_files_for_verification_async_with_metadata(
         )
 
         for file_path, (content, truncated) in zip(batch, results):
-            if total_chars >= per_batch_budget:
+            # #584: check the PROJECTED total, not the current one. The old
+            # `total_chars >= per_batch_budget` check ran before this file's
+            # content was added, so a single file up to the full per-file
+            # budget could push total_chars past per_batch_budget before the
+            # *next* file's check ever caught it — overshooting by up to one
+            # whole per-file budget's worth of characters.
+            if total_chars + len(content) > per_batch_budget:
                 sections.append(
                     f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
                 )
+                budget_exceeded = True
                 break
 
             total_chars += len(content)

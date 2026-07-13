@@ -26,6 +26,14 @@ MAX_FILES_EXPANSION = 100
 # to sniff it. Generous: tier char budgets truncate anything reviewable anyway.
 MAX_BLOB_SIZE_BYTES = 5_000_000
 
+# #584: content-mode git calls (`_blob_sizes`, `_text_paths`,
+# `_reviewability_attrs`) spread an unbounded candidate-path list directly
+# into a subprocess argv. A commit touching enough files (a huge vendoring
+# or initial-import commit) can exceed the OS ARG_MAX, causing the call to
+# fail and its paths to be silently treated as omitted/binary. Chunking
+# keeps any single invocation well under ARG_MAX on every supported OS.
+GIT_ARGV_BATCH_SIZE = 200
+
 # Text file extensions to include (whitelist approach per council decision)
 # 80+ extensions covering common source code, config, and documentation files
 TEXT_EXTENSIONS: Set[str] = frozenset(

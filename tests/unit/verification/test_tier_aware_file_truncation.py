@@ -207,6 +207,47 @@ class TestFetchFilesUsesTierLimit:
         assert captured_limits == [15_000]
 
 
+class TestBatchBudgetDoesNotOvershoot:
+    """#584: the per-batch check ran BEFORE adding a file's content, so a
+    single file up to the full per-file budget could push `total_chars` well
+    past `per_batch_budget` before the *next* file's check caught it —
+    overshooting by up to one whole per-file budget's worth of characters."""
+
+    @pytest.mark.asyncio
+    async def test_second_large_file_is_omitted_not_overshot(self):
+        from llm_council.verification import file_ops as api
+
+        # reasoning tier: per-file and per-batch budget are both 50_000.
+        big = "y" * 40_000
+
+        async def fake_fetch(snapshot_id, file_path, max_file_chars=None):
+            return big, False
+
+        async def fake_expand(snapshot_id, target_paths):
+            return list(target_paths), False, [], []
+
+        with (
+            patch.object(api, "_fetch_file_at_commit_async", side_effect=fake_fetch),
+            patch.object(api, "_expand_target_paths", side_effect=fake_expand),
+            patch.object(
+                api,
+                "_get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+        ):
+            content, metadata = await api._fetch_files_for_verification_async_with_metadata(
+                "HEAD", ["docs/a.md", "docs/b.md"], tier="reasoning"
+            )
+
+        assert "docs/a.md" in content
+        assert "docs/b.md" not in content, (
+            "a second 40K file must be omitted, not appended past the 50K "
+            "batch budget — including it would overshoot to ~80K chars"
+        )
+        assert "omitted" in content
+
+
 # ---------------------------------------------------------------------------
 # expansion_warnings plumbing
 # ---------------------------------------------------------------------------
