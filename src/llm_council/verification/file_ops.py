@@ -857,6 +857,24 @@ async def _expand_target_paths(
 # =============================================================================
 
 
+async def _wait_killed_process(proc: "asyncio.subprocess.Process") -> None:
+    """Bounded wait for an already-killed process to reap.
+
+    SIGKILL should terminate a process almost immediately regardless of what
+    syscall it's blocked in, but "should" is not "must never hang" — this
+    still uses a short bound rather than a bare ``await proc.wait()`` so a
+    truly wedged process (e.g. stuck in an uninterruptible kernel state)
+    can't reintroduce the same unbounded-hang class this helper exists to
+    close. A short, fixed bound is used rather than ``ASYNC_SUBPROCESS_TIMEOUT``
+    — a killed process reaping is expected to be near-instant, not a full
+    request-level wait.
+    """
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=2.0)
+    except asyncio.TimeoutError:
+        logger.warning("process did not reap within 2s after kill() — abandoning wait")
+
+
 async def _fetch_file_at_commit_async(
     snapshot_id: str,
     file_path: str,
@@ -934,11 +952,38 @@ async def _fetch_file_at_commit_async(
 
             except asyncio.TimeoutError:
                 proc.kill()
-                await proc.wait()
+                await _wait_killed_process(proc)
                 return f"[Error: Timeout reading {file_path}]", False
 
-            # Wait for process to complete (already killed if truncated)
-            await proc.wait()
+            # Wait for process to complete (already killed if truncated).
+            #
+            # BUG (found via a real-world verify() hang, ~15min, no ADR-040
+            # protection reaches this code): reading only stdout here, never
+            # stderr, is the classic Python subprocess pipe deadlock. If the
+            # child (e.g. `git show` triggering an LFS smudge filter, a
+            # submodule warning, or CRLF notices) writes enough to `stderr`
+            # to fill the OS pipe buffer while nobody drains it, the child
+            # blocks *inside the kernel* on that write — it can fully close
+            # stdout (giving EOF, so read_with_limit() above returns cleanly)
+            # while never actually exiting. A bare `await proc.wait()` here
+            # then hangs indefinitely: this file-fetch runs entirely BEFORE
+            # the ADR-040 global deadline wrapper even starts (prompt
+            # building happens ahead of run_verification's asyncio.wait_for),
+            # so nothing else bounds it either.
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "git show for %s:%s produced all stdout but did not exit "
+                    "within %ss — likely blocked writing to an unread stderr "
+                    "pipe (LFS/submodule/CRLF chatter); force-killed",
+                    snapshot_id,
+                    file_path,
+                    ASYNC_SUBPROCESS_TIMEOUT,
+                )
+                proc.kill()
+                await _wait_killed_process(proc)
+                return f"[Error: git show for {file_path} hung after producing output — killed]", False
 
             if proc.returncode != 0 and not truncated:
                 # Only check return code if we didn't kill it for truncation

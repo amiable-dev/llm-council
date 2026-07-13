@@ -230,6 +230,124 @@ class TestAsyncTimeout:
             mock_proc.kill.assert_called()
 
 
+class TestProcessExitDeadlock:
+    """Regression tests for the classic Python subprocess pipe deadlock:
+    stdout=PIPE + stderr=PIPE with only stdout drained can leave the child
+    blocked writing to a full, unread stderr pipe. It can produce all of
+    stdout (EOF) yet never actually terminate — and proc.wait() had no
+    timeout, so a single pathological file (LFS smudge chatter, submodule
+    warnings, CRLF notices — anything writing enough to stderr) could hang
+    verify() for its full remaining lifetime with zero cap, entirely outside
+    the ADR-040 global deadline (file fetching runs before that wrapper is
+    ever reached).
+    """
+
+    @pytest.mark.asyncio
+    async def test_fetch_does_not_hang_if_process_never_exits_after_stdout_eof(self):
+        """stdout reaches EOF normally, but the process itself never exits
+        (simulating it being stuck writing to a full stderr pipe). The whole
+        fetch must return within a bounded time, not hang indefinitely."""
+        from llm_council.verification.file_ops import _fetch_file_at_commit_async
+
+        async def mock_read(size: int) -> bytes:
+            return b""  # immediate EOF — stdout already fully produced
+
+        mock_stdout = MagicMock()
+        mock_stdout.read = mock_read
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        mock_proc.returncode = 0
+        mock_proc.kill = MagicMock()
+
+        async def never_returns():
+            await asyncio.Event().wait()  # blocks forever — the stuck process
+
+        mock_proc.wait = never_returns
+
+        with (
+            patch(
+                "llm_council.verification.file_ops._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.file_ops._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+            patch("llm_council.verification.file_ops.ASYNC_SUBPROCESS_TIMEOUT", 0.2),
+        ):
+            # Outer bound is a TEST safety net (so an unfixed regression fails
+            # fast instead of hanging the suite) — the fix should make the
+            # inner call itself return well within this.
+            content, truncated = await asyncio.wait_for(
+                _fetch_file_at_commit_async("HEAD", "file.txt"), timeout=3.0
+            )
+            assert "[Error:" in content
+            assert truncated is False
+            mock_proc.kill.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_does_not_hang_after_kill_if_process_wont_die(self):
+        """The timeout-path proc.wait() (after a kill() from the read-loop
+        timeout) must ALSO be bounded — a SIGKILL'd process should reap
+        promptly, but this must not rely on that being instantaneous."""
+        from llm_council.verification.file_ops import _fetch_file_at_commit_async
+
+        async def slow_read(size: int) -> bytes:
+            await asyncio.sleep(999)  # never resolves within the read-loop timeout
+            return b""
+
+        mock_stdout = MagicMock()
+        mock_stdout.read = slow_read
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        mock_proc.returncode = 0
+        mock_proc.kill = MagicMock()
+
+        async def never_returns():
+            await asyncio.Event().wait()
+
+        mock_proc.wait = never_returns
+
+        with (
+            patch(
+                "llm_council.verification.file_ops._get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "llm_council.verification.file_ops._get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                return_value=mock_proc,
+            ),
+            patch("llm_council.verification.file_ops.ASYNC_SUBPROCESS_TIMEOUT", 0.2),
+        ):
+            content, truncated = await asyncio.wait_for(
+                _fetch_file_at_commit_async("HEAD", "file.txt"), timeout=3.0
+            )
+            assert "[Error:" in content
+            assert truncated is False
+
+
 class TestPathValidation:
     """Tests for path validation security."""
 
