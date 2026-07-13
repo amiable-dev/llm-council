@@ -10,8 +10,6 @@ These tests verify that:
 """
 
 import asyncio
-import time
-from typing import Tuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -145,27 +143,74 @@ class TestConcurrentFileFetching:
 
     @pytest.mark.asyncio
     async def test_concurrent_fetches_dont_block_each_other(self):
-        """Multiple concurrent fetches should run in parallel, not serially."""
-        from llm_council.verification.api import _fetch_file_at_commit_async
+        """Multiple concurrent fetches should run in parallel, not serially.
 
-        # Measure time for concurrent fetches
-        files = ["pyproject.toml", "README.md", "CHANGELOG.md"]
+        #585: the previous version of this test compared real wall-clock
+        timing against a 1.5x margin — inherently flaky under CI load or
+        scheduling variance. This version proves concurrency deterministically:
+        each mocked subprocess call waits on a shared barrier that only
+        releases once all `concurrency_count` calls have started. If the
+        fetches were secretly serialized, the first call would block forever
+        waiting for the others to start (which never happens one at a time),
+        so a bug shows up as a bounded timeout, not a flaky margin.
+        """
+        from llm_council.verification import file_ops as api
 
-        start = time.monotonic()
-        results = await asyncio.gather(*[_fetch_file_at_commit_async("HEAD", f) for f in files])
-        concurrent_time = time.monotonic() - start
+        # Must stay below MAX_CONCURRENT_GIT_OPS (10): the real semaphore caps
+        # concurrent slot usage, so a barrier count >= the semaphore limit
+        # would deadlock against the semaphore itself, not prove anything.
+        concurrency_count = 3
+        entered = 0
+        all_entered = asyncio.Event()
+        entered_lock = asyncio.Lock()
 
-        # Measure time for sequential fetches
-        start = time.monotonic()
-        for f in files:
-            await _fetch_file_at_commit_async("HEAD", f)
-        sequential_time = time.monotonic() - start
+        async def fake_exec(*args, **kwargs):
+            nonlocal entered
+            async with entered_lock:
+                entered += 1
+                if entered == concurrency_count:
+                    all_entered.set()
+            await asyncio.wait_for(all_entered.wait(), timeout=2.0)
 
-        # Concurrent should be faster (or at least not significantly slower)
-        # Allow 50% overhead for context switching
-        assert concurrent_time < sequential_time * 1.5, (
-            f"Concurrent ({concurrent_time:.2f}s) should be faster than "
-            f"sequential ({sequential_time:.2f}s)"
+            proc = MagicMock()
+            proc.returncode = 0
+            proc.stdout = MagicMock()
+            proc.stdout.read = AsyncMock(side_effect=[b"content", b""])
+            proc.stderr = MagicMock()
+            proc.stderr.read = AsyncMock(return_value=b"")
+            proc.wait = AsyncMock()
+            proc.kill = MagicMock()
+            return proc
+
+        files = ["a.py", "b.py", "c.py"]
+        with (
+            patch.object(
+                api, "_get_git_root_async", new_callable=AsyncMock, return_value="/mock/root"
+            ),
+            patch.object(
+                api,
+                "_get_git_semaphore",
+                new_callable=AsyncMock,
+                return_value=asyncio.Semaphore(10),
+            ),
+            patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+        ):
+            results = await asyncio.gather(
+                *[api._fetch_file_at_commit_async("HEAD", f) for f in files]
+            )
+
+        assert entered == concurrency_count
+        assert len(results) == concurrency_count
+        # If the fetches were secretly serialized, only the LAST one to enter
+        # would ever see `all_entered` set before its own 2s timeout — the
+        # earlier ones would time out, and _fetch_file_at_commit_async's own
+        # graceful error handling turns that into an "[Error: ...]" result
+        # rather than a raised exception. Checking counts alone can't catch
+        # this (a serialized run still eventually reaches entered==3); only
+        # checking that every result is real content proves true concurrency.
+        assert all(content == "content" for content, _truncated in results), (
+            f"a serialized (non-concurrent) run would time out early callers "
+            f"into an error result instead of real content: {results!r}"
         )
 
     @pytest.mark.asyncio
@@ -430,15 +475,33 @@ class TestConcurrencyLimiting:
 
     @pytest.mark.asyncio
     async def test_semaphore_limits_concurrent_operations(self):
-        """Semaphore should limit concurrent git operations to MAX_CONCURRENT_GIT_OPS."""
+        """Semaphore should limit concurrent git operations to MAX_CONCURRENT_GIT_OPS.
+
+        #585: the previous version of this test only checked that `sem` is
+        an `asyncio.Semaphore` instance — it never verified the bound itself,
+        so a semaphore created with the wrong count (or no real limiting at
+        all) would still pass. This exercises the actual limiting behavior:
+        acquire it exactly `MAX_CONCURRENT_GIT_OPS` times without blocking,
+        then confirm the NEXT acquire genuinely blocks.
+        """
         from llm_council.verification.api import MAX_CONCURRENT_GIT_OPS, _get_git_semaphore
 
         sem = await _get_git_semaphore()
-
-        # Semaphore should be created with MAX_CONCURRENT_GIT_OPS
-        # We can't directly access _value, but we can verify the semaphore exists
         assert sem is not None
         assert isinstance(sem, asyncio.Semaphore)
+
+        acquired = 0
+        try:
+            for _ in range(MAX_CONCURRENT_GIT_OPS):
+                await asyncio.wait_for(sem.acquire(), timeout=1.0)
+                acquired += 1
+
+            # All permits are held; one more acquire must block, not succeed.
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(sem.acquire(), timeout=0.2)
+        finally:
+            for _ in range(acquired):
+                sem.release()
 
     @pytest.mark.asyncio
     async def test_max_concurrent_git_ops_is_reasonable(self):
