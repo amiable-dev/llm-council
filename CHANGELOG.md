@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.1] - 2026-07-13
+
+Patch release: fixes an unbounded `verify()` hang plus several robustness bugs surfaced while diagnosing it, and hardens two flaky/weak tests in the same area. No behavior changes for callers beyond the fixes themselves.
+
+### Fixed
+
+- **`verify()` could hang indefinitely with no timeout ([#582](https://github.com/amiable-dev/llm-council/issues/582))** — `_fetch_file_at_commit_async`'s per-file `git show` spawns with both stdout and stderr piped but only drained stdout. If the child wrote enough to stderr (LFS/submodule/CRLF chatter) to fill the OS pipe buffer before anyone read it, it could close stdout cleanly while never exiting — and the following `proc.wait()` had no timeout at all. This step runs entirely before `run_verification()`'s ADR-040 global deadline is even reached, so nothing else bounded it either. Both `proc.wait()` call sites are now wrapped in `asyncio.wait_for`, with a bounded reap-after-kill fallback.
+- **`target_paths=[]` was silently treated the same as `None` ([#584](https://github.com/amiable-dev/llm-council/issues/584))** — an explicit empty list ("review zero files") is falsy in Python, so it fell through to the `git diff-tree` "no target_paths given" branch and fetched every changed file instead of none.
+- **Per-batch file-content budget could overshoot by up to one whole per-file budget** ([#584](https://github.com/amiable-dev/llm-council/issues/584)) — the limit check ran before adding a file's content, not after. Corrected while preserving the documented guarantee that the first file is always included in full, even when its own truncation marker pushes it slightly over budget.
+- **Content-mode git calls could exceed the OS `ARG_MAX` on large commits** ([#584](https://github.com/amiable-dev/llm-council/issues/584)) — `_blob_sizes`/`_text_paths`/`_reviewability_attrs` (used only under `LLM_COUNCIL_FILE_SELECTION=content`/`shadow`) spread an unbounded candidate-path list directly into subprocess argv; a sufficiently large vendoring/import commit could exceed it, silently dropping every path in the failed call as omitted/binary. Now chunked (`GIT_ARGV_BATCH_SIZE=200`) and merged.
+- **`git diff-tree` discovery failures were silently swallowed** ([#584](https://github.com/amiable-dev/llm-council/issues/584)) — a bare `except Exception: pass` meant a real failure (missing git binary, corrupt repo) resulted in reviewing zero files with no signal at all. Now logged and surfaced as an `expansion_warnings` entry.
+- **Path validation over-rejected legitimate filenames** containing the substring `..` (e.g. `version..txt`) — now checks path components, which still catches every real traversal case.
+- Minor: git's actual error message is now included when a file fetch fails (previously discarded); an unrecognized git object type (e.g. a submodule gitlink) is now recorded with the more precise `unknown_object` reason instead of `not_found`; `llm-council ignore --print-defaults` now lists the `.config/gcloud/**`-style compound secret-directory rules it was omitting.
+
+### Testing
+
+- Replaced a flaky wall-clock-based concurrency test and a no-op semaphore-bound assertion in the verify test suite with deterministic equivalents ([#585](https://github.com/amiable-dev/llm-council/issues/585)).
+
 ## [0.40.0] - 2026-07-11
 
 **Content-aware verify file selection + coverage accounting (ADR-053, epic [#546](https://github.com/amiable-dev/llm-council/issues/546) P3).** Completes the file-selection redesign begun in v0.39.0's security fix. Everything here is **opt-in and byte-identical by default** — no verify verdict changes on upgrade. Closes [#542](https://github.com/amiable-dev/llm-council/issues/542) (unlisted languages silently dropped).
