@@ -257,6 +257,26 @@ class TestExpandTargetPaths:
         assert any(f.endswith(".py") for f in files)
 
     @pytest.mark.asyncio
+    async def test_unrecognized_object_type_uses_unknown_object_reason(self):
+        """#584: the `Omission.reason` docstring documents `unknown_object` as
+        a distinct reason from `not_found`, but a git object type that is
+        neither `blob` nor `tree` (e.g. `commit` for a submodule gitlink, or
+        `tag`) was recorded as `not_found` — losing the more precise reason
+        that already exists for exactly this case."""
+        from llm_council.verification import file_ops as api
+
+        async def fake_object_type(snapshot_id, path):
+            return "commit"  # a submodule gitlink: neither blob nor tree
+
+        with patch.object(api, "_get_git_object_type", side_effect=fake_object_type):
+            _files, _truncated, _warnings, omissions = await api._expand_target_paths(
+                "HEAD", ["vendor/submodule"]
+            )
+
+        assert len(omissions) == 1
+        assert omissions[0].reason == "unknown_object"
+
+    @pytest.mark.asyncio
     async def test_expands_mixed_paths(self):
         """Mixed file and directory paths should be handled correctly."""
         from llm_council.verification.api import _expand_target_paths
@@ -407,6 +427,53 @@ class TestFetchFilesIntegration:
         assert isinstance(metadata["expanded_paths"], list)
         assert "paths_truncated" in metadata
         assert "expansion_warnings" in metadata
+
+
+# =============================================================================
+# #584: diff-tree failure must not fail open silently
+# =============================================================================
+
+
+class TestDiffTreeFailureIsNotSilent:
+    """The `target_paths=None` branch discovers changed files via `git
+    diff-tree` inside a bare `try/except Exception: pass`. A real failure
+    (missing git binary, corrupt repo, non-zero exit some other way) left
+    `files_to_fetch` at its initial empty list with absolutely no signal —
+    verify() would silently review zero files and report success on the
+    coverage front, rather than surfacing that discovery itself failed."""
+
+    @pytest.mark.asyncio
+    async def test_diff_tree_exception_is_logged_and_warned(self, caplog):
+        from llm_council.verification import file_ops as api
+
+        with (
+            patch.object(
+                api,
+                "_get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                new_callable=AsyncMock,
+                side_effect=OSError("git binary not found"),
+            ),
+            caplog.at_level("WARNING"),
+        ):
+            _content, metadata = await api._fetch_files_for_verification_async_with_metadata(
+                "HEAD", None
+            )
+
+        assert metadata["expanded_paths"] == []
+        warnings = metadata.get("expansion_warnings") or []
+        joined = " ".join(str(w).lower() for w in warnings)
+        assert "diff-tree" in joined or "discover" in joined, (
+            f"a failed discovery must be a visible warning, not silence; got {warnings!r}"
+        )
+        assert any(
+            "diff-tree" in rec.message.lower() or "discover" in rec.message.lower()
+            for rec in caplog.records
+        ), "a failed diff-tree discovery must also be logged, not just swallowed"
 
 
 # =============================================================================

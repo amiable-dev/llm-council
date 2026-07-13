@@ -64,6 +64,22 @@ class TestAsyncFileFetching:
         assert truncated is False
 
     @pytest.mark.asyncio
+    async def test_fetch_file_error_includes_git_stderr(self):
+        """#584: stderr was read on a non-zero return code but then discarded —
+        the returned error message never included git's own explanation, only
+        a generic "could not read" string. The actual git error is far more
+        useful for diagnosing why a fetch failed."""
+        from llm_council.verification.api import _fetch_file_at_commit_async
+
+        content, _truncated = await _fetch_file_at_commit_async(
+            "invalidcommitsha123", "pyproject.toml"
+        )
+
+        assert "invalid object name" in content.lower() or "fatal" in content.lower(), (
+            f"expected git's actual stderr in the error message; got: {content!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_fetch_file_truncates_large_files(self):
         """Large files should be truncated to MAX_FILE_CHARS via streaming read."""
         from llm_council.verification.api import (
@@ -379,6 +395,25 @@ class TestPathValidation:
         assert _validate_file_path("src/main.py") is True
         assert _validate_file_path("tests/test_file.py") is True
         assert _validate_file_path("README.md") is True
+
+    def test_accepts_filenames_merely_containing_dotdot_substring(self):
+        """#584: a bare `if ".." in file_path` over-rejects legitimate
+        filenames that just happen to contain the substring `..` without
+        it being an actual `..` path COMPONENT — e.g. `version..txt`. Only a
+        genuine `..` traversal component must be rejected, not any file
+        containing the two characters somewhere in its name."""
+        from llm_council.verification.api import _validate_file_path
+
+        assert _validate_file_path("version..txt") is True
+        assert _validate_file_path("docs/my..notes.md") is True
+
+    def test_still_rejects_traversal_disguised_inside_a_longer_path(self):
+        """The segment-based fix must not regress detection of a real `..`
+        component anywhere in the path, not just at the start."""
+        from llm_council.verification.api import _validate_file_path
+
+        assert _validate_file_path("src/../../etc/passwd") is False
+        assert _validate_file_path("a/b/../../../c") is False
 
     @pytest.mark.asyncio
     async def test_fetch_rejects_invalid_paths(self):
