@@ -247,6 +247,55 @@ class TestBatchBudgetDoesNotOvershoot:
         )
         assert "omitted" in content
 
+    @pytest.mark.asyncio
+    async def test_first_file_is_never_dropped_even_if_its_own_truncation_marker_overshoots(
+        self,
+    ):
+        """A council review of PR #586 caught a regression the overshoot fix
+        above introduced: `_fetch_file_at_commit_async` appends a truncation
+        marker AFTER clamping to the limit (`content[:limit] + "...marker"`),
+        so a truncated file's returned length is slightly ABOVE
+        `per_file_budget`, not equal to it. Since `per_file_budget ==
+        per_batch_budget`, checking `total_chars + len(content) >
+        per_batch_budget` unconditionally — even at `total_chars == 0` —
+        would drop the very first file entirely instead of including it
+        truncated. CLAUDE.md documents "reasoning/high can read a full 50K
+        file" as a guarantee; the first file must always be included."""
+        from llm_council.verification import file_ops as api
+
+        limit = 50_000
+        # Exactly what _fetch_file_at_commit_async returns for a truncated file:
+        # content clamped to `limit`, PLUS a marker that pushes length over it.
+        truncated_content = ("y" * limit) + (
+            f"\n\n... [truncated, original file larger than {limit} chars]"
+        )
+        assert len(truncated_content) > limit, "sanity: marker must push length over the limit"
+
+        async def fake_fetch(snapshot_id, file_path, max_file_chars=None):
+            return truncated_content, True
+
+        async def fake_expand(snapshot_id, target_paths):
+            return list(target_paths), False, [], []
+
+        with (
+            patch.object(api, "_fetch_file_at_commit_async", side_effect=fake_fetch),
+            patch.object(api, "_expand_target_paths", side_effect=fake_expand),
+            patch.object(
+                api,
+                "_get_git_root_async",
+                new_callable=AsyncMock,
+                return_value="/mock/root",
+            ),
+        ):
+            content, metadata = await api._fetch_files_for_verification_async_with_metadata(
+                "HEAD", ["docs/huge.md"], tier="reasoning"
+            )
+
+        assert "docs/huge.md" in content, (
+            "the first file must always be included, even if its own "
+            "truncation marker makes it slightly exceed the batch budget"
+        )
+
 
 # ---------------------------------------------------------------------------
 # expansion_warnings plumbing

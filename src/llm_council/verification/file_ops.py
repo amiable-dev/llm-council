@@ -1253,7 +1253,16 @@ async def _fetch_files_for_verification_async_with_metadata(
             # budget could push total_chars past per_batch_budget before the
             # *next* file's check ever caught it — overshooting by up to one
             # whole per-file budget's worth of characters.
-            if total_chars + len(content) > per_batch_budget:
+            #
+            # `total_chars > 0` guards the FIRST file: a truncated file's
+            # returned content is `content[:limit] + marker_text`, so its
+            # length is slightly ABOVE per_file_budget (== per_batch_budget)
+            # on its own. Without this guard the projected-total check would
+            # drop the first file entirely instead of including it truncated
+            # (a Council review of this exact PR caught the regression) —
+            # CLAUDE.md documents "reasoning/high can read a full 50K file"
+            # as a guarantee, so the first file is always included.
+            if total_chars > 0 and total_chars + len(content) > per_batch_budget:
                 sections.append(
                     f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
                 )
