@@ -119,7 +119,11 @@ async def test_integration_persistence_enabled(temp_bias_store):
                                 assert len(lines) > 0
                                 # Check content of first record
                                 record = json.loads(lines[0])
-                                assert record["schema_version"] == "1.1.0"
+                                # 1.2.0 (#611): `position` now records the
+                                # DISPLAY index, not the reviewer's ranking
+                                # index, so the semantic — and the version —
+                                # changed together.
+                                assert record["schema_version"] == "1.2.0"
                                 assert "session_id" in record
                                 assert record["consent_level"] == 1  # Default LOCAL_ONLY
 

@@ -136,3 +136,68 @@ class TestCouncilRound1:
         # the high agreement must NOT be flagged as positional.
         assert abs(s.position_alignment) < 0.01
         assert s.amplification_suspect is False
+
+
+class TestPositionAlignmentUsesDisplayOrder:
+    """#611: the amplification signal was inverted by the position defect.
+
+    `position_alignment` correlates `-position` against consensus score to
+    detect "agreement that tracks DISPLAY order". While `position` held the
+    reviewer's ranking index instead, a session where reviewers agreed on
+    favouring the LAST-displayed model produced a strongly POSITIVE alignment
+    and flagged `amplification_suspect` — the exact opposite of the truth.
+    """
+
+    def test_agreeing_on_the_last_displayed_model_is_not_a_suspect(self):
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+        from llm_council.bias_amplification import session_agreement_decomposition
+
+        label_to_model = {
+            "Response A": {"model": "m/alpha", "display_index": 0},
+            "Response B": {"model": "m/beta", "display_index": 1},
+            "Response C": {"model": "m/gamma", "display_index": 2},
+        }
+        stage1 = [
+            {"model": "m/alpha", "response": "a"},
+            {"model": "m/beta", "response": "b"},
+            {"model": "m/gamma", "response": "c"},
+        ]
+        # Both reviewers strongly agree — and both favour gamma, shown LAST.
+        # Display order cannot explain this agreement.
+        stage2 = [
+            {
+                "model": f"rev/{i}",
+                "parsed_ranking": {
+                    "ranking": ["Response C", "Response B", "Response A"],
+                    "scores": {
+                        "Response A": 4.0 + i * 0.5,
+                        "Response B": 6.0 + i * 0.5,
+                        "Response C": 9.0 + i * 0.5,
+                    },
+                },
+            }
+            for i in (1, 2)
+        ]
+
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=stage1,
+            stage2_results=stage2,
+            label_to_model=label_to_model,
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+        decomposition = session_agreement_decomposition(records)[0]
+
+        assert decomposition.agreement_index > 0.8, "sanity: reviewers do agree here"
+        assert decomposition.position_alignment < 0, (
+            "the favoured model was displayed LAST, so alignment must be "
+            f"negative; got {decomposition.position_alignment} — position is "
+            "probably holding the ranking index again (#611)"
+        )
+        assert decomposition.amplification_suspect is False, (
+            "high agreement that does NOT track display order is not an "
+            "amplification suspect"
+        )

@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Configuration (loaded from unified_config - ADR-031)
 # =============================================================================
 
+from .bias_audit import derive_position_mapping
 from .unified_config import get_config
 
 
@@ -119,7 +120,7 @@ class BiasMetricRecord:
         query_metadata: Optional metadata about the query
     """
 
-    schema_version: str = "1.1.0"
+    schema_version: str = "1.2.0"
     session_id: str = ""
     timestamp: str = ""
     consent_level: int = 1  # LOCAL_ONLY default
@@ -497,6 +498,9 @@ def create_bias_records_from_session(
             return val.get("model", "")
         return str(val) if val else ""
 
+    # #611: model -> display index, from the same mapping the labels come from.
+    position_by_model = derive_position_mapping(label_to_model)
+
     # Parse all rankings first
     for ranking_result in stage2_results:
         # One record per (reviewer, candidate) pair
@@ -522,8 +526,23 @@ def create_bias_records_from_session(
             # Get the score if available
             score_value = float(scores.get(label, 0.0))
 
-            # Position is 0-indexed index in the processed list
-            position = idx
+            # #611: DISPLAY position, not the reviewer's ranking index.
+            #
+            # This used to be `position = idx`, i.e. the index into
+            # `labels_to_process`, which is the reviewer's OUTPUT RANKING. The
+            # field is documented as "Display position during peer review", and
+            # bias_amplification.position_alignment correlates -position against
+            # consensus score to detect agreement that tracks DISPLAY order.
+            # Fed a ranking index instead, it correlated reviewers' rankings
+            # against a consensus derived from those same rankings — close to a
+            # restatement of agreement_index, and skewed toward false positives
+            # by the -position sign convention.
+            #
+            # derive_position_mapping is reused rather than re-deriving the
+            # label parsing a third time; it already handles the enhanced
+            # (display_index) and legacy (letter-order) formats, and owns the
+            # ADR-017 invariant that labels are assigned in presentation order.
+            position = position_by_model.get(model_id, idx)
 
             # Find usage stats if available
             # Note: We don't have per-candidate response length easily accessible here
@@ -535,7 +554,7 @@ def create_bias_records_from_session(
                     break
 
             record = BiasMetricRecord(
-                schema_version="1.1.0",
+                schema_version="1.2.0",
                 session_id=session_id,
                 timestamp=timestamp,
                 consent_level=consent_level.value

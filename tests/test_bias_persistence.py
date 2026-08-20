@@ -23,7 +23,9 @@ class TestBiasMetricRecord:
 
         record = BiasMetricRecord()
 
-        assert record.schema_version == "1.1.0"
+        # 1.2.0 (#611): `position` now means DISPLAY position; records written
+        # at 1.1.0 hold the reviewer's ranking index under the same field name.
+        assert record.schema_version == "1.2.0"
         assert record.session_id == ""
         assert record.timestamp == ""
         assert record.consent_level == 1  # LOCAL_ONLY default
@@ -161,7 +163,7 @@ class TestBiasMetricRecord:
         data = json.loads(line)
 
         assert "schema_version" in data
-        assert data["schema_version"] == "1.1.0"
+        assert data["schema_version"] == "1.2.0"
 
 
 class TestConsentLevel:
@@ -959,3 +961,173 @@ class TestPersistSessionBiasData:
                     )
 
             assert custom_path.exists()
+
+
+class TestPositionIsDisplayPosition:
+    """#611: `position` recorded the reviewer's ranking, not display order.
+
+    `BiasMetricRecord.position` is documented as "Display position during peer
+    review (0-indexed)", but `create_bias_records_from_session` populated it
+    from `enumerate()` over `parsed["ranking"]` — the order the reviewer
+    *ranked* the candidates, not the order they were *shown*.
+
+    That defeats `bias_amplification.position_alignment` (ADR-047 P4), which
+    correlates `-position` against consensus score to detect "agreement that
+    tracks display order". Fed the reviewer's own ranking instead, it
+    correlates rankings against a consensus derived from those same rankings —
+    near-tautological with `agreement_index`, and biased toward false
+    positives by the `-position` sign convention.
+
+    The display index was available in `label_to_model` all along.
+    """
+
+    def _label_to_model(self):
+        # Display order: A=alpha(0), B=beta(1), C=gamma(2)
+        return {
+            "Response A": {"model": "m/alpha", "display_index": 0},
+            "Response B": {"model": "m/beta", "display_index": 1},
+            "Response C": {"model": "m/gamma", "display_index": 2},
+        }
+
+    def _stage1(self):
+        return [
+            {"model": "m/alpha", "response": "a"},
+            {"model": "m/beta", "response": "b"},
+            {"model": "m/gamma", "response": "c"},
+        ]
+
+    def test_position_is_display_index_not_ranking_index(self):
+        """The reviewer ranks in reverse; positions must NOT follow the ranking."""
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+
+        stage2 = [
+            {
+                "model": "rev/1",
+                "parsed_ranking": {
+                    "ranking": ["Response C", "Response B", "Response A"],
+                    "scores": {"Response A": 5.0, "Response B": 7.0, "Response C": 9.0},
+                },
+            }
+        ]
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=self._stage1(),
+            stage2_results=stage2,
+            label_to_model=self._label_to_model(),
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+
+        positions = {r.model_id: r.position for r in records}
+        assert positions == {"m/alpha": 0, "m/beta": 1, "m/gamma": 2}, (
+            f"position must be display order, not the reviewer's ranking; got {positions}"
+        )
+
+    def test_two_reviewers_ranking_differently_share_display_positions(self):
+        """Display order is a property of the session, not of a reviewer.
+
+        With one shared shuffle (today's behaviour), every reviewer saw the
+        same order — so their recorded positions must agree, however
+        differently they ranked.
+        """
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+
+        stage2 = [
+            {
+                "model": "rev/1",
+                "parsed_ranking": {
+                    "ranking": ["Response A", "Response B", "Response C"],
+                    "scores": {"Response A": 9.0, "Response B": 7.0, "Response C": 5.0},
+                },
+            },
+            {
+                "model": "rev/2",
+                "parsed_ranking": {
+                    "ranking": ["Response C", "Response A", "Response B"],
+                    "scores": {"Response A": 6.0, "Response B": 4.0, "Response C": 8.0},
+                },
+            },
+        ]
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=self._stage1(),
+            stage2_results=stage2,
+            label_to_model=self._label_to_model(),
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+
+        by_reviewer = {}
+        for r in records:
+            by_reviewer.setdefault(r.reviewer_id, {})[r.model_id] = r.position
+
+        assert by_reviewer["rev/1"] == by_reviewer["rev/2"], (
+            "reviewers saw one shared display order, so positions must match; "
+            f"got {by_reviewer}"
+        )
+
+    def test_legacy_label_format_falls_back_to_letter_order(self):
+        """Legacy `{"Response A": "model"}` has no display_index."""
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+
+        stage2 = [
+            {
+                "model": "rev/1",
+                "parsed_ranking": {
+                    "ranking": ["Response C", "Response A", "Response B"],
+                    "scores": {"Response A": 5.0, "Response B": 6.0, "Response C": 7.0},
+                },
+            }
+        ]
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=self._stage1(),
+            stage2_results=stage2,
+            label_to_model={
+                "Response A": "m/alpha",
+                "Response B": "m/beta",
+                "Response C": "m/gamma",
+            },
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+
+        positions = {r.model_id: r.position for r in records}
+        assert positions == {"m/alpha": 0, "m/beta": 1, "m/gamma": 2}
+
+    def test_schema_version_distinguishes_corrected_records(self):
+        """Records written before the fix carry a different position semantic.
+
+        Pooled cross-session analyses (ADR-018) would otherwise silently mix
+        two incompatible meanings of the same field.
+        """
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+
+        stage2 = [
+            {
+                "model": "rev/1",
+                "parsed_ranking": {
+                    "ranking": ["Response A"],
+                    "scores": {"Response A": 8.0},
+                },
+            }
+        ]
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=self._stage1(),
+            stage2_results=stage2,
+            label_to_model=self._label_to_model(),
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+        assert records[0].schema_version != "1.1.0", (
+            "position semantics changed; the schema version must change with it"
+        )
