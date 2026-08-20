@@ -680,3 +680,32 @@ class TestHealthCheckReportsEffectiveConfig:
 
         assert data["default_tier"] == "high"
         assert mk.call_args.args[0] == "high"
+
+    @pytest.mark.asyncio
+    async def test_config_failure_returns_json_not_a_crash(self):
+        """A health check that raises is worse than one reporting not-ready.
+
+        The config lookups ran before any try/except, so a malformed config
+        made the tool itself throw instead of answering.
+        """
+        from llm_council.mcp_server import council_health_check
+
+        with patch(
+            "llm_council.mcp_server._get_council_models",
+            side_effect=RuntimeError("malformed config"),
+        ):
+            data = json.loads(await council_health_check())
+
+        assert data["ready"] is False
+        assert "malformed config" in json.dumps(data)
+
+    @pytest.mark.asyncio
+    async def test_estimated_duration_covers_every_supported_tier(self):
+        """`reasoning` is a real tier consult_council accepts; it was omitted."""
+        from llm_council.mcp_server import council_health_check
+
+        with patch("llm_council.mcp_server.OPENROUTER_API_KEY", None):
+            data = json.loads(await council_health_check())
+
+        for tier_name in ("quick", "balanced", "high", "reasoning"):
+            assert tier_name in data["estimated_duration"], f"{tier_name} missing"

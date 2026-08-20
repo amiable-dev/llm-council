@@ -376,10 +376,29 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     # unrecognised value, so the reported tier is the one that would run.
     default_tier = tier if tier in TIER_MODEL_POOLS else "high"
 
-    configured_models = list(_get_council_models())
-    chairman_model = _get_chairman_model()
     config_warnings = []
     tier_error = None
+
+    # These lookups can themselves raise on a malformed config. A health check
+    # that throws is strictly worse than one reporting not-ready, so degrade
+    # into the same structured answer rather than propagating.
+    try:
+        configured_models = list(_get_council_models())
+        chairman_model = _get_chairman_model()
+    except Exception as e:
+        config_error = f"{type(e).__name__}: {e}"
+        return json.dumps(
+            {
+                "version": council_version,
+                "ready": False,
+                "message": f"Configuration could not be loaded ({config_error}).",
+                "config_warnings": [
+                    f"Reading council configuration failed ({config_error}); "
+                    "consult_council would fail on this configuration."
+                ],
+            },
+            indent=2,
+        )
 
     try:
         effective_models = list(create_tier_contract(default_tier).allowed_models)
@@ -416,6 +435,9 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
             "quick": "~20-30 seconds (fastest models)",
             "balanced": "~45-60 seconds (most models)",
             "high": f"~60-90 seconds (all {len(effective_models)} models)",
+            # `reasoning` is a tier consult_council accepts; omitting it left a
+            # real option undocumented in the health check's own output.
+            "reasoning": "~3-6 minutes (extended thinking; raise MCP_TIMEOUT)",
         },
     }
 
