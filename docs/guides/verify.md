@@ -138,8 +138,12 @@ given path is or isn't reviewed with `llm-council ignore --explain <path>`.
   file regardless of extension** — unlisted languages, `LICENSE`, `CODEOWNERS`,
   shebang scripts. Also omits `linguist-generated`/`linguist-vendored` paths and
   (unless `LLM_COUNCIL_REVIEW_SVG=true`) `.svg`.
-- `shadow` — acts on the allowlist but logs what `content` would add or drop, so
-  you can measure the change before adopting it.
+- `shadow` — acts on the allowlist but records what `content` would add or drop,
+  so you can measure the change before adopting it. Each shadow run appends one
+  JSON line — `{ts, snapshot_id, candidates, selected, would_add, would_drop}`,
+  paths only, never file contents — to `.council/selection/decisions.jsonl`
+  (empty deltas included, so the delta *rate* is measurable). Recording is
+  soft-fail and never affects selection.
 
 **Repo-owned exclusions** — in `content` mode, `verify` honours the first present
 of `.llmignore` → `.aiexclude` → `.aiignore` → `.cursorignore` → `.codeiumignore`
