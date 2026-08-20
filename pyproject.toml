@@ -51,7 +51,10 @@ http = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
 # uvicorn for running the HTTP server.
 mcp = [
     "llm-council-core[http]",
-    "mcp>=1.22.0,<1.27",
+    # Floor 1.28.1: GHSA fixes for HTTP-transport principal verification,
+    # experimental task-handler isolation, and WS Host/Origin validation.
+    # Ceiling <2: the SDK v2 migration (Tasks wiring, #425) is its own change.
+    "mcp>=1.28.1,<2",
 ]
 # Secure key storage via system keychain - install with: pip install "llm-council-core[secure]"
 secure = ["keyring>=23.0.0"]
