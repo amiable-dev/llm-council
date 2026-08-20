@@ -403,7 +403,7 @@ class TestHealthCheckKeySource:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "test-key"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="test-key"),
             patch("llm_council.mcp_server.get_key_source", return_value="environment"),
             patch("llm_council.mcp_server.query_model_with_status") as mock_query,
         ):

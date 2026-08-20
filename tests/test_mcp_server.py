@@ -192,7 +192,7 @@ async def test_council_health_check_success():
     from llm_council.mcp_server import council_health_check
     from llm_council.openrouter import STATUS_OK
 
-    with patch("llm_council.mcp_server.OPENROUTER_API_KEY", "test-key"):
+    with patch("llm_council.mcp_server._get_openrouter_api_key", return_value="test-key"):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -215,7 +215,7 @@ async def test_council_health_check_api_error():
     }
 
     with (
-        patch("llm_council.mcp_server.OPENROUTER_API_KEY", "invalid-key"),
+        patch("llm_council.mcp_server._get_openrouter_api_key", return_value="invalid-key"),
         patch("llm_council.mcp_server.query_model_with_status", return_value=mock_response),
     ):
         result = await council_health_check()
@@ -231,7 +231,7 @@ async def test_council_health_check_includes_estimates():
     """Test health check includes duration estimates (ADR-012)."""
     from llm_council.mcp_server import council_health_check
 
-    with patch("llm_council.mcp_server.OPENROUTER_API_KEY", None):
+    with patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -434,7 +434,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None),
             patch(
                 "llm_council.mcp_server.create_tier_contract",
             ) as mk,
@@ -455,7 +455,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None),
             patch("llm_council.mcp_server._get_council_models", return_value=["cfg/a", "cfg/b"]),
             patch("llm_council.mcp_server.create_tier_contract") as mk,
         ):
@@ -474,7 +474,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None),
             patch("llm_council.mcp_server._get_council_models", return_value=["same/a"]),
             patch("llm_council.mcp_server.create_tier_contract") as mk,
         ):
@@ -493,7 +493,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None),
             patch("llm_council.mcp_server.create_tier_contract") as mk,
         ):
             mk.return_value = MagicMock(allowed_models=["first/model"])
@@ -514,7 +514,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.openrouter import STATUS_OK
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
             patch(
                 "llm_council.mcp_server.query_model_with_status",
                 new_callable=AsyncMock,
@@ -539,7 +539,7 @@ class TestHealthCheckReportsEffectiveConfig:
             return {"status": STATUS_OK, "content": "pong", "latency_ms": 7}
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
             patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
             patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
         ):
@@ -561,7 +561,7 @@ class TestHealthCheckReportsEffectiveConfig:
             return {"status": STATUS_OK, "content": "pong", "latency_ms": 5}
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
             patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
             patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
         ):
@@ -585,7 +585,7 @@ class TestHealthCheckReportsEffectiveConfig:
             return {"status": STATUS_OK, "content": "pong", "latency_ms": 5}
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
             patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
             patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
         ):
@@ -608,7 +608,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.openrouter import STATUS_OK
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
             patch(
                 "llm_council.mcp_server.create_tier_contract",
                 side_effect=ValueError("bad tier pool config"),
@@ -635,7 +635,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.openrouter import STATUS_OK
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
             patch("llm_council.mcp_server.create_tier_contract") as mk,
             patch(
                 "llm_council.mcp_server.query_model_with_status",
@@ -659,7 +659,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None),
             patch("llm_council.mcp_server.create_tier_contract") as mk,
         ):
             mk.return_value = MagicMock(allowed_models=["quick/one"])
@@ -675,7 +675,7 @@ class TestHealthCheckReportsEffectiveConfig:
         from llm_council.mcp_server import council_health_check
 
         with (
-            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None),
             patch("llm_council.mcp_server.create_tier_contract") as mk,
         ):
             mk.return_value = MagicMock(allowed_models=["h/1"])
@@ -707,7 +707,7 @@ class TestHealthCheckReportsEffectiveConfig:
         """`reasoning` is a real tier consult_council accepts; it was omitted."""
         from llm_council.mcp_server import council_health_check
 
-        with patch("llm_council.mcp_server.OPENROUTER_API_KEY", None):
+        with patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None):
             data = json.loads(await council_health_check())
 
         for tier_name in ("quick", "balanced", "high", "reasoning"):

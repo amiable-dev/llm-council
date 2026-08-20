@@ -124,6 +124,11 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def __dir__():
+    """Include the lazily-resolved aliases in introspection (PEP 562)."""
+    return sorted(set(globals()) | set(_LAZY_ALIASES))
+
+
 mcp = FastMCP("LLM Council")
 
 
@@ -158,7 +163,9 @@ def _build_confidence_configs() -> dict:
 
 
 # Build configs at import time (can be refreshed if needed)
-CONFIDENCE_CONFIGS = _build_confidence_configs()
+# #609 (round-2 review): this reads tier timeouts from live config, so
+# assigning it at import froze them exactly like the aliases above.
+_LAZY_ALIASES["CONFIDENCE_CONFIGS"] = lambda: _build_confidence_configs()
 
 
 @mcp.tool()
@@ -218,7 +225,9 @@ async def consult_council(
     except ValueError:
         verdict_type_enum = VerdictType.SYNTHESIS
     # Get confidence configuration (ADR-012 Section 5: Tier-Sovereign Timeouts)
-    config = CONFIDENCE_CONFIGS.get(confidence, CONFIDENCE_CONFIGS["high"])
+    # Resolved live; a module global here would be the import-time snapshot.
+    confidence_configs = _build_confidence_configs()
+    config = confidence_configs.get(confidence, confidence_configs["high"])
     total_timeout = config.get("total", TIMEOUT_SYNTHESIS_TRIGGER)
     per_model_timeout = config.get("per_model", 90)  # Default to high tier
 
@@ -409,6 +418,9 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
         # #609: resolved live. Read from the module global this was a frozen
         # import-time snapshot, so a key configured afterwards stayed invisible.
         api_key = _get_openrouter_api_key()
+        # Also re-resolves the key underneath, so it belongs inside the
+        # same guard rather than able to bypass the not-ready path.
+        key_source = get_key_source()
     except Exception as e:
         config_error = f"{type(e).__name__}: {e}"
         return json.dumps(
@@ -450,7 +462,7 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     checks = {
         "version": council_version,
         "api_key_configured": bool(api_key),
-        "key_source": get_key_source(),  # ADR-013: Show where key came from (not the key itself)
+        "key_source": key_source,  # ADR-013: where the key came from, never the key
         "default_tier": default_tier,
         "council_size": len(effective_models),
         "chairman_model": chairman_model,
