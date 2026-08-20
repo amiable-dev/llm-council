@@ -89,3 +89,70 @@ class TestBiasAggregation:
         # Check for chart elements
         assert "Average Score per Position" in report
         assert "Pos 1" in report
+
+
+class TestLegacyPositionsExcludedFromPositionBias:
+    """#611/#613 round 2: a SECOND position consumer lived here.
+
+    `aggregate_position_bias` groups scores by `position`. Before schema 1.2.0
+    that field held the reviewer's ranking index, so pooling old and new
+    records averages two different quantities under one name.
+
+    Gated per-consumer rather than at the read layer on purpose: pre-1.2.0
+    records stay fully valid for the length/score and reviewer-calibration
+    analyses, and dropping them at read would discard good data to protect
+    one field.
+    """
+
+    def _rec(self, schema, position, score, reviewer="rev/1", model="m/a"):
+        from llm_council.bias_persistence import BiasMetricRecord
+
+        return BiasMetricRecord(
+            schema_version=schema,
+            session_id="s1",
+            reviewer_id=reviewer,
+            model_id=model,
+            position=position,
+            score_value=score,
+            response_length_chars=100,
+        )
+
+    def test_legacy_records_alone_yield_no_position_report(self):
+        from llm_council.bias_aggregation import aggregate_position_bias
+
+        legacy = [
+            self._rec("1.1.0", 0, 9.0),
+            self._rec("1.1.0", 1, 5.0),
+            self._rec("1.1.0", 2, 3.0),
+        ]
+        assert aggregate_position_bias(legacy) is None, (
+            "ranking indices must not be analysed as display positions"
+        )
+
+    def test_current_records_are_analysed(self):
+        from llm_council.bias_aggregation import aggregate_position_bias
+
+        current = [
+            self._rec("1.2.0", 0, 9.0),
+            self._rec("1.2.0", 1, 5.0),
+        ]
+        assert aggregate_position_bias(current) is not None
+
+    def test_record_exposes_the_predicate(self):
+        """Consumers need a discoverable way to ask, not a version string."""
+        assert self._rec("1.2.0", 0, 1.0).position_is_display_order is True
+        assert self._rec("1.1.0", 0, 1.0).position_is_display_order is False
+        assert self._rec("garbage", 0, 1.0).position_is_display_order is False
+
+    def test_abbreviated_version_is_not_treated_as_pre_fix(self):
+        """"1.2" parses to (1, 2), which compares LESS than (1, 2, 0)."""
+        assert self._rec("1.2", 0, 1.0).position_is_display_order is True
+        assert self._rec("2", 0, 1.0).position_is_display_order is True
+        assert self._rec("1.1", 0, 1.0).position_is_display_order is False
+
+    def test_csv_export_carries_the_schema_version(self):
+        """The export is raw data; rows are kept, but the semantic travels."""
+        from llm_council.bias_aggregation import generate_bias_report_csv
+        import inspect
+
+        assert "schema_version" in inspect.getsource(generate_bias_report_csv)
