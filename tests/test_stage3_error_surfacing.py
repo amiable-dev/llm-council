@@ -98,11 +98,13 @@ class TestErrorDetailIsNeverEmpty:
         "error_detail": ""
 
     7 seconds, zero tokens — a provider-boundary error, not a slow generation.
-    `council_stages` does the right thing (`status_response.get("error",
-    "no detail returned")`), but the default never fires because the value is
-    present-and-empty rather than missing. The empty string is produced
-    upstream: `query_model_with_status`'s generic handler returns `str(e)`,
-    which is `""` for any exception constructed without a message.
+    Two independent causes. Upstream, `query_model_with_status`'s generic
+    handler returned `str(e)`, which is `""` for any exception constructed
+    without a message. Downstream, `council_stages` read
+    `status_response.get("error", "no detail returned")` — whose default does
+    NOT fire for a present-but-empty value, so the empty string passed
+    straight through. Both are fixed: the source names the exception type, and
+    the consumer uses `or` so it holds for any producer of this shape.
 
     #397 added the status-preserving variant so a billing outage could be told
     from a dead model; #403 added `unclear_reason=infra_failure` for the same
@@ -150,8 +152,13 @@ class TestErrorDetailIsNeverEmpty:
         assert "RuntimeError" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_failure_is_logged_not_printed(self, caplog):
-        """A bare `print` in a library call path is unroutable and untestable."""
+    async def test_failure_is_logged_not_printed(self, caplog, capsys):
+        """A bare `print` in a library call path is unroutable and untestable.
+
+        Asserts both halves of its own name: the failure reaches logging, AND
+        nothing is written to stdout. Checking only the first half would let
+        the `print` survive alongside the logger (council review of #610).
+        """
         import httpx
         from unittest.mock import patch
         from llm_council.openrouter import query_model_with_status
@@ -167,6 +174,7 @@ class TestErrorDetailIsNeverEmpty:
 
         logged = " ".join(r.message for r in caplog.records)
         assert "upstream 502" in logged, f"failure not logged; records={caplog.records!r}"
+        assert capsys.readouterr().out == "", "library call path must not print to stdout"
 
     @pytest.mark.asyncio
     async def test_stage3_never_renders_empty_parentheses(self, monkeypatch):
