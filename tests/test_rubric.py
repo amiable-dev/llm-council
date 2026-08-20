@@ -715,3 +715,183 @@ class TestRubricIntegration:
         # Model reported 6.9 but our ceiling should cap it at 4.0
         calculated = calculate_weighted_score_with_accuracy_ceiling(scores, UPDATED_RUBRIC_WEIGHTS)
         assert calculated == 4.0
+
+
+class TestRubricDimensionOrder:
+    """#592: rubric criteria were listed in one fixed order, always.
+
+    ACCURACY -> RELEVANCE -> COMPLETENESS -> CONCISENESS -> CLARITY was emitted
+    for every reviewer of every run, so any position preference a judge holds
+    applied systematically instead of averaging out. Rubric-based judging is
+    documented to show position effects tied to where a criterion sits in the
+    list; the mitigation is to permute it.
+
+    Opt-in via `evaluation.rubric.randomize_dimension_order`
+    (`RUBRIC_RANDOMIZE_DIMENSION_ORDER`), default OFF.
+
+    SCOPE: varies per council call, not per reviewer — stage 2 builds one
+    prompt for all reviewers. Per-reviewer variation is #602.
+    """
+
+    def _weights(self):
+        return {
+            "accuracy": 0.35,
+            "relevance": 0.10,
+            "completeness": 0.20,
+            "conciseness": 0.15,
+            "clarity": 0.20,
+        }
+
+    def test_default_order_is_unchanged(self):
+        """Flag off must reproduce the pre-#592 criteria order exactly."""
+        from llm_council.council_stages import _rubric_dimension_order
+
+        keys = [key for key, _title, _bullets in _rubric_dimension_order(randomize=False)]
+        assert keys == ["accuracy", "relevance", "completeness", "conciseness", "clarity"]
+
+    def test_flag_off_renders_byte_identical_criteria_block(self):
+        """Golden test: the exact text the prompt carried before #592.
+
+        Guards the refactor that moved the criteria out of the f-string and
+        into data — any drift in wording, numbering, or spacing fails here.
+        """
+        from llm_council.council_stages import (
+            _rubric_dimension_order,
+            _render_rubric_criteria,
+        )
+
+        expected = """1. **ACCURACY** (35% of final score)
+   - Is the information factually correct?
+   - Are there any hallucinations or errors?
+   - Are claims properly qualified when uncertain?
+
+2. **RELEVANCE** (10% of final score)
+   - Does it directly address the question asked?
+   - Is all content pertinent to the query?
+   - Does it stay on topic?
+
+3. **COMPLETENESS** (20% of final score)
+   - Does it address all aspects of the question?
+   - Are important considerations included?
+   - Is the answer substantive enough?
+
+4. **CONCISENESS** (15% of final score)
+   - Is every sentence adding value?
+   - Does it avoid unnecessary padding, hedging, or repetition?
+   - Is it appropriately brief for the question's complexity?
+
+5. **CLARITY** (20% of final score)
+   - Is it well-organized and easy to follow?
+   - Is the language clear and unambiguous?
+   - Would the intended audience understand it?"""
+
+        rendered = _render_rubric_criteria(
+            _rubric_dimension_order(randomize=False), self._weights()
+        )
+        assert rendered == expected
+
+    def test_randomized_order_still_contains_every_dimension_once(self):
+        """Permuting must not drop, duplicate, or invent a dimension."""
+        from llm_council.council_stages import _rubric_dimension_order
+        from llm_council.rubric import REQUIRED_DIMENSIONS
+
+        for _ in range(25):
+            keys = [k for k, _t, _b in _rubric_dimension_order(randomize=True)]
+            assert sorted(keys) == sorted(REQUIRED_DIMENSIONS)
+            assert len(keys) == len(set(keys))
+
+    def test_randomized_order_actually_varies(self):
+        """A shuffle that never shuffles would silently defeat the point."""
+        from llm_council.council_stages import _rubric_dimension_order
+
+        seen = {
+            tuple(k for k, _t, _b in _rubric_dimension_order(randomize=True))
+            for _ in range(50)
+        }
+        assert len(seen) > 1, "randomize=True produced one fixed order across 50 calls"
+
+    def test_weights_follow_their_dimension_when_reordered(self):
+        """A permuted list must not detach a weight from its criterion."""
+        from llm_council.council_stages import (
+            _rubric_dimension_order,
+            _render_rubric_criteria,
+        )
+
+        weights = self._weights()
+        for _ in range(15):
+            dims = _rubric_dimension_order(randomize=True)
+            rendered = _render_rubric_criteria(dims, weights)
+            for key, title, _bullets in dims:
+                pct = int(weights[key] * 100)
+                assert f"**{title}** ({pct}% of final score)" in rendered
+
+    def test_renumbering_is_sequential_after_shuffle(self):
+        """Criteria stay numbered 1..5 in presentation order, not by identity."""
+        from llm_council.council_stages import (
+            _rubric_dimension_order,
+            _render_rubric_criteria,
+        )
+
+        rendered = _render_rubric_criteria(
+            _rubric_dimension_order(randomize=True), self._weights()
+        )
+        numbers = [line.split(".")[0] for line in rendered.splitlines() if line.startswith(("1", "2", "3", "4", "5"))]
+        assert numbers == ["1", "2", "3", "4", "5"]
+
+    def test_json_score_keys_match_criteria_order(self):
+        """The answer template must present keys in the same order as the criteria."""
+        from llm_council.council_stages import (
+            _rubric_dimension_order,
+            _render_rubric_score_keys,
+        )
+
+        dims = _rubric_dimension_order(randomize=True)
+        rendered = _render_rubric_score_keys(dims)
+        rendered_keys = [line.split('"')[1] for line in rendered.splitlines()]
+        assert rendered_keys == [k for k, _t, _b in dims]
+
+    def test_parser_is_order_independent(self):
+        """The reason reordering is safe: scores are read by key, not position."""
+        import json
+
+        shuffled = {
+            "ranking": ["Response A"],
+            "evaluations": {
+                "Response A": {
+                    "clarity": 9,
+                    "accuracy": 8,
+                    "conciseness": 6,
+                    "relevance": 7,
+                    "completeness": 5,
+                    "notes": "keys deliberately out of declaration order",
+                }
+            },
+        }
+        parsed = parse_rubric_evaluation(f"```json\n{json.dumps(shuffled)}\n```")
+        assert parsed is not None
+        scores = parsed["evaluations"]["Response A"]
+        assert scores["accuracy"] == 8 and scores["clarity"] == 9
+
+    def test_config_flag_defaults_off(self):
+        """Byte-identical-by-default is the project convention."""
+        from llm_council.unified_config import RubricConfig
+
+        assert RubricConfig().randomize_dimension_order is False
+
+    def test_env_var_can_enable_the_flag(self, monkeypatch):
+        """The pydantic `validation_alias` alone does NOT read the environment.
+
+        `UnifiedConfig` is a plain BaseModel, not BaseSettings — env vars are
+        applied by `_apply_env_overrides`, so a flag missing from that function
+        is unsettable in practice however it is declared. Caught exactly that
+        way during #592: the flag existed and read False no matter what.
+        """
+        from llm_council.unified_config import get_config, reload_config
+
+        monkeypatch.setenv("RUBRIC_RANDOMIZE_DIMENSION_ORDER", "true")
+        reload_config()
+        try:
+            assert get_config().evaluation.rubric.randomize_dimension_order is True
+        finally:
+            monkeypatch.delenv("RUBRIC_RANDOMIZE_DIMENSION_ORDER", raising=False)
+            reload_config()

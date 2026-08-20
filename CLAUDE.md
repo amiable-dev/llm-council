@@ -153,6 +153,7 @@ Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Prior
 | `LLM_COUNCIL_AUDITION_ENABLED` (true) / `_MAX_SEATS` (1) / `_SHADOW_SESSIONS` (10) / `_EVAL_SESSIONS` (50) | Audition (ADR-029) |
 | `LLM_COUNCIL_METRICS_ENABLED` / `_BACKEND` (none\|statsd\|prometheus) / `LLM_COUNCIL_STATSD_HOST` / `_PORT` | Metrics export (ADR-030) |
 | `RUBRIC_SCORING_ENABLED` / `SAFETY_GATE_ENABLED` / `BIAS_AUDIT_ENABLED` / `BIAS_PERSISTENCE_ENABLED` | Evaluation toggles (ADR-031) |
+| `RUBRIC_RANDOMIZE_DIMENSION_ORDER` | #592: permute rubric criteria order per council call (default off ⇒ byte-identical prompt). Per-call, not per-reviewer — stage 2 shares one prompt; per-reviewer is #602 |
 | `WILDCARD_ENABLED` / `PROMPT_OPTIMIZATION_ENABLED` | Triage features (ADR-020) |
 
 **Reasoning effort levels** (`reasoning/`): MINIMAL 10% (quick/creative), LOW 20% (balanced), MEDIUM 50% (high/coding), HIGH 80% (reasoning/math), XHIGH 95% (opt-in). Applied per stage: stage1 on, stage2 off, stage3 on by default.

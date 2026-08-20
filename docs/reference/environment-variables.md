@@ -118,6 +118,7 @@
 | `LLM_COUNCIL_HASH_SECRET` | HMAC secret for query hashing (RESEARCH consent) | dev secret |
 | `LLM_COUNCIL_QUALITY_METRICS` | Output quality metrics (ADR-036) | false |
 | `LLM_COUNCIL_QUALITY_TIER` | Tier gating for quality metrics | code |
+| `RUBRIC_RANDOMIZE_DIMENSION_ORDER` | Permute the rubric criteria order per council call, so a judge's position preference does not apply systematically (#592). Off ⇒ byte-identical prompt | false |
 | `RUBRIC_SCORING_ENABLED` | Multi-dimensional rubric scoring (ADR-016/031) | false |
 | `SAFETY_GATE_ENABLED` | Safety pre-check gate (ADR-016/031) | false |
 
