@@ -400,8 +400,16 @@ def aggregate_position_bias(
         PositionBiasReport or None if insufficient position variation
     """
     # Group scores by position
+    #
+    # #611: `position` held the reviewer's RANKING index before schema 1.2.0.
+    # Pooling those with display indices would average two different
+    # quantities under one name, so older records are skipped here. They stay
+    # valid for the length/score and reviewer-calibration analyses, which is
+    # why this is gated per-consumer rather than at the read layer.
     position_scores: Dict[int, List[float]] = {}
     for r in records:
+        if not getattr(r, "position_is_display_order", False):
+            continue
         pos = r.position
         if pos not in position_scores:
             position_scores[pos] = []
@@ -669,6 +677,12 @@ def generate_bias_report_csv(
     # Header
     writer.writerow(
         [
+            # #611: `position` means the reviewer's ranking index below
+            # schema 1.2.0 and the display index at/above it. The export is
+            # raw data rather than an analysis, so rows are NOT dropped —
+            # instead the schema travels with them, so a downstream analyst
+            # can separate the two semantics instead of averaging them.
+            "schema_version",
             "session_id",
             "timestamp",
             "reviewer_id",
@@ -684,6 +698,7 @@ def generate_bias_report_csv(
     for r in records:
         writer.writerow(
             [
+                r.schema_version,
                 r.session_id,
                 r.timestamp,
                 r.reviewer_id,
