@@ -894,6 +894,13 @@ class RubricConfig(BaseModel):
     accuracy_ceiling_enabled: bool = Field(
         default=True, validation_alias="ACCURACY_CEILING_ENABLED"
     )
+    # #592: the rubric criteria are otherwise listed in the same order for
+    # every reviewer of every run, so any position preference a judge has
+    # applies systematically rather than averaging out. Default OFF — flag-off
+    # renders a byte-identical prompt (pinned by test).
+    randomize_dimension_order: bool = Field(
+        default=False, validation_alias="RUBRIC_RANDOMIZE_DIMENSION_ORDER"
+    )
     weights: Dict[str, float] = Field(
         default_factory=lambda: {
             "accuracy": 0.35,
@@ -1528,6 +1535,13 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
         config_dict.setdefault("evaluation", {}).setdefault("rubric", {})[
             "accuracy_ceiling_enabled"
         ] = accuracy_ceiling_enabled.lower() in ("true", "1", "yes")
+
+    # #592: rubric criteria order randomization (default off)
+    randomize_dimension_order = os.getenv("RUBRIC_RANDOMIZE_DIMENSION_ORDER")
+    if randomize_dimension_order:
+        config_dict.setdefault("evaluation", {}).setdefault("rubric", {})[
+            "randomize_dimension_order"
+        ] = randomize_dimension_order.lower() in ("true", "1", "yes")
 
     safety_enabled = os.getenv("SAFETY_GATE_ENABLED")
     if safety_enabled:

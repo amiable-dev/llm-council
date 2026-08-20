@@ -17,12 +17,6 @@
       "env": {
         "REPO_PATH": "/Users/christopherjoseph/projects/amiable/llm-council"
       }
-    },
-    "llm-council": {
-      "type": "stdio",
-      "command": "/Users/christopherjoseph/projects/amiable/llm-council/.venv/bin/llm-council",
-      "args": [],
-      "env": {}
     }
   }
 }
