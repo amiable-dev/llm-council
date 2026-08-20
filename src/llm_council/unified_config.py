@@ -1138,9 +1138,20 @@ def _normalize_config_shape(
     section_keys = {k for k in council_section if k in unified_fields}
 
     if not section_keys:
-        # Flat shape: `council:` holds CouncilConfig fields (or keys we cannot
-        # classify, which _check_unknown_top_level_keys will not see because
-        # they are nested — see that function's note on nested keys).
+        # Flat shape: `council:` holds CouncilConfig fields. Anything in there
+        # that neither model claims still has to be reported — `CouncilConfig`
+        # inherits pydantic's `extra="ignore"`, so it would otherwise be eaten
+        # in silence, and this branch never reaches the top-level key check.
+        unknown_in_council = sorted(set(council_section) - council_fields - unified_fields)
+        if unknown_in_council:
+            message = (
+                "Unknown key(s) under 'council:' ignored: "
+                f"{', '.join(unknown_in_council)}. "
+                f"Valid council fields: {', '.join(sorted(council_fields))}."
+            )
+            if strict:
+                raise ValueError(message)
+            logger.warning(message)
         return raw_config
 
     # `council:` names at least one UnifiedConfig section, so it is an
@@ -1186,10 +1197,13 @@ def _normalize_config_shape(
         else:
             envelope["council"] = council_fields_inside
 
-    overlapping = sorted(set(siblings) & set(envelope))
+    # Any key defined in two places loses one of its values on merge, so say so
+    # — including for unknown keys, which are dropped later but should not also
+    # disappear from the report that names them.
+    overlapping = sorted(set(siblings) & (set(envelope) | set(unknown_inside)))
     if overlapping:
         logger.warning(
-            "Config sections %s appear both at the top level and inside the "
+            "Config key(s) %s appear both at the top level and inside the "
             "'council:' envelope; the 'council:' values win.",
             ", ".join(overlapping),
         )
@@ -1209,8 +1223,11 @@ def _check_unknown_top_level_keys(config_dict: Dict[str, Any], strict: bool = Fa
     hard-fails only under ``strict=True``, which already means "raise instead
     of falling back to defaults".
 
-    Note the check is top-level only; nested unknown keys are still dropped
-    quietly. Deeper validation is deliberately out of scope here.
+    Scope: this checks the top level. ``_normalize_config_shape`` separately
+    reports unknown keys sitting inside a ``council:`` block, so both levels
+    that #591 touches are covered. Unknown keys nested deeper inside other
+    sections are still dropped quietly — full recursive validation is
+    deliberately out of scope.
     """
     unknown = sorted(set(config_dict) - set(UnifiedConfig.model_fields))
     if not unknown:

@@ -2280,3 +2280,54 @@ council:
             "_normalize_config_shape cannot classify a shared key — resolve the "
             "collision or give shape detection an explicit precedence rule."
         )
+
+    def test_unknown_key_inside_flat_council_block_is_reported(self, tmp_path, caplog):
+        """Round-3 council review: the flat branch buried unknown keys.
+
+        `council:` holding only CouncilConfig fields takes an early return, so
+        an unrecognised key beside them never reached the top-level check and
+        was eaten by CouncilConfig's `extra="ignore"` without a word.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a]
+  typo_key: 1
+""")
+        with caplog.at_level("WARNING"):
+            config = load_config(config_file)
+
+        assert config.council.models == ["my/model-a"]
+        joined = " ".join(r.message for r in caplog.records)
+        assert "typo_key" in joined, (
+            f"unknown key under council: must be reported; got {[r.message for r in caplog.records]!r}"
+        )
+
+    def test_strict_mode_raises_on_unknown_key_inside_flat_council_block(self, tmp_path):
+        """Consistent with every other unknown-key path."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a]
+  typo_key: 1
+""")
+        with pytest.raises(ValueError, match="typo_key"):
+            load_config(config_file, strict=True)
+
+    def test_key_defined_in_both_places_is_reported(self, tmp_path, caplog):
+        """A key present at top level AND in the envelope loses one value."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  tiers:
+    default: balanced
+
+tiers:
+  default: quick
+""")
+        with caplog.at_level("WARNING"):
+            config = load_config(config_file)
+
+        assert config.tiers.default == "balanced", "envelope should win"
+        joined = " ".join(r.message for r in caplog.records)
+        assert "tiers" in joined, "a value silently discarded by merge must be reported"
