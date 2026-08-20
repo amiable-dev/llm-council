@@ -14,6 +14,7 @@ import pytest
 # Will be created
 from llm_council.unified_config import (
     UnifiedConfig,
+    CouncilConfig,
     TierConfig,
     TriageConfig,
     GatewayConfig,
@@ -2049,3 +2050,284 @@ class TestTierPoolsConfig:
 
         for tier in ["quick", "balanced", "high", "reasoning"]:
             assert tier in pools or hasattr(pools, tier)
+
+
+class TestConfigShapeCompatibility:
+    """#591: `load_config()` silently discarded most real-world configs.
+
+    Two YAML shapes exist in the wild, and both are shipped by this repo:
+
+    * **envelope** — a single top-level ``council:`` key wrapping UnifiedConfig
+      sections (``council: {tiers: ..., gateways: ...}``). This is what the
+      module docstring documents and what ``llm_council.yaml`` in this repo
+      uses. It worked, because ``load_config`` unwrapped ``council:`` and
+      splatted its contents as ``UnifiedConfig`` kwargs.
+    * **flat** — ``council:`` is a *sibling* of the other sections and holds
+      ``CouncilConfig`` fields (``council: {models: ...}`` alongside a
+      top-level ``tiers:``). This is what ``llm_council.yaml.example`` — the
+      template users are told to copy — uses, and it was **entirely inert**:
+      every top-level section other than ``council:`` was never read, and
+      ``council:``'s own contents were dropped by pydantic ``extra="ignore"``
+      because ``models``/``chairman`` are not ``UnifiedConfig`` fields.
+
+    Disambiguation is exact, not heuristic: ``UnifiedConfig`` and
+    ``CouncilConfig`` field names are disjoint sets.
+    """
+
+    def test_flat_shape_council_models_are_applied(self, tmp_path):
+        """#591 repro: `council: {models, chairman}` was silently dropped."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models:
+    - my/model-a
+    - my/model-b
+  chairman: my/model-a
+""")
+        config = load_config(config_file)
+        assert config.council.models == ["my/model-a", "my/model-b"]
+        assert config.council.chairman == "my/model-a"
+
+    def test_flat_shape_sibling_sections_are_applied(self, tmp_path):
+        """The `llm_council.yaml.example` shape: `council:` beside `tiers:`.
+
+        Every one of these top-level sections was previously ignored.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  synthesis_mode: debate
+  exclude_self_votes: false
+
+tiers:
+  default: quick
+
+gateways:
+  default: requesty
+
+triage:
+  enabled: true
+""")
+        config = load_config(config_file)
+        assert config.council.synthesis_mode == "debate"
+        assert config.council.exclude_self_votes is False
+        assert config.tiers.default == "quick"
+        assert config.gateways.default == "requesty"
+        assert config.triage.enabled is True
+
+    def test_legacy_envelope_shape_still_works(self, tmp_path):
+        """Regression guard: the shape this repo's own llm_council.yaml uses.
+
+        Test-pinned by the pre-existing TestYAMLParsing cases; must not break.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  tiers:
+    default: balanced
+  gateways:
+    default: requesty
+""")
+        config = load_config(config_file)
+        assert config.tiers.default == "balanced"
+        assert config.gateways.default == "requesty"
+
+    def test_double_nested_workaround_still_works(self, tmp_path):
+        """The workaround #591's reporter adopted must not silently break.
+
+        `council: {council: {...}, gateways: {...}}` is the envelope shape with
+        an explicit inner CouncilConfig. Fixing the bug must not punish the
+        people who worked around it.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  council:
+    models: [my/model-a, my/model-b]
+    chairman: my/model-a
+  gateways:
+    default: openrouter
+""")
+        config = load_config(config_file)
+        assert config.council.models == ["my/model-a", "my/model-b"]
+        assert config.council.chairman == "my/model-a"
+        assert config.gateways.default == "openrouter"
+
+    def test_unknown_top_level_key_is_warned_not_silently_dropped(self, tmp_path, caplog):
+        """#591 root cause: pydantic `extra="ignore"` made every typo silent.
+
+        `metrics:` is not a UnifiedConfig field (the real sections are
+        `observability`/`telemetry`) — yet it is shipped in
+        llm_council.yaml.example. A user gets zero effect and zero signal.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+tiers:
+  default: quick
+
+metrics:
+  enabled: true
+""")
+        with caplog.at_level("WARNING"):
+            config = load_config(config_file)
+
+        assert config.tiers.default == "quick"
+        joined = " ".join(rec.message for rec in caplog.records).lower()
+        assert "metrics" in joined, (
+            f"unknown top-level config key must be surfaced, not dropped silently; "
+            f"got: {[r.message for r in caplog.records]!r}"
+        )
+
+    def test_strict_mode_raises_on_unknown_top_level_key(self, tmp_path):
+        """`strict=True` already means 'raise instead of falling back'."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+tiers:
+  default: quick
+
+metrics:
+  enabled: true
+""")
+        with pytest.raises(ValueError, match="metrics"):
+            load_config(config_file, strict=True)
+
+
+class TestConfigShapeNoSilentLoss:
+    """Council review of PR #605 found the first cut still had drop paths.
+
+    The point of #591 is that config must never vanish in silence. The
+    original `_normalize_config_shape` had two ways it still could:
+
+    * **envelope + siblings** — unwrapping ``council:`` returned *only* that
+      section, discarding any valid top-level sibling section outright.
+    * **mixed keys** — a ``council:`` block holding both section names and
+      CouncilConfig fields was handed back whole, so the section-name half was
+      then dropped by ``CouncilConfig``'s ``extra="ignore"``.
+
+    Both are now split and merged rather than dropped.
+    """
+
+    def test_envelope_with_top_level_siblings_keeps_both(self, tmp_path):
+        """Envelope `council:` beside a top-level section must keep both."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  tiers:
+    default: balanced
+
+observability:
+  metrics:
+    enabled: true
+""")
+        config = load_config(config_file)
+        assert config.tiers.default == "balanced", "envelope contents lost"
+        assert config.observability.metrics.enabled is True, "top-level sibling lost"
+
+    def test_mixed_council_block_keeps_both_halves(self, tmp_path):
+        """`council:` holding BOTH a section name and CouncilConfig fields.
+
+        Neither half may be dropped: the section name is lifted to top level,
+        the council fields stay in the council block.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a, my/model-b]
+  tiers:
+    default: quick
+""")
+        config = load_config(config_file)
+        assert config.council.models == ["my/model-a", "my/model-b"], "council half lost"
+        assert config.tiers.default == "quick", "section half lost"
+
+    def test_mixed_council_block_warns(self, tmp_path, caplog):
+        """The mixed shape is salvaged, but the author should still be told."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a]
+  tiers:
+    default: quick
+""")
+        with caplog.at_level("WARNING"):
+            load_config(config_file)
+        joined = " ".join(r.message for r in caplog.records).lower()
+        assert "council" in joined and "tiers" in joined
+
+    def test_strict_mode_raises_on_mixed_council_block(self, tmp_path):
+        """`strict=True` means hard-fail on a malformed config, consistently."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a]
+  tiers:
+    default: quick
+""")
+        with pytest.raises(ValueError, match="(?i)council"):
+            load_config(config_file, strict=True)
+
+    def test_unified_and_council_field_names_stay_disjoint(self):
+        """Load-bearing invariant behind shape detection — pin it explicitly.
+
+        Shape detection classifies the keys under `council:` by which model
+        owns them. If a future field name were added to BOTH models, that key
+        would be genuinely undecidable and detection would silently misroute
+        config. This test is the guard the logic itself cannot provide.
+        """
+        overlap = set(UnifiedConfig.model_fields) & set(CouncilConfig.model_fields)
+        assert overlap == set(), (
+            f"UnifiedConfig and CouncilConfig now share field name(s): {sorted(overlap)}. "
+            "_normalize_config_shape cannot classify a shared key — resolve the "
+            "collision or give shape detection an explicit precedence rule."
+        )
+
+    def test_unknown_key_inside_flat_council_block_is_reported(self, tmp_path, caplog):
+        """Round-3 council review: the flat branch buried unknown keys.
+
+        `council:` holding only CouncilConfig fields takes an early return, so
+        an unrecognised key beside them never reached the top-level check and
+        was eaten by CouncilConfig's `extra="ignore"` without a word.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a]
+  typo_key: 1
+""")
+        with caplog.at_level("WARNING"):
+            config = load_config(config_file)
+
+        assert config.council.models == ["my/model-a"]
+        joined = " ".join(r.message for r in caplog.records)
+        assert "typo_key" in joined, (
+            f"unknown key under council: must be reported; got {[r.message for r in caplog.records]!r}"
+        )
+
+    def test_strict_mode_raises_on_unknown_key_inside_flat_council_block(self, tmp_path):
+        """Consistent with every other unknown-key path."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models: [my/model-a]
+  typo_key: 1
+""")
+        with pytest.raises(ValueError, match="typo_key"):
+            load_config(config_file, strict=True)
+
+    def test_key_defined_in_both_places_is_reported(self, tmp_path, caplog):
+        """A key present at top level AND in the envelope loses one value."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  tiers:
+    default: balanced
+
+tiers:
+  default: quick
+""")
+        with caplog.at_level("WARNING"):
+            config = load_config(config_file)
+
+        assert config.tiers.default == "balanced", "envelope should win"
+        joined = " ".join(r.message for r in caplog.records)
+        assert "tiers" in joined, "a value silently discarded by merge must be reported"

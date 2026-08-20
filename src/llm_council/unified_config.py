@@ -7,7 +7,22 @@ This module provides a unified configuration system that consolidates settings f
 
 Configuration Priority: YAML > Environment Variables > Defaults
 
-Example YAML configuration (llm_council.yaml):
+Two YAML shapes are supported (#591). Neither is deprecated; they are told
+apart exactly, because UnifiedConfig and CouncilConfig field names are disjoint.
+
+**Flat** — sections at the top level, with ``council:`` holding council fields.
+This is the shape ``llm_council.yaml.example`` ships:
+
+    council:
+      models: [openai/gpt-5.4, anthropic/claude-opus-4.8]
+      chairman: google/gemini-3.1-pro-preview
+    tiers:
+      default: high
+    gateways:
+      default: openrouter
+
+**Envelope** — a single top-level ``council:`` key wrapping the sections. This
+is the shape this repo's own ``llm_council.yaml`` uses:
 
     council:
       tiers:
@@ -25,10 +40,17 @@ Example YAML configuration (llm_council.yaml):
         fallback:
           enabled: true
           chain: [openrouter, requesty, direct]
+
+To set council models under the envelope shape, nest an inner ``council:``
+(``council: {council: {models: [...]}}``).
+
+Unrecognised top-level keys are logged as warnings rather than dropped in
+silence, and raise under ``load_config(..., strict=True)``.
 """
 
 import fnmatch
 import json
+import logging
 import os
 import re
 from contextvars import ContextVar
@@ -40,6 +62,8 @@ import yaml
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from .tier_contract import TierContract, create_tier_contract
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -1071,6 +1095,153 @@ def _merge_dicts(base: Dict, override: Dict) -> Dict:
     return result
 
 
+def _normalize_config_shape(
+    raw_config: Dict[str, Any], strict: bool = False
+) -> Dict[str, Any]:
+    """Resolve a parsed YAML mapping to ``UnifiedConfig`` keyword shape (#591).
+
+    Two shapes exist in the wild, and this repo ships one of each:
+
+    * **envelope** — one top-level ``council:`` key wrapping UnifiedConfig
+      sections, e.g. ``council: {tiers: ..., gateways: ...}``. Documented in
+      this module's docstring and used by this repo's own ``llm_council.yaml``.
+    * **flat** — ``council:`` is a *sibling* of the other sections and holds
+      ``CouncilConfig`` fields, e.g. ``council: {models: ...}`` next to a
+      top-level ``tiers:``. Used by ``llm_council.yaml.example``, the template
+      users are told to copy.
+
+    Previously only the envelope was honoured (``UnifiedConfig(**raw["council"])``),
+    so every flat config was almost entirely discarded: sibling sections were
+    never read, and ``council:``'s own contents were dropped by pydantic
+    ``extra="ignore"`` because ``models``/``chairman`` are not UnifiedConfig
+    fields. No error, no warning — the hardcoded defaults silently applied.
+
+    Detection is exact rather than heuristic: ``UnifiedConfig`` and
+    ``CouncilConfig`` field names are disjoint sets, so the keys under
+    ``council:`` identify the shape unambiguously. That invariant is
+    load-bearing and pinned by
+    ``TestConfigShapeNoSilentLoss::test_unified_and_council_field_names_stay_disjoint``.
+    Both shapes remain supported — neither is deprecated, since both are
+    documented.
+
+    Nothing is ever dropped to make a shape fit. An envelope carrying council
+    fields, or sitting beside top-level siblings, is split and merged rather
+    than truncated; a mixed ``council:`` block warns (and raises under
+    ``strict``) but still applies both halves.
+    """
+    council_section = raw_config.get("council")
+    if not isinstance(council_section, dict) or not council_section:
+        return raw_config
+
+    unified_fields = set(UnifiedConfig.model_fields)
+    council_fields = set(CouncilConfig.model_fields)
+    section_keys = {k for k in council_section if k in unified_fields}
+
+    if not section_keys:
+        # Flat shape: `council:` holds CouncilConfig fields. Anything in there
+        # that neither model claims still has to be reported — `CouncilConfig`
+        # inherits pydantic's `extra="ignore"`, so it would otherwise be eaten
+        # in silence, and this branch never reaches the top-level key check.
+        unknown_in_council = sorted(set(council_section) - council_fields - unified_fields)
+        if unknown_in_council:
+            message = (
+                "Unknown key(s) under 'council:' ignored: "
+                f"{', '.join(unknown_in_council)}. "
+                f"Valid council fields: {', '.join(sorted(council_fields))}."
+            )
+            if strict:
+                raise ValueError(message)
+            logger.warning(message)
+        return raw_config
+
+    # `council:` names at least one UnifiedConfig section, so it is an
+    # envelope. Split rather than unwrap wholesale: an envelope may also carry
+    # CouncilConfig fields, and the file may carry top-level siblings. Dropping
+    # either half is the exact silent-loss failure this function exists to end.
+    #
+    # Classification is three-way, not binary. A key that belongs to neither
+    # model is *unknown*, not a council field — burying it in `council:` would
+    # hand it to CouncilConfig's extra="ignore" and drop it in silence, the very
+    # bug being fixed. Unknown keys are lifted to the top level instead, so
+    # _check_unknown_top_level_keys names them.
+    siblings = {k: v for k, v in raw_config.items() if k != "council"}
+    envelope = {k: v for k, v in council_section.items() if k in unified_fields}
+    council_fields_inside = {
+        k: v for k, v in council_section.items() if k in council_fields
+    }
+    unknown_inside = {
+        k: v
+        for k, v in council_section.items()
+        if k not in unified_fields and k not in council_fields
+    }
+
+    if council_fields_inside:
+        # Mixed shape. Salvage both halves, but this is malformed enough to be
+        # worth saying out loud — and to hard-fail under strict.
+        message = (
+            "Ambiguous config: the 'council:' section mixes UnifiedConfig "
+            f"section names ({', '.join(sorted(envelope))}) with council "
+            f"fields ({', '.join(sorted(council_fields_inside))}). Both halves "
+            "were applied; move the section names to the top level to remove "
+            "the ambiguity."
+        )
+        if strict:
+            raise ValueError(message)
+        logger.warning(message)
+
+        # Preserve the council half. If the envelope also carried an explicit
+        # inner `council:` block, that one is more specific and wins per key.
+        inner = envelope.get("council")
+        if isinstance(inner, dict):
+            envelope["council"] = {**council_fields_inside, **inner}
+        else:
+            envelope["council"] = council_fields_inside
+
+    # Any key defined in two places loses one of its values on merge, so say so
+    # — including for unknown keys, which are dropped later but should not also
+    # disappear from the report that names them.
+    overlapping = sorted(set(siblings) & (set(envelope) | set(unknown_inside)))
+    if overlapping:
+        logger.warning(
+            "Config key(s) %s appear both at the top level and inside the "
+            "'council:' envelope; the 'council:' values win.",
+            ", ".join(overlapping),
+        )
+
+    # Envelope wins on conflict: it is the more deeply-qualified location.
+    # Unknown keys ride along at the top level so they get reported, not buried.
+    return {**siblings, **unknown_inside, **envelope}
+
+
+def _check_unknown_top_level_keys(config_dict: Dict[str, Any], strict: bool = False) -> None:
+    """Surface top-level config keys that ``UnifiedConfig`` would discard (#591).
+
+    Pydantic's default ``extra="ignore"`` is what turned every shape mismatch
+    and key typo into a silent no-op. This does not change that behaviour
+    (making it ``extra="forbid"`` would be a breaking change for anyone whose
+    config carries an unrecognised section today) — it makes it *audible*, and
+    hard-fails only under ``strict=True``, which already means "raise instead
+    of falling back to defaults".
+
+    Scope: this checks the top level. ``_normalize_config_shape`` separately
+    reports unknown keys sitting inside a ``council:`` block, so both levels
+    that #591 touches are covered. Unknown keys nested deeper inside other
+    sections are still dropped quietly — full recursive validation is
+    deliberately out of scope.
+    """
+    unknown = sorted(set(config_dict) - set(UnifiedConfig.model_fields))
+    if not unknown:
+        return
+
+    message = (
+        f"Unknown top-level configuration key(s) ignored: {', '.join(unknown)}. "
+        f"Valid sections: {', '.join(sorted(UnifiedConfig.model_fields))}."
+    )
+    if strict:
+        raise ValueError(message)
+    logger.warning(message)
+
+
 def load_config(
     config_path: Optional[Path] = None,
     strict: bool = False,
@@ -1101,11 +1272,13 @@ def load_config(
         # Substitute environment variables
         raw_config = _substitute_env_vars(raw_config)
 
-        # Extract council section
-        council_config = raw_config.get("council", {})
+        # #591: resolve which of the two shipped YAML shapes this is, then
+        # surface anything that would otherwise be dropped in silence.
+        config_dict = _normalize_config_shape(raw_config, strict=strict)
+        _check_unknown_top_level_keys(config_dict, strict=strict)
 
         # Build config from YAML
-        return UnifiedConfig(**council_config)
+        return UnifiedConfig(**config_dict)
 
     except yaml.YAMLError as e:
         if strict:
