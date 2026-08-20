@@ -148,10 +148,13 @@ class BiasMetricRecord:
         would discard good data to protect one field.
         """
         try:
-            parts = tuple(int(x) for x in str(self.schema_version).split(".")[:3])
+            components = [int(x) for x in str(self.schema_version).split(".")[:3]]
         except (TypeError, ValueError):
             return False
-        return parts >= (1, 2, 0)
+        # Pad: "1.2" must parse as (1, 2, 0), not (1, 2) — the latter compares
+        # LESS than (1, 2, 0) and would wrongly read as pre-fix (#613 review).
+        components += [0] * (3 - len(components))
+        return tuple(components) >= (1, 2, 0)
 
     def to_jsonl_line(self) -> str:
         """Serialize to single JSONL line.

@@ -65,10 +65,12 @@ POSITION_IS_DISPLAY_ORDER_SINCE = (1, 2, 0)
 def _position_is_display_order(schema_version: str) -> bool:
     """True if this record's `position` field means display order (#611)."""
     try:
-        parts = tuple(int(x) for x in str(schema_version).split(".")[:3])
+        components = [int(x) for x in str(schema_version).split(".")[:3]]
     except (TypeError, ValueError):
         return False
-    return parts >= POSITION_IS_DISPLAY_ORDER_SINCE
+    # "1.2" must parse as (1, 2, 0); an unpadded (1, 2) compares LESS.
+    components += [0] * (3 - len(components))
+    return tuple(components) >= POSITION_IS_DISPLAY_ORDER_SINCE
 
 
 def session_agreement_decomposition(

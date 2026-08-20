@@ -143,3 +143,16 @@ class TestLegacyPositionsExcludedFromPositionBias:
         assert self._rec("1.2.0", 0, 1.0).position_is_display_order is True
         assert self._rec("1.1.0", 0, 1.0).position_is_display_order is False
         assert self._rec("garbage", 0, 1.0).position_is_display_order is False
+
+    def test_abbreviated_version_is_not_treated_as_pre_fix(self):
+        """"1.2" parses to (1, 2), which compares LESS than (1, 2, 0)."""
+        assert self._rec("1.2", 0, 1.0).position_is_display_order is True
+        assert self._rec("2", 0, 1.0).position_is_display_order is True
+        assert self._rec("1.1", 0, 1.0).position_is_display_order is False
+
+    def test_csv_export_carries_the_schema_version(self):
+        """The export is raw data; rows are kept, but the semantic travels."""
+        from llm_council.bias_aggregation import generate_bias_report_csv
+        import inspect
+
+        assert "schema_version" in inspect.getsource(generate_bias_report_csv)
