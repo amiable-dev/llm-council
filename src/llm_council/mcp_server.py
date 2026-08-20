@@ -117,7 +117,14 @@ _LAZY_ALIASES = {
 
 
 def __getattr__(name: str):
-    """Resolve the back-compat config aliases on access rather than at import."""
+    """Resolve the back-compat config aliases on access rather than at import.
+
+    CAVEAT: ``from llm_council.mcp_server import OPENROUTER_API_KEY`` evaluates
+    this hook once, at the *importing* module's import time, and binds the
+    result there — re-freezing the value in that namespace. Import the module
+    and read the attribute (``mcp_server.OPENROUTER_API_KEY``) to keep lazy
+    resolution. Audited: no production consumer uses the from-import form.
+    """
     resolver = _LAZY_ALIASES.get(name)
     if resolver is not None:
         return resolver()
