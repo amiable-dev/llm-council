@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.0] - 2026-08-20
+
+**Correctness pass over configuration, health reporting, and bias measurement.** Seven changes from an issue-review sweep, several of which found that a subsystem was silently reporting something other than reality. Two carry behaviour changes worth reading before upgrading: the bias `position` semantics and what `council_health_check` reports.
+
+### Fixed
+
+- **`verify()`/config: YAML was silently discarded ([#591](https://github.com/amiable-dev/llm-council/issues/591))** — `load_config()` only ever honoured one of the two shapes this repo ships. Any config with sections at the top level (the shape `llm_council.yaml.example` uses — **the template users are told to copy**) was almost entirely ignored: sibling sections were never read, and `council:`'s own contents were dropped by pydantic's `extra="ignore"` because `models`/`chairman` aren't `UnifiedConfig` fields. No error, no warning; hardcoded defaults applied. Both shapes are now supported, detected exactly rather than heuristically. The shipped `.example` template was **entirely inert** before this and now works.
+- **Unknown config keys are no longer silent ([#591](https://github.com/amiable-dev/llm-council/issues/591))** — unrecognised keys, at the top level and inside a `council:` block, are logged and raise under `load_config(..., strict=True)`. `extra="ignore"` is deliberately unchanged (`forbid` would hard-break configs carrying an unrecognised section today). This immediately surfaced three long-dead keys in this repo's own `llm_council.yaml`.
+- **Chairman errors surfaced as `(error: )` ([#594](https://github.com/amiable-dev/llm-council/issues/594))** — `str(e)` is `""` for any exception constructed without a message, and `.get(key, default)` doesn't fire its default for a present-but-empty value, so a real chairman outage produced an error message with **empty parentheses** and no way to tell a rate-limit from a 5xx from a parse failure. Fixed at both ends: the detail now names the exception type, and the consumer uses `or`. Applied to the three gateway routers that share the response shape. Restores what [#397](https://github.com/amiable-dev/llm-council/issues/397) and [#403](https://github.com/amiable-dev/llm-council/issues/403) were for.
+- **Bias `position` recorded the wrong quantity ([#611](https://github.com/amiable-dev/llm-council/issues/611))** — `BiasMetricRecord.position` is documented as *"Display position during peer review"* but was populated from `enumerate()` over the reviewer's **output ranking**. This **inverted** the ADR-047 P4 amplification signal: on a session where reviewers agreed while favouring the model displayed *last*, `position_alignment` read **+0.993 / `amplification_suspect: True`** before the fix and **−0.993 / `False`** after. `llm-council bias-report --amplification` was flagging clean sessions.
+- **Config was frozen at import ([#609](https://github.com/amiable-dev/llm-council/issues/609))** — `COUNCIL_MODELS`, `CHAIRMAN_MODEL`, `OPENROUTER_API_KEY`, `TIER_MODEL_POOLS` and `CONFIDENCE_CONFIGS` were computed once when `mcp_server` was imported, so a key or pool configured afterwards (keychain re-auth, `llm-council setup-key`, an env change in a long-lived process) never reached them. Now resolved on access via PEP 562; the public names are unchanged and `unittest.mock.patch` still works on them.
+
+### Added
+
+- **`council_health_check(deep=True)` probes the chairman ([#596](https://github.com/amiable-dev/llm-council/issues/596))** — the default probe pings a cheap lite model, so it answers *"is the API reachable"*, not *"will the council complete"*. During a ~1h chairman outage it reported `ready: true` throughout while every real run failed. The default probe now declares `probe_scope: "connectivity_only"` with a caveat; `deep=true` probes the configured chairman and reports `ready: false` when synthesis would fail. Opt-in, because it costs a real chairman call.
+- **`council_health_check(tier=...)`** — reports readiness for the tier a real run would use, mirroring `consult_council`'s resolution including its fallback to `high`.
+- **Rubric criteria order can be randomized ([#592](https://github.com/amiable-dev/llm-council/issues/592))** — `RUBRIC_RANDOMIZE_DIMENSION_ORDER` / `evaluation.rubric.randomize_dimension_order`, **default off**. The five rubric criteria were otherwise listed in one fixed order for every reviewer of every run, so a judge's position preference applied systematically rather than averaging out. Flag-off renders a byte-identical prompt (golden-tested).
+
+### Changed
+
+> [!IMPORTANT]
+> **`council_health_check` now reports what a real run would do.** `models`/`council_size` come from the **tier-resolved** pool rather than the flat `council.models` list, since `consult_council` always runs the former; when the two disagree the response gains `configured_council_models` and a `config_warnings` entry. `ready` is now `false` when the tier cannot be resolved or resolves to no models — connectivity alone is no longer sufficient. **If you gate CI on `ready`, it can now be `false` in cases that previously reported `true`** — in each case because a real run would have failed.
+
+> [!IMPORTANT]
+> **Bias record schema `1.1.0` → `1.2.0` ([#611](https://github.com/amiable-dev/llm-council/issues/611)).** The meaning of an existing field changed, so records written before this release carry a ranking index under `position` while new ones carry a display index. Position analyses (`aggregate_position_bias`, `session_agreement_decomposition`) now **skip pre-1.2.0 records** rather than averaging two different quantities — so historical position/amplification output will shrink or empty until new data accumulates. Older records remain fully valid, and are still used, for score, reviewer-calibration and length analyses. `BiasMetricRecord.position_is_display_order` exposes the distinction; the CSV export carries `schema_version`.
+
+- **`llm_council.yaml.example`** — the `metrics:` block was invalid (no such section) and is corrected to `observability.metrics`, so the shipped template loads without warnings.
+
+### Documentation
+
+- **ADR-017 Amendment 1: per-reviewer response-order randomization is declined** ([#602](https://github.com/amiable-dev/llm-council/issues/602), closed as superseded). Answers the ADR's own open Council Review Question 1 with a decision and its reasoning: at N=4–5 reviewers it decorrelates position bias into noise rather than cancelling it, the project's own bias metrics cannot resolve the difference, and it would dissolve the very metric it aims to support. Three checkable conditions that would reopen it are recorded, along with the full implementation contract, so the decision is revisitable rather than lost.
+- `docs/guides/mcp.md` documents both new `council_health_check` parameters and warns explicitly that `ready: true` does not mean synthesis will succeed.
+
 ## [0.41.1] - 2026-08-20
 
 Patch release: ships the dependency-security floor that just missed the v0.41.0 tag, and refreshes the stale MCP registry card.
