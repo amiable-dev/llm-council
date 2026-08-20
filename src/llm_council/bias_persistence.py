@@ -111,7 +111,10 @@ class BiasMetricRecord:
         consent_level: Privacy consent level (0-4)
         reviewer_id: Model that gave the score
         model_id: Model being scored
-        position: Display position during peer review (0-indexed)
+        position: Display position during peer review (0-indexed).
+            NOTE (#611): records at schema_version < 1.2.0 hold the reviewer's
+            RANKING index here instead. Any consumer treating this as display
+            order must gate on `position_is_display_order`.
         response_length_chars: Character count of the response
         score_value: Numeric score given by reviewer
         score_scale: Scale description (e.g., "1-10")
@@ -133,6 +136,22 @@ class BiasMetricRecord:
     council_config_version: str = "0.1.0"
     query_hash: Optional[str] = None
     query_metadata: Optional[Dict[str, Any]] = None
+
+    @property
+    def position_is_display_order(self) -> bool:
+        """True if `position` means display order rather than ranking (#611).
+
+        Exposed on the record so a consumer cannot reasonably use `position`
+        without meeting the question. Filtering at the read layer was
+        considered and rejected: pre-1.2.0 records remain fully valid for
+        score, reviewer and response-length analysis, and dropping them there
+        would discard good data to protect one field.
+        """
+        try:
+            parts = tuple(int(x) for x in str(self.schema_version).split(".")[:3])
+        except (TypeError, ValueError):
+            return False
+        return parts >= (1, 2, 0)
 
     def to_jsonl_line(self) -> str:
         """Serialize to single JSONL line.
@@ -485,9 +504,13 @@ def create_bias_records_from_session(
     position_by_label = derive_label_positions(label_to_model)
 
     # Precomputed once; this was an O(n^2) rescan of stage1_results per ranking.
-    response_length_by_model = {
-        r.get("model", ""): len(r.get("response", "") or "") for r in stage1_results
-    }
+    # First-wins, matching the `break` in the loop this replaced — a dict
+    # comprehension would silently flip it to last-wins for duplicate models.
+    response_length_by_model: Dict[str, int] = {}
+    for _r in stage1_results:
+        response_length_by_model.setdefault(
+            _r.get("model", ""), len(_r.get("response", "") or "")
+        )
 
     # Parse all rankings first
     for ranking_result in stage2_results:
@@ -526,7 +549,7 @@ def create_bias_records_from_session(
             # restatement of agreement_index, and skewed toward false positives
             # by the -position sign convention.
             #
-            # derive_position_mapping is reused rather than re-deriving the
+            # derive_label_positions owns the parsing rather than re-deriving the
             # label parsing a third time; it already handles the enhanced
             # (display_index) and legacy (letter-order) formats, and owns the
             # ADR-017 invariant that labels are assigned in presentation order.
