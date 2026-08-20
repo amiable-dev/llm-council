@@ -99,6 +99,7 @@ Verify the council is ready.
 
 **Parameters:**
 
+- `tier` (default `"high"`): report readiness for the tier a real run would use. Mirrors `consult_council`'s resolution, including its fallback to `high` for an unrecognised value.
 - `deep` (default `false`): also probe the configured **chairman** model. Costs one real chairman call. The default probe only checks general API reachability via a cheap lite model, which cannot detect a chairman-specific outage.
 
 **Returns:**

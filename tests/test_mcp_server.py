@@ -590,3 +590,93 @@ class TestHealthCheckReportsEffectiveConfig:
 
         assert calls == [__import__("llm_council.gateway.base", fromlist=["x"]).DEFAULT_HEALTH_CHECK_MODEL]
         assert "chairman_connectivity" not in data
+
+    @pytest.mark.asyncio
+    async def test_tier_resolution_failure_is_not_ready(self):
+        """Council review of #608: the fallback recreated the very bug.
+
+        Wrapping `create_tier_contract` in `except Exception` and quietly
+        falling back to the flat list let the health check report ready:true
+        for a config under which `consult_council` — which has no such
+        fallback — would raise. That is the same 'health check misrepresents
+        reality' failure this PR exists to fix.
+        """
+        from llm_council.mcp_server import council_health_check
+        from llm_council.openrouter import STATUS_OK
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch(
+                "llm_council.mcp_server.create_tier_contract",
+                side_effect=ValueError("bad tier pool config"),
+            ),
+            patch(
+                "llm_council.mcp_server.query_model_with_status",
+                new_callable=AsyncMock,
+                return_value={"status": STATUS_OK, "content": "pong", "latency_ms": 5},
+            ),
+        ):
+            data = json.loads(await council_health_check())
+
+        assert data["ready"] is False, (
+            "tier resolution failed, so a real run would raise — must not report ready"
+        )
+        joined = (data["message"] + " ".join(data.get("config_warnings", []))).lower()
+        assert "tier" in joined
+        assert "bad tier pool config" in joined, "the underlying error must be surfaced"
+
+    @pytest.mark.asyncio
+    async def test_empty_effective_pool_is_not_ready(self):
+        """A council of zero models cannot deliberate, however healthy the API."""
+        from llm_council.mcp_server import council_health_check
+        from llm_council.openrouter import STATUS_OK
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server.create_tier_contract") as mk,
+            patch(
+                "llm_council.mcp_server.query_model_with_status",
+                new_callable=AsyncMock,
+                return_value={"status": STATUS_OK, "content": "pong", "latency_ms": 5},
+            ),
+        ):
+            mk.return_value = MagicMock(allowed_models=[])
+            data = json.loads(await council_health_check())
+
+        assert data["council_size"] == 0
+        assert data["ready"] is False
+        assert "no models" in data["message"].lower() or "empty" in data["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_reports_the_tier_that_was_asked_about(self):
+        """`consult_council` runs whichever tier the caller picks.
+
+        Reporting only 'high' misrepresents readiness for the others.
+        """
+        from llm_council.mcp_server import council_health_check
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server.create_tier_contract") as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["quick/one"])
+            data = json.loads(await council_health_check(tier="quick"))
+
+        assert data["default_tier"] == "quick"
+        assert data["models"] == ["quick/one"]
+        assert mk.call_args.args[0] == "quick"
+
+    @pytest.mark.asyncio
+    async def test_unknown_tier_falls_back_to_high_like_consult_council(self):
+        """Mirrors consult_council: an unrecognised tier resolves to 'high'."""
+        from llm_council.mcp_server import council_health_check
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server.create_tier_contract") as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["h/1"])
+            data = json.loads(await council_health_check(tier="nonsense"))
+
+        assert data["default_tier"] == "high"
+        assert mk.call_args.args[0] == "high"

@@ -342,7 +342,7 @@ async def consult_council(
 
 
 @mcp.tool()
-async def council_health_check(deep: bool = False) -> str:
+async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     """
     Check LLM Council health before expensive operations (ADR-012).
 
@@ -372,16 +372,31 @@ async def council_health_check(deep: bool = False) -> str:
     # import-time COUNCIL_MODELS constant) meant the health check could name a
     # completely different council than the one that runs, with no signal — and
     # being import-time-bound, it also never reflected a config reload.
-    default_tier = "high"
-    try:
-        effective_models = list(create_tier_contract(default_tier).allowed_models)
-    except Exception:  # tier resolution must never break the health check
-        effective_models = list(_get_council_models())
+    # Mirror consult_council's own resolution, including its fallback for an
+    # unrecognised value, so the reported tier is the one that would run.
+    default_tier = tier if tier in TIER_MODEL_POOLS else "high"
+
     configured_models = list(_get_council_models())
     chairman_model = _get_chairman_model()
-
     config_warnings = []
-    if sorted(configured_models) != sorted(effective_models):
+    tier_error = None
+
+    try:
+        effective_models = list(create_tier_contract(default_tier).allowed_models)
+    except Exception as e:
+        # Do NOT silently fall back. consult_council has no such fallback, so
+        # a config that breaks tier resolution breaks a real run — reporting
+        # ready:true here would recreate exactly the misrepresentation this
+        # function was just fixed to avoid (council review of #608).
+        tier_error = f"{type(e).__name__}: {e}"
+        effective_models = []
+        config_warnings.append(
+            f"Tier '{default_tier}' could not be resolved ({tier_error}). "
+            "consult_council resolves the same contract with no fallback, so a "
+            "real run would fail."
+        )
+
+    if tier_error is None and sorted(configured_models) != sorted(effective_models):
         config_warnings.append(
             "council.models and the resolved tier pool disagree: a real "
             f"consult_council run at the '{default_tier}' tier uses "
@@ -436,8 +451,25 @@ async def council_health_check(deep: bool = False) -> str:
             }
 
             if response["status"] == STATUS_OK:
-                checks["ready"] = True
-                checks["message"] = "Council is ready. Use consult_council to ask questions."
+                # Connectivity is necessary but not sufficient: a council with
+                # no resolvable models cannot deliberate however healthy the
+                # API is (council review of #608).
+                if tier_error is not None:
+                    checks["ready"] = False
+                    checks["message"] = (
+                        f"Tier '{default_tier}' could not be resolved ({tier_error}). "
+                        "consult_council would fail on this configuration."
+                    )
+                elif not effective_models:
+                    checks["ready"] = False
+                    checks["message"] = (
+                        f"Tier '{default_tier}' resolved to no models, so the council "
+                        "has nothing to deliberate with. Configure "
+                        f"tiers.pools.{default_tier}.models or council.models."
+                    )
+                else:
+                    checks["ready"] = True
+                    checks["message"] = "Council is ready. Use consult_council to ask questions."
             else:
                 checks["ready"] = False
                 checks["message"] = (
@@ -472,7 +504,7 @@ async def council_health_check(deep: bool = False) -> str:
                     checks["chairman_connectivity"] = {
                         "status": "error",
                         "model": chairman_model,
-                        "error": f"{type(e).__name__}: {e}" or repr(e),
+                        "error": f"{type(e).__name__}: {e}",
                     }
                     checks["ready"] = False
                     checks["message"] = f"Chairman probe failed: {type(e).__name__}: {e}"
