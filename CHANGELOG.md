@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.1] - 2026-08-20
+
+Patch release: ships the dependency-security floor that just missed the v0.41.0 tag, and refreshes the stale MCP registry card.
+
+### Security
+
+- **`mcp` optional-dependency floor raised to `>=1.28.1,<2`** (was `>=1.22.0,<1.27`) — 1.28.1 carries the upstream fixes for three GHSA advisories in the MCP Python SDK: HTTP transports serving session requests without verifying the authenticated principal, experimental task handlers allowing cross-client task access/cancellation, and missing WebSocket Host/Origin validation. The llm-council MCP server itself runs over stdio, where these transports are not in play, but installs of the `[mcp]` extra previously resolved a vulnerable-range SDK. The v2 SDK migration (Tasks wiring) remains tracked in [#425](https://github.com/amiable-dev/llm-council/issues/425).
+
+### Fixed
+
+- `server-card.json` (the static SEP-2127 registry card at the repo root) had rotted at v0.37.1 — regenerated; tool registry content was unchanged, only the version stamp.
+
 ## [0.41.0] - 2026-08-20
 
 Minor release: makes ADR-053 shadow-mode telemetry durable — the reviewable evidence that gates the announced file-selection and coverage-clamp default flips ([#557](https://github.com/amiable-dev/llm-council/issues/557)).
