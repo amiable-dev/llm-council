@@ -15,6 +15,7 @@ first and `.envrc` genuinely holds `export SECRET=…`, so it STAYS denied here.
 """
 
 import asyncio
+import json
 import subprocess
 from pathlib import Path
 
@@ -157,6 +158,51 @@ class TestShadowMode:
         # shadow ACTS on allowlist: .zig stays omitted
         selected, omitted = asyncio.run(_select(sha, ["src/main.zig", "app.py"]))
         assert "src/main.zig" not in {b.path for b in selected}
+
+    def test_shadow_run_appends_decision_record(self, sniff_repo, monkeypatch):
+        """#595: the delta must survive as a reviewable record, not just a log line."""
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "shadow")
+        _repo, sha = sniff_repo
+        asyncio.run(_select(sha, ["src/main.zig", "empty.py"]))
+        log = Path(".council") / "selection" / "decisions.jsonl"  # cwd is the repo
+        assert log.exists()
+        rec = json.loads(log.read_text().splitlines()[-1])
+        assert rec["snapshot_id"] == sha
+        assert rec["would_add"] == ["src/main.zig"]
+        assert rec["would_drop"] == []
+        assert rec["candidates"] == 2
+        assert rec["selected"] == 1
+        assert "ts" in rec
+
+    def test_shadow_empty_delta_still_appends(self, sniff_repo, monkeypatch):
+        """Empty deltas are the denominator — the #557 review needs the rate."""
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "shadow")
+        _repo, sha = sniff_repo
+        asyncio.run(_select(sha, ["empty.py"]))
+        log = Path(".council") / "selection" / "decisions.jsonl"
+        rec = json.loads(log.read_text().splitlines()[-1])
+        assert rec["would_add"] == []
+        assert rec["would_drop"] == []
+        assert rec["candidates"] == 1
+        assert rec["selected"] == 1
+
+    def test_shadow_log_failure_never_breaks_selection(self, sniff_repo, monkeypatch, tmp_path):
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "shadow")
+        _repo, sha = sniff_repo
+        blocker = tmp_path / "blocker"
+        blocker.write_text("")  # a FILE where a directory is needed ⇒ mkdir raises
+        monkeypatch.setattr(
+            file_ops, "DEFAULT_SELECTION_DECISIONS_PATH", blocker / "decisions.jsonl"
+        )
+        selected, omitted = asyncio.run(_select(sha, ["src/main.zig", "empty.py"]))
+        assert {b.path for b in selected} == {"empty.py"}
+        assert any(o.path == "src/main.zig" for o in omitted)
+
+    def test_allowlist_mode_writes_no_decision_log(self, sniff_repo, monkeypatch):
+        monkeypatch.delenv("LLM_COUNCIL_FILE_SELECTION", raising=False)
+        _repo, sha = sniff_repo
+        asyncio.run(_select(sha, ["src/main.zig", "empty.py"]))
+        assert not (Path(".council") / "selection" / "decisions.jsonl").exists()
 
 
 class TestModeParsing:
