@@ -294,90 +294,85 @@ def derive_position_mapping(label_to_model):
 
 ---
 
-# Amendment 1 — Per-Reviewer Randomization (2026-08-20)
+# Amendment 1 — Per-Reviewer Randomization: Declined (2026-08-20)
 
-**Status:** Proposed
+**Status:** Accepted (decision: do not implement)
 **Amends:** "Enhancement 3", "Scenario 1", the Implementation Status table, and Council Review Question 1
-**Issues:** [#592](https://github.com/amiable-dev/llm-council/issues/592) (rubric-criteria order, shipped separately), [#602](https://github.com/amiable-dev/llm-council/issues/602) (this amendment), [#611](https://github.com/amiable-dev/llm-council/issues/611) (prerequisite)
-
-## Why this amendment exists
-
-An external report ([#592](https://github.com/amiable-dev/llm-council/issues/592)) observed that `stage2_collect_rankings` shuffles once per council call and sends the *same* prompt to every reviewer, so all reviewers see Response A/B/C in identical positions. Any position preference a judge holds therefore applies uniformly across the council for that run rather than decorrelating across reviewers.
-
-That observation is correct, and this ADR already anticipated it — "Enhancement 3" and "Scenario 1" describe both the change and the `reviewer_position_mapping` it would require. What the original text left open is Council Review **Question 1**: *"Is per-reviewer randomization worth the added complexity?"* This amendment answers it.
-
-## Finding that changes the answer
-
-Investigation for #602 surfaced a defect that must be resolved first, and that materially alters the cost/benefit.
-
-**`BiasMetricRecord.position` does not hold the display position.** It is documented as *"Display position during peer review (0-indexed)"*, but `create_bias_records_from_session` populates it with `enumerate()` over the reviewer's **output ranking**. Demonstrated (display order alpha=0, beta=1, gamma=2; reviewer ranks C,B,A):
-
-| model | recorded `.position` | true `display_index` |
-|---|---|---|
-| `m/alpha` | 2 | 0 |
-| `m/beta` | 1 | 1 |
-| `m/gamma` | 0 | 2 |
-
-Consequently `bias_amplification.position_alignment` — intended as *"high agreement that tracks display order = amplification suspect"* — currently correlates the reviewers' own rankings against a consensus derived from those same rankings. It is close to a restatement of `agreement_index`, not a position-bias measure. Tracked as [#611](https://github.com/amiable-dev/llm-council/issues/611).
-
-There are two position paths and only one is correct: the per-session audit (`derive_position_mapping` → `run_bias_audit`) uses real `display_index` values; the persisted cross-session records do not.
-
-**This inverts part of the #602 write-up.** That issue asserted that a per-reviewer shuffle would "silently corrupt" `position_alignment`. In fact the record schema *already* carries a per-(reviewer, model) position, and `bias_amplification` *already* averages positions per model with an explicit comment anticipating ADR-017 per-reviewer randomization (added in the #437 review). The blocker is narrower than claimed, and the metric is already not measuring display order.
+**Issues:** [#592](https://github.com/amiable-dev/llm-council/issues/592) (rubric-criteria order — implemented separately), [#602](https://github.com/amiable-dev/llm-council/issues/602) (closed as superseded by this amendment), [#611](https://github.com/amiable-dev/llm-council/issues/611) (the defect actually worth fixing — fixed)
 
 ## Decision
 
-**Adopt per-reviewer randomization, behind a default-off flag, and only after [#611](https://github.com/amiable-dev/llm-council/issues/611) is fixed.**
+**Do not implement per-reviewer response-order randomization.** Council Review Question 1 — *"Is per-reviewer randomization worth the added complexity?"* — is answered **no**, at the council's operating scale.
 
-Answering Question 1 directly: **yes, but at low priority and with honest expectations.** The complexity is smaller than the original P2 rating assumed, because the persistence schema and the amplification reducer already accommodate per-reviewer positions. The *benefit* is also smaller than the framing implies — see "Calibration" below.
+"Enhancement 3" and "Scenario 1" remain accurate descriptions of *how* it would be built if the scale ever changes. They are recorded here as **considered and declined**, not as pending work.
 
-### Ordering (non-negotiable)
+## How this was arrived at
 
-1. **#611 first.** Until `position` means display position, neither the current single-order design nor a per-reviewer design can be evaluated — there is no working instrument to measure whether randomization helps. Shipping per-reviewer randomization onto a broken measure would produce a change we cannot verify.
-2. **Then per-reviewer randomization**, with the tracking contract below.
+An external report ([#592](https://github.com/amiable-dev/llm-council/issues/592)) correctly observed that `stage2_collect_rankings` shuffles once per call and sends the same prompt to every reviewer, so all reviewers see Response A/B/C in identical positions. That observation is true, and this ADR had already anticipated it.
 
-### Contract
+Investigating it produced a more useful result than implementing it would have.
 
-`stage2_collect_rankings` builds one prompt for all reviewers today. Per-reviewer order requires per-reviewer prompts, which changes three things:
+### The measurement instrument was broken
 
-- **`reviewer_position_mapping: Dict[str, Dict[str, int]]`** — reviewer → model → display index, as "Scenario 1" specified. `label_to_model` remains for the single-order case and for de-anonymised display, but is no longer sufficient to describe what any given reviewer saw.
-- **The INVARIANT is narrowed.** "Labels are assigned in lexicographic order corresponding to presentation order" continues to hold *per reviewer*. It ceases to hold globally for the session, and any consumer treating it as session-global must be updated. `derive_position_mapping` is such a consumer.
-- **Seeded per reviewer** (`rng = random.Random(hash(reviewer))`, per Enhancement 3's sketch) so a run is reproducible and a failing case can be replayed. This subsumes the deferred "Deterministic Seeding" enhancement for stage 2.
+`BiasMetricRecord.position` was documented as *"Display position during peer review (0-indexed)"* but was populated with `enumerate()` over the reviewer's **output ranking**. `bias_amplification.position_alignment` — the metric intended to detect *"agreement that tracks display order"* — was therefore correlating reviewers' rankings against a consensus derived from those same rankings.
 
-### Flag
+Measured on one session where two reviewers agreed strongly and both favoured the model displayed **last** (so display order could not explain their agreement):
 
-`evaluation.bias.per_reviewer_order` (or equivalent), **default off**, flag-off byte-identical — matching how #592's sibling change (rubric-criteria order) shipped, and the project's standing convention for behaviour-affecting changes.
+| | `position_alignment` | `amplification_suspect` |
+|---|---|---|
+| before | **+0.993** | **True** (false positive) |
+| after | **−0.993** | False |
 
-## Calibration — what this does and does not buy
+The sign inverted: the metric reported the opposite of reality, and `llm-council bias-report --amplification` would flag clean sessions. Fixed in [#611](https://github.com/amiable-dev/llm-council/issues/611).
 
-At the council's real scale (N=4–5 reviewers), per-reviewer randomization **decorrelates** position bias into noise; it does not cancel it. CLAUDE.md is explicit that per-session bias metrics are anomaly indicators over 4–5 data points, far below the ~30 needed for significance. This ADR used the same reasoning to defer Latin-square and counterbalancing designs as *"overkill for 3-5 reviewers but valuable for large-scale evaluations"* — that reasoning applies here too, in weaker form.
+**This is why the ordering mattered.** Shipping per-reviewer randomization first would have been a change whose effect could not be measured, evaluated against an instrument that was inverted.
 
-Converting a systematic bias into noise is a real improvement, and it removes a confound that is otherwise indistinguishable from genuine consensus. But it should be scoped as a **rigour improvement**, not a fix for a live defect, and it is the *weaker* of the two effects this amendment touches — #611 is the one that restores a broken measurement.
+### The stated blocker did not exist
 
-An honest secondary consequence: once every reviewer sees a different order, `position_alignment`'s threat model largely dissolves, because there is no shared display order for agreement to track. Averaged per-model positions converge toward `(n-1)/2` and the correlation tends to zero. That is the *correct* outcome, not a regression — but it means the metric's interpretation must be re-documented, and a per-reviewer within-session position/score correlation would be the more informative replacement.
+[#602](https://github.com/amiable-dev/llm-council/issues/602) asserted that a per-reviewer shuffle would *"silently corrupt"* the bias-audit subsystem. That was wrong. `BiasMetricRecord` already carries a per-`(reviewer, model)` position, and `session_agreement_decomposition` already averages positions per model, with a comment explicitly anticipating ADR-017 per-reviewer randomization added during the #437 review. The persistence layer was built for this all along.
+
+## Why declined
+
+1. **It decorrelates rather than cancels.** At N=4–5 reviewers, per-reviewer ordering converts a systematic position effect into noise; it does not remove it. This ADR used precisely this reasoning to defer Latin-square and counterbalancing designs as *"overkill for 3-5 reviewers but valuable for large-scale evaluations."* The same logic applies, only more weakly, to per-reviewer shuffling.
+
+2. **Per-session bias metrics cannot resolve the difference.** CLAUDE.md is explicit that these are anomaly indicators over 4–5 data points, against roughly 30 needed for significance. A change whose benefit is invisible to the project's own instrumentation is hard to justify as anything but rigour theatre.
+
+3. **It would dissolve the metric it is meant to help.** Once every reviewer sees a different order there is no shared display order for agreement to track; averaged per-model positions converge toward `(n−1)/2` and `position_alignment` tends to zero. That is arguably the *correct* end state, but it means the work also requires re-specifying an ADR-047 P4 metric — cost on both sides of the ledger.
+
+4. **The confound it removes has now been made measurable instead.** With #611 fixed, a genuine shared-order effect will show up in `position_alignment` and in `aggregate_position_bias`. Detecting the bias is more valuable at this scale than pre-emptively randomising it away, because detection also tells us whether it exists at all.
+
+## What was done instead
+
+| Change | Status |
+|---|---|
+| Fix `position` to record display order ([#611](https://github.com/amiable-dev/llm-council/issues/611)) | ✅ Implemented — restores the instrument |
+| Randomize **rubric-criteria** order, opt-in ([#592](https://github.com/amiable-dev/llm-council/issues/592)) | ✅ Implemented — no downstream dependents, so it shipped on its own |
+| Per-reviewer **response** order ([#602](https://github.com/amiable-dev/llm-council/issues/602)) | ❌ Declined — this amendment |
+
+## Conditions that would reopen this
+
+Revisit if any of these becomes true:
+
+- The council routinely runs **≥10 reviewers**, where per-reviewer ordering starts to average out rather than merely decorrelate, and where Latin-square balancing also becomes worth reconsidering.
+- Post-#611 data shows a **persistent positive `position_alignment`** across many sessions — i.e. the shared-order confound is real and material, not hypothetical.
+- The council's output is used for **published benchmarking or comparative model claims**, where methodological rigour is judged independently of its effect size.
 
 ## Consequences
 
-- **Positive:** removes a shared-order confound; makes seeded reproducibility available for stage 2; forces #611's fix, which is the higher-value change.
-- **Negative:** stage 2 gains per-reviewer prompt construction, which interacts with the two dispatch paths in that function; cross-reviewer analysis becomes two-level (as this ADR's original trade-off note predicted); `position_alignment` needs reinterpretation.
-- **Neutral:** no effect on prompt caching — stage-2 prompts are a documented ADR-049 cache no-op, so per-reviewer prompt divergence costs no cache hits.
+- **Positive:** avoids per-reviewer prompt construction in a function that already has two dispatch paths; avoids re-specifying `position_alignment`; keeps the shared-order confound observable rather than hidden.
+- **Negative:** a genuine shared-order position effect, if one exists, continues to apply uniformly within a run rather than being spread across reviewers. Accepted knowingly — it is now measurable.
+- **Neutral:** no effect on prompt caching either way; stage-2 prompts are a documented ADR-049 cache no-op.
 
 ## Implementation Status (updated)
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Basic randomization | ✅ Implemented | `random.shuffle()` in Stage 2 |
+| Basic randomization | ✅ Implemented | `random.shuffle()` in Stage 2, once per call |
 | Anonymous labels | ✅ Implemented | Response A, B, C... |
 | Label-to-model mapping | ✅ Implemented | Enhanced format with `display_index` |
 | Position tracking (per-session audit) | ✅ Implemented (v0.3.0) | `derive_position_mapping` → `run_bias_audit` |
-| Position tracking (persisted records) | ❌ **Defective** | Records ranking index, not display position — [#611](https://github.com/amiable-dev/llm-council/issues/611) |
+| Position tracking (persisted records) | ✅ Fixed (#611) | Was recording the ranking index; schema `1.2.0` marks the corrected semantic |
 | Rubric-criteria order randomization | ✅ Implemented (#592) | Per call, opt-in; distinct from response order |
-| Per-reviewer randomization | 🔶 Proposed | This amendment; blocked on #611 |
-| Deterministic seed option | 🔶 Proposed | Subsumed by per-reviewer seeding above |
+| Per-reviewer randomization | ❌ **Declined** | This amendment — see "Conditions that would reopen" |
+| Deterministic seed option | ❌ Deferred | Was justified mainly as scaffolding for per-reviewer seeding |
 | Latin square balancing | ❌ Deferred | Unchanged: overkill at N=4–5 |
-
-## Open questions for review
-
-1. Is the ordering right — is #611 genuinely a prerequisite, or could per-reviewer randomization land first and be validated some other way?
-2. Should `position_alignment` be re-specified as a per-reviewer within-session correlation as part of this work, or left to a separate ADR-047 amendment?
-3. Does bumping `BiasMetricRecord.schema_version` (for #611) suffice for pooled analyses, or do existing records need migration/quarantine?
-4. Given the modest expected benefit at N=4–5, is this worth doing at all once #611 is fixed — or should #602 close as "won't do, superseded by #611"?
