@@ -97,11 +97,43 @@ def get_key_source() -> str:
     return _get_key_source()
 
 
-# Module-level aliases for backwards compatibility
-COUNCIL_MODELS = _get_council_models()
-CHAIRMAN_MODEL = _get_chairman_model()
-OPENROUTER_API_KEY = _get_openrouter_api_key()
-TIER_MODEL_POOLS = _get_tier_model_pools()
+# Module-level aliases for backwards compatibility.
+#
+# #609: these were computed once at import, so a key or pool configured
+# afterwards — a keychain re-auth, `llm-council setup-key`, an env change in a
+# long-lived server process — never reached them, and the health check
+# reported a frozen snapshot. Resolved lazily instead (PEP 562), so the public
+# names stay available and are never stale.
+#
+# `unittest.mock.patch` still works on them: it setattr()s a real module
+# attribute, which shadows this hook, then delattr()s on exit to restore lazy
+# resolution. Verified, and pinned by tests.
+_LAZY_ALIASES = {
+    "COUNCIL_MODELS": lambda: _get_council_models(),
+    "CHAIRMAN_MODEL": lambda: _get_chairman_model(),
+    "OPENROUTER_API_KEY": lambda: _get_openrouter_api_key(),
+    "TIER_MODEL_POOLS": lambda: _get_tier_model_pools(),
+}
+
+
+def __getattr__(name: str):
+    """Resolve the back-compat config aliases on access rather than at import.
+
+    CAVEAT: ``from llm_council.mcp_server import OPENROUTER_API_KEY`` evaluates
+    this hook once, at the *importing* module's import time, and binds the
+    result there — re-freezing the value in that namespace. Import the module
+    and read the attribute (``mcp_server.OPENROUTER_API_KEY``) to keep lazy
+    resolution. Audited: no production consumer uses the from-import form.
+    """
+    resolver = _LAZY_ALIASES.get(name)
+    if resolver is not None:
+        return resolver()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    """Include the lazily-resolved aliases in introspection (PEP 562)."""
+    return sorted(set(globals()) | set(_LAZY_ALIASES))
 
 
 mcp = FastMCP("LLM Council")
@@ -138,7 +170,9 @@ def _build_confidence_configs() -> dict:
 
 
 # Build configs at import time (can be refreshed if needed)
-CONFIDENCE_CONFIGS = _build_confidence_configs()
+# #609 (round-2 review): this reads tier timeouts from live config, so
+# assigning it at import froze them exactly like the aliases above.
+_LAZY_ALIASES["CONFIDENCE_CONFIGS"] = lambda: _build_confidence_configs()
 
 
 @mcp.tool()
@@ -198,12 +232,15 @@ async def consult_council(
     except ValueError:
         verdict_type_enum = VerdictType.SYNTHESIS
     # Get confidence configuration (ADR-012 Section 5: Tier-Sovereign Timeouts)
-    config = CONFIDENCE_CONFIGS.get(confidence, CONFIDENCE_CONFIGS["high"])
+    # Resolved live; a module global here would be the import-time snapshot.
+    confidence_configs = _build_confidence_configs()
+    config = confidence_configs.get(confidence, confidence_configs["high"])
     total_timeout = config.get("total", TIMEOUT_SYNTHESIS_TRIGGER)
     per_model_timeout = config.get("per_model", 90)  # Default to high tier
 
     # Create TierContract for tier-appropriate model selection (ADR-022)
-    tier = confidence if confidence in TIER_MODEL_POOLS else "high"
+    # #609: resolve live — a module global would be the import-time snapshot.
+    tier = confidence if confidence in _get_tier_model_pools() else "high"
     tier_contract = create_tier_contract(tier)
 
     # Progress reporting helper that bridges MCP context to council callback
@@ -374,7 +411,7 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     # being import-time-bound, it also never reflected a config reload.
     # Mirror consult_council's own resolution, including its fallback for an
     # unrecognised value, so the reported tier is the one that would run.
-    default_tier = tier if tier in TIER_MODEL_POOLS else "high"
+    default_tier = tier if tier in _get_tier_model_pools() else "high"
 
     config_warnings = []
     tier_error = None
@@ -385,6 +422,12 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     try:
         configured_models = list(_get_council_models())
         chairman_model = _get_chairman_model()
+        # #609: resolved live. Read from the module global this was a frozen
+        # import-time snapshot, so a key configured afterwards stayed invisible.
+        api_key = _get_openrouter_api_key()
+        # Also re-resolves the key underneath, so it belongs inside the
+        # same guard rather than able to bypass the not-ready path.
+        key_source = get_key_source()
     except Exception as e:
         config_error = f"{type(e).__name__}: {e}"
         return json.dumps(
@@ -425,8 +468,8 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
 
     checks = {
         "version": council_version,
-        "api_key_configured": bool(OPENROUTER_API_KEY),
-        "key_source": get_key_source(),  # ADR-013: Show where key came from (not the key itself)
+        "api_key_configured": bool(api_key),
+        "key_source": key_source,  # ADR-013: where the key came from, never the key
         "default_tier": default_tier,
         "council_size": len(effective_models),
         "chairman_model": chairman_model,
