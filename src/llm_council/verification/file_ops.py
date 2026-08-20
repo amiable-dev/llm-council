@@ -4,8 +4,10 @@ Verbatim move — no logic changes. Back-compat re-exports live in api.py.
 """
 
 import asyncio
+import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -776,10 +778,46 @@ async def select_blobs(
                     "LLM_COUNCIL_FILE_SELECTION=shadow: content would add %s, drop %s",
                     would_add, would_drop,
                 )
+            _log_shadow_decision(
+                snapshot_id, len(survivors), len(selected), would_add, would_drop
+            )
         except Exception:  # shadow telemetry must never break selection
             logger.debug("shadow content classification failed", exc_info=True)
 
     return selected, omitted
+
+
+DEFAULT_SELECTION_DECISIONS_PATH = Path(".council") / "selection" / "decisions.jsonl"
+
+
+def _log_shadow_decision(
+    snapshot_id: str,
+    candidates: int,
+    selected: int,
+    would_add: List[str],
+    would_drop: List[str],
+    path: Optional[Path] = None,
+) -> None:
+    """Append one shadow-mode selection record (#595). Paths only; soft-fail.
+
+    Every shadow run is recorded — empty deltas included — so the #557 flip
+    review can compute a delta *rate*, not just read the deltas.
+    """
+    p = path if path is not None else DEFAULT_SELECTION_DECISIONS_PATH
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "ts": time.time(),
+            "snapshot_id": snapshot_id,
+            "candidates": candidates,
+            "selected": selected,
+            "would_add": would_add,
+            "would_drop": would_drop,
+        }
+        with p.open("a") as fh:
+            fh.write(json.dumps(record) + "\n")
+    except Exception as exc:
+        logger.debug("shadow selection decision log failed (%s)", exc)
 
 
 def _is_text_file(file_path: str) -> bool:
