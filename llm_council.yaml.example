@@ -35,6 +35,7 @@ evaluation:
     # store_path: data/bias_metrics.jsonl
     # consent_level: LOCAL_ONLY    # OFF|LOCAL_ONLY|ANONYMOUS|ENHANCED|RESEARCH
 
-metrics:
-  enabled: false                   # ADR-030: none | statsd | prometheus
-  # backend: statsd
+observability:
+  metrics:
+    enabled: false                 # ADR-030: none | statsd | prometheus
+    # backend: statsd

@@ -7,7 +7,22 @@ This module provides a unified configuration system that consolidates settings f
 
 Configuration Priority: YAML > Environment Variables > Defaults
 
-Example YAML configuration (llm_council.yaml):
+Two YAML shapes are supported (#591). Neither is deprecated; they are told
+apart exactly, because UnifiedConfig and CouncilConfig field names are disjoint.
+
+**Flat** — sections at the top level, with ``council:`` holding council fields.
+This is the shape ``llm_council.yaml.example`` ships:
+
+    council:
+      models: [openai/gpt-5.4, anthropic/claude-opus-4.8]
+      chairman: google/gemini-3.1-pro-preview
+    tiers:
+      default: high
+    gateways:
+      default: openrouter
+
+**Envelope** — a single top-level ``council:`` key wrapping the sections. This
+is the shape this repo's own ``llm_council.yaml`` uses:
 
     council:
       tiers:
@@ -25,10 +40,17 @@ Example YAML configuration (llm_council.yaml):
         fallback:
           enabled: true
           chain: [openrouter, requesty, direct]
+
+To set council models under the envelope shape, nest an inner ``council:``
+(``council: {council: {models: [...]}}``).
+
+Unrecognised top-level keys are logged as warnings rather than dropped in
+silence, and raise under ``load_config(..., strict=True)``.
 """
 
 import fnmatch
 import json
+import logging
 import os
 import re
 from contextvars import ContextVar
@@ -40,6 +62,8 @@ import yaml
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
 from .tier_contract import TierContract, create_tier_contract
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -1071,6 +1095,85 @@ def _merge_dicts(base: Dict, override: Dict) -> Dict:
     return result
 
 
+def _normalize_config_shape(raw_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve a parsed YAML mapping to ``UnifiedConfig`` keyword shape (#591).
+
+    Two shapes exist in the wild, and this repo ships one of each:
+
+    * **envelope** — one top-level ``council:`` key wrapping UnifiedConfig
+      sections, e.g. ``council: {tiers: ..., gateways: ...}``. Documented in
+      this module's docstring and used by this repo's own ``llm_council.yaml``.
+    * **flat** — ``council:`` is a *sibling* of the other sections and holds
+      ``CouncilConfig`` fields, e.g. ``council: {models: ...}`` next to a
+      top-level ``tiers:``. Used by ``llm_council.yaml.example``, the template
+      users are told to copy.
+
+    Previously only the envelope was honoured (``UnifiedConfig(**raw["council"])``),
+    so every flat config was almost entirely discarded: sibling sections were
+    never read, and ``council:``'s own contents were dropped by pydantic
+    ``extra="ignore"`` because ``models``/``chairman`` are not UnifiedConfig
+    fields. No error, no warning — the hardcoded defaults silently applied.
+
+    Detection is exact rather than heuristic: ``UnifiedConfig`` and
+    ``CouncilConfig`` field names are disjoint sets, so the keys under
+    ``council:`` identify the shape unambiguously. Both shapes remain
+    supported — neither is deprecated, since both are documented.
+    """
+    council_section = raw_config.get("council")
+    if not isinstance(council_section, dict) or not council_section:
+        return raw_config
+
+    keys = set(council_section)
+    unified_hits = keys & set(UnifiedConfig.model_fields)
+    council_hits = keys & set(CouncilConfig.model_fields)
+
+    if unified_hits and council_hits:
+        # Genuinely ambiguous: `council:` mixes section names with
+        # CouncilConfig fields. Treat as flat (the documented-template shape)
+        # but say so, because one half will not land where the author expects.
+        logger.warning(
+            "Ambiguous config: the 'council:' section mixes UnifiedConfig "
+            "section names (%s) with CouncilConfig fields (%s). Treating it as "
+            "a CouncilConfig block; move the section names to the top level.",
+            ", ".join(sorted(unified_hits)),
+            ", ".join(sorted(council_hits)),
+        )
+        return raw_config
+
+    if unified_hits:
+        # Envelope shape: unwrap it, as load_config has always done.
+        return council_section
+
+    # Flat shape (or a council block we cannot classify): use as-is.
+    return raw_config
+
+
+def _check_unknown_top_level_keys(config_dict: Dict[str, Any], strict: bool = False) -> None:
+    """Surface top-level config keys that ``UnifiedConfig`` would discard (#591).
+
+    Pydantic's default ``extra="ignore"`` is what turned every shape mismatch
+    and key typo into a silent no-op. This does not change that behaviour
+    (making it ``extra="forbid"`` would be a breaking change for anyone whose
+    config carries an unrecognised section today) — it makes it *audible*, and
+    hard-fails only under ``strict=True``, which already means "raise instead
+    of falling back to defaults".
+
+    Note the check is top-level only; nested unknown keys are still dropped
+    quietly. Deeper validation is deliberately out of scope here.
+    """
+    unknown = sorted(set(config_dict) - set(UnifiedConfig.model_fields))
+    if not unknown:
+        return
+
+    message = (
+        f"Unknown top-level configuration key(s) ignored: {', '.join(unknown)}. "
+        f"Valid sections: {', '.join(sorted(UnifiedConfig.model_fields))}."
+    )
+    if strict:
+        raise ValueError(message)
+    logger.warning(message)
+
+
 def load_config(
     config_path: Optional[Path] = None,
     strict: bool = False,
@@ -1101,11 +1204,13 @@ def load_config(
         # Substitute environment variables
         raw_config = _substitute_env_vars(raw_config)
 
-        # Extract council section
-        council_config = raw_config.get("council", {})
+        # #591: resolve which of the two shipped YAML shapes this is, then
+        # surface anything that would otherwise be dropped in silence.
+        config_dict = _normalize_config_shape(raw_config)
+        _check_unknown_top_level_keys(config_dict, strict=strict)
 
         # Build config from YAML
-        return UnifiedConfig(**council_config)
+        return UnifiedConfig(**config_dict)
 
     except yaml.YAMLError as e:
         if strict:

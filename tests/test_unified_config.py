@@ -2049,3 +2049,143 @@ class TestTierPoolsConfig:
 
         for tier in ["quick", "balanced", "high", "reasoning"]:
             assert tier in pools or hasattr(pools, tier)
+
+
+class TestConfigShapeCompatibility:
+    """#591: `load_config()` silently discarded most real-world configs.
+
+    Two YAML shapes exist in the wild, and both are shipped by this repo:
+
+    * **envelope** — a single top-level ``council:`` key wrapping UnifiedConfig
+      sections (``council: {tiers: ..., gateways: ...}``). This is what the
+      module docstring documents and what ``llm_council.yaml`` in this repo
+      uses. It worked, because ``load_config`` unwrapped ``council:`` and
+      splatted its contents as ``UnifiedConfig`` kwargs.
+    * **flat** — ``council:`` is a *sibling* of the other sections and holds
+      ``CouncilConfig`` fields (``council: {models: ...}`` alongside a
+      top-level ``tiers:``). This is what ``llm_council.yaml.example`` — the
+      template users are told to copy — uses, and it was **entirely inert**:
+      every top-level section other than ``council:`` was never read, and
+      ``council:``'s own contents were dropped by pydantic ``extra="ignore"``
+      because ``models``/``chairman`` are not ``UnifiedConfig`` fields.
+
+    Disambiguation is exact, not heuristic: ``UnifiedConfig`` and
+    ``CouncilConfig`` field names are disjoint sets.
+    """
+
+    def test_flat_shape_council_models_are_applied(self, tmp_path):
+        """#591 repro: `council: {models, chairman}` was silently dropped."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  models:
+    - my/model-a
+    - my/model-b
+  chairman: my/model-a
+""")
+        config = load_config(config_file)
+        assert config.council.models == ["my/model-a", "my/model-b"]
+        assert config.council.chairman == "my/model-a"
+
+    def test_flat_shape_sibling_sections_are_applied(self, tmp_path):
+        """The `llm_council.yaml.example` shape: `council:` beside `tiers:`.
+
+        Every one of these top-level sections was previously ignored.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  synthesis_mode: debate
+  exclude_self_votes: false
+
+tiers:
+  default: quick
+
+gateways:
+  default: requesty
+
+triage:
+  enabled: true
+""")
+        config = load_config(config_file)
+        assert config.council.synthesis_mode == "debate"
+        assert config.council.exclude_self_votes is False
+        assert config.tiers.default == "quick"
+        assert config.gateways.default == "requesty"
+        assert config.triage.enabled is True
+
+    def test_legacy_envelope_shape_still_works(self, tmp_path):
+        """Regression guard: the shape this repo's own llm_council.yaml uses.
+
+        Test-pinned by the pre-existing TestYAMLParsing cases; must not break.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  tiers:
+    default: balanced
+  gateways:
+    default: requesty
+""")
+        config = load_config(config_file)
+        assert config.tiers.default == "balanced"
+        assert config.gateways.default == "requesty"
+
+    def test_double_nested_workaround_still_works(self, tmp_path):
+        """The workaround #591's reporter adopted must not silently break.
+
+        `council: {council: {...}, gateways: {...}}` is the envelope shape with
+        an explicit inner CouncilConfig. Fixing the bug must not punish the
+        people who worked around it.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+council:
+  council:
+    models: [my/model-a, my/model-b]
+    chairman: my/model-a
+  gateways:
+    default: openrouter
+""")
+        config = load_config(config_file)
+        assert config.council.models == ["my/model-a", "my/model-b"]
+        assert config.council.chairman == "my/model-a"
+        assert config.gateways.default == "openrouter"
+
+    def test_unknown_top_level_key_is_warned_not_silently_dropped(self, tmp_path, caplog):
+        """#591 root cause: pydantic `extra="ignore"` made every typo silent.
+
+        `metrics:` is not a UnifiedConfig field (the real sections are
+        `observability`/`telemetry`) — yet it is shipped in
+        llm_council.yaml.example. A user gets zero effect and zero signal.
+        """
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+tiers:
+  default: quick
+
+metrics:
+  enabled: true
+""")
+        with caplog.at_level("WARNING"):
+            config = load_config(config_file)
+
+        assert config.tiers.default == "quick"
+        joined = " ".join(rec.message for rec in caplog.records).lower()
+        assert "metrics" in joined, (
+            f"unknown top-level config key must be surfaced, not dropped silently; "
+            f"got: {[r.message for r in caplog.records]!r}"
+        )
+
+    def test_strict_mode_raises_on_unknown_top_level_key(self, tmp_path):
+        """`strict=True` already means 'raise instead of falling back'."""
+        config_file = tmp_path / "llm_council.yaml"
+        config_file.write_text("""
+tiers:
+  default: quick
+
+metrics:
+  enabled: true
+""")
+        with pytest.raises(ValueError, match="metrics"):
+            load_config(config_file, strict=True)
