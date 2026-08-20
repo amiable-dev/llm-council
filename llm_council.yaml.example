@@ -37,5 +37,5 @@ evaluation:
 
 observability:
   metrics:
-    enabled: false                 # ADR-030: none | statsd | prometheus
-    # backend: statsd
+    enabled: false                 # ADR-030: emit metrics at all
+    # backend: none                # none | statsd | prometheus
