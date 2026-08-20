@@ -539,8 +539,8 @@ Response B has some issues.
         assert holistic_result["ranking"] == ["Response A", "Response B"]
         assert holistic_result["scores"]["Response A"] == 8
 
-    def test_malformed_evaluations_returns_none(self):
-        """Malformed evaluations structure should return None."""
+    def test_malformed_evaluations_are_not_type_validated(self):
+        """A non-dict "evaluations" value is returned as-is, not rejected."""
         response_text = """
 ```json
 {
@@ -1032,12 +1032,14 @@ class TestRubricOrderIntegration:
         prompts = await self._capture_prompts(randomize=True, calls=15)
         assert prompts, "no reviewer prompt captured"
         for prompt in prompts:
-            labels = re.findall(r"### (Response [A-Z])", prompt) or re.findall(
-                r"(Response [A-Z]):", prompt
-            )
+            # The prompt wraps candidates as <candidate_response id="A">, NOT
+            # "### Response A". An earlier version of this test guessed the
+            # latter, matched nothing, and skipped its own assertion behind
+            # `if labels:` — a vacuous pass caught in review.
+            labels = re.findall(r'<candidate_response id="([A-Z])">', prompt)
+            assert len(labels) == 2, f"expected both candidates, got {labels}"
+            assert len(labels) == len(set(labels)), f"duplicate labels: {labels}"
             assert "answer one" in prompt and "answer two" in prompt
-            if labels:
-                assert len(labels) == len(set(labels)), f"duplicate labels: {labels}"
 
     @pytest.mark.asyncio
     async def test_full_prompt_is_byte_identical_when_flag_off(self):
@@ -1146,3 +1148,58 @@ IMPORTANT: You MUST end your response with a JSON block. The JSON must be wrappe
 
 Now provide your evaluation and ranking:'''
         assert seen[0] == expected
+
+    @pytest.mark.asyncio
+    async def test_progress_dispatch_path_gets_the_same_rubric_prompt(self):
+        """stage 2 has two dispatch paths; both must carry the rubric order.
+
+        With no callbacks and early consensus off it calls
+        `query_models_parallel`; with `on_review_event` (or progress, or early
+        consensus) it calls `query_model` per reviewer via `as_completed`.
+        The prompt is assembled *before* that branch, so both paths share it —
+        this pins that, rather than leaving the callback path unverified.
+        """
+        import re
+        from unittest.mock import patch
+        from llm_council import council_stages
+
+        seen = []
+
+        async def fake_query(model, messages, **kwargs):
+            seen.append(messages[0]["content"])
+            return {"content": "FINAL RANKING:\n1. Response A\n2. Response B"}
+
+        async def on_review_event(kind, payload):
+            return None
+
+        orders = set()
+        with (
+            patch.object(
+                council_stages, "get_config", return_value=self._config(randomize=True)
+            ),
+            patch.object(council_stages, "query_model", side_effect=fake_query),
+        ):
+            for _ in range(25):
+                await council_stages.stage2_collect_rankings(
+                    "q",
+                    self._stage1(),
+                    models=["m/a", "m/b"],
+                    on_review_event=on_review_event,
+                )
+
+        assert seen, "callback path captured no prompt — wrong mock target?"
+        for prompt in seen:
+            order = self._criteria_order(prompt)
+            assert sorted(order) == [
+                "ACCURACY",
+                "CLARITY",
+                "COMPLETENESS",
+                "CONCISENESS",
+                "RELEVANCE",
+            ]
+            # Answer template must track criteria on this path too.
+            keys = re.findall(r'^      "([a-z]+)": <1-10>,', prompt, flags=re.MULTILINE)
+            assert keys == [c.lower() for c in order] * 2
+            orders.add(order)
+
+        assert len(orders) > 1, "flag on, but the callback path never varied order"
