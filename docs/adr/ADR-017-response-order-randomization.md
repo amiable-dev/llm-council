@@ -1,6 +1,6 @@
 # ADR-017: Response Order Randomization
 
-**Status:** Accepted → Partially Implemented (2025-12-17)
+**Status:** Accepted → Partially Implemented (2025-12-17) → Amended (2026-08-20, see Amendment 1)
 **Date:** 2025-12-13
 **Decision Makers:** Engineering
 **Related:** ADR-010 (Consensus Mechanisms), ADR-015 (Bias Auditing)
@@ -138,7 +138,14 @@ For each reviewer, systematically rotate the order.
 
 ## Implementation Status
 
-| Feature | Status | Notes |
+> [!NOTE]
+> **Superseded by Amendment 1 (2026-08-20).** The table below is the status as
+> of 2025-12-17 and is retained for history. See
+> [Amendment 1's Implementation Status](#implementation-status-updated) for the
+> current one — in particular, per-reviewer randomization is now *declined*
+> rather than pending, and persisted position tracking was defective until #611.
+
+| Feature | Status (2025-12-17, historical) | Notes |
 |---------|--------|-------|
 | Basic randomization | ✅ Implemented | `random.shuffle()` in Stage 2 |
 | Anonymous labels | ✅ Implemented | Response A, B, C... |
@@ -353,7 +360,7 @@ The sign inverted: the metric reported the opposite of reality, and `llm-council
 
 Revisit if any of these becomes true:
 
-- The council routinely runs **≥10 reviewers**, where per-reviewer ordering starts to average out rather than merely decorrelate, and where Latin-square balancing also becomes worth reconsidering.
+- The council's default tier pool reaches **≥10 reviewers** (i.e. `len(tier_contract.allowed_models) >= 10` for the tier in routine use), where per-reviewer ordering starts to average out rather than merely decorrelate, and where Latin-square balancing also becomes worth reconsidering.
 - Post-#611 data shows a **persistent positive `position_alignment`** across many sessions — i.e. the shared-order confound is real and material, not hypothetical.
 - The council's output is used for **published benchmarking or comparative model claims**, where methodological rigour is judged independently of its effect size.
 
@@ -374,5 +381,5 @@ Revisit if any of these becomes true:
 | Position tracking (persisted records) | ✅ Fixed (#611) | Was recording the ranking index; schema `1.2.0` marks the corrected semantic |
 | Rubric-criteria order randomization | ✅ Implemented (#592) | Per call, opt-in; distinct from response order |
 | Per-reviewer randomization | ❌ **Declined** | This amendment — see "Conditions that would reopen" |
-| Deterministic seed option | ❌ Deferred | Was justified mainly as scaffolding for per-reviewer seeding |
+| Deterministic seed option | ❌ Deferred | Still open on its own merits. The 2025-12-17 review rated it P1 and *"essential for reproducible testing"* — that justification is independent of per-reviewer randomization and is NOT retired by this amendment |
 | Latin square balancing | ❌ Deferred | Unchanged: overkill at N=4–5 |
