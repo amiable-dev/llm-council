@@ -173,7 +173,10 @@ async def test_council_health_check_no_api_key():
     """Test health check when API key is not configured."""
     from llm_council.mcp_server import council_health_check
 
-    with patch("llm_council.mcp_server.OPENROUTER_API_KEY", None):
+    # #609: the health check resolves the key live rather than reading the
+    # import-time alias, so the resolver is the thing to patch. Patching the
+    # alias would only affect external readers of the module attribute.
+    with patch("llm_council.mcp_server._get_openrouter_api_key", return_value=None):
         result = await council_health_check()
         data = json.loads(result)
 
@@ -709,3 +712,77 @@ class TestHealthCheckReportsEffectiveConfig:
 
         for tier_name in ("quick", "balanced", "high", "reasoning"):
             assert tier_name in data["estimated_duration"], f"{tier_name} missing"
+
+
+class TestConfigIsResolvedLiveNotAtImport:
+    """#609: module-level aliases were frozen at import.
+
+    `OPENROUTER_API_KEY`, `TIER_MODEL_POOLS`, `COUNCIL_MODELS` and
+    `CHAIRMAN_MODEL` were computed once when `mcp_server` was first imported,
+    so a key added afterwards (keychain re-auth, `llm-council setup-key`, an
+    env change in a long-lived server process) never reached them. The health
+    check then reported `api_key_configured` from a stale value.
+
+    Same class as the #608 fix for the model list, and the same class as #591
+    Bug 2 — the health check describing something other than what a real run
+    would do.
+    """
+
+    def test_api_key_alias_reflects_current_config(self):
+        import llm_council.mcp_server as m
+
+        with patch.object(m, "_get_openrouter_api_key", return_value="fresh-key"):
+            assert m.OPENROUTER_API_KEY == "fresh-key", (
+                "module alias is frozen at import; a key configured later is invisible"
+            )
+
+    def test_tier_pools_alias_reflects_current_config(self):
+        import llm_council.mcp_server as m
+
+        with patch.object(m, "_get_tier_model_pools", return_value={"custom": ["x/y"]}):
+            assert m.TIER_MODEL_POOLS == {"custom": ["x/y"]}
+
+    def test_council_aliases_reflect_current_config(self):
+        import llm_council.mcp_server as m
+
+        with patch.object(m, "_get_council_models", return_value=["live/model"]):
+            assert m.COUNCIL_MODELS == ["live/model"]
+        with patch.object(m, "_get_chairman_model", return_value="live/chair"):
+            assert m.CHAIRMAN_MODEL == "live/chair"
+
+    @pytest.mark.asyncio
+    async def test_health_check_sees_a_key_configured_after_import(self):
+        """The reported symptom: key added post-import, still 'not configured'."""
+        import llm_council.mcp_server as m
+
+        with (
+            patch.object(m, "_get_openrouter_api_key", return_value=""),
+            patch.object(m, "create_tier_contract") as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["a/b"])
+            before = json.loads(await m.council_health_check())
+
+        with (
+            patch.object(m, "_get_openrouter_api_key", return_value="now-configured"),
+            patch.object(m, "create_tier_contract") as mk,
+            patch.object(
+                m,
+                "query_model_with_status",
+                new_callable=AsyncMock,
+                return_value={"status": "ok", "content": "pong", "latency_ms": 5},
+            ),
+        ):
+            mk.return_value = MagicMock(allowed_models=["a/b"])
+            after = json.loads(await m.council_health_check())
+
+        assert before["api_key_configured"] is False
+        assert after["api_key_configured"] is True, (
+            "a key configured after import must be visible to the health check"
+        )
+
+    def test_unknown_module_attribute_still_raises(self):
+        """The lazy hook must not swallow genuine typos."""
+        import llm_council.mcp_server as m
+
+        with pytest.raises(AttributeError):
+            m.NO_SUCH_SETTING
