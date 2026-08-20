@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Configuration (loaded from unified_config - ADR-031)
 # =============================================================================
 
-from .bias_audit import derive_position_mapping
+from .bias_audit import derive_label_positions
 from .unified_config import get_config
 
 
@@ -397,25 +397,6 @@ def _get_model_from_label_value(label_value: Any) -> str:
     return str(label_value)
 
 
-def _get_position_from_label(label: str, label_value: Any) -> int:
-    """Extract position from label_to_model entry.
-
-    Uses display_index from enhanced format, or derives from label letter.
-    """
-    if isinstance(label_value, dict) and "display_index" in label_value:
-        return label_value["display_index"]
-
-    # Fall back to deriving from label letter (A=0, B=1, etc.)
-    # Label format: "Response A", "Response B", etc.
-    parts = label.split()
-    if len(parts) >= 2:
-        letter = parts[-1].upper()
-        if letter.isalpha() and len(letter) == 1:
-            return ord(letter) - ord("A")
-
-    return 0
-
-
 def _extract_query_metadata(query: str) -> Dict[str, Any]:
     """Extract metadata from the user query for bias analysis (ADR-018).
 
@@ -498,8 +479,15 @@ def create_bias_records_from_session(
             return val.get("model", "")
         return str(val) if val else ""
 
-    # #611: model -> display index, from the same mapping the labels come from.
-    position_by_model = derive_position_mapping(label_to_model)
+    # #611: LABEL -> display index, from the same mapping the labels come from.
+    # Keyed by label, not model: one model can appear under two labels at two
+    # different positions, and keying by model collapses them (#613 review).
+    position_by_label = derive_label_positions(label_to_model)
+
+    # Precomputed once; this was an O(n^2) rescan of stage1_results per ranking.
+    response_length_by_model = {
+        r.get("model", ""): len(r.get("response", "") or "") for r in stage1_results
+    }
 
     # Parse all rankings first
     for ranking_result in stage2_results:
@@ -542,16 +530,26 @@ def create_bias_records_from_session(
             # label parsing a third time; it already handles the enhanced
             # (display_index) and legacy (letter-order) formats, and owns the
             # ADR-017 invariant that labels are assigned in presentation order.
-            position = position_by_model.get(model_id, idx)
+            # No fallback to `idx`: that IS the ranking index this fix removes,
+            # and reinstating it for unmapped labels would silently restore the
+            # bug for exactly the records we cannot verify (#613 review). A
+            # record whose display position is unknown is dropped instead.
+            if label not in position_by_label:
+                logger.warning(
+                    "No display position derivable for label %r (model %s) in "
+                    "session %s; dropping the bias record rather than recording "
+                    "a ranking index.",
+                    label,
+                    model_id,
+                    session_id,
+                )
+                continue
+            position = position_by_label[label]
 
             # Find usage stats if available
             # Note: We don't have per-candidate response length easily accessible here
             # without looking back at stage1_results, but we can do a quick lookup
-            response_length = 0
-            for r in stage1_results:
-                if r.get("model") == model_id:
-                    response_length = len(r.get("response", ""))
-                    break
+            response_length = response_length_by_model.get(model_id, 0)
 
             record = BiasMetricRecord(
                 schema_version="1.2.0",

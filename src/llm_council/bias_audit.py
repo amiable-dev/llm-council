@@ -221,6 +221,48 @@ def calculate_position_bias(
     return round(pos_variance, 3), detected
 
 
+def derive_label_positions(label_to_model: Optional[Dict[str, Any]]) -> Dict[str, int]:
+    """Derive {label: display position} from a label_to_model mapping.
+
+    Position is a property of the LABEL, not of the model: one model may appear
+    under two labels, shown at two different positions. Keying by model
+    collapses that (#613 review), so this label-keyed form is the primitive and
+    ``derive_position_mapping`` is the model-keyed view built on top of it.
+
+    Supports the enhanced format ({"model": ..., "display_index": N}) and the
+    legacy format ({"Response A": "model"}), falling back to letter order when
+    `display_index` is absent.
+
+    A label whose position cannot be derived is OMITTED rather than guessed —
+    callers must be able to tell "unknown" from a plausible-looking wrong value.
+
+    INVARIANT: labels are assigned in lexicographic order corresponding to
+    presentation order (A=first, B=second). ADR-017.
+    """
+    if not label_to_model:
+        return {}
+
+    import re
+
+    positions: Dict[str, int] = {}
+    for label, value in label_to_model.items():
+        if isinstance(value, dict):
+            if not value.get("model"):
+                continue
+            display_index = value.get("display_index")
+            if display_index is not None:
+                positions[label] = display_index
+                continue
+        elif not value:
+            continue
+
+        match = re.match(r"^[Rr]esponse\s+([A-Za-z])$", label.strip())
+        if match:
+            positions[label] = ord(match.group(1).upper()) - ord("A")
+
+    return positions
+
+
 def derive_position_mapping(label_to_model: Optional[Dict[str, Any]]) -> Dict[str, int]:
     """Derive position mapping from label_to_model mapping.
 

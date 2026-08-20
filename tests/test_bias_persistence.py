@@ -1131,3 +1131,89 @@ class TestPositionIsDisplayPosition:
         assert records[0].schema_version != "1.1.0", (
             "position semantics changed; the schema version must change with it"
         )
+
+    def test_unmappable_label_does_not_fall_back_to_ranking_index(self):
+        """Council review of #613: the fallback reintroduced the bug.
+
+        `position_by_model.get(model_id, idx)` quietly restored the ranking
+        index whenever a model was missing from the mapping — the exact
+        semantic this fix removes. A record whose display position cannot be
+        determined must not be written with a plausible-looking wrong one.
+        """
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+
+        # "Response Alpha" yields a model but no derivable position: it has no
+        # display_index and its label is not the single-letter form the legacy
+        # fallback can parse. That is a genuine mapping miss.
+        stage2 = [
+            {
+                "model": "rev/1",
+                "parsed_ranking": {
+                    "ranking": ["Response Alpha", "Response A"],
+                    "scores": {"Response Alpha": 9.0, "Response A": 5.0},
+                },
+            }
+        ]
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=self._stage1(),
+            stage2_results=stage2,
+            label_to_model={
+                "Response Alpha": {"model": "m/unmappable"},
+                "Response A": {"model": "m/alpha", "display_index": 0},
+            },
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+        positions = {r.model_id: r.position for r in records}
+        assert "m/unmappable" not in positions, (
+            "a record whose display position cannot be determined must be "
+            f"dropped, not written with the ranking index; got {positions}"
+        )
+        assert positions == {"m/alpha": 0}
+
+    def test_duplicate_model_keeps_distinct_display_positions(self):
+        """Positions are a property of the LABEL, not of the model.
+
+        If the same model appears under two labels, keying the lookup by model
+        collapses them and assigns one of the two positions to both.
+        """
+        from llm_council.bias_persistence import (
+            create_bias_records_from_session,
+            ConsentLevel,
+        )
+
+        label_to_model = {
+            "Response A": {"model": "m/dup", "display_index": 0},
+            "Response B": {"model": "m/other", "display_index": 1},
+            "Response C": {"model": "m/dup", "display_index": 2},
+        }
+        stage2 = [
+            {
+                "model": "rev/1",
+                "parsed_ranking": {
+                    "ranking": ["Response C", "Response B", "Response A"],
+                    "scores": {
+                        "Response A": 5.0,
+                        "Response B": 6.0,
+                        "Response C": 7.0,
+                    },
+                },
+            }
+        ]
+        records = create_bias_records_from_session(
+            session_id="s1",
+            stage1_results=[
+                {"model": "m/dup", "response": "a"},
+                {"model": "m/other", "response": "b"},
+            ],
+            stage2_results=stage2,
+            label_to_model=label_to_model,
+            consent_level=ConsentLevel.LOCAL_ONLY,
+        )
+        dup_positions = sorted(r.position for r in records if r.model_id == "m/dup")
+        assert dup_positions == [0, 2], (
+            f"the two labels for m/dup were shown at 0 and 2; got {dup_positions}"
+        )

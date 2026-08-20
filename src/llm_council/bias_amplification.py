@@ -55,12 +55,32 @@ def _pearson(x: List[float], y: List[float]) -> float:
     return sxy / (sxx * syy) ** 0.5
 
 
+# #611: `position` meant the reviewer's RANKING index before schema 1.2.0 and
+# the DISPLAY index from 1.2.0 onward. Position analysis over a mixed store
+# would silently average two different quantities, so older records are
+# excluded rather than reinterpreted.
+POSITION_IS_DISPLAY_ORDER_SINCE = (1, 2, 0)
+
+
+def _position_is_display_order(schema_version: str) -> bool:
+    """True if this record's `position` field means display order (#611)."""
+    try:
+        parts = tuple(int(x) for x in str(schema_version).split(".")[:3])
+    except (TypeError, ValueError):
+        return False
+    return parts >= POSITION_IS_DISPLAY_ORDER_SINCE
+
+
 def session_agreement_decomposition(
     records: List[BiasMetricRecord],
 ) -> List[SessionDecomposition]:
     """Decompose reviewer agreement per session. Pure; report-only."""
     by_session: Dict[str, List[BiasMetricRecord]] = {}
     for r in records:
+        # #611: skip records whose `position` is a ranking index, not display
+        # order. Bumping the schema version only helps if a reader acts on it.
+        if not _position_is_display_order(r.schema_version):
+            continue
         by_session.setdefault(r.session_id, []).append(r)
 
     out: List[SessionDecomposition] = []
