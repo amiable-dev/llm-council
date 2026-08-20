@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.0] - 2026-08-20
+
+Minor release: makes ADR-053 shadow-mode telemetry durable — the reviewable evidence that gates the announced file-selection and coverage-clamp default flips ([#557](https://github.com/amiable-dev/llm-council/issues/557)).
+
+> [!NOTE]
+> This is the first of the two minor releases' advance notice promised in v0.40.0 before the coverage-clamp default flips from `warn` to `clamp`. The notice in the v0.40.0 entry below still applies: to prepare, set `LLM_COUNCIL_COVERAGE_POLICY=clamp` early and/or run `LLM_COUNCIL_FILE_SELECTION=shadow` — which, as of this release, leaves a reviewable record.
+
+### Added
+
+- **Shadow-mode selection decision log ([#595](https://github.com/amiable-dev/llm-council/issues/595))** — with `LLM_COUNCIL_FILE_SELECTION=shadow`, every `verify`/`gate` run now appends one JSON line — `{ts, snapshot_id, candidates, selected, would_add, would_drop}` — to `.council/selection/decisions.jsonl` (the ADR-047 screening-log pattern). Previously the content-vs-allowlist delta was only a `logger.info` line, which no entry surface's default logging configuration displays, so shadow runs left no reviewable evidence for the [#557](https://github.com/amiable-dev/llm-council/issues/557) flip decision. Every shadow run is recorded, empty deltas included, so the delta *rate* is measurable; paths only, never file contents; soft-fail — recording can never affect selection. `allowlist` (default) and `content` modes write nothing.
+
+### Fixed
+
+- `uv.lock` was missing the lock entry for the `pathspec` runtime dependency declared in v0.40.0 ([#554](https://github.com/amiable-dev/llm-council/issues/554)); lockfile refreshed, no code change.
+
 ## [0.40.1] - 2026-07-13
 
 Patch release: fixes an unbounded `verify()` hang plus several robustness bugs surfaced while diagnosing it, and hardens two flaky/weak tests in the same area. No behavior changes for callers beyond the fixes themselves.
