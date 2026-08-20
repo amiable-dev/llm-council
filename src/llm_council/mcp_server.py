@@ -342,12 +342,20 @@ async def consult_council(
 
 
 @mcp.tool()
-async def council_health_check() -> str:
+async def council_health_check(deep: bool = False) -> str:
     """
     Check LLM Council health before expensive operations (ADR-012).
 
-    Returns status of API connectivity, configured models, and estimated response time.
-    Use this to verify the council is working before calling consult_council.
+    Returns status of API connectivity, the models a real run would use, and
+    estimated response time. Use this to verify the council is working before
+    calling consult_council.
+
+    Args:
+        deep: Also probe the configured chairman model (#596). Costs one real
+            chairman call. The default probe only checks general API
+            connectivity via a cheap lite model, which cannot detect a
+            chairman-specific outage — stage 3 is the single point of failure
+            that turns an otherwise-successful run into a verdict-less one.
     """
     from importlib.metadata import version as pkg_version
 
@@ -356,19 +364,49 @@ async def council_health_check() -> str:
     except Exception:
         council_version = "unknown"
 
+    # #591 Bug 2: report what a real run would actually use.
+    #
+    # `consult_council` always builds a TierContract and runs
+    # `tier_contract.allowed_models`; it never consults the flat
+    # `council.models` list. Reporting the flat list (previously via the
+    # import-time COUNCIL_MODELS constant) meant the health check could name a
+    # completely different council than the one that runs, with no signal — and
+    # being import-time-bound, it also never reflected a config reload.
+    default_tier = "high"
+    try:
+        effective_models = list(create_tier_contract(default_tier).allowed_models)
+    except Exception:  # tier resolution must never break the health check
+        effective_models = list(_get_council_models())
+    configured_models = list(_get_council_models())
+    chairman_model = _get_chairman_model()
+
+    config_warnings = []
+    if sorted(configured_models) != sorted(effective_models):
+        config_warnings.append(
+            "council.models and the resolved tier pool disagree: a real "
+            f"consult_council run at the '{default_tier}' tier uses "
+            f"{effective_models}, not {configured_models}. Set "
+            f"tiers.pools.{default_tier}.models to match, or rely on the tier pool."
+        )
+
     checks = {
         "version": council_version,
         "api_key_configured": bool(OPENROUTER_API_KEY),
         "key_source": get_key_source(),  # ADR-013: Show where key came from (not the key itself)
-        "council_size": len(COUNCIL_MODELS),
-        "chairman_model": CHAIRMAN_MODEL,
-        "models": COUNCIL_MODELS,
+        "default_tier": default_tier,
+        "council_size": len(effective_models),
+        "chairman_model": chairman_model,
+        "models": effective_models,
         "estimated_duration": {
             "quick": "~20-30 seconds (fastest models)",
             "balanced": "~45-60 seconds (most models)",
-            "high": f"~60-90 seconds (all {len(COUNCIL_MODELS)} models)",
+            "high": f"~60-90 seconds (all {len(effective_models)} models)",
         },
     }
+
+    if config_warnings:
+        checks["configured_council_models"] = configured_models
+        checks["config_warnings"] = config_warnings
 
     # Quick connectivity test with a fast, cheap model
     if checks["api_key_configured"]:
@@ -385,6 +423,16 @@ async def council_health_check() -> str:
                 "status": response["status"],
                 "latency_ms": latency_ms,
                 "test_model": DEFAULT_HEALTH_CHECK_MODEL,
+                # #596: say what this probe does and does not cover. It pings a
+                # cheap lite model, so it answers "is the API reachable", not
+                # "will the council complete" — during a chairman outage those
+                # diverge, and this reported ready:true for an hour while every
+                # real run failed.
+                "probe_scope": "connectivity_only",
+                "caveat": (
+                    "Probes a lite model only; does not exercise the chairman or "
+                    "the council models. Pass deep=true to probe the chairman."
+                ),
             }
 
             if response["status"] == STATUS_OK:
@@ -395,6 +443,39 @@ async def council_health_check() -> str:
                 checks["message"] = (
                     f"API connectivity issue: {response.get('error', 'Unknown error')}"
                 )
+
+            # #596: opt-in probe of the model that actually performs synthesis.
+            if deep:
+                try:
+                    chair_start = time.time()
+                    chair_response = await query_model_with_status(
+                        chairman_model,
+                        [{"role": "user", "content": "ping"}],
+                        timeout=30.0,
+                    )
+                    chair_latency = int((time.time() - chair_start) * 1000)
+                    checks["chairman_connectivity"] = {
+                        "status": chair_response["status"],
+                        "latency_ms": chair_latency,
+                        "model": chairman_model,
+                    }
+                    if chair_response["status"] != STATUS_OK:
+                        detail = chair_response.get("error") or "no detail returned"
+                        checks["chairman_connectivity"]["error"] = detail
+                        checks["ready"] = False
+                        checks["message"] = (
+                            f"Chairman model {chairman_model} is not answering "
+                            f"({chair_response['status']}: {detail}). Stage-3 synthesis "
+                            "would fail, so the council cannot produce a verdict."
+                        )
+                except Exception as e:
+                    checks["chairman_connectivity"] = {
+                        "status": "error",
+                        "model": chairman_model,
+                        "error": f"{type(e).__name__}: {e}" or repr(e),
+                    }
+                    checks["ready"] = False
+                    checks["message"] = f"Chairman probe failed: {type(e).__name__}: {e}"
 
         except Exception as e:
             checks["api_connectivity"] = {

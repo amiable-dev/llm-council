@@ -407,3 +407,186 @@ async def test_shared_results_populated_incrementally():
         assert len(result) == 2
         assert len(shared) == 2
         assert result is shared  # They should be the same object
+
+
+class TestHealthCheckReportsEffectiveConfig:
+    """#591 Bug 2 + #596: the health check reported a code path real runs don't take.
+
+    Two independent reports, one root cause — `council_health_check` described
+    a configuration and a connectivity story that a real `consult_council`
+    call does not follow:
+
+    * **#591 Bug 2** — it reported `COUNCIL_MODELS` (the flat `council.models`
+      list, captured at import time), while `consult_council` always builds a
+      `TierContract` and runs `tier_contract.allowed_models`. The two can name
+      completely different models with no signal that they disagree.
+    * **#596** — it pinged a fixed cheap lite model, so it answered "is the API
+      reachable at all", not "will the council complete". During a ~1h chairman
+      outage it reported `ready: true` throughout while every real run failed.
+    """
+
+    @pytest.mark.asyncio
+    async def test_reports_models_a_real_run_would_use(self):
+        """The reported models must come from the tier a real run resolves."""
+        from llm_council.mcp_server import council_health_check
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch(
+                "llm_council.mcp_server.create_tier_contract",
+            ) as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["tier/one", "tier/two"])
+            data = json.loads(await council_health_check())
+
+        assert data["models"] == ["tier/one", "tier/two"], (
+            "health check must report the tier-resolved models a real "
+            f"consult_council run would use; got {data.get('models')!r}"
+        )
+        assert data["council_size"] == 2
+        assert data["default_tier"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_warns_when_configured_models_diverge_from_effective(self):
+        """The exact #591 Bug 2 symptom: two sources, silently disagreeing."""
+        from llm_council.mcp_server import council_health_check
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_council_models", return_value=["cfg/a", "cfg/b"]),
+            patch("llm_council.mcp_server.create_tier_contract") as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["tier/x"])
+            data = json.loads(await council_health_check())
+
+        assert data.get("configured_council_models") == ["cfg/a", "cfg/b"]
+        warnings = " ".join(data.get("config_warnings", [])).lower()
+        assert "council.models" in warnings or "tier" in warnings, (
+            f"divergence must be surfaced, not silent; got {data.get('config_warnings')!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_divergence_warning_when_they_agree(self):
+        """No false alarms for the ordinary, correctly-configured case."""
+        from llm_council.mcp_server import council_health_check
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server._get_council_models", return_value=["same/a"]),
+            patch("llm_council.mcp_server.create_tier_contract") as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["same/a"])
+            data = json.loads(await council_health_check())
+
+        assert not data.get("config_warnings")
+        assert "configured_council_models" not in data
+
+    @pytest.mark.asyncio
+    async def test_models_are_resolved_at_call_time_not_import_time(self):
+        """`COUNCIL_MODELS` was a module-level constant bound at import.
+
+        A config reload therefore never reached the health check output.
+        """
+        from llm_council.mcp_server import council_health_check
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", None),
+            patch("llm_council.mcp_server.create_tier_contract") as mk,
+        ):
+            mk.return_value = MagicMock(allowed_models=["first/model"])
+            first = json.loads(await council_health_check())
+            mk.return_value = MagicMock(allowed_models=["second/model"])
+            second = json.loads(await council_health_check())
+
+        assert first["models"] == ["first/model"]
+        assert second["models"] == ["second/model"], (
+            "health check is caching models from import time; a reconfigured "
+            "council is not reflected"
+        )
+
+    @pytest.mark.asyncio
+    async def test_shallow_probe_is_labelled_as_not_covering_the_chairman(self):
+        """#596: `ready` must not imply the chairman is healthy."""
+        from llm_council.mcp_server import council_health_check
+        from llm_council.openrouter import STATUS_OK
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch(
+                "llm_council.mcp_server.query_model_with_status",
+                new_callable=AsyncMock,
+                return_value={"status": STATUS_OK, "content": "pong", "latency_ms": 5},
+            ),
+        ):
+            data = json.loads(await council_health_check())
+
+        assert data["api_connectivity"]["probe_scope"] == "connectivity_only"
+        assert "chairman" in data["api_connectivity"]["caveat"].lower()
+
+    @pytest.mark.asyncio
+    async def test_deep_probe_queries_the_configured_chairman(self):
+        """#596: opt-in probe of the model that actually performs synthesis."""
+        from llm_council.mcp_server import council_health_check
+        from llm_council.openrouter import STATUS_OK
+
+        calls = []
+
+        async def fake(model, messages, **kwargs):
+            calls.append(model)
+            return {"status": STATUS_OK, "content": "pong", "latency_ms": 7}
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
+            patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
+        ):
+            data = json.loads(await council_health_check(deep=True))
+
+        assert "chair/model" in calls, f"deep probe never called the chairman; called {calls}"
+        assert data["chairman_connectivity"]["status"] == STATUS_OK
+        assert data["chairman_connectivity"]["model"] == "chair/model"
+
+    @pytest.mark.asyncio
+    async def test_deep_probe_failure_makes_ready_false(self):
+        """The outage case: lite model fine, chairman broken => NOT ready."""
+        from llm_council.mcp_server import council_health_check
+        from llm_council.openrouter import STATUS_OK, STATUS_ERROR
+
+        async def fake(model, messages, **kwargs):
+            if model == "chair/model":
+                return {"status": STATUS_ERROR, "error": "502 upstream", "latency_ms": 9}
+            return {"status": STATUS_OK, "content": "pong", "latency_ms": 5}
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
+            patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
+        ):
+            data = json.loads(await council_health_check(deep=True))
+
+        assert data["ready"] is False, (
+            "a failing chairman must not report ready:true — this is the #596 outage"
+        )
+        assert "chairman" in data["message"].lower()
+
+    @pytest.mark.asyncio
+    async def test_deep_probe_is_opt_in(self):
+        """Default stays cheap: one lite ping, no chairman call."""
+        from llm_council.mcp_server import council_health_check
+        from llm_council.openrouter import STATUS_OK
+
+        calls = []
+
+        async def fake(model, messages, **kwargs):
+            calls.append(model)
+            return {"status": STATUS_OK, "content": "pong", "latency_ms": 5}
+
+        with (
+            patch("llm_council.mcp_server.OPENROUTER_API_KEY", "k"),
+            patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
+            patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
+        ):
+            data = json.loads(await council_health_check())
+
+        assert calls == [__import__("llm_council.gateway.base", fromlist=["x"]).DEFAULT_HEALTH_CHECK_MODEL]
+        assert "chairman_connectivity" not in data
