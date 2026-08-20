@@ -97,12 +97,25 @@ Retrieve the persisted transcript for a past verification (by
 
 Verify the council is ready.
 
+**Parameters:**
+
+- `tier` (default `"high"`): report readiness for the tier a real run would use. Mirrors `consult_council`'s resolution, including its fallback to `high` for an unrecognised value.
+- `deep` (default `false`): also probe the configured **chairman** model. Costs one real chairman call. The default probe only checks general API reachability via a cheap lite model, which cannot detect a chairman-specific outage.
+
 **Returns:**
 
 - `api_key_configured`: Whether key is set
 - `key_source`: Where key came from
-- `council_size`: Number of models
+- `default_tier`: The tier whose models are reported below
+- `council_size` / `models`: The models a real `consult_council` run would use — resolved from the tier pool, which is what the council actually runs
+- `configured_council_models` / `config_warnings`: Present **only** when the flat `council.models` list disagrees with the resolved tier pool, so the two cannot diverge silently
+- `api_connectivity.probe_scope`: `connectivity_only` for the default probe, with a `caveat` naming what it does not cover
+- `chairman_connectivity`: Present only with `deep=true`
 - `ready`: Whether council is operational
+
+!!! warning "`ready: true` does not mean synthesis will succeed"
+
+    The default probe pings a lite model, so it answers *"is the API reachable"*, not *"will the council complete"*. During a chairman outage those diverge: stage-3 synthesis is a single point of failure, so a healthy API can still yield runs with no verdict. Pass `deep=true` before a high-stakes run to probe the chairman itself.
 
 ## Jury Mode
 
