@@ -287,7 +287,11 @@ class DirectGateway(BaseRouter):
             return {
                 "status": "error",
                 "latency_ms": latency_ms,
-                "error": str(e),
+                # #594: `str(e)` is "" for a message-less exception, and this
+                # dict shares the status/error contract that rendered
+                # "(error: )" to operators for a whole outage. Name the type so
+                # the detail is non-empty by construction.
+                "error": f"{type(e).__name__}: {e}" if str(e) else type(e).__name__,
             }
 
     async def _query_openai(

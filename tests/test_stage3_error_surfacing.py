@@ -86,3 +86,101 @@ async def test_success_path_unchanged(monkeypatch):
     assert result["response"] == "SYNTHESIS: all good"
     assert "error_status" not in result
     assert usage["prompt_tokens"] == 10
+
+
+class TestErrorDetailIsNeverEmpty:
+    """#594: the detail was surfaced correctly but arrived empty.
+
+    Observed live on 2026-07-16 during a chairman outage. stage3.json held:
+
+        "response": "Error: Unable to generate final synthesis (error: )",
+        "error_status": "error",
+        "error_detail": ""
+
+    7 seconds, zero tokens — a provider-boundary error, not a slow generation.
+    `council_stages` does the right thing (`status_response.get("error",
+    "no detail returned")`), but the default never fires because the value is
+    present-and-empty rather than missing. The empty string is produced
+    upstream: `query_model_with_status`'s generic handler returns `str(e)`,
+    which is `""` for any exception constructed without a message.
+
+    #397 added the status-preserving variant so a billing outage could be told
+    from a dead model; #403 added `unclear_reason=infra_failure` for the same
+    goal. An empty detail defeats both.
+    """
+
+    @pytest.mark.asyncio
+    async def test_message_less_exception_still_yields_a_detail(self):
+        """`str(IndexError())` is `""` — the exact shape that shipped empty."""
+        import httpx
+        from unittest.mock import patch
+        from llm_council.openrouter import query_model_with_status, STATUS_ERROR
+
+        with (
+            patch("llm_council.openrouter._get_openrouter_api_key", return_value="k"),
+            patch.object(
+                httpx.AsyncClient, "post", side_effect=IndexError()
+            ),
+        ):
+            result = await query_model_with_status("m/a", [{"role": "user", "content": "q"}])
+
+        assert result["status"] == STATUS_ERROR
+        detail = result.get("error", "")
+        assert detail, "error detail is empty — the #594 bug"
+        assert "IndexError" in detail, (
+            f"detail must name the exception type to be diagnosable; got {detail!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_exception_with_message_keeps_its_message(self):
+        """The common case must not regress into type-only output."""
+        import httpx
+        from unittest.mock import patch
+        from llm_council.openrouter import query_model_with_status
+
+        with (
+            patch("llm_council.openrouter._get_openrouter_api_key", return_value="k"),
+            patch.object(
+                httpx.AsyncClient, "post", side_effect=RuntimeError("upstream 502")
+            ),
+        ):
+            result = await query_model_with_status("m/a", [{"role": "user", "content": "q"}])
+
+        assert "upstream 502" in result["error"]
+        assert "RuntimeError" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_failure_is_logged_not_printed(self, caplog):
+        """A bare `print` in a library call path is unroutable and untestable."""
+        import httpx
+        from unittest.mock import patch
+        from llm_council.openrouter import query_model_with_status
+
+        with (
+            patch("llm_council.openrouter._get_openrouter_api_key", return_value="k"),
+            patch.object(
+                httpx.AsyncClient, "post", side_effect=RuntimeError("upstream 502")
+            ),
+            caplog.at_level("WARNING"),
+        ):
+            await query_model_with_status("m/a", [{"role": "user", "content": "q"}])
+
+        logged = " ".join(r.message for r in caplog.records)
+        assert "upstream 502" in logged, f"failure not logged; records={caplog.records!r}"
+
+    @pytest.mark.asyncio
+    async def test_stage3_never_renders_empty_parentheses(self, monkeypatch):
+        """End-to-end: the operator-facing string the outage actually showed."""
+        async def message_less_failure(model, messages, disable_tools=False, timeout=120.0, **kw):
+            # What the pre-fix openrouter handler returned for `IndexError()`.
+            return {"status": "error", "error": "", "latency_ms": 6944}
+
+        monkeypatch.setattr(council_mod, "query_model_with_status", message_less_failure)
+        result, _usage, _ = await council_mod.stage3_synthesize_final(
+            "q", _stage1(), _stage2(), _agg()
+        )
+
+        assert "(error: )" not in result["response"], (
+            f"empty parens are the #594 symptom; got {result['response']!r}"
+        )
+        assert result["error_detail"], "error_detail must never be empty"

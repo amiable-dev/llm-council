@@ -1113,7 +1113,13 @@ STAGE 2 - Peer Rankings:
         # Fallback if chairman fails — SURFACE the status + underlying error
         # so operators can tell an infra outage apart from a code defect.
         error_status = status_response.get("status", "error")
-        error_detail = status_response.get("error", "no detail returned")
+        # #594: `.get(key, default)` does NOT fire its default for a
+        # present-but-empty value, so an upstream `"error": ""` rendered as
+        # "(error: )" for a whole outage. `or` covers empty/None regardless of
+        # which producer supplied the response — query_model_with_status is
+        # fixed at source, but the gateway adapter and any future router are
+        # separate producers of this same shape.
+        error_detail = status_response.get("error") or "no detail returned"
         logger.warning(
             "stage-3 chairman synthesis failed: %s — %s (model=%s, latency=%sms)",
             error_status,

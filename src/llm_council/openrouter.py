@@ -5,6 +5,7 @@ ADR-026 Phase 2: Added reasoning_params support for reasoning models.
 
 import httpx
 import asyncio
+import logging
 import time
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 
@@ -12,6 +13,8 @@ from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 from llm_council.unified_config import get_api_key
 
 from llm_council.gateway.resolver import resolve_endpoint, resolve_model_name
+
+logger = logging.getLogger(__name__)
 
 # Default OpenRouter API URL (can be overridden via gateways config)
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -240,11 +243,20 @@ async def query_model_with_status(
 
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
-        print(f"Error querying model {model}: {e}")
+        # #594: `str(e)` is "" for any exception constructed without a message
+        # (e.g. a bare IndexError from an unexpected response shape), and that
+        # empty string travelled all the way to the operator as
+        # "Unable to generate final synthesis (error: )" during the 2026-07-16
+        # chairman outage — undiagnosable. Always name the type, so the detail
+        # is non-empty by construction. This is the same goal as #397 (don't
+        # collapse failures to None) and #403 (distinguish infra from defect);
+        # an empty detail defeats both.
+        detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        logger.warning("Error querying model %s: %s", model, detail)
         return {
             "status": STATUS_ERROR,
             "latency_ms": latency_ms,
-            "error": str(e),
+            "error": detail,
         }
 
 
