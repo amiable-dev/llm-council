@@ -1095,7 +1095,9 @@ def _merge_dicts(base: Dict, override: Dict) -> Dict:
     return result
 
 
-def _normalize_config_shape(raw_config: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_config_shape(
+    raw_config: Dict[str, Any], strict: bool = False
+) -> Dict[str, Any]:
     """Resolve a parsed YAML mapping to ``UnifiedConfig`` keyword shape (#591).
 
     Two shapes exist in the wild, and this repo ships one of each:
@@ -1116,36 +1118,85 @@ def _normalize_config_shape(raw_config: Dict[str, Any]) -> Dict[str, Any]:
 
     Detection is exact rather than heuristic: ``UnifiedConfig`` and
     ``CouncilConfig`` field names are disjoint sets, so the keys under
-    ``council:`` identify the shape unambiguously. Both shapes remain
-    supported — neither is deprecated, since both are documented.
+    ``council:`` identify the shape unambiguously. That invariant is
+    load-bearing and pinned by
+    ``TestConfigShapeNoSilentLoss::test_unified_and_council_field_names_stay_disjoint``.
+    Both shapes remain supported — neither is deprecated, since both are
+    documented.
+
+    Nothing is ever dropped to make a shape fit. An envelope carrying council
+    fields, or sitting beside top-level siblings, is split and merged rather
+    than truncated; a mixed ``council:`` block warns (and raises under
+    ``strict``) but still applies both halves.
     """
     council_section = raw_config.get("council")
     if not isinstance(council_section, dict) or not council_section:
         return raw_config
 
-    keys = set(council_section)
-    unified_hits = keys & set(UnifiedConfig.model_fields)
-    council_hits = keys & set(CouncilConfig.model_fields)
+    unified_fields = set(UnifiedConfig.model_fields)
+    council_fields = set(CouncilConfig.model_fields)
+    section_keys = {k for k in council_section if k in unified_fields}
 
-    if unified_hits and council_hits:
-        # Genuinely ambiguous: `council:` mixes section names with
-        # CouncilConfig fields. Treat as flat (the documented-template shape)
-        # but say so, because one half will not land where the author expects.
-        logger.warning(
-            "Ambiguous config: the 'council:' section mixes UnifiedConfig "
-            "section names (%s) with CouncilConfig fields (%s). Treating it as "
-            "a CouncilConfig block; move the section names to the top level.",
-            ", ".join(sorted(unified_hits)),
-            ", ".join(sorted(council_hits)),
-        )
+    if not section_keys:
+        # Flat shape: `council:` holds CouncilConfig fields (or keys we cannot
+        # classify, which _check_unknown_top_level_keys will not see because
+        # they are nested — see that function's note on nested keys).
         return raw_config
 
-    if unified_hits:
-        # Envelope shape: unwrap it, as load_config has always done.
-        return council_section
+    # `council:` names at least one UnifiedConfig section, so it is an
+    # envelope. Split rather than unwrap wholesale: an envelope may also carry
+    # CouncilConfig fields, and the file may carry top-level siblings. Dropping
+    # either half is the exact silent-loss failure this function exists to end.
+    #
+    # Classification is three-way, not binary. A key that belongs to neither
+    # model is *unknown*, not a council field — burying it in `council:` would
+    # hand it to CouncilConfig's extra="ignore" and drop it in silence, the very
+    # bug being fixed. Unknown keys are lifted to the top level instead, so
+    # _check_unknown_top_level_keys names them.
+    siblings = {k: v for k, v in raw_config.items() if k != "council"}
+    envelope = {k: v for k, v in council_section.items() if k in unified_fields}
+    council_fields_inside = {
+        k: v for k, v in council_section.items() if k in council_fields
+    }
+    unknown_inside = {
+        k: v
+        for k, v in council_section.items()
+        if k not in unified_fields and k not in council_fields
+    }
 
-    # Flat shape (or a council block we cannot classify): use as-is.
-    return raw_config
+    if council_fields_inside:
+        # Mixed shape. Salvage both halves, but this is malformed enough to be
+        # worth saying out loud — and to hard-fail under strict.
+        message = (
+            "Ambiguous config: the 'council:' section mixes UnifiedConfig "
+            f"section names ({', '.join(sorted(envelope))}) with council "
+            f"fields ({', '.join(sorted(council_fields_inside))}). Both halves "
+            "were applied; move the section names to the top level to remove "
+            "the ambiguity."
+        )
+        if strict:
+            raise ValueError(message)
+        logger.warning(message)
+
+        # Preserve the council half. If the envelope also carried an explicit
+        # inner `council:` block, that one is more specific and wins per key.
+        inner = envelope.get("council")
+        if isinstance(inner, dict):
+            envelope["council"] = {**council_fields_inside, **inner}
+        else:
+            envelope["council"] = council_fields_inside
+
+    overlapping = sorted(set(siblings) & set(envelope))
+    if overlapping:
+        logger.warning(
+            "Config sections %s appear both at the top level and inside the "
+            "'council:' envelope; the 'council:' values win.",
+            ", ".join(overlapping),
+        )
+
+    # Envelope wins on conflict: it is the more deeply-qualified location.
+    # Unknown keys ride along at the top level so they get reported, not buried.
+    return {**siblings, **unknown_inside, **envelope}
 
 
 def _check_unknown_top_level_keys(config_dict: Dict[str, Any], strict: bool = False) -> None:
@@ -1206,7 +1257,7 @@ def load_config(
 
         # #591: resolve which of the two shipped YAML shapes this is, then
         # surface anything that would otherwise be dropped in silence.
-        config_dict = _normalize_config_shape(raw_config)
+        config_dict = _normalize_config_shape(raw_config, strict=strict)
         _check_unknown_top_level_keys(config_dict, strict=strict)
 
         # Build config from YAML
