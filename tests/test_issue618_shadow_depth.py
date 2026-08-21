@@ -189,19 +189,6 @@ class TestSoftFail:
 class TestOrchestratorWiring:
     """Both orchestrators must call the shadow hook (AST-pinned, cf. ADR-053)."""
 
-    def _calls_in(self, func_names):
-        src = pathlib.Path("src/llm_council/council.py").read_text()
-        tree = ast.parse(src)
-        called_from = set()
-        for fn in ast.walk(tree):
-            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                for node in ast.walk(fn):
-                    if isinstance(node, ast.Call):
-                        name = getattr(node.func, "id", getattr(node.func, "attr", ""))
-                        if name == "evaluate_and_log_shadow_depth":
-                            called_from.add(fn.name)
-        return {f for f in func_names if any(f in c or c in f for c in called_from)} or called_from & set(func_names)
-
     def test_both_orchestrators_call_the_hook(self):
         src = pathlib.Path("src/llm_council/council.py").read_text()
         tree = ast.parse(src)

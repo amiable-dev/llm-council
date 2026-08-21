@@ -127,6 +127,10 @@ def plan_escalation(
 
     current_set = set(models_for_rung(all_models, current_rung))
     added = [m for m in models_for_rung(all_models, target) if m not in current_set]
+    if not added:
+        # MINI set == FULL set (small council): an "escalate" with nothing to
+        # add would be internally inconsistent (#622 council finding).
+        return EscalationPlan(decision="stop", reason="at_effective_full_depth")
 
     estimate = None
     try:
@@ -137,6 +141,25 @@ def plan_escalation(
         estimate = estimator.estimate(added)
     except Exception as exc:  # pricing is best-effort
         logger.debug("escalation estimate failed (ignored): %s", exc)
+
+    if estimate is None and enforcer is not None:
+        # With budget enforcement ON, an unpriceable escalation must not
+        # silently bypass the veto (#622 council finding): fail safe, stay
+        # at the current depth, and say so.
+        try:
+            from .budget import budget_enforcement_enabled
+
+            if budget_enforcement_enabled():
+                logger.warning(
+                    "graduated depth: escalation unpriceable while budget "
+                    "enforcement is enabled — vetoed (fail-safe)"
+                )
+                return EscalationPlan(
+                    decision="vetoed",
+                    reason="budget: escalation unpriceable (estimator unavailable)",
+                )
+        except Exception as exc:
+            logger.debug("budget availability check failed (ignored): %s", exc)
 
     if enforcer is not None and estimate is not None:
         try:
@@ -328,7 +351,7 @@ def evaluate_and_log_shadow_depth(
         p = path if path is not None else DEFAULT_DEPTH_DECISIONS_PATH
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
-            with p.open("a") as fh:
+            with p.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")
         except Exception as exc:
             logger.debug("shadow depth decision log failed (%s)", exc)

@@ -123,6 +123,48 @@ class TestPlanEscalation:
         assert "budget" in plan.reason
         assert plan.next_rung is None  # veto means: stay at current depth
 
+    def test_unpriceable_escalation_vetoed_when_enforcement_enabled(self, monkeypatch):
+        """#622 council finding: estimator failure must not silently bypass the
+        budget veto. Enforcement on + unpriceable escalation ⇒ fail-safe veto."""
+        from llm_council.budget import BudgetEnforcer
+
+        class _FailingEstimator:
+            def estimate(self, models):
+                raise RuntimeError("no history")
+
+        monkeypatch.setenv("LLM_COUNCIL_BUDGET_ENFORCEMENT", "true")
+        plan = self._plan(
+            monkeypatch,
+            estimator=_FailingEstimator(),
+            enforcer=BudgetEnforcer(),
+            budget_remaining=1.0,
+        )
+        assert plan.decision == "vetoed"
+        assert "unpriceable" in plan.reason
+
+    def test_unpriceable_without_enforcement_still_escalates(self, monkeypatch):
+        """Pricing stays best-effort when enforcement is off (no enforcer)."""
+
+        class _FailingEstimator:
+            def estimate(self, models):
+                raise RuntimeError("no history")
+
+        plan = self._plan(monkeypatch, estimator=_FailingEstimator())
+        assert plan.decision == "escalate"
+
+    def test_no_models_to_add_stops_instead_of_empty_escalation(self, monkeypatch):
+        """#622 council finding: MINI==FULL set ⇒ stop, never escalate with
+        added_models=[] (an internally inconsistent plan)."""
+        monkeypatch.setenv("LLM_COUNCIL_GRADUATED_DEPTH", "true")
+        plan = plan_escalation(
+            all_models=["a", "b", "c"],
+            current_rung=DepthRung.MINI,
+            css=0.1,
+            confidence=0.1,
+        )
+        assert plan.decision == "stop"
+        assert plan.reason == "at_effective_full_depth"
+
     def test_no_budget_set_escalates(self, monkeypatch):
         from llm_council.budget import BudgetEnforcer
 
