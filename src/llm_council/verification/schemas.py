@@ -197,19 +197,35 @@ class SnapshotResolutionError(Exception):
         self.unresolved_paths = unresolved_paths
         self.expansion_warnings = expansion_warnings
         self.repo_root = repo_root
-        first = unresolved_paths[0] if unresolved_paths else "<none>"
+        # Built as independent sentences rather than a variable prefix glued
+        # to a fixed suffix: the first version's suffix said "THAT repository",
+        # which dangled when no root had been named (#617 review).
+        if unresolved_paths:
+            first = unresolved_paths[0]
+            what = (
+                f"None of the {len(unresolved_paths)} target_paths could be "
+                f"resolved at snapshot {snapshot_id} (first: {first})."
+            )
+        else:
+            what = f"No target_paths could be resolved at snapshot {snapshot_id}."
+
         where = (
-            f" Searched repository root: {repo_root}."
+            f"Searched repository root: {repo_root}."
             if repo_root
-            else " The repository root being searched could not be determined."
+            else "The repository root being searched could not be determined."
         )
-        super().__init__(
-            f"None of the {len(unresolved_paths)} target_paths could be "
-            f"resolved at snapshot {snapshot_id} (first: {first})."
-            f"{where} Check that this snapshot exists in THAT repository — in a "
-            "multi-repo session the daemon searches only the root it started "
-            "in — and that the paths exist at that commit."
+
+        # All four documented causes, not just the multi-repo one. Leading on
+        # multi-repo alone would misdirect the more frequent cases — an
+        # unfetched branch or an unpropagated push (#617 review).
+        why = (
+            "Common causes: the snapshot lives in a different repository than "
+            "the one searched (a multi-repo session searches only the root the "
+            "daemon started in); the branch was never fetched there; a recent "
+            "push has not propagated yet; or the paths do not exist at that "
+            "commit."
         )
+        super().__init__(f"{what} {where} {why}")
 
 
 # =============================================================================

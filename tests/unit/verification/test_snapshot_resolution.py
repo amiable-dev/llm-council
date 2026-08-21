@@ -393,3 +393,59 @@ class TestErrorNamesTheRepoRoot:
         )
         text = str(err).lower()
         assert "repositor" in text or "root" in text
+
+    def test_message_is_coherent_when_root_is_unknown(self):
+        """Council review of #617: 'THAT repository' dangled with no antecedent.
+
+        The message was built by concatenating a variable prefix onto a fixed
+        suffix that assumed the prefix had just named a repository. With no
+        root determined it read "...could not be determined. Check that this
+        snapshot exists in THAT repository" — pointing at nothing.
+        """
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        text = str(
+            SnapshotResolutionError(
+                snapshot_id="abc1234",
+                unresolved_paths=["src/app.py"],
+                expansion_warnings=[],
+            )
+        )
+        assert "THAT repository" not in text, f"dangling reference: {text}"
+        assert "could not be determined" in text
+
+    def test_message_lists_the_other_common_causes_too(self):
+        """Multi-repo is one cause, and probably not the most frequent.
+
+        Leading on it alone risks sending an operator hunting a mis-rooted
+        daemon when the real cause is an unfetched branch or a push that has
+        not propagated — both documented in the class docstring.
+        """
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        text = str(
+            SnapshotResolutionError(
+                snapshot_id="abc1234",
+                unresolved_paths=["src/app.py"],
+                expansion_warnings=[],
+                repo_root="/repo/a",
+            )
+        ).lower()
+        assert "fetch" in text, "unfetched branch is a documented cause"
+        assert "push" in text or "propagat" in text, "push race is a documented cause"
+        assert "different repository" in text or "multi-repo" in text
+
+    def test_empty_unresolved_paths_reads_sensibly(self):
+        """'None of the 0 target_paths' is awkward; guard the degenerate case."""
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        text = str(
+            SnapshotResolutionError(
+                snapshot_id="abc1234",
+                unresolved_paths=[],
+                expansion_warnings=[],
+                repo_root="/repo/a",
+            )
+        )
+        assert "None of the 0" not in text, f"awkward phrasing: {text}"
+        assert "abc1234" in text
