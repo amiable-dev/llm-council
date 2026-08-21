@@ -780,10 +780,15 @@ and runs the full council, so it budgets at `high`.
    entity-encoded (`&lt;…`) before budgeting — a body cannot forge a
    premature close plus a fake operator item. Each neutralization is a
    structured `evidence_tag_neutralized` warning, and the adversarial case is
-   test-pinned (exactly one real open/close pair per rendered item). NOTE:
-   verify's renderer has the same exposure and does NOT yet neutralize —
-   changing it touches ADR-049's byte-stability goldens, so it is tracked as
-   its own follow-up rather than a rider here.
+   test-pinned (exactly one real open/close pair per rendered item).
+   **#625 (follow-up, shipped):** the verify prompt path now applies the same
+   neutralization — the shared helpers (`_neutralize_evidence_body`,
+   `_neutralize_evidence_items`) live in `verification/evidence_render.py`
+   beside the renderer, run BEFORE `_budget_evidence` so all byte-math
+   (including the fail-closed oversized-blocking check) sees final bytes, and
+   emit the same typed warning (`EvidenceWarning.reason` gained the value).
+   Clean bodies pass through byte-identical, so ADR-049's byte-stability
+   goldens are unaffected (test-pinned).
 
 Telemetry stays content-free: summaries/warnings/metrics carry ids, sources,
 and sizes — never bodies (test-pinned).

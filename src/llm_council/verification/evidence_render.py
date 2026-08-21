@@ -4,12 +4,68 @@ Verbatim move — no logic changes. Back-compat re-exports live in api.py.
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from .constants import MAX_EVIDENCE_CHARS_RATIO, TIER_MAX_CHARS
 from .schemas import BlockingEvidenceTooLarge, EvidenceItem, EvidenceWarning
 
 logger = logging.getLogger(__name__)
+
+# #625 (found by the #624 council gate on the consult path): the
+# <evidence_item> wrapper is the structural boundary of the rendered section,
+# and the body is caller/tool text — so the exact tag sequences must not
+# survive verbatim inside a body, or content could forge a premature close
+# plus a fake operator-supplied item. Entity-encoding just these sequences
+# defangs the structure while keeping the body readable as data.
+# Case-insensitive: the LLM-facing boundary is not a strict XML parser.
+_EVIDENCE_TAG_RE = re.compile(r"<(/?)(evidence_item)", re.IGNORECASE)
+
+
+def _neutralize_evidence_body(content: str) -> Tuple[str, int]:
+    """Entity-encode ``<evidence_item`` / ``</evidence_item`` inside a body.
+
+    Returns (neutralized_content, substitution_count). Shared by the verify
+    prompt path (below) and ``consult_evidence`` (#619/#624).
+    """
+    return _EVIDENCE_TAG_RE.subn(lambda m: f"&lt;{m.group(1)}{m.group(2)}", content)
+
+
+def _neutralize_evidence_items(
+    evidence: Optional[List[EvidenceItem]],
+) -> Tuple[List[EvidenceItem], List[EvidenceWarning]]:
+    """Neutralize tag sequences in every body, with a typed warning each.
+
+    Runs BEFORE ``_budget_evidence`` so all byte-math — including the
+    fail-closed oversized-blocking check — sees the final rendered bytes.
+    Clean items pass through unchanged (byte-identical: ADR-049 goldens).
+    """
+    if not evidence:
+        return [], []
+    out: List[EvidenceItem] = []
+    warnings: List[EvidenceWarning] = []
+    for idx, item in enumerate(evidence):
+        neutralized, n_subs = _neutralize_evidence_body(item.content)
+        if n_subs:
+            warnings.append(
+                EvidenceWarning(
+                    evidence_id=item.evidence_id,
+                    request_index=idx,
+                    source=item.source,
+                    reason="evidence_tag_neutralized",
+                    detail=(
+                        f"{n_subs} <evidence_item> tag sequence(s) inside the "
+                        "body were entity-encoded to keep the rendered "
+                        "structure caller-proof"
+                    ),
+                    chars_attempted=len(item.content),
+                    chars_kept=len(neutralized),
+                )
+            )
+            out.append(item.model_copy(update={"content": neutralized}))
+        else:
+            out.append(item)
+    return out, warnings
 
 def _budget_evidence(
     evidence: Optional[List[EvidenceItem]],
