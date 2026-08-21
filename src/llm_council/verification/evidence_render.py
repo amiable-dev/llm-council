@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 # plus a fake operator-supplied item. Entity-encoding just these sequences
 # defangs the structure while keeping the body readable as data.
 # Case-insensitive: the LLM-facing boundary is not a strict XML parser.
-_EVIDENCE_TAG_RE = re.compile(r"<(/?)(evidence_item)", re.IGNORECASE)
+# The trailing \b keeps unrelated names sharing the prefix (e.g.
+# <evidence_item_count>) untouched (#626) — the real tag is always followed
+# by a space (attributes) or ">", both non-word characters.
+_EVIDENCE_TAG_RE = re.compile(r"<(/?)(evidence_item)\b", re.IGNORECASE)
 
 
 def _neutralize_evidence_body(content: str) -> Tuple[str, int]:
