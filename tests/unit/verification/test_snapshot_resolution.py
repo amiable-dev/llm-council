@@ -327,3 +327,125 @@ class TestPipelineSurfacesExpansionMetadata:
 
             with pytest.raises(SnapshotResolutionError):
                 await run_verification(request, store)
+
+
+class TestErrorNamesTheRepoRoot:
+    """#581: the failure never said which repository was searched.
+
+    `_get_git_root_async()` discovers the git toplevel once, in the MCP
+    server's spawn cwd, and caches it process-wide; all eight git call sites
+    then run with `cwd=git_root`. In a multi-repo session — a client rooted in
+    repo A orchestrating work in sibling repo B — every snapshot from B fails,
+    because the daemon can only ever see A.
+
+    The error read "Verify the snapshot exists in the daemon's checkout",
+    which points at the right idea while withholding the one fact that
+    identifies the problem: *which* checkout. It reads as "bad commit",
+    sending the operator to look at the SHA rather than at the daemon's root.
+    """
+
+    def test_error_message_states_which_root_was_searched(self):
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        err = SnapshotResolutionError(
+            snapshot_id="abc1234",
+            unresolved_paths=["src/app.py"],
+            expansion_warnings=[],
+            repo_root="/Users/dev/projects/repo-a",
+        )
+        assert "/Users/dev/projects/repo-a" in str(err), (
+            f"the searched root must appear in the message; got: {err}"
+        )
+
+    def test_repo_root_is_exposed_as_an_attribute(self):
+        """Structured consumers shouldn't have to parse the prose."""
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        err = SnapshotResolutionError(
+            snapshot_id="abc1234",
+            unresolved_paths=["src/app.py"],
+            expansion_warnings=[],
+            repo_root="/repo/a",
+        )
+        assert err.repo_root == "/repo/a"
+
+    def test_repo_root_is_optional_for_back_compat(self):
+        """Existing raise sites and callers must keep working."""
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        err = SnapshotResolutionError(
+            snapshot_id="abc1234",
+            unresolved_paths=["src/app.py"],
+            expansion_warnings=[],
+        )
+        assert err.repo_root is None
+        assert "abc1234" in str(err)
+
+    def test_message_hints_at_the_multi_repo_cause(self):
+        """A mis-rooted daemon is the case the old wording concealed."""
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        err = SnapshotResolutionError(
+            snapshot_id="abc1234",
+            unresolved_paths=["src/app.py"],
+            expansion_warnings=[],
+            repo_root="/repo/a",
+        )
+        text = str(err).lower()
+        assert "repositor" in text or "root" in text
+
+    def test_message_is_coherent_when_root_is_unknown(self):
+        """Council review of #617: 'THAT repository' dangled with no antecedent.
+
+        The message was built by concatenating a variable prefix onto a fixed
+        suffix that assumed the prefix had just named a repository. With no
+        root determined it read "...could not be determined. Check that this
+        snapshot exists in THAT repository" — pointing at nothing.
+        """
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        text = str(
+            SnapshotResolutionError(
+                snapshot_id="abc1234",
+                unresolved_paths=["src/app.py"],
+                expansion_warnings=[],
+            )
+        )
+        assert "THAT repository" not in text, f"dangling reference: {text}"
+        assert "could not be determined" in text
+
+    def test_message_lists_the_other_common_causes_too(self):
+        """Multi-repo is one cause, and probably not the most frequent.
+
+        Leading on it alone risks sending an operator hunting a mis-rooted
+        daemon when the real cause is an unfetched branch or a push that has
+        not propagated — both documented in the class docstring.
+        """
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        text = str(
+            SnapshotResolutionError(
+                snapshot_id="abc1234",
+                unresolved_paths=["src/app.py"],
+                expansion_warnings=[],
+                repo_root="/repo/a",
+            )
+        ).lower()
+        assert "fetch" in text, "unfetched branch is a documented cause"
+        assert "push" in text or "propagat" in text, "push race is a documented cause"
+        assert "different repository" in text or "multi-repo" in text
+
+    def test_empty_unresolved_paths_reads_sensibly(self):
+        """'None of the 0 target_paths' is awkward; guard the degenerate case."""
+        from llm_council.verification.schemas import SnapshotResolutionError
+
+        text = str(
+            SnapshotResolutionError(
+                snapshot_id="abc1234",
+                unresolved_paths=[],
+                expansion_warnings=[],
+                repo_root="/repo/a",
+            )
+        )
+        assert "None of the 0" not in text, f"awkward phrasing: {text}"
+        assert "abc1234" in text

@@ -234,10 +234,14 @@ async def _build_verification_prompt(
     )
 
     if target_paths and not expansion_metadata.get("expanded_paths"):
+        # #581: name the repository that was searched. The daemon resolves one
+        # root process-wide from its spawn cwd, so "not found" is frequently
+        # "found nothing HERE" — which the operator cannot tell without this.
         raise SnapshotResolutionError(
             snapshot_id=snapshot_id,
             unresolved_paths=list(target_paths),
             expansion_warnings=list(expansion_metadata.get("expansion_warnings", [])),
+            repo_root=await _get_git_root_async(),
         )
 
     evidence_instructions = _build_evidence_instructions(bool(kept_evidence))
@@ -725,6 +729,7 @@ async def _run_verification_pipeline(
         if _policy == "fail":
             raise SnapshotResolutionError(
                 snapshot_id=request.snapshot_id,
+                repo_root=await _get_git_root_async(),
                 unresolved_paths=[c["path"] for c in _clampers],
                 expansion_warnings=[
                     f"coverage: {c['path']} ({c['reason']}) not reviewed "
@@ -1243,6 +1248,8 @@ async def verify_endpoint(request: VerifyRequest) -> VerifyResponse:
                 "error": "snapshot_resolution_failed",
                 "message": str(e),
                 "snapshot_id": e.snapshot_id,
+                # #581: which repository the daemon actually searched.
+                "repo_root": e.repo_root,
                 "unresolved_paths": e.unresolved_paths,
                 "expansion_warnings": e.expansion_warnings,
             },

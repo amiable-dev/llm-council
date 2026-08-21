@@ -171,9 +171,30 @@ class SnapshotResolutionError(Exception):
     read your code."
 
     Common upstream causes:
+      - the daemon is rooted in a DIFFERENT repository than the snapshot came
+        from (#581) — git operations run in one process-wide root discovered
+        from the server's spawn cwd, so in a multi-repo session a sibling
+        repo's commits are invisible
       - snapshot_id is on a branch not fetched in the daemon's local clone
       - push-replication race: commit was just pushed and hasn't propagated
       - paths refer to files that don't exist at this commit
+
+    #581: `repo_root` names the repository that was actually searched. Without
+    it the message read as "bad commit" and sent operators to inspect the SHA,
+    when the real cause was a correct SHA in a repository the daemon cannot
+    see.
+
+    Disclosure note (#617 review): `repo_root` is an absolute server-side path
+    and is returned over both the MCP and HTTP error surfaces. On the MCP path
+    the server is the caller's own machine, so this discloses nothing. On a
+    remotely-deployed HTTP server it reveals the deployment's directory layout
+    to an authenticated caller. Judged an acceptable trade for a failure this
+    error otherwise cannot explain — but an operator exposing the HTTP API to
+    untrusted callers may want to scrub `detail.repo_root` at the edge.
+
+    `repo_root` is checked for truthiness rather than `is not None`: an empty
+    string is as undetermined as a missing one, and both should produce the
+    "could not be determined" wording.
     """
 
     def __init__(
@@ -182,17 +203,41 @@ class SnapshotResolutionError(Exception):
         snapshot_id: str,
         unresolved_paths: List[str],
         expansion_warnings: List[str],
+        repo_root: Optional[str] = None,
     ) -> None:
         self.snapshot_id = snapshot_id
         self.unresolved_paths = unresolved_paths
         self.expansion_warnings = expansion_warnings
-        first = unresolved_paths[0] if unresolved_paths else "<none>"
-        super().__init__(
-            f"None of the {len(unresolved_paths)} target_paths could be "
-            f"resolved at snapshot {snapshot_id} (first: {first}). "
-            "Verify the snapshot exists in the daemon's checkout and that "
-            "the paths exist at that commit."
+        self.repo_root = repo_root
+        # Built as independent sentences rather than a variable prefix glued
+        # to a fixed suffix: the first version's suffix said "THAT repository",
+        # which dangled when no root had been named (#617 review).
+        if unresolved_paths:
+            first = unresolved_paths[0]
+            what = (
+                f"None of the {len(unresolved_paths)} target_paths could be "
+                f"resolved at snapshot {snapshot_id} (first: {first})."
+            )
+        else:
+            what = f"No target_paths could be resolved at snapshot {snapshot_id}."
+
+        where = (
+            f"Searched repository root: {repo_root}."
+            if repo_root
+            else "The repository root being searched could not be determined."
         )
+
+        # All four documented causes, not just the multi-repo one. Leading on
+        # multi-repo alone would misdirect the more frequent cases — an
+        # unfetched branch or an unpropagated push (#617 review).
+        why = (
+            "Common causes: the snapshot lives in a different repository than "
+            "the one searched (a multi-repo session searches only the root the "
+            "daemon started in); the branch was never fetched there; a recent "
+            "push has not propagated yet; or the paths do not exist at that "
+            "commit."
+        )
+        super().__init__(f"{what} {where} {why}")
 
 
 # =============================================================================
