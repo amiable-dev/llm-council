@@ -141,6 +141,30 @@ class TestPrepareConsultEvidence:
         assert by_index[0]["downgraded"] is False
         assert by_index[1]["downgraded"] is True
 
+    def test_attribute_injection_impossible_by_validation(self):
+        """#624 round-2 finding: <evidence_item> ATTRIBUTE values are safe by
+        schema validation, not by escaping — source is regex-constrained
+        (no quotes, no angle brackets, no newlines), evidence_id likewise,
+        format/strength are Literal enums, and the index is a server int.
+        Pin that the dangerous characters are rejected outright."""
+        from pydantic import ValidationError
+
+        for bad_source in ['tool"onload=x', "tool>break", "tool<tag", "tool\nx"]:
+            with pytest.raises(ValidationError):
+                prepare_consult_evidence(
+                    [{"source": bad_source, "content": "x"}], "high"
+                )
+        for bad_id in ['id"x', "id>x", "id<x", "id x"]:
+            with pytest.raises(ValidationError):
+                prepare_consult_evidence(
+                    [{"source": "tool@1", "content": "x", "evidence_id": bad_id}],
+                    "high",
+                )
+        with pytest.raises(ValidationError):
+            prepare_consult_evidence(
+                [{"source": "tool@1", "content": "x", "strength": "critical"}], "high"
+            )
+
     def test_summary_and_warnings_never_contain_content(self):
         prep = prepare_consult_evidence([INFO_ITEM, BLOCKING_ITEM], "high")
         meta = json.dumps({"s": prep["summary"], "w": prep["warnings"], "m": prep["metrics"]})
