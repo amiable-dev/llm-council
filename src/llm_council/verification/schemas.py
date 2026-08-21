@@ -183,6 +183,18 @@ class SnapshotResolutionError(Exception):
     it the message read as "bad commit" and sent operators to inspect the SHA,
     when the real cause was a correct SHA in a repository the daemon cannot
     see.
+
+    Disclosure note (#617 review): `repo_root` is an absolute server-side path
+    and is returned over both the MCP and HTTP error surfaces. On the MCP path
+    the server is the caller's own machine, so this discloses nothing. On a
+    remotely-deployed HTTP server it reveals the deployment's directory layout
+    to an authenticated caller. Judged an acceptable trade for a failure this
+    error otherwise cannot explain — but an operator exposing the HTTP API to
+    untrusted callers may want to scrub `detail.repo_root` at the edge.
+
+    `repo_root` is checked for truthiness rather than `is not None`: an empty
+    string is as undetermined as a missing one, and both should produce the
+    "could not be determined" wording.
     """
 
     def __init__(
