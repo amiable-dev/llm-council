@@ -126,7 +126,6 @@
 
 | Variable | Description | Default |
 |---|---|---|
-| `LLM_COUNCIL_CALIBRATED_CONFIDENCE` | PASS threshold uses calibrated confidence (ADR-047 P2) | false |
 | `LLM_COUNCIL_SCREENING` | Screening judge: off / shadow / active (ADR-047 P3) | off |
 | `LLM_COUNCIL_SCREEN_MAX_CHARS` | Screening eligibility: max content chars | 5000 |
 | `LLM_COUNCIL_SCREEN_MIN_SCORE` | Screening unanimity minimum per dimension | 9 |

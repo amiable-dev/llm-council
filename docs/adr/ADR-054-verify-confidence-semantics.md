@@ -1,6 +1,6 @@
 # ADR-054: What `confidence` Means in verify() — and How to Calibrate It
 
-**Status:** Proposed 2026-07-11 (rev 2 — council review 2026-07-12)
+**Status:** Accepted 2026-08-21 — **D3 fork resolved: D3a adopted** (maintainer decision, [#563](https://github.com/amiable-dev/llm-council/issues/563)): confidence demoted to labelled telemetry; the `LLM_COUNCIL_CALIBRATED_CONFIDENCE` PASS gate removed (the flag is deleted, per open question 2 — a gate that should not exist should not be resurrectable by env var); D3b scoped as [#628](https://github.com/amiable-dev/llm-council/issues/628), gated on structured stage-1 findings. (Proposed 2026-07-11; rev 2 — council review 2026-07-12.)
 **Date:** 2026-07-11
 
 **Review history:**

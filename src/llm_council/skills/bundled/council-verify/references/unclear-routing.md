@@ -32,5 +32,7 @@ the raw value until a mapping is fitted from human dispositions:
 llm-council calibration-report --fit
 ```
 
-The PASS threshold consumes the calibrated value only behind
-`LLM_COUNCIL_CALIBRATED_CONFIDENCE=true` (default off).
+Both confidence numbers are telemetry only (ADR-054 D3a): no verdict
+threshold consumes them — verdicts come from findings (structured path) or
+verdict extraction (legacy). Do not gate automation on them as if they were
+calibrated probabilities.

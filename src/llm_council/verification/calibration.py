@@ -15,10 +15,12 @@ mean something:
   ``.council/calibration/mapping.json``; identity when absent.
 
 Both confidences are surfaced on every response (``confidence`` raw,
-``confidence_calibrated``). The PASS threshold uses the calibrated value
-ONLY behind ``LLM_COUNCIL_CALIBRATED_CONFIDENCE=true`` (default off —
-flag-off behaviour byte-identical) until the mapping is validated
-(ADR-047 mitigation; modest-N observational data).
+``confidence_calibrated``) — **as telemetry only** (ADR-054 D3a, #563):
+``confidence`` is a reviewer-agreement-derived heuristic, not a calibrated
+probability, and no verdict threshold consumes the calibrated value. The
+former calibrated-confidence PASS gate (the ADR-047 P2 env flag) was
+removed by that decision; verdicts are decided by findings (structured
+path, ADR-051) or verdict extraction (legacy path).
 """
 
 from __future__ import annotations
@@ -35,15 +37,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAPPING_PATH = Path(".council") / "calibration" / "mapping.json"
 DEFAULT_DISPOSITIONS_PATH = Path(".council") / "calibration" / "dispositions.jsonl"
 DEFAULT_LOGS_DIR = Path(".council") / "logs"
-
-
-def calibrated_confidence_enabled() -> bool:
-    """Flag gate: PASS thresholding uses calibrated confidence (default off)."""
-    return os.getenv("LLM_COUNCIL_CALIBRATED_CONFIDENCE", "false").lower() in (
-        "true",
-        "1",
-        "yes",
-    )
 
 
 @dataclass
@@ -182,6 +175,10 @@ class CalibrationMapping:
         ys = [p[1] for p in points]
         if xs != sorted(xs) or ys != sorted(ys):
             raise ValueError("calibration mapping must be monotonic")
+        # #629: confidences live in [0, 1]; out-of-range coordinates are
+        # corruption, rejected the same way (load_mapping ⇒ identity).
+        if any(not (0.0 <= v <= 1.0) for p in points for v in p):
+            raise ValueError("calibration mapping coordinates must be in [0, 1]")
         return cls(points=points)
 
 

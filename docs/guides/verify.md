@@ -66,8 +66,13 @@ llm-council calibration-report          # analyze .council/logs
 llm-council calibration-report --fit    # fit mapping from dispositions
 ```
 
-The PASS threshold consumes the calibrated value only behind
-`LLM_COUNCIL_CALIBRATED_CONFIDENCE=true` (default off).
+Both numbers are **telemetry, not a calibrated probability** (ADR-054 D3a):
+`confidence` is derived from reviewer agreement and the chairman's
+self-report, and no verdict threshold consumes the calibrated value —
+verdicts are decided by findings (structured path) or verdict extraction
+(legacy). The former `LLM_COUNCIL_CALIBRATED_CONFIDENCE` PASS gate was
+removed; do not build automation on `confidence >= X` as if the number were
+a probability.
 
 ## Screening judge (ADR-047, opt-in)
 

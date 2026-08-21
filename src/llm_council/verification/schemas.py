@@ -522,9 +522,10 @@ class VerifyResponse(BaseModel):
         description=(
             "Confidence after the persisted monotonic calibration mapping"
             " (.council/calibration/mapping.json; identity when absent, so it"
-            " equals the raw value until a mapping is fitted). The PASS"
-            " threshold uses this ONLY when LLM_COUNCIL_CALIBRATED_CONFIDENCE"
-            " is enabled (default off)."
+            " equals the raw value until a mapping is fitted). TELEMETRY ONLY"
+            " (ADR-054 D3a): no verdict threshold consumes this value — like"
+            " `confidence`, it is a reviewer-agreement-derived heuristic, not"
+            " a calibrated probability."
         ),
     )
     # ADR-047 P1 (#413): machine-readable UNCLEAR cause. None unless

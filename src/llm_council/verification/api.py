@@ -52,10 +52,7 @@ from llm_council.cache_context import (
     prompt_cache_ttl,
     set_cache_context,
 )
-from llm_council.verification.calibration import (
-    calibrated_confidence_enabled,
-    load_mapping,
-)
+from llm_council.verification.calibration import load_mapping
 from llm_council.verification.screening import (
     evaluate_screen,
     log_decision,
@@ -694,9 +691,10 @@ async def _run_verification_pipeline(
         # #355: prefer the chairman's structured BINARY verdict over a regex
         # over the synthesis prose. ``verdict_result`` is parsed in Stage 3.
         verdict_result=verdict_result,
-        calibrate=(
-            calibration_mapping.calibrate if calibrated_confidence_enabled() else None
-        ),
+        # ADR-054 D3a (#563): calibration never gates a verdict — the
+        # calibrated value is REPORTED (filled below from the persisted
+        # mapping) but no threshold consumes it.
+        calibrate=None,
     )
 
     verdict = verification_output["verdict"]
