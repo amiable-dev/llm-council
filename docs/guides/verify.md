@@ -196,12 +196,13 @@ logic on `coverage`, not on `expansion_warnings`.
 
 > **Upcoming default change.** The clamp default will flip from `warn` to `clamp`
 > in a future minor release (with ≥2 releases' notice). When it does, a
-> `verify`/`gate` `pass` over an unreviewed changed/explicit file — in the default
-> `allowlist` selection, any unlisted-extension source file — returns
-> `unclear(incomplete_coverage)`, and `gate` refuses an explicit `warn`. **Adopt
-> early** with `LLM_COUNCIL_COVERAGE_POLICY=clamp`; **preview** the impact with
-> `LLM_COUNCIL_FILE_SELECTION=shadow`. Switching to `content` selection reviews
-> the dropped files so they no longer clamp.
+> `verify`/`gate` `pass` over an unreviewed changed/explicit file returns
+> `unclear(incomplete_coverage)`, and `gate` refuses an explicit `warn`. With
+> `content` file selection now the default, unlisted-extension source files
+> are reviewed rather than dropped, so the clamp's remaining triggers are the
+> genuinely surprising omissions (`not_found`, `truncated`, `denied_secret` —
+> and `non-text` for users who opted back into `allowlist` selection).
+> **Adopt early** with `LLM_COUNCIL_COVERAGE_POLICY=clamp`.
 
 ## Response fields
 

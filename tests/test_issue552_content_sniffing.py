@@ -6,8 +6,9 @@ a blob is text iff its first 8000 bytes contain no NUL — read via
 `binary`/`-diff` from the snapshot. A one-call `git ls-tree` size pre-pass
 enforces a byte cap and disambiguates empty files (which `grep` omits).
 
-`allowlist` (default) stays byte-identical. `shadow` acts on the allowlist but
-logs what `content` would have changed.
+`content` is the default since the #557 flip (2026-08-21); `allowlist` is the
+one-var opt-out restoring pre-flip behavior byte-identically. `shadow` acts on
+the allowlist but logs what `content` would have changed.
 
 ADR erratum: the ADR's Q1 example list includes `.envrc` as "reviewed", but
 Q3a lists it as a secret and #548 shipped it denied. The secret boundary runs
@@ -162,11 +163,16 @@ class TestDefaultAndAllowlistOptOut:
 
 class TestShadowMode:
     def test_shadow_acts_on_allowlist_but_reports_the_delta(self, sniff_repo, monkeypatch):
+        # #631 gate finding: the old fixture requested app.py, which the repo
+        # never contained — the assertion passed for the wrong reason
+        # (not_found, not allowlist exclusion). empty.py exists and is on the
+        # allowlist, so the pairing below genuinely pins "shadow ACTS on
+        # allowlist" (zig omitted) while content-classification runs silently.
         monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "shadow")
         _repo, sha = sniff_repo
-        # shadow ACTS on allowlist: .zig stays omitted
-        selected, omitted = asyncio.run(_select(sha, ["src/main.zig", "app.py"]))
-        assert "src/main.zig" not in {b.path for b in selected}
+        selected, omitted = asyncio.run(_select(sha, ["src/main.zig", "empty.py"]))
+        assert {b.path for b in selected} == {"empty.py"}
+        assert any(o.path == "src/main.zig" and o.reason == "non-text" for o in omitted)
 
     def test_shadow_run_appends_decision_record(self, sniff_repo, monkeypatch):
         """#595: the delta must survive as a reviewable record, not just a log line."""
