@@ -724,8 +724,13 @@ class TestEventLoopNotBlocked:
             ):
                 await file_ops._fetch_file_at_commit_async("HEAD", "some/file.py")
         finally:
+            # Never let heartbeat cleanup mask an exception from the fetch:
+            # this `finally` runs on the failure path too (#620 review).
             stop.set()
-            await beat
+            try:
+                await beat
+            except Exception:  # pragma: no cover - cleanup must not shadow
+                pass
 
         assert len(ticks) >= 2, "heartbeat never sampled; the test proves nothing"
         gaps = [b - a for a, b in zip(ticks, ticks[1:])]
