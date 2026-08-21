@@ -12,7 +12,6 @@ from llm_council.verification.calibration import (
     CalibrationMapping,
     CalibrationRecord,
     analyze_corpus,
-    calibrated_confidence_enabled,
     fit_from_dispositions,
     load_corpus,
     load_mapping,
@@ -121,10 +120,10 @@ class TestFit:
         assert fit_from_dispositions(records, {}).is_identity
 
 
-class TestFlagGate:
-    def test_default_off(self, monkeypatch):
-        monkeypatch.delenv("LLM_COUNCIL_CALIBRATED_CONFIDENCE", raising=False)
-        assert calibrated_confidence_enabled() is False
+class TestCalibrateParam:
+    """ADR-054 D3a (#563): the flag gate is gone; the `calibrate` param
+    remains as the REPORTING mechanism only (no production path passes it
+    for gating — pinned in test_issue563_d3a_demotion.py)."""
 
     def test_flag_off_verdict_byte_identical(self):
         # build_verification_result without a calibrator: threshold uses raw.
