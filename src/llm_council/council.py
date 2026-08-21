@@ -164,6 +164,9 @@ from llm_council.quality import (
     calculate_quality_metrics,
     should_include_quality_metrics,
 )
+from .graduated_depth import (
+    evaluate_and_log_shadow_depth,
+)
 from llm_council.rubric import (
     parse_rubric_evaluation,
     calculate_weighted_score,
@@ -645,6 +648,16 @@ async def run_council_with_fallback(
         result["metadata"]["synthesis_type"] = "full"
         result["metadata"]["aggregate_rankings"] = aggregate_rankings
         result["metadata"]["label_to_model"] = label_to_model
+
+        # ADR-044 P3 (#618): shadow depth telemetry — internally soft-fail,
+        # writes .council/depth/decisions.jsonl, response payload unchanged.
+        evaluate_and_log_shadow_depth(
+            entry_point="run_council_with_fallback",
+            stage2_results=stage2_results,
+            label_to_model=label_to_model,
+            aggregate_rankings=aggregate_rankings,
+            council_models=council_models,
+        )
         result["metadata"]["verdict_type"] = verdict_type.value
         result["metadata"]["effective_verdict_type"] = effective_verdict_type.value
         result["metadata"]["deadlock_detected"] = deadlock_detected
@@ -1143,6 +1156,18 @@ async def run_full_council(
             label_to_model=label_to_model,
         )
         metadata["quality_metrics"] = quality_metrics.to_dict()
+
+    # ADR-044 P3 (#618): shadow depth telemetry — internally soft-fail,
+    # writes .council/depth/decisions.jsonl, response payload unchanged.
+    # Deliberately outside the quality-metrics block: that flag governs
+    # response annotation, not internal signals (#618 design review).
+    evaluate_and_log_shadow_depth(
+        entry_point="run_full_council",
+        stage2_results=stage2_results,
+        label_to_model=label_to_model,
+        aggregate_rankings=aggregate_rankings,
+        council_models=models or _get_council_models(),
+    )
 
     # Emit telemetry event (non-blocking, fire-and-forget)
     telemetry = get_telemetry()

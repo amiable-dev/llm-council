@@ -86,7 +86,7 @@
 | Variable | Description | Default |
 |---|---|---|
 | `LLM_COUNCIL_EARLY_CONSENSUS` | Early consensus termination (ADR-044 P2; off = shadow) | false |
-| `LLM_COUNCIL_GRADUATED_DEPTH` | Graduated deliberation depth (ADR-044 P3) | false |
+| `LLM_COUNCIL_GRADUATED_DEPTH` | Graduated deliberation depth (ADR-044 P3): active mini→full ladder, gated on shadow telemetry review. Shadow telemetry itself (`.council/depth/decisions.jsonl`, "was full depth necessary?") is always recorded regardless of this flag — numeric signals only, soft-fail, response unchanged. See the [Deliberation Depth guide](../guides/deliberation-depth.md) | false |
 | `LLM_COUNCIL_PERFORMANCE_SELECTION` | Blend live index into selection (ADR-044 P1) | false |
 
 ## Cost & budget (ADR-011)
