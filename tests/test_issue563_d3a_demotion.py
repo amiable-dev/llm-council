@@ -47,6 +47,30 @@ class TestDocsRelabelled:
         assert "not a calibrated probability" in guide.lower()
 
 
+class TestMappingRangeValidation:
+    """#629 council finding (minor): a persisted mapping with coordinates
+    outside [0, 1] is corrupt and must be rejected on load (load_mapping then
+    soft-fails to identity, same as the monotonicity check)."""
+
+    def test_from_json_rejects_out_of_range_coordinates(self):
+        from llm_council.verification.calibration import CalibrationMapping
+
+        for bad in (
+            '{"points": [[0.0, 0.0], [1.5, 1.0]]}',
+            '{"points": [[-0.1, 0.0], [1.0, 1.0]]}',
+            '{"points": [[0.0, 0.0], [1.0, 1.2]]}',
+        ):
+            with pytest.raises(ValueError):
+                CalibrationMapping.from_json(bad)
+
+    def test_load_mapping_soft_fails_to_identity_on_out_of_range(self, tmp_path):
+        from llm_council.verification.calibration import load_mapping
+
+        p = tmp_path / "mapping.json"
+        p.write_text('{"points": [[0.0, 0.0], [2.0, 1.0]]}')
+        assert load_mapping(p).is_identity
+
+
 class TestReportingSurvives:
     def test_calibrate_param_still_computes_reported_value(self):
         """The calibrate mechanism stays for REPORTING (confidence_calibrated);

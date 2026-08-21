@@ -175,6 +175,10 @@ class CalibrationMapping:
         ys = [p[1] for p in points]
         if xs != sorted(xs) or ys != sorted(ys):
             raise ValueError("calibration mapping must be monotonic")
+        # #629: confidences live in [0, 1]; out-of-range coordinates are
+        # corruption, rejected the same way (load_mapping ⇒ identity).
+        if any(not (0.0 <= v <= 1.0) for p in points for v in p):
+            raise ValueError("calibration mapping coordinates must be in [0, 1]")
         return cls(points=points)
 
 
