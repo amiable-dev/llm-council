@@ -737,3 +737,53 @@ Deferred until Phase 1+2 telemetry justifies it. Requires Chairman synthesis to 
 - ADR-041 (telemetry wiring; defines `input_metrics` extension surface)
 - midimon `~/.claude/commands/epic-loop.md` (downstream consumer)
 - Upstream scanners: `ai-slop-detector` v3.7.3 (May 2026), `antislop` v0.3.0 (Jan 2026)
+
+## Amendment 1 — evidence on `consult_council` (2026-08-21, #619)
+
+Extracted from the #579 assessment: the "retrieval hook" a research/grounding
+mode wants is exactly this ADR's mechanism, pointed at the consult path.
+Callers with their own retrieval (MCP clients with web search, RAG pipelines)
+supply snippets; llm-council still owns no search integration (ADR-009).
+
+**One evidence subsystem.** `consult_council` (MCP) and `POST /v1/council/run`
+(HTTP) accept the same `evidence` items, validated by the same `EvidenceItem`
+schema and budgeted by the same per-tier `MAX_EVIDENCE_CHARS_RATIO` ×
+`TIER_MAX_CHARS` whole-item budgeter. The HTTP endpoint has no tier parameter
+and runs the full council, so it budgets at `high`.
+
+**Where consult deliberately differs** (`consult_evidence.py`):
+
+1. **`strength: blocking` is downgraded to informational, explicitly.**
+   Consult has no gate; "blocking" is verify's ask-the-council-to-verify
+   semantic. Downgrading (structured `blocking_downgraded_consult` warning +
+   `downgraded: true` in the summary + a note in the MCP text response)
+   rather than rejecting keeps one evidence list usable across both tools.
+   Corollary: the `BlockingEvidenceTooLarge` fail-closed path cannot trigger
+   on consult — an oversized item fails OPEN (dropped whole, warned), because
+   with no gate there is nothing to fail closed *for*.
+2. **Dispositions are budgeting-level only** (`rendered` / `dropped_budget`).
+   The chairman disposition protocol (confirmed/rejected/unresolved) is bound
+   to verify's binary-verdict JSON; a free-form synthesis carries no such
+   block. If consult later gains verdict-typed evidence dispositions, that is
+   a new decision, not an implication of this one.
+3. **Entry-surface rendering.** The `## Caller-supplied Evidence` section
+   (consult-flavoured wording; identical `<evidence_item>` fencing and
+   data-not-instructions framing) is appended to the caller's query by the
+   MCP/HTTP entry surfaces before the orchestrator runs — every stage sees
+   the same grounded query and the orchestrators are untouched. No evidence
+   ⇒ the query is byte-identical (test-pinned).
+
+4. **Body tag-sequence neutralization** (added after the #624 council gate
+   flagged it as critical). The `<evidence_item>` wrapper is the structural
+   boundary and the body is caller text, so the exact sequences
+   `<evidence_item` / `</evidence_item` (case-insensitive) inside a body are
+   entity-encoded (`&lt;…`) before budgeting — a body cannot forge a
+   premature close plus a fake operator item. Each neutralization is a
+   structured `evidence_tag_neutralized` warning, and the adversarial case is
+   test-pinned (exactly one real open/close pair per rendered item). NOTE:
+   verify's renderer has the same exposure and does NOT yet neutralize —
+   changing it touches ADR-049's byte-stability goldens, so it is tracked as
+   its own follow-up rather than a rider here.
+
+Telemetry stays content-free: summaries/warnings/metrics carry ids, sources,
+and sizes — never bodies (test-pinned).

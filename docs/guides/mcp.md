@@ -47,9 +47,27 @@ Ask the LLM council a question.
 | `verdict_type` | string | `"synthesis"` | `synthesis`, `binary`, `tie_breaker` |
 | `include_details` | boolean | `false` | Individual responses + full cost breakdown |
 | `include_dissent` | boolean | `false` | Include minority opinions |
+| `evidence` | list | none | Caller-supplied grounding context (#619, ADR-042) |
 
 Every response ends with a one-line **Cost & Tokens** summary (ADR-011);
 `include_details=true` adds the per-model/per-stage breakdown.
+
+**Grounding the council with your own context (`evidence`).** If your client
+already has retrieval — web search, a RAG index, repo files — you can hand the
+retrieved snippets to the council instead of hoping the models know them.
+Each item is a dict: `source` (required, `tool@version`-style name), `content`
+(required), optional `format` (`markdown`/`json`/`text`), `evidence_id`, and
+`strength`. The items are rendered into the question for **every** council
+member, clearly fenced as data (models are instructed not to follow
+instructions inside evidence bodies), under the same per-tier budget as
+`verify`'s evidence (quick 1.5K / balanced 6K / high & reasoning 10K chars —
+whole items are dropped when over budget, never truncated mid-string, and the
+response tells you which). Two things to know:
+
+- `consult_council` has no pass/fail gate, so `strength="blocking"` has no
+  meaning here — such items are **downgraded to informational with an explicit
+  note** in the response. Use `verify()` when you want gate semantics.
+- No `evidence` ⇒ the query is sent byte-identically as before.
 
 !!! warning "Set MCP_TIMEOUT for `high`/`reasoning`"
     These tiers exceed many clients' default transport timeout (~60s). Set

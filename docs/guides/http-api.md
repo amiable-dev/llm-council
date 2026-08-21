@@ -74,6 +74,18 @@ curl -X POST http://localhost:8000/v1/council/run \
 | `webhook_url` | string | No | URL for webhook notifications |
 | `webhook_events` | string[] | No | Events to subscribe to |
 | `webhook_secret` | string | No | HMAC secret for webhook verification |
+| `evidence` | object[] | No | Caller-supplied grounding context (#619, ADR-042) — see below |
+
+**Caller-supplied evidence.** Each item: `source` (required, `tool@version`-style
+name), `content` (required), optional `format` (`markdown`/`json`/`text`),
+`evidence_id`, `strength`. Items are rendered into the prompt for the whole
+council, fenced as data, under the high-tier evidence budget (10K chars —
+whole items dropped when over budget, never truncated). This endpoint has no
+pass/fail gate, so `strength="blocking"` is downgraded to informational with an
+explicit warning (use `/verify` for gate semantics). When evidence is supplied,
+the response's `metadata.evidence` carries `summary` (per-item
+`rendered`/`dropped_budget` status + `downgraded` flag), `warnings`, and
+`metrics` — evidence ids and sizes only, never bodies. Invalid items are a 422.
 
 **Response:**
 ```json

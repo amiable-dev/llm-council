@@ -87,6 +87,8 @@ auth_dependency = Depends(verify_token)
 from llm_council.webhooks.sse import council_event_generator, get_sse_headers
 from llm_council.webhooks.types import WebhookConfig
 from llm_council.verdict import VerdictType
+from llm_council.consult_evidence import prepare_consult_evidence
+from llm_council.verification.schemas import EvidenceItem
 
 # FastAPI app instance
 from llm_council import __version__ as _package_version
@@ -140,6 +142,20 @@ class CouncilRequest(BaseModel):
     )
     include_dissent: Optional[bool] = Field(
         default=False, description="Extract minority opinions from Stage 2 evaluations (ADR-025b)"
+    )
+    # #619 (ADR-042): caller-supplied grounding context
+    evidence: Optional[List[EvidenceItem]] = Field(
+        default=None,
+        description=(
+            "Caller-supplied grounding context (#619, ADR-042): items with "
+            "source (tool@version charset), content, optional format/"
+            "evidence_id/strength. Rendered into the prompt for the whole "
+            "council under the high-tier evidence budget (10K chars; whole "
+            "items dropped, never truncated). strength='blocking' is "
+            "downgraded to informational with an explicit warning — this "
+            "endpoint has no gate; use /verify for gate semantics. "
+            "Dispositions returned under metadata.evidence."
+        ),
     )
 
 
@@ -248,15 +264,39 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
     except ValueError:
         verdict_type_enum = VerdictType.SYNTHESIS
 
+    # #619 (ADR-042): caller-supplied evidence — already schema-validated by
+    # FastAPI (typed field ⇒ 422 on bad items); budget + render at the entry
+    # surface. This endpoint has no confidence tiers, so the budget uses the
+    # high tier (the full council this endpoint runs). No evidence ⇒ the
+    # prompt is byte-identical.
+    evidence_prep = None
+    effective_prompt = request.prompt
+    if request.evidence:
+        evidence_prep = prepare_consult_evidence(
+            [e.model_dump() for e in request.evidence], "high"
+        )
+        if evidence_prep:
+            effective_prompt = request.prompt + evidence_prep["section"]
+
     try:
         # Run the full council deliberation
         stage1, stage2, stage3, metadata = await run_full_council(
-            request.prompt,
+            effective_prompt,
             models=request.models,
             webhook_config=webhook_config,
             verdict_type=verdict_type_enum,
             include_dissent=request.include_dissent or False,
         )
+
+        if evidence_prep:
+            metadata = {
+                **metadata,
+                "evidence": {
+                    "summary": evidence_prep["summary"],
+                    "warnings": evidence_prep["warnings"],
+                    "metrics": evidence_prep["metrics"],
+                },
+            }
 
         return CouncilResponse(
             stage1=stage1,

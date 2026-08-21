@@ -182,6 +182,7 @@ async def consult_council(
     include_details: bool = False,
     verdict_type: str = "synthesis",
     include_dissent: bool = False,
+    evidence: Optional[List[Dict[str, Any]]] = None,
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -217,6 +218,15 @@ async def consult_council(
             - "binary": Go/no-go decision (approved/rejected) with confidence score
             - "tie_breaker": Chairman resolves deadlocked decisions
         include_dissent: If True, extract minority opinions from Stage 2 evaluations (ADR-025b).
+        evidence: #619 (ADR-042) — caller-supplied grounding context. List of
+            dicts with keys: source (required), content (required), format
+            (markdown|json|text, default markdown), evidence_id (optional),
+            strength. Rendered into the query for the whole council under the
+            same per-tier budget as verify's evidence (quick=1.5K,
+            balanced=6K, high/reasoning=10K chars; whole items dropped, never
+            truncated). NOTE: consult has no gate, so strength="blocking" is
+            DOWNGRADED to informational with an explicit warning — use
+            verify() for gate semantics.
         ctx: MCP context for progress reporting (injected automatically).
 
     Returns:
@@ -243,6 +253,33 @@ async def consult_council(
     tier = confidence if confidence in _get_tier_model_pools() else "high"
     tier_contract = create_tier_contract(tier)
 
+    # #619 (ADR-042): caller-supplied evidence — validate, budget, render into
+    # the query at the entry surface (orchestrators untouched; no evidence ⇒
+    # query byte-identical).
+    evidence_prep = None
+    effective_query = query
+    if evidence:
+        from pydantic import ValidationError
+
+        from llm_council.consult_evidence import prepare_consult_evidence
+
+        try:
+            evidence_prep = prepare_consult_evidence(evidence, tier)
+        except ValidationError as e:
+            return json.dumps(
+                {
+                    "error": "invalid_evidence",
+                    "detail": str(e),
+                    "hint": (
+                        "each evidence item needs source (tool@version charset) "
+                        "and content; see the evidence argument docs"
+                    ),
+                },
+                indent=2,
+            )
+        if evidence_prep:
+            effective_query = query + evidence_prep["section"]
+
     # Progress reporting helper that bridges MCP context to council callback
     async def on_progress(step: int, total: int, message: str):
         if ctx:
@@ -259,7 +296,7 @@ async def consult_council(
     # - Per-model status tracking
     # - Jury Mode verdict types (ADR-025b)
     council_result = await run_council_with_fallback(
-        query,
+        effective_query,
         on_progress=on_progress,
         synthesis_deadline=total_timeout,
         per_model_timeout=per_model_timeout,
@@ -290,6 +327,27 @@ async def consult_council(
         result += f"\n*Council status: {status} ({synthesis_type} synthesis{tier_info})*\n"
     elif tier_used:
         result += f"\n*Tier: {tier_used}*\n"
+
+    # #619 (ADR-042): surface what happened to caller-supplied evidence.
+    if evidence_prep:
+        m = evidence_prep["metrics"]
+        result += (
+            f"\n*Evidence: {m['evidence_items_kept']}/{m['evidence_items_requested']} "
+            f"item(s) rendered ({m['evidence_chars_rendered']} chars)*\n"
+        )
+        downgraded = [r["evidence_id"] for r in evidence_prep["summary"] if r["downgraded"]]
+        if downgraded:
+            result += (
+                f"> **Note**: 'blocking' evidence downgraded to informational for "
+                f"consult ({', '.join(downgraded)}) — consult has no gate; use "
+                f"verify() for gate semantics.\n"
+            )
+        dropped = [r["evidence_id"] for r in evidence_prep["summary"] if r["status"] != "rendered"]
+        if dropped:
+            result += (
+                f"> **Note**: dropped over the {tier}-tier evidence budget "
+                f"({', '.join(dropped)}) — whole items are dropped, never truncated.\n"
+            )
 
     # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
     verdict = metadata.get("verdict")
