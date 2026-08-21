@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.0] - 2026-08-21
+
+**The #579 extraction chain: grounded consultation + compute-optimal telemetry.** Two features extracted from the STORM/Co-STORM research-mode proposal ([#579](https://github.com/amiable-dev/llm-council/issues/579)) — each justified on its own merits — plus the evidence-hardening their council reviews demanded. Design records: ADR-042 Amendment 1, ADR-044 implementation note.
+
+### Added
+
+- **Caller-supplied evidence on `consult_council` and `POST /v1/council/run` ([#619](https://github.com/amiable-dev/llm-council/issues/619))** — callers with their own retrieval (MCP clients with web search, RAG pipelines) can ground the council's deliberation in supplied context: the same `evidence` items `verify()` accepts (ADR-042 schema, per-tier whole-item budget), rendered into the query for the whole council as fenced, data-not-instructions context. Consult has no gate, so `strength="blocking"` is **downgraded to informational with an explicit warning** (use `verify()` for gate semantics); no evidence ⇒ the query is byte-identical. HTTP responses carry `metadata.evidence` (per-item dispositions, warnings, metrics — never bodies). See the MCP and HTTP API guides.
+- **Graduated-depth shadow telemetry (ADR-044 P3 wiring, [#618](https://github.com/amiable-dev/llm-council/issues/618))** — every full council run now appends one content-free JSON line to `.council/depth/decisions.jsonl` answering *"was full depth necessary?"* (full-run CSS + a counterfactual mini-council CSS + a decision classification), computed from data the run already produced: no extra model calls, no response change, soft-fail. This is the evidence that gates the future opt-in depth ladder ([#623](https://github.com/amiable-dev/llm-council/issues/623)); `LLM_COUNCIL_GRADUATED_DEPTH` remains default-off and activates nothing yet. New guide: **Deliberation Depth** (`docs/guides/deliberation-depth.md`). Also hardens the (still-unwired) escalation engine: budget enforcement can no longer be silently bypassed by an unpriceable escalation, and a degenerate empty escalation now stops explicitly.
+
+### Security
+
+- **Evidence bodies can no longer forge the `<evidence_item>` structural boundary ([#625](https://github.com/amiable-dev/llm-council/issues/625); found by the council gate on [#624](https://github.com/amiable-dev/llm-council/pull/624))** — on both the consult and verify paths, the exact tag sequences inside an evidence body are entity-encoded before budgeting (so the fail-closed oversized-blocking check sees final bytes), each occurrence recorded as a structured `evidence_tag_neutralized` warning. Clean bodies render byte-identically (prompt-cache goldens unaffected). Only the exact tag name is touched — `<evidence_item_count>`-style content passes through.
+
+### Fixed
+
+- Snapshot-resolution failures now name the repository root that was searched ([#617](https://github.com/amiable-dev/llm-council/issues/617)) — "not found" in a multi-repo session is frequently "found nothing *here*", which the operator previously could not tell.
+
+### Testing
+
+- The verify event-loop regression test can now actually fail ([#620](https://github.com/amiable-dev/llm-council/issues/620)).
+
 ## [0.42.0] - 2026-08-20
 
 **Correctness pass over configuration, health reporting, and bias measurement.** Seven changes from an issue-review sweep, several of which found that a subsystem was silently reporting something other than reality. Two carry behaviour changes worth reading before upgrading: the bias `position` semantics and what `council_health_check` reports.
