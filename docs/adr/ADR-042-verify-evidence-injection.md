@@ -773,5 +773,17 @@ and runs the full council, so it budgets at `high`.
    the same grounded query and the orchestrators are untouched. No evidence
    ⇒ the query is byte-identical (test-pinned).
 
+4. **Body tag-sequence neutralization** (added after the #624 council gate
+   flagged it as critical). The `<evidence_item>` wrapper is the structural
+   boundary and the body is caller text, so the exact sequences
+   `<evidence_item` / `</evidence_item` (case-insensitive) inside a body are
+   entity-encoded (`&lt;…`) before budgeting — a body cannot forge a
+   premature close plus a fake operator item. Each neutralization is a
+   structured `evidence_tag_neutralized` warning, and the adversarial case is
+   test-pinned (exactly one real open/close pair per rendered item). NOTE:
+   verify's renderer has the same exposure and does NOT yet neutralize —
+   changing it touches ADR-049's byte-stability goldens, so it is tracked as
+   its own follow-up rather than a rider here.
+
 Telemetry stays content-free: summaries/warnings/metrics carry ids, sources,
 and sizes — never bodies (test-pinned).

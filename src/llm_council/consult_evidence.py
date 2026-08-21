@@ -27,9 +27,27 @@ are verify's, imported here. What differs on the consult path:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# #624 council finding (critical): the <evidence_item> wrapper is the
+# structural boundary of the rendered section, and the body is caller
+# text — so the exact tag sequences must not survive verbatim inside a
+# body, or content could forge a premature close + a fake operator item.
+# Entity-encoding just these sequences defangs the structure while keeping
+# the body readable as data. Case-insensitive: the LLM-facing boundary is
+# not a strict XML parser.
+_EVIDENCE_TAG_RE = re.compile(r"<(/?)(evidence_item)", re.IGNORECASE)
+
+
+def _neutralize_evidence_body(content: str) -> tuple[str, int]:
+    """Entity-encode ``<evidence_item`` / ``</evidence_item`` inside a body.
+
+    Returns (neutralized_content, substitution_count).
+    """
+    return _EVIDENCE_TAG_RE.subn(lambda m: f"&lt;{m.group(1)}{m.group(2)}", content)
 
 
 def prepare_consult_evidence(
@@ -65,11 +83,34 @@ def prepare_consult_evidence(
     items = [EvidenceItem(**e) for e in evidence]  # ValidationError propagates
 
     warnings: List[Dict[str, Any]] = []
-    downgraded_ids: set = set()
+    # #624: downgrades tracked by request INDEX — unique by construction; a
+    # caller-supplied evidence_id can collide with another item's auto-{idx}
+    # fallback and must not misattribute the flag.
+    downgraded_indices: set = set()
     effective: List[EvidenceItem] = []
     for idx, item in enumerate(items):
+        updates: Dict[str, Any] = {}
+
+        neutralized, n_subs = _neutralize_evidence_body(item.content)
+        if n_subs:
+            updates["content"] = neutralized
+            warnings.append(
+                {
+                    "evidence_id": item.evidence_id,
+                    "request_index": idx,
+                    "source": item.source,
+                    "reason": "evidence_tag_neutralized",
+                    "detail": (
+                        f"{n_subs} <evidence_item> tag sequence(s) inside the "
+                        "body were entity-encoded to keep the rendered "
+                        "structure caller-proof"
+                    ),
+                }
+            )
+
         if item.strength == "blocking":
-            downgraded_ids.add(item.evidence_id or f"auto-{idx}")
+            downgraded_indices.add(idx)
+            updates["strength"] = "informational"
             warnings.append(
                 {
                     "evidence_id": item.evidence_id,
@@ -83,9 +124,8 @@ def prepare_consult_evidence(
                     ),
                 }
             )
-            effective.append(item.model_copy(update={"strength": "informational"}))
-        else:
-            effective.append(item)
+
+        effective.append(item.model_copy(update=updates) if updates else item)
 
     kept, budget_warnings = _budget_evidence(effective, tier)
     warnings.extend(w.model_dump() for w in budget_warnings)
@@ -100,7 +140,7 @@ def prepare_consult_evidence(
                 "request_index": idx,
                 "source": item.source,
                 "strength_submitted": item.strength,
-                "downgraded": item_id in downgraded_ids,
+                "downgraded": idx in downgraded_indices,
                 "status": "rendered" if idx in kept_indices else "dropped_budget",
             }
         )
