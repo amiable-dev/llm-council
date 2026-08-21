@@ -10,6 +10,7 @@ These tests verify that:
 """
 
 import asyncio
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -638,25 +639,102 @@ class TestEventLoopNotBlocked:
 
     @pytest.mark.asyncio
     async def test_event_loop_remains_responsive(self):
-        """Event loop should remain responsive during file fetch."""
-        from llm_council.verification.api import _fetch_file_at_commit_async
+        """The fetch must not starve the event loop while it runs (#588).
 
-        # Create a flag that will be set by a concurrent task
-        flag_set = False
+        The original version could not fail: it ran the fetch and a
+        flag-setter under `asyncio.gather`, then asserted the flag was set.
+        `gather` waits for BOTH, so the setter always completed and the flag
+        was always True — even if the fetch had frozen the loop for ten
+        seconds first. A guard on the invariant the async design exists to
+        protect, providing no protection.
 
-        async def set_flag():
-            nonlocal flag_set
-            await asyncio.sleep(0.01)  # Tiny delay
-            flag_set = True
+        A second attempt (parking the mocked read on an `asyncio.Event` that a
+        concurrent task must set) was ALSO insufficient, and was verified so:
+        synchronous blocking placed *before* the await simply delayed
+        everything and then completed, because the loop was free again by the
+        time the event mattered. Liveness alone cannot see starvation that has
+        already ended.
 
-        # Start file fetch and flag setter concurrently
-        await asyncio.gather(
-            _fetch_file_at_commit_async("HEAD", "pyproject.toml"),
-            set_flag(),
+        What can: sampling. A heartbeat ticks on a short interval throughout
+        the fetch, and the largest gap between ticks is the longest the loop
+        went unserviced. Synchronous blocking anywhere in the fetch path
+        shows up directly as an oversized gap.
+
+        On the flakiness this must not reintroduce (#585): that test compared
+        two similar real durations against a 1.5x margin, so ordinary
+        scheduling noise could flip it. This compares mocked work of roughly
+        zero against a one-second bound — three orders of magnitude of
+        headroom. It distinguishes "the loop was serviced" from "the loop was
+        frozen", not "fast" from "slow".
+        """
+        from llm_council.verification import file_ops
+
+        # Generous relative to the mocked work (~0ms); tight relative to any
+        # blocking call worth catching.
+        MAX_UNSERVICED_SECONDS = 1.0
+
+        ticks: list = []
+        stop = asyncio.Event()
+
+        async def heartbeat():
+            while not stop.is_set():
+                ticks.append(time.monotonic())
+                await asyncio.sleep(0.005)
+
+        # A few chunks, each preceded by a short ASYNC wait. The awaits keep
+        # the loop free by construction, so they give the heartbeat a window
+        # to sample without themselves creating gaps — anything that widens a
+        # gap has to come from the code under test.
+        chunks = [b"chunk-one", b"chunk-two", b"chunk-three", b""]
+
+        async def mock_read(size: int) -> bytes:
+            await asyncio.sleep(0.02)
+            return chunks.pop(0) if chunks else b""
+
+        mock_stdout = MagicMock()
+        mock_stdout.read = mock_read
+        mock_stderr = MagicMock()
+        mock_stderr.read = AsyncMock(return_value=b"")
+
+        mock_proc = MagicMock()
+        mock_proc.stdout = mock_stdout
+        mock_proc.stderr = mock_stderr
+        mock_proc.returncode = 0
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        beat = asyncio.create_task(heartbeat())
+        await asyncio.sleep(0)  # let the heartbeat register a first tick
+        try:
+            with (
+                patch.object(
+                    file_ops, "_get_git_root_async", new_callable=AsyncMock, return_value="/mock"
+                ),
+                patch.object(
+                    file_ops,
+                    "_get_git_semaphore",
+                    new_callable=AsyncMock,
+                    return_value=asyncio.Semaphore(10),
+                ),
+                patch(
+                    "asyncio.create_subprocess_exec",
+                    new_callable=AsyncMock,
+                    return_value=mock_proc,
+                ),
+            ):
+                await file_ops._fetch_file_at_commit_async("HEAD", "some/file.py")
+        finally:
+            stop.set()
+            await beat
+
+        assert len(ticks) >= 2, "heartbeat never sampled; the test proves nothing"
+        gaps = [b - a for a, b in zip(ticks, ticks[1:])]
+        worst = max(gaps)
+        assert worst < MAX_UNSERVICED_SECONDS, (
+            f"event loop went unserviced for {worst:.2f}s during the fetch "
+            f"(bound {MAX_UNSERVICED_SECONDS}s) — something in the fetch path "
+            "is blocking rather than awaiting"
         )
-
-        # Flag should have been set (event loop wasn't blocked)
-        assert flag_set, "Event loop was blocked during file fetch"
 
     @pytest.mark.asyncio
     async def test_uses_asyncio_subprocess_not_sync(self):
