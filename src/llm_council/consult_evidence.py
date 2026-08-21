@@ -26,25 +26,12 @@ are verify's, imported here. What differs on the consult path:
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List, Optional
 
-# #624 council finding (critical): the <evidence_item> wrapper is the
-# structural boundary of the rendered section, and the body is caller
-# text — so the exact tag sequences must not survive verbatim inside a
-# body, or content could forge a premature close + a fake operator item.
-# Entity-encoding just these sequences defangs the structure while keeping
-# the body readable as data. Case-insensitive: the LLM-facing boundary is
-# not a strict XML parser.
-_EVIDENCE_TAG_RE = re.compile(r"<(/?)(evidence_item)", re.IGNORECASE)
-
-
-def _neutralize_evidence_body(content: str) -> tuple[str, int]:
-    """Entity-encode ``<evidence_item`` / ``</evidence_item`` inside a body.
-
-    Returns (neutralized_content, substitution_count).
-    """
-    return _EVIDENCE_TAG_RE.subn(lambda m: f"&lt;{m.group(1)}{m.group(2)}", content)
+# #624 council finding (critical): evidence bodies must not be able to forge
+# the <evidence_item> structural boundary. The neutralization helper now
+# lives beside the shared renderer (#625 applied it to the verify path too);
+# consult imports it from there.
 
 
 def prepare_consult_evidence(
@@ -73,6 +60,7 @@ def prepare_consult_evidence(
     from .verification.evidence_render import (
         _budget_evidence,
         _evidence_input_metrics,
+        _neutralize_evidence_body,
         _render_evidence_item,
     )
     from .verification.schemas import EvidenceItem

@@ -106,6 +106,7 @@ class EvidenceWarning(BaseModel):
         "budget_overflow_dropped",
         "format_mismatch_rendered_as_text",
         "duplicate_source_disambiguated",
+        "evidence_tag_neutralized",  # #625: tag sequence defanged inside a body
     ]
     detail: str
     chars_attempted: int = Field(..., ge=0)

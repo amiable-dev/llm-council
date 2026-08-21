@@ -119,6 +119,7 @@ from .evidence_render import (  # noqa: F401
     _build_evidence_instructions,
     _build_evidence_section,
     _evidence_input_metrics,
+    _neutralize_evidence_items,
     _render_evidence_item,
     _usage_input_metrics,
 )
@@ -215,7 +216,12 @@ async def _build_verification_prompt(
           - chars_submitted: int                  — sum of submitted content
     """
     # ADR-042: budget + render evidence first; carve from TIER_MAX_CHARS.
+    # #625: neutralize <evidence_item> tag sequences inside bodies BEFORE
+    # budgeting, so byte-math (incl. the fail-closed oversized-blocking
+    # check) sees final bytes. Clean bodies pass through byte-identical.
+    evidence, neutralize_warnings = _neutralize_evidence_items(evidence)
     kept_evidence, evidence_warnings = _budget_evidence(evidence, tier)
+    evidence_warnings = neutralize_warnings + evidence_warnings
     evidence_section = _build_evidence_section(kept_evidence)
     chars_rendered = len(evidence_section)
     chars_submitted = sum(len(item.content) for item in (evidence or []))
