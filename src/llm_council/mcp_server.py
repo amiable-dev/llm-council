@@ -704,6 +704,10 @@ async def verify(
                 "error": "snapshot_resolution_failed",
                 "message": str(e),
                 "snapshot_id": e.snapshot_id,
+                # #581: the repository the daemon searched. This is the MCP
+                # surface, where the mis-rooted-daemon case actually bites —
+                # a client rooted in one repo driving work in a sibling.
+                "repo_root": getattr(e, "repo_root", None),
                 "unresolved_paths": e.unresolved_paths,
                 "expansion_warnings": e.expansion_warnings,
                 "exit_code": 2,

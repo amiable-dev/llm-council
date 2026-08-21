@@ -171,9 +171,18 @@ class SnapshotResolutionError(Exception):
     read your code."
 
     Common upstream causes:
+      - the daemon is rooted in a DIFFERENT repository than the snapshot came
+        from (#581) — git operations run in one process-wide root discovered
+        from the server's spawn cwd, so in a multi-repo session a sibling
+        repo's commits are invisible
       - snapshot_id is on a branch not fetched in the daemon's local clone
       - push-replication race: commit was just pushed and hasn't propagated
       - paths refer to files that don't exist at this commit
+
+    #581: `repo_root` names the repository that was actually searched. Without
+    it the message read as "bad commit" and sent operators to inspect the SHA,
+    when the real cause was a correct SHA in a repository the daemon cannot
+    see.
     """
 
     def __init__(
@@ -182,16 +191,24 @@ class SnapshotResolutionError(Exception):
         snapshot_id: str,
         unresolved_paths: List[str],
         expansion_warnings: List[str],
+        repo_root: Optional[str] = None,
     ) -> None:
         self.snapshot_id = snapshot_id
         self.unresolved_paths = unresolved_paths
         self.expansion_warnings = expansion_warnings
+        self.repo_root = repo_root
         first = unresolved_paths[0] if unresolved_paths else "<none>"
+        where = (
+            f" Searched repository root: {repo_root}."
+            if repo_root
+            else " The repository root being searched could not be determined."
+        )
         super().__init__(
             f"None of the {len(unresolved_paths)} target_paths could be "
-            f"resolved at snapshot {snapshot_id} (first: {first}). "
-            "Verify the snapshot exists in the daemon's checkout and that "
-            "the paths exist at that commit."
+            f"resolved at snapshot {snapshot_id} (first: {first})."
+            f"{where} Check that this snapshot exists in THAT repository — in a "
+            "multi-repo session the daemon searches only the root it started "
+            "in — and that the paths exist at that commit."
         )
 
 
