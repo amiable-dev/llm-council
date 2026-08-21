@@ -129,15 +129,24 @@ class TestContentMode:
         assert omitted[0].reason == "denied_secret"
 
 
-class TestAllowlistModeByteIdentical:
-    def test_default_is_allowlist_and_uses_the_extension_predicate(self, sniff_repo, monkeypatch):
+class TestDefaultAndAllowlistOptOut:
+    def test_default_is_content_and_reviews_unlisted_extensions(self, sniff_repo, monkeypatch):
+        """#557 flip (maintainer decision 2026-08-21): content is the default —
+        unlisted-extension text files are reviewed, closing the #542 gap by
+        default. Strictly stricter: nothing reviewed before stops being
+        reviewed (35-run shadow telemetry showed zero would_drop)."""
         monkeypatch.delenv("LLM_COUNCIL_FILE_SELECTION", raising=False)
         _repo, sha = sniff_repo
-        # .zig is NOT on TEXT_EXTENSIONS ⇒ dropped in allowlist mode (the #542 gap)
+        selected, omitted = asyncio.run(_select(sha, ["src/main.zig", "LICENSE"]))
+        assert {b.path for b in selected} == {"src/main.zig", "LICENSE"}
+
+    def test_allowlist_remains_the_documented_opt_out(self, sniff_repo, monkeypatch):
+        """LLM_COUNCIL_FILE_SELECTION=allowlist restores the pre-flip behavior
+        exactly — the one-var escape hatch the flip decision promised."""
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "allowlist")
+        _repo, sha = sniff_repo
         selected, omitted = asyncio.run(_select(sha, ["src/main.zig", "LICENSE"]))
         assert "src/main.zig" not in {b.path for b in selected}
-        # allowlist mode must make NO git subprocess call for content sniffing
-        # (byte-identical guarantee) — asserted indirectly: .zig omitted as non-text
         assert any(o.path == "src/main.zig" and o.reason == "non-text" for o in omitted)
 
     def test_allowlist_mode_is_synchronous_pathonly(self, monkeypatch):
@@ -198,7 +207,9 @@ class TestShadowMode:
         assert {b.path for b in selected} == {"empty.py"}
         assert any(o.path == "src/main.zig" for o in omitted)
 
-    def test_allowlist_mode_writes_no_decision_log(self, sniff_repo, monkeypatch):
+    def test_default_content_mode_writes_no_decision_log(self, sniff_repo, monkeypatch):
+        # only shadow mode records selection decisions — the (content) default
+        # and explicit allowlist both write nothing
         monkeypatch.delenv("LLM_COUNCIL_FILE_SELECTION", raising=False)
         _repo, sha = sniff_repo
         asyncio.run(_select(sha, ["src/main.zig", "empty.py"]))
@@ -209,12 +220,12 @@ class TestModeParsing:
     @pytest.mark.parametrize(
         "val,expected",
         [
-            (None, "allowlist"),
+            (None, "content"),  # #557 flip: content is the default
             ("allowlist", "allowlist"),
             ("content", "content"),
             ("shadow", "shadow"),
             ("CONTENT", "content"),
-            ("garbage", "allowlist"),  # invalid ⇒ safe default
+            ("garbage", "content"),  # invalid ⇒ the default
         ],
     )
     def test_file_selection_mode(self, monkeypatch, val, expected):

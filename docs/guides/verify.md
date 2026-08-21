@@ -135,14 +135,22 @@ given path is or isn't reviewed with `llm-council ignore --explain <path>`.
 
 **File classification** — `LLM_COUNCIL_FILE_SELECTION`:
 
-- `allowlist` (default) — the historical `TEXT_EXTENSIONS` list. Byte-identical
-  to older releases. A file whose extension isn't on the list (`.zig`, `.tf`,
-  `.dart`, …) is dropped.
-- `content` — git's own text detection (a blob is text iff its first 8000 bytes
-  contain no NUL), honouring the snapshot's `.gitattributes`. **Reviews any text
-  file regardless of extension** — unlisted languages, `LICENSE`, `CODEOWNERS`,
-  shebang scripts. Also omits `linguist-generated`/`linguist-vendored` paths and
-  (unless `LLM_COUNCIL_REVIEW_SVG=true`) `.svg`.
+- `content` (**default**) — git's own text detection (a blob is text iff its
+  first 8000 bytes contain no NUL), honouring the snapshot's `.gitattributes`.
+  **Reviews any text file regardless of extension** — unlisted languages,
+  `LICENSE`, `CODEOWNERS`, shebang scripts. Also omits
+  `linguist-generated`/`linguist-vendored` paths and (unless
+  `LLM_COUNCIL_REVIEW_SVG=true`) `.svg`.
+- `allowlist` — the historical `TEXT_EXTENSIONS` list; the one-var opt-out that
+  restores pre-flip behavior exactly. A file whose extension isn't on the list
+  (`.zig`, `.tf`, `.dart`, …) is dropped.
+
+> **Default changed.** Until the #557 flip, `allowlist` was the default and
+> unlisted-extension text files were silently not reviewed — a `gate` could
+> PASS without reading them. The `content` default is strictly stricter:
+> nothing reviewed before stops being reviewed, but commits touching
+> previously-unlisted files can gain findings (and modest prompt cost). Set
+> `LLM_COUNCIL_FILE_SELECTION=allowlist` to restore the old behavior.
 - `shadow` — acts on the allowlist but records what `content` would add or drop,
   so you can measure the change before adopting it. Each shadow run appends one
   JSON line — `{ts, snapshot_id, candidates, selected, would_add, would_drop}`,

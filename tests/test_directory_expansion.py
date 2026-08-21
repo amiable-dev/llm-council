@@ -231,7 +231,15 @@ class TestGitLsTreeZNameOnly:
 
 
 class TestExpandTargetPaths:
-    """Tests for _expand_target_paths() with text filtering (Issue #309)."""
+    """Tests for _expand_target_paths() with text filtering (Issue #309).
+
+    Pinned to allowlist mode (#557 flipped the default to content): these
+    tests exercise the path-only extension filter with mocked git state,
+    which is exactly allowlist semantics."""
+
+    @pytest.fixture(autouse=True)
+    def _allowlist_mode(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "allowlist")
 
     @pytest.mark.asyncio
     async def test_passes_through_single_file(self):
@@ -537,7 +545,13 @@ class TestVerifyResponseSchema:
 
 
 class TestDocsDirectoryIntegration:
-    """Integration tests verifying docs/ directory expansion (Issue #313)."""
+    """Integration tests verifying docs/ directory expansion (Issue #313).
+
+    Pinned to allowlist mode (#557) — see TestExpandTargetPaths."""
+
+    @pytest.fixture(autouse=True)
+    def _allowlist_mode(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "allowlist")
 
     @pytest.mark.asyncio
     async def test_docs_directory_expands_to_markdown_files(self):
