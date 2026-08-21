@@ -16,10 +16,13 @@ This module is the decision engine + opt-in hook; orchestrators call
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -124,6 +127,10 @@ def plan_escalation(
 
     current_set = set(models_for_rung(all_models, current_rung))
     added = [m for m in models_for_rung(all_models, target) if m not in current_set]
+    if not added:
+        # MINI set == FULL set (small council): an "escalate" with nothing to
+        # add would be internally inconsistent (#622 council finding).
+        return EscalationPlan(decision="stop", reason="at_effective_full_depth")
 
     estimate = None
     try:
@@ -134,6 +141,25 @@ def plan_escalation(
         estimate = estimator.estimate(added)
     except Exception as exc:  # pricing is best-effort
         logger.debug("escalation estimate failed (ignored): %s", exc)
+
+    if estimate is None and enforcer is not None:
+        # With budget enforcement ON, an unpriceable escalation must not
+        # silently bypass the veto (#622 council finding): fail safe, stay
+        # at the current depth, and say so.
+        try:
+            from .budget import budget_enforcement_enabled
+
+            if budget_enforcement_enabled():
+                logger.warning(
+                    "graduated depth: escalation unpriceable while budget "
+                    "enforcement is enabled — vetoed (fail-safe)"
+                )
+                return EscalationPlan(
+                    decision="vetoed",
+                    reason="budget: escalation unpriceable (estimator unavailable)",
+                )
+        except Exception as exc:
+            logger.debug("budget availability check failed (ignored): %s", exc)
 
     if enforcer is not None and estimate is not None:
         try:
@@ -178,6 +204,161 @@ def plan_escalation(
         added_models=added,
         estimate=estimate,
     )
+
+
+DEFAULT_DEPTH_DECISIONS_PATH = Path(".council") / "depth" / "decisions.jsonl"
+
+
+def _label_model(value: Any) -> Optional[str]:
+    """label_to_model values are enhanced dicts ({model, display_index}) or plain strings."""
+    if isinstance(value, dict):
+        return value.get("model")
+    return value if isinstance(value, str) else None
+
+
+def _css_from(stage2_results: Any, aggregate_rankings: Any) -> Optional[float]:
+    """ADR-036 CSS from in-memory Stage-2 data — pure, no model calls.
+
+    Deliberately independent of LLM_COUNCIL_QUALITY_METRICS: that flag governs
+    response annotation, not internal control-flow signals (#618 design review).
+    """
+    try:
+        from .quality.consensus import consensus_strength_score
+
+        tuples = [
+            (r["model"], r.get("average_position", r.get("borda_score", 0.0)))
+            for r in aggregate_rankings
+        ]
+        if not tuples:
+            return None
+        return consensus_strength_score(tuples, stage2_results)
+    except Exception:
+        logger.debug("shadow depth: CSS computation failed", exc_info=True)
+        return None
+
+
+def _counterfactual_mini_css(
+    stage2_results: Any, label_to_model: Any, mini_models: List[str]
+) -> Optional[float]:
+    """Approximate the mini rung's CSS by subsetting the full run's rankings.
+
+    Keeps only the mini models' reviews, restricted to the mini models'
+    responses (relative order preserved), and re-runs Borda + CSS on the
+    subset. An approximation — rankings were elicited in an N-candidate
+    context — but it observes both error directions (see ADR-044 note).
+    """
+    try:
+        from .council_rankings import calculate_aggregate_rankings
+
+        mini_set = set(mini_models)
+        sub_l2m = {
+            lab: val
+            for lab, val in label_to_model.items()
+            if _label_model(val) in mini_set
+        }
+        if len(sub_l2m) < 2:
+            return None
+        keep_labels = set(sub_l2m)
+        sub_entries = []
+        for entry in stage2_results:
+            if entry.get("model") not in mini_set:
+                continue
+            parsed = entry.get("parsed_ranking") or {}
+            if parsed.get("abstained"):
+                continue
+            order = [lbl for lbl in parsed.get("ranking", []) if lbl in keep_labels]
+            if len(order) < 2:
+                continue
+            sub_entries.append(
+                {"model": entry["model"], "parsed_ranking": {"ranking": order}}
+            )
+        if not sub_entries:
+            return None
+        sub_agg = calculate_aggregate_rankings(sub_entries, sub_l2m)
+        return _css_from(sub_entries, sub_agg)
+    except Exception:
+        logger.debug("shadow depth: counterfactual mini CSS failed", exc_info=True)
+        return None
+
+
+def evaluate_and_log_shadow_depth(
+    *,
+    entry_point: str,
+    stage2_results: List[Dict[str, Any]],
+    label_to_model: Dict[str, Any],
+    aggregate_rankings: List[Dict[str, Any]],
+    council_models: List[str],
+    confidence: Optional[float] = None,
+    path: Optional[Path] = None,
+) -> Optional[Dict[str, Any]]:
+    """Shadow-mode depth telemetry (#618): "was full depth necessary?"
+
+    Called by both orchestrators after aggregate rankings exist. Classifies
+    the run against the ladder's thresholds, appends one JSON line to
+    ``.council/depth/decisions.jsonl`` (numeric signals and model names only,
+    never response content), and returns the record. Soft-fail throughout —
+    telemetry never breaks a council run, and the response payload is
+    unchanged. ``est_saved_usd`` is included only when the ADR-011 estimator
+    has real history (a 0.0 from unknown costs is omitted, never fabricated).
+    """
+    try:
+        css_full = _css_from(stage2_results, aggregate_rankings)
+        mini_models = models_for_rung(council_models, DepthRung.MINI)
+        css_mini = _counterfactual_mini_css(stage2_results, label_to_model, mini_models)
+
+        if css_full is None:
+            decision = "signals_unavailable"
+        elif len(council_models) <= _MINI_COUNCIL_SIZE:
+            decision = "ladder_inapplicable"
+        elif css_mini is None:
+            decision = "counterfactual_unavailable"
+        elif should_escalate(css_mini, confidence):
+            decision = "would_escalate"
+        elif should_escalate(css_full, confidence):
+            decision = "premature_halt_risk"
+        else:
+            decision = "mini_would_suffice"
+
+        record: Dict[str, Any] = {
+            "ts": time.time(),
+            "entry_point": entry_point,
+            "council_size": len(council_models),
+            "mini_council_models": list(mini_models),
+            "css_full": css_full,
+            "css_mini_counterfactual": css_mini,
+            "confidence": confidence,
+            "decision": decision,
+            "hypothetical_saved_models": (
+                len(council_models) - len(mini_models)
+                if decision == "mini_would_suffice"
+                else 0
+            ),
+            "extra_stage2_reviews_if_escalated": (
+                len(mini_models) if decision == "would_escalate" else 0
+            ),
+        }
+        if decision == "mini_would_suffice":
+            try:
+                from .budget import CostEstimator
+
+                saved = [m for m in council_models if m not in set(mini_models)]
+                est = CostEstimator().estimate(saved)
+                if est.expected > 0:
+                    record["est_saved_usd"] = est.expected
+            except Exception:
+                logger.debug("shadow depth: saved-cost estimate failed", exc_info=True)
+
+        p = path if path is not None else DEFAULT_DEPTH_DECISIONS_PATH
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with p.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record) + "\n")
+        except Exception as exc:
+            logger.debug("shadow depth decision log failed (%s)", exc)
+        return record
+    except Exception:
+        logger.debug("shadow depth evaluation failed", exc_info=True)
+        return None
 
 
 _NUMERIC_KEYS = ("prompt_tokens", "completion_tokens", "total_tokens", "cost_usd", "cached_tokens")

@@ -149,3 +149,84 @@ CHANGELOG); LLM-facing text where surfaced; flag defaults documented
 
 - [ADR-026 Dynamic Model Intelligence](./ADR-026-dynamic-model-intelligence.md) · [ADR-011 Cost & Token Accounting](./ADR-011-cost-tracking.md) · [ADR-040 Timeout Guardrails](./ADR-040-verification-timeout-observability.md) · [ADR-020 Not Diamond Strategy](./ADR-020-not-diamond-integration-strategy.md)
 - RouteLLM-class routing results; compute-optimal test-time scaling; route-receipt auditability (see `docs/roadmap-2026-h2.md` sources)
+
+## Implementation note — P3 wiring & shadow instrumentation (2026-08-21, #618)
+
+Phase 3 shipped `graduated_depth.py` as a bounded decision engine; nothing
+called `plan_escalation`. This note records the wiring design, honoring the
+mitigation above: shadow-mode logging precedes enablement. A council design
+review (2026-08-21) materially corrected two of the original proposals; the
+corrections are credited inline.
+
+### Slice 1 (shipped with this note): shadow instrumentation, zero behavior change
+
+Today's behavior is always full depth, so shadow cannot observe real
+escalations; it measures the counterfactual instead. After aggregate rankings
+are computed, both orchestrators (`run_full_council` — HTTP;
+`run_council_with_fallback` — MCP/webhooks) call a soft-fail hook
+(`evaluate_and_log_shadow_depth`) that:
+
+1. **Computes CSS internally** (pure-Python over in-memory Stage-2 data, no
+   model calls, response unchanged) — deliberately independent of
+   `LLM_COUNCIL_QUALITY_METRICS`, which is an *output-annotation* flag.
+   Binding routing/telemetry control flow to a presentation flag would
+   silently disable the ladder for flag-off users. *(Council correction:
+   the original proposal had the hook respect the flag.)*
+2. **Computes a counterfactual mini-rung CSS** by subsetting the full run's
+   Stage-2 rankings to the prefix-3 mini models (their reviews, restricted to
+   their responses, relative order preserved) and re-running the Borda + CSS
+   math on the subset. This is an approximation — the rankings were elicited
+   in an N-candidate context — but it observes *both* error directions.
+   *(Council correction: the original plan treated the counterfactual as
+   unobservable and logged only an upper bound.)*
+3. Classifies the run:
+   - `mini_would_suffice` — mini CSS and full CSS both strong: the ladder
+     would have stopped at 3 models and full depth added little. The savings
+     candidate.
+   - `premature_halt_risk` — mini CSS strong but full CSS weak: the ladder
+     would have stopped while the full council disagreed. The degradation
+     hazard; slice 2 must be judged on this rate.
+   - `would_escalate` — mini CSS weak: the ladder would have escalated,
+     costing an *extra* mini Stage-2 pass over today's single full pass
+     (logged as `extra_stage2_reviews_if_escalated`; not priced in USD —
+     per-stage cost history does not exist and is never fabricated).
+   - `ladder_inapplicable` — council size ≤ mini size (see eligibility).
+   - `signals_unavailable` / `counterfactual_unavailable` — parse failures;
+     the unknown-never-escalates rule keeps these out of savings math.
+4. Appends one JSON line to `.council/depth/decisions.jsonl` — durable file,
+   not a log line (#595 lesson): `{ts, entry_point, council_size,
+   mini_council_models, css_full, css_mini_counterfactual, confidence,
+   decision, hypothetical_saved_models, extra_stage2_reviews_if_escalated,
+   est_saved_usd?}`. Numeric signals and model names only, never response
+   content. `est_saved_usd` (ADR-011 estimator over the models beyond the
+   mini rung) only when positive — an all-unknown 0.0 is omitted, never
+   presented as "$0 savings".
+5. Soft-fails everywhere; telemetry never breaks a council run. The response
+   payload is unchanged (flag-off results byte-identical, test-pinned).
+
+### Eligibility (corrected)
+
+The ladder applies only where the council is *larger* than the mini rung —
+size-based (`len(models) > 3`), which in practice means the high/reasoning
+tiers. *(Council correction: the original proposal excluded high/reasoning to
+honor the tier "promise" — but quick(2) is smaller than the mini rung and
+balanced(3) equals it, so that exclusion would have made the ladder a no-op
+everywhere. The tier promise is the quality of the final synthesis, which the
+consensus gate protects; that premise is ADR-044 itself.)*
+
+### Slice 2 (follow-up, gated on slice-1 data): active ladder
+
+`LLM_COUNCIL_GRADUATED_DEPTH=true` routes eligible requests to a separate
+graduated orchestrator composing the existing stage functions (mini rung →
+Stage 2 → `plan_escalation` → added models' Stage 1 only → full Stage 2 →
+single Stage 3); `run_full_council`'s hot path stays untouched. Recorded
+hazards for that work, from the same review: (a) an escalated run costs
+strictly more than a straight full run (the mini Stage-2 pass is wasted) —
+the shadow `would_escalate` rate bounds this overhead before enablement;
+(b) stale mini-rung ranking artifacts must not leak into the final Stage 3
+context; (c) the added-models fan-out is a partial-parallel orchestration
+change with no slice-1 test coverage; (d) slice 2's schema adds
+`latency_penalty_ms` (unmeasurable in shadow). Enablement criteria: review
+`decisions.jsonl` for the `mini_would_suffice` vs `premature_halt_risk`
+ratio; a material premature-halt rate at the 0.7 threshold blocks the flag
+default and re-opens threshold tuning.
