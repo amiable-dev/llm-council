@@ -26,11 +26,8 @@ are verify's, imported here. What differs on the consult path:
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any, Dict, List, Optional
-
-logger = logging.getLogger(__name__)
 
 # #624 council finding (critical): the <evidence_item> wrapper is the
 # structural boundary of the rendered section, and the body is caller
@@ -146,7 +143,10 @@ def prepare_consult_evidence(
         )
 
     section = _build_consult_evidence_section(kept, _render_evidence_item)
-    metrics = _evidence_input_metrics(effective, {"kept": kept, "chars_rendered": len(section)}, tier)
+    # #624 round 3: the "requested" side of the metrics counts what the caller
+    # SUBMITTED (pre-downgrade `items`), so blocking_requested is honest; the
+    # "kept" side reads the effective tuples, so blocking_kept is correctly 0.
+    metrics = _evidence_input_metrics(items, {"kept": kept, "chars_rendered": len(section)}, tier)
 
     return {
         "section": section,

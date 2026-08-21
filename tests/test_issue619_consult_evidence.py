@@ -164,6 +164,21 @@ class TestPrepareConsultEvidence:
             prepare_consult_evidence(
                 [{"source": "tool@1", "content": "x", "strength": "critical"}], "high"
             )
+        with pytest.raises(ValidationError):
+            prepare_consult_evidence(
+                [{"source": "tool@1", "content": "x", "format": 'md" onload='}], "high"
+            )
+
+    def test_metrics_report_submitted_blocking_count(self):
+        """#624 round-3 finding (major): metrics must reflect what the caller
+        SUBMITTED — blocking_requested counts pre-downgrade strengths, while
+        blocking_kept is correctly 0 (nothing blocking is ever kept here)."""
+        prep = prepare_consult_evidence([INFO_ITEM, BLOCKING_ITEM], "high")
+        m = prep["metrics"]
+        assert m["evidence_items_blocking_requested"] == 1
+        assert m["evidence_items_informational_requested"] == 1
+        assert m["evidence_items_blocking_kept"] == 0
+        assert m["evidence_items_informational_kept"] == 2
 
     def test_summary_and_warnings_never_contain_content(self):
         prep = prepare_consult_evidence([INFO_ITEM, BLOCKING_ITEM], "high")
