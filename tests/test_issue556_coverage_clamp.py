@@ -195,7 +195,9 @@ class TestReceiptFeedsClamp:
         ).stdout.strip()
         monkeypatch.setattr(file_ops, "_cached_git_root", str(repo))
         monkeypatch.chdir(repo)
-        monkeypatch.delenv("LLM_COUNCIL_FILE_SELECTION", raising=False)  # allowlist
+        # this scenario tests the ALLOWLIST+clamp interaction (the #542 silent
+        # drop) — explicit since #557 flipped the default to content
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "allowlist")
 
         _c, meta = asyncio.run(
             file_ops._fetch_files_for_verification_async_with_metadata(sha, None)

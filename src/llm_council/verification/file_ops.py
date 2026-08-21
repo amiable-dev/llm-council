@@ -413,10 +413,16 @@ def _is_secret_path(file_path: str) -> bool:
 def file_selection_mode() -> str:
     """ADR-053 Q1: `LLM_COUNCIL_FILE_SELECTION` in {allowlist,content,shadow}.
 
-    Invalid / unset ⇒ `allowlist` (the safe, byte-identical default).
+    Invalid / unset ⇒ `content` — the default since the #557 flip (maintainer
+    decision 2026-08-21): any text file is reviewed regardless of extension,
+    closing the #542 silent-drop gap by default. Strictly stricter than the
+    old allowlist default (nothing reviewed before stops being reviewed);
+    `allowlist` remains the documented one-var opt-out restoring the pre-flip
+    behavior exactly. The Q3 secret boundary and Q2 garbage filter always run
+    first regardless of mode.
     """
-    val = os.getenv("LLM_COUNCIL_FILE_SELECTION", "allowlist").strip().lower()
-    return val if val in ("allowlist", "content", "shadow") else "allowlist"
+    val = os.getenv("LLM_COUNCIL_FILE_SELECTION", "content").strip().lower()
+    return val if val in ("allowlist", "content", "shadow") else "content"
 
 
 async def _blob_sizes(snapshot_id: str, paths: List[str]) -> Dict[str, int]:

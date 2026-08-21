@@ -58,6 +58,14 @@ async def _meta(sha, target_paths):
 
 
 class TestCoverageReceipt:
+    """Pinned to allowlist mode (#557 flipped the default to content): these
+    scenarios test the receipt's typed non-text omissions, which only occur
+    under the extension allowlist."""
+
+    @pytest.fixture(autouse=True)
+    def _allowlist_mode(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "allowlist")
+
     def test_coverage_present_with_typed_omissions(self, tmp_path, monkeypatch):
         _repo, sha = _commit(
             tmp_path,

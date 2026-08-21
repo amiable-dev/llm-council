@@ -112,6 +112,14 @@ def test_allowed_paths_are_not_secrets(path):
 
 
 class TestSelectBlobsAppliesTheBoundary:
+    """Subject: the Q3 secret boundary, which runs before and independent of
+    Q1 mode. Pinned to allowlist (#557 flipped the default to content) so the
+    bogus snapshot ids these tests use don't require live git classification."""
+
+    @pytest.fixture(autouse=True)
+    def _allowlist_mode(self, monkeypatch):
+        monkeypatch.setenv("LLM_COUNCIL_FILE_SELECTION", "allowlist")
+
     def test_secret_is_omitted_with_denied_secret_reason(self):
         selected, omitted = asyncio.run(file_ops.select_blobs("0" * 40, [(".env", "explicit")]))
         assert selected == []
