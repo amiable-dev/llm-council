@@ -14,6 +14,7 @@ from llm_council.gateway_adapter import (
     STATUS_RATE_LIMITED,
     STATUS_TIMEOUT,
 )
+from llm_council.log_safety import safe_log
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +80,11 @@ def resolve_stage_timeout(per_model_timeout: Optional[float]) -> float:
     try:
         value = float(per_model_timeout)
     except (TypeError, ValueError):
+        # CWE-117 (#651): the rejected value is arbitrary by definition here,
+        # so it is CR/LF-collapsed before it reaches the log line.
         logger.warning(
-            "non-numeric per_model_timeout %r; using the %ss stage floor",
-            per_model_timeout,
+            "non-numeric per_model_timeout %s; using the %ss stage floor",
+            safe_log(repr(per_model_timeout)),
             TIMEOUT_STAGE_FLOOR,
         )
         return TIMEOUT_STAGE_FLOOR
@@ -90,8 +93,9 @@ def resolve_stage_timeout(per_model_timeout: Optional[float]) -> float:
     # mistake would read as a multi-day budget. Both land on the floor, so the
     # documented contract is load-bearing instead of a side effect of max().
     if not math.isfinite(value) or value <= 0.0 or value > _MAX_STAGE_TIMEOUT:
+        # Already proven finite-or-not by float(), so no CR/LF risk here.
         logger.warning(
-            "implausible per_model_timeout %r seconds (expected 0 < t <= %s; "
+            "implausible per_model_timeout %s seconds (expected 0 < t <= %s; "
             "a value near 1000x the tier budget means a TierContract "
             "per_model_timeout_ms was passed without dividing by 1000); "
             "using the %ss stage floor",
