@@ -1,0 +1,425 @@
+"""#648: consult-path stage 2/3 budgets must be tier-aware (ADR-012 / ADR-040).
+
+TDD: tests written first.
+
+The consult orchestrators called ``stage2_collect_rankings`` and
+``stage3_synthesize_final`` WITHOUT a ``timeout`` argument, so both ran at
+their own hard-coded 120s defaults regardless of tier — and
+``LLM_COUNCIL_TIMEOUT_MULTIPLIER``, which feeds ``timeouts.multiplier`` and
+therefore ``TierContract.per_model_timeout_ms``, never reached either stage.
+Latent until the 0.45.0 chairman moved to ``anthropic/claude-opus-5`` (#635),
+which reliably exceeds 120s on a reasoning-tier synthesis.
+
+ADR-040 fixed this class of bug on the verify path (#545). These tests pin the
+consult path.
+
+Budget policy (#648): ``max(per_model_timeout, TIMEOUT_STAGE_FLOOR)``. The
+tier value raises the budget; the 120s floor guarantees the fix can never
+SHRINK a stage below the historical default (high tier's per_model is 90s and
+balanced's is 45s — capping at per_model would have created fresh instances of
+the very failure being fixed). The global ``synthesis_deadline`` wait_for
+remains the outer bound.
+"""
+
+import inspect
+import os
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+
+# =============================================================================
+# The budget helper
+# =============================================================================
+
+
+class TestResolveStageTimeout:
+    """``resolve_stage_timeout`` derives a stage budget from the tier value."""
+
+    def test_tier_value_wins_when_above_floor(self):
+        from llm_council.council_usage import resolve_stage_timeout
+
+        assert resolve_stage_timeout(300.0) == 300.0
+
+    def test_floor_wins_when_tier_value_below_it(self):
+        """high=90s and balanced=45s must NOT shrink stage 2/3 below 120s."""
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert resolve_stage_timeout(90.0) == TIMEOUT_STAGE_FLOOR
+        assert resolve_stage_timeout(45.0) == TIMEOUT_STAGE_FLOOR
+
+    def test_floor_is_the_historical_default(self):
+        """The floor must equal the old hard-coded default (byte-identical)."""
+        from llm_council.council_stages import stage2_collect_rankings, stage3_synthesize_final
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR
+
+        assert TIMEOUT_STAGE_FLOOR == 120.0
+        assert inspect.signature(stage3_synthesize_final).parameters["timeout"].default == 120.0
+        assert inspect.signature(stage2_collect_rankings).parameters["timeout"].default == 120.0
+
+    @pytest.mark.parametrize("bad", [None, 0, 0.0, -1.0])
+    def test_missing_or_nonpositive_falls_back_to_floor(self, bad):
+        """A misconfigured tier must not produce a zero/negative budget."""
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert resolve_stage_timeout(bad) == TIMEOUT_STAGE_FLOOR
+
+    def test_reexported_from_council(self):
+        """council.py re-exports moved names (ADR-046 P0 convention)."""
+        import llm_council.council as council_module
+        import llm_council.council_usage as source_module
+
+        assert council_module.resolve_stage_timeout is source_module.resolve_stage_timeout
+        assert council_module.TIMEOUT_STAGE_FLOOR == source_module.TIMEOUT_STAGE_FLOOR
+
+
+class TestTierDerivedBudgets:
+    """The helper composed with the real tier contracts."""
+
+    def test_reasoning_tier_gets_its_full_per_model_budget(self):
+        from llm_council.council_usage import resolve_stage_timeout
+        from llm_council.tier_contract import create_tier_contract
+
+        contract = create_tier_contract("reasoning")
+        budget = resolve_stage_timeout(contract.per_model_timeout_ms / 1000)
+
+        assert budget == 300.0
+        assert budget > 120.0, "the reported regression: reasoning capped at 120s"
+
+    def test_timeout_multiplier_reaches_the_stage_budget(self):
+        """LLM_COUNCIL_TIMEOUT_MULTIPLIER=3 must scale the chairman budget."""
+        from llm_council.council_usage import resolve_stage_timeout
+        from llm_council.tier_contract import create_tier_contract
+        from llm_council.unified_config import reload_config
+
+        try:
+            with patch.dict(os.environ, {"LLM_COUNCIL_TIMEOUT_MULTIPLIER": "3"}):
+                reload_config()
+                contract = create_tier_contract("reasoning")
+                assert resolve_stage_timeout(contract.per_model_timeout_ms / 1000) == 900.0
+        finally:
+            # Must reload OUTSIDE patch.dict — a reload while the env var is
+            # still patched would leave the multiplier in the process-wide
+            # config and silently retime every later test.
+            reload_config()
+
+
+# =============================================================================
+# run_council_with_fallback (facade + MCP consult_council)
+# =============================================================================
+
+
+def _stage1_stub(models):
+    """(stage1_results, usage, model_statuses) for N models."""
+    results = [{"model": m, "response": f"Answer from {m}"} for m in models]
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    statuses = {m: {"status": "ok", "latency_ms": 1, "response": r["response"]} for m, r in zip(models, results)}
+    return results, usage, statuses
+
+
+class TestRunCouncilWithFallbackPassesTierBudgets:
+    @pytest.mark.asyncio
+    async def test_stage3_receives_tier_derived_timeout(self):
+        from llm_council.council import run_council_with_fallback
+        from llm_council.tier_contract import create_tier_contract
+
+        contract = create_tier_contract("reasoning")
+        models = contract.allowed_models
+
+        with (
+            patch(
+                "llm_council.council.stage1_collect_responses_with_status", new_callable=AsyncMock
+            ) as mock_stage1,
+            patch(
+                "llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock
+            ) as mock_stage1_5,
+            patch(
+                "llm_council.council.stage2_collect_rankings", new_callable=AsyncMock
+            ) as mock_stage2,
+            patch(
+                "llm_council.council.stage3_synthesize_final", new_callable=AsyncMock
+            ) as mock_stage3,
+        ):
+            stage1_results, usage, statuses = _stage1_stub(models)
+            mock_stage1.return_value = (stage1_results, usage, statuses)
+            mock_stage1_5.return_value = (stage1_results, usage)
+            mock_stage2.return_value = ([], {}, usage)
+            mock_stage3.return_value = ({"model": "chair", "response": "Final"}, usage, None)
+
+            await run_council_with_fallback(
+                "Test query",
+                tier_contract=contract,
+                synthesis_deadline=contract.deadline_ms / 1000,
+                per_model_timeout=contract.per_model_timeout_ms / 1000,
+            )
+
+            assert mock_stage3.await_args.kwargs["timeout"] == 300.0
+
+    @pytest.mark.asyncio
+    async def test_stage2_receives_tier_derived_timeout(self):
+        from llm_council.council import run_council_with_fallback
+        from llm_council.tier_contract import create_tier_contract
+
+        contract = create_tier_contract("reasoning")
+        models = contract.allowed_models
+
+        with (
+            patch(
+                "llm_council.council.stage1_collect_responses_with_status", new_callable=AsyncMock
+            ) as mock_stage1,
+            patch(
+                "llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock
+            ) as mock_stage1_5,
+            patch(
+                "llm_council.council.stage2_collect_rankings", new_callable=AsyncMock
+            ) as mock_stage2,
+            patch(
+                "llm_council.council.stage3_synthesize_final", new_callable=AsyncMock
+            ) as mock_stage3,
+        ):
+            stage1_results, usage, statuses = _stage1_stub(models)
+            mock_stage1.return_value = (stage1_results, usage, statuses)
+            mock_stage1_5.return_value = (stage1_results, usage)
+            mock_stage2.return_value = ([], {}, usage)
+            mock_stage3.return_value = ({"model": "chair", "response": "Final"}, usage, None)
+
+            await run_council_with_fallback(
+                "Test query",
+                tier_contract=contract,
+                synthesis_deadline=contract.deadline_ms / 1000,
+                per_model_timeout=contract.per_model_timeout_ms / 1000,
+            )
+
+            assert mock_stage2.await_args.kwargs["timeout"] == 300.0
+
+    @pytest.mark.asyncio
+    async def test_default_call_keeps_the_120s_floor(self):
+        """No tier ⇒ per_model default 25s must NOT shrink stage 2/3."""
+        from llm_council.council import run_council_with_fallback
+
+        models = ["m-a", "m-b", "m-c"]
+
+        with (
+            patch(
+                "llm_council.council.stage1_collect_responses_with_status", new_callable=AsyncMock
+            ) as mock_stage1,
+            patch(
+                "llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock
+            ) as mock_stage1_5,
+            patch(
+                "llm_council.council.stage2_collect_rankings", new_callable=AsyncMock
+            ) as mock_stage2,
+            patch(
+                "llm_council.council.stage3_synthesize_final", new_callable=AsyncMock
+            ) as mock_stage3,
+        ):
+            stage1_results, usage, statuses = _stage1_stub(models)
+            mock_stage1.return_value = (stage1_results, usage, statuses)
+            mock_stage1_5.return_value = (stage1_results, usage)
+            mock_stage2.return_value = ([], {}, usage)
+            mock_stage3.return_value = ({"model": "chair", "response": "Final"}, usage, None)
+
+            await run_council_with_fallback("Test query", models=models, synthesis_deadline=600)
+
+            assert mock_stage2.await_args.kwargs["timeout"] == 120.0
+            assert mock_stage3.await_args.kwargs["timeout"] == 120.0
+
+
+class TestReasoningConsultRegression:
+    """The reported failure, end-to-end through the real stage functions.
+
+    A chairman that needs more than 120s must produce a real synthesis at
+    reasoning tier instead of
+    ``"Error: Unable to generate final synthesis (timeout: ...)"``.
+    """
+
+    @pytest.mark.asyncio
+    async def test_slow_chairman_is_not_cut_off_at_120s(self):
+        from llm_council.council import run_council_with_fallback
+        from llm_council.tier_contract import create_tier_contract
+
+        contract = create_tier_contract("reasoning")
+        models = contract.allowed_models
+        seen_timeouts = []
+
+        async def fake_chairman(model, messages, disable_tools=False, timeout=120.0, **kwargs):
+            # Stands in for a chairman whose synthesis takes ~150s: succeeds
+            # only when its budget exceeds the old hard-coded default.
+            seen_timeouts.append(timeout)
+            if timeout < 150.0:
+                return {
+                    "status": "timeout",
+                    "error": f"Timeout after {timeout}s",
+                    "latency_ms": int(timeout * 1000),
+                }
+            return {"status": "ok", "content": "Synthesised answer", "usage": {}}
+
+        with (
+            patch(
+                "llm_council.council.stage1_collect_responses_with_status", new_callable=AsyncMock
+            ) as mock_stage1,
+            patch(
+                "llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock
+            ) as mock_stage1_5,
+            patch(
+                "llm_council.council.stage2_collect_rankings", new_callable=AsyncMock
+            ) as mock_stage2,
+            patch("llm_council.council_stages.query_model_with_status", side_effect=fake_chairman),
+        ):
+            stage1_results, usage, statuses = _stage1_stub(models)
+            mock_stage1.return_value = (stage1_results, usage, statuses)
+            mock_stage1_5.return_value = (stage1_results, usage)
+            mock_stage2.return_value = ([], {}, usage)
+
+            result = await run_council_with_fallback(
+                "Test query",
+                tier_contract=contract,
+                synthesis_deadline=contract.deadline_ms / 1000,
+                per_model_timeout=contract.per_model_timeout_ms / 1000,
+            )
+
+        assert seen_timeouts == [300.0]
+        assert "Unable to generate final synthesis" not in result["synthesis"]
+        assert result["synthesis"] == "Synthesised answer"
+
+
+# =============================================================================
+# run_full_council (HTTP /council)
+# =============================================================================
+
+
+class TestRunFullCouncilTimeoutParameter:
+    def test_accepts_per_model_timeout(self):
+        from llm_council.council import run_full_council
+
+        params = inspect.signature(run_full_council).parameters
+        assert "per_model_timeout" in params
+        assert params["per_model_timeout"].default is None
+
+    @pytest.mark.asyncio
+    async def test_passes_resolved_timeout_to_stage3(self):
+        from llm_council.council import run_full_council
+
+        models = ["m-a", "m-b", "m-c"]
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+        with (
+            patch(
+                "llm_council.council.stage1_collect_responses", new_callable=AsyncMock
+            ) as mock_stage1,
+            patch(
+                "llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock
+            ) as mock_stage1_5,
+            patch(
+                "llm_council.council.stage2_collect_rankings", new_callable=AsyncMock
+            ) as mock_stage2,
+            patch(
+                "llm_council.council.stage3_synthesize_final", new_callable=AsyncMock
+            ) as mock_stage3,
+        ):
+            stage1_results = [{"model": m, "response": "r"} for m in models]
+            mock_stage1.return_value = (stage1_results, usage)
+            mock_stage1_5.return_value = (stage1_results, usage)
+            mock_stage2.return_value = ([], {}, usage)
+            mock_stage3.return_value = ({"model": "chair", "response": "Final"}, usage, None)
+
+            await run_full_council("Test query", models=models, per_model_timeout=270.0)
+
+            assert mock_stage3.await_args.kwargs["timeout"] == 270.0
+            assert mock_stage2.await_args.kwargs["timeout"] == 270.0
+
+    @pytest.mark.asyncio
+    async def test_omitting_the_kwarg_keeps_the_floor(self):
+        from llm_council.council import run_full_council
+
+        models = ["m-a", "m-b", "m-c"]
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+        with (
+            patch(
+                "llm_council.council.stage1_collect_responses", new_callable=AsyncMock
+            ) as mock_stage1,
+            patch(
+                "llm_council.council.stage1_5_normalize_styles", new_callable=AsyncMock
+            ) as mock_stage1_5,
+            patch(
+                "llm_council.council.stage2_collect_rankings", new_callable=AsyncMock
+            ) as mock_stage2,
+            patch(
+                "llm_council.council.stage3_synthesize_final", new_callable=AsyncMock
+            ) as mock_stage3,
+        ):
+            stage1_results = [{"model": m, "response": "r"} for m in models]
+            mock_stage1.return_value = (stage1_results, usage)
+            mock_stage1_5.return_value = (stage1_results, usage)
+            mock_stage2.return_value = ([], {}, usage)
+            mock_stage3.return_value = ({"model": "chair", "response": "Final"}, usage, None)
+
+            await run_full_council("Test query", models=models)
+
+            assert mock_stage3.await_args.kwargs["timeout"] == 120.0
+
+
+class TestHttpCouncilEndpointWiring:
+    """/council has no tier parameter; it already documents the high tier."""
+
+    def test_endpoint_passes_high_tier_per_model_timeout(self):
+        from fastapi.testclient import TestClient
+
+        from llm_council.http_server import app
+        from llm_council.tier_contract import create_tier_contract
+
+        expected = create_tier_contract("high").per_model_timeout_ms / 1000
+
+        with patch("llm_council.http_server.run_full_council", new_callable=AsyncMock) as mock_run:
+            mock_run.return_value = (
+                [],
+                [],
+                {"model": "chair", "response": "Final"},
+                {"usage": {}},
+            )
+            client = TestClient(app)
+            response = client.post(
+                "/v1/council/run",
+                json={"prompt": "Test query", "api_key": "sk-test-key"},
+            )
+
+        assert response.status_code == 200
+        assert mock_run.await_args.kwargs["per_model_timeout"] == expected
+
+
+# =============================================================================
+# Call-site guard — the defect was an OMITTED argument, so pin it structurally
+# =============================================================================
+
+
+class TestNoStageCallSiteRelaxesToTheDefault:
+    """Every council.py call to stage 2/3 must pass an explicit timeout.
+
+    The original bug was invisible in review: the call simply left the kwarg
+    off and silently inherited 120.0. An AST check makes a regression loud.
+    """
+
+    @pytest.mark.parametrize("func", ["stage2_collect_rankings", "stage3_synthesize_final"])
+    def test_every_call_site_passes_timeout(self, func):
+        import ast
+        from pathlib import Path
+
+        import llm_council.council as council_module
+
+        tree = ast.parse(Path(council_module.__file__).read_text())
+        calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == func
+        ]
+
+        assert calls, f"no {func} call sites found in council.py"
+        for call in calls:
+            kwargs = {kw.arg for kw in call.keywords}
+            assert "timeout" in kwargs, (
+                f"{func} called at council.py:{call.lineno} without an explicit "
+                f"timeout — it would silently inherit the 120s default (#648)"
+            )

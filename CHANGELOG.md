@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Consult-path Stage 2 and Stage 3 now get tier-aware timeouts ([#648](https://github.com/amiable-dev/llm-council/issues/648))** — both council orchestrators called `stage2_collect_rankings` and `stage3_synthesize_final` without a `timeout`, so peer review and chairman synthesis each ran at their own hard-coded 120s default no matter the tier, and `LLM_COUNCIL_TIMEOUT_MULTIPLIER` never reached either stage. Latent until the 0.45.0 chairman moved to `anthropic/claude-opus-5` ([#635](https://github.com/amiable-dev/llm-council/issues/635)), which reliably exceeds 120s on a substantial reasoning-tier synthesis: **every reasoning-tier consult lost its synthesis**, returning `"Error: Unable to generate final synthesis (timeout: Timeout after 120.0s)"` while all member responses, rankings, and dissent completed normally. Both stages now derive their budget from the tier's per-model timeout (`max(per_model, 120s)`), so reasoning tier gets 300s — 900s at `LLM_COUNCIL_TIMEOUT_MULTIPLIER=3`. ADR-040 fixed this same class of bug on the verify path ([#545](https://github.com/amiable-dev/llm-council/issues/545)); this brings the consult path into line. The 120s floor is deliberate: it guarantees no tier's stage budget can *shrink* (high tier's per-model budget is 90s, balanced's 45s), so quick/balanced/high behavior is unchanged at the default multiplier. `POST /v1/council/run` has no tier parameter and now sources its budgets from the high-tier contract it already assumes. **Migration:** none — no configuration changes, and the only behavior change at default settings is that reasoning-tier consults now complete.
+
+### Changed
+
+- `LLM_COUNCIL_TIMEOUT_MULTIPLIER` is documented correctly in the environment reference: it scales every tier timeout (default `1.0`), and is unrelated to the verify path's fixed `VERIFICATION_TIMEOUT_MULTIPLIER` code constant (2.0) it was previously described as.
+
 ## [0.45.0] - 2026-08-22
 
 **The Aug-2026 council model refresh.** One change, every tier: the default councils, chairman, and aggregators move to current-generation OpenRouter models per the accepted research in [discussion #636](https://github.com/amiable-dev/llm-council/discussions/636) (tracking: [#635](https://github.com/amiable-dev/llm-council/issues/635)).

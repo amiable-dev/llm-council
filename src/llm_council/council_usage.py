@@ -19,6 +19,38 @@ TIMEOUT_PER_MODEL_HARD = 25.0
 TIMEOUT_SYNTHESIS_TRIGGER = 40.0
 TIMEOUT_RESPONSE_DEADLINE = 50.0
 
+# #648: floor for the Stage 2 / Stage 3 budgets on the consult path. Equal to
+# the historical hard-coded default in stage2_collect_rankings /
+# stage3_synthesize_final, so deriving a budget from the tier can only ever
+# RAISE it.
+TIMEOUT_STAGE_FLOOR = 120.0
+
+
+def resolve_stage_timeout(per_model_timeout: Optional[float]) -> float:
+    """#648: derive the Stage 2 / Stage 3 budget from the tier's per-model one.
+
+    Both consult orchestrators used to call ``stage2_collect_rankings`` and
+    ``stage3_synthesize_final`` without a ``timeout``, so each ran at its own
+    hard-coded 120s default no matter the tier — and
+    ``LLM_COUNCIL_TIMEOUT_MULTIPLIER`` (which feeds ``timeouts.multiplier`` and
+    therefore ``TierContract.per_model_timeout_ms``) never reached them. ADR-040
+    fixed the same class of bug on the verify path (#545).
+
+    The tier value raises the budget; ``TIMEOUT_STAGE_FLOOR`` guarantees it can
+    never SHRINK a stage below the historical default. That floor is load-bearing:
+    high tier's per-model budget is 90s and balanced's is 45s, so capping at
+    ``per_model_timeout`` — the literal ADR-040 waterfall — would have created
+    fresh instances of the very timeout this fixes. The outer bound stays
+    ``synthesis_deadline``, whose global ``wait_for`` degrades to
+    ``quick_synthesis`` rather than to a stage error string.
+
+    A missing or non-positive value (a misconfigured tier, or an orchestrator
+    with no tier at all) falls back to the floor rather than to a zero budget.
+    """
+    if per_model_timeout is None:
+        return TIMEOUT_STAGE_FLOOR
+    return max(float(per_model_timeout), TIMEOUT_STAGE_FLOOR)
+
 # ADR-012: Model Status Types (mirrors openrouter status types)
 MODEL_STATUS_OK = STATUS_OK
 MODEL_STATUS_TIMEOUT = STATUS_TIMEOUT

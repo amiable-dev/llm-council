@@ -88,6 +88,7 @@ from llm_council.webhooks.sse import council_event_generator, get_sse_headers
 from llm_council.webhooks.types import WebhookConfig
 from llm_council.verdict import VerdictType
 from llm_council.consult_evidence import prepare_consult_evidence
+from llm_council.tier_contract import create_tier_contract
 from llm_council.verification.schemas import EvidenceItem
 
 # FastAPI app instance
@@ -278,11 +279,20 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
         if evidence_prep:
             effective_prompt = request.prompt + evidence_prep["section"]
 
+    # #648: this endpoint has no confidence tier, but it runs the full council —
+    # the same high tier the evidence budget above already assumes. Sourcing the
+    # Stage 2/3 budgets from that contract is what makes
+    # LLM_COUNCIL_TIMEOUT_MULTIPLIER reach this path; at multiplier 1.0 the high
+    # tier's 90s per-model budget sits under the 120s floor, so the effective
+    # budget is unchanged.
+    high_tier_per_model = create_tier_contract("high").per_model_timeout_ms / 1000
+
     try:
         # Run the full council deliberation
         stage1, stage2, stage3, metadata = await run_full_council(
             effective_prompt,
             models=request.models,
+            per_model_timeout=high_tier_per_model,
             webhook_config=webhook_config,
             verdict_type=verdict_type_enum,
             include_dissent=request.include_dissent or False,
