@@ -939,7 +939,7 @@ async def run_verification(
         # sequence id (hash of the target paths) — never the per-round SHA,
         # which would defeat the affinity it exists to provide. Cleared in
         # the finally below; consumers no-op when the context is absent.
-        subject_key = hashlib.sha1(
+        subject_key = hashlib.sha256(
             "\n".join(sorted(request.target_paths or ["<repo>"])).encode()
         ).hexdigest()[:12]
         set_cache_context(
