@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.45.0] - 2026-08-22
+
+**The Aug-2026 council model refresh.** One change, every tier: the default councils, chairman, and aggregators move to current-generation OpenRouter models per the accepted research in [discussion #636](https://github.com/amiable-dev/llm-council/discussions/636) (tracking: [#635](https://github.com/amiable-dev/llm-council/issues/635)).
 
 ### Changed
 
