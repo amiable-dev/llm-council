@@ -191,8 +191,8 @@ The flow is async/parallel wherever possible to minimize latency.
 5. Open PR: `gh pr create --title "Release v0.X.0" --body "…"`.
 6. Wait for required checks: **Test, Lint, Type Check, DCO** (DCO needs `--signoff`). Do not merge until green.
 7. `gh pr merge --squash --delete-branch`.
-8. **After merge**, tag from updated master: `git tag -a v0.X.0 -m "…" && git push origin v0.X.0` — this triggers `publish.yml` (build → test wheel → publish to PyPI).
-9. Verify: `gh run list --workflow=publish.yml --limit=1`, then `pip index versions llm-council-core`.
+8. **After merge**, tag from updated master: `git tag -a v0.X.0 -m "…" && git push origin v0.X.0` — this triggers `publish.yml` (build → test wheel → publish to PyPI → announce: auto-creates the GitHub Release with `--generate-notes` and posts a Discord embed via `DISCORD_RELEASES_WEBHOOK` secret; both idempotent/soft-fail, #644).
+9. Verify: `gh run list --workflow=publish.yml --limit=1`, then `pip index versions llm-council-core`. The GitHub Release no longer needs manual backfill (announce job creates it).
 
 **Versioning:** git tags via `hatch-vcs`/setuptools-scm; `src/llm_council/_version.py` is auto-generated + gitignored. SemVer (MAJOR breaking / MINOR feature / PATCH fix).
 
