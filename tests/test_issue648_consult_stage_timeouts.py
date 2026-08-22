@@ -64,6 +64,59 @@ class TestResolveStageTimeout:
 
         assert resolve_stage_timeout(bad) == TIMEOUT_STAGE_FLOOR
 
+    def test_nan_does_not_propagate_through_the_floor(self):
+        """max(nan, 120.0) is nan in CPython — the guard must be explicit.
+
+        asyncio.wait_for(timeout=nan) is not a 120s budget, so a NaN slipping
+        through would silently defeat the floor the whole fix rests on.
+        """
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert max(float("nan"), TIMEOUT_STAGE_FLOOR) != TIMEOUT_STAGE_FLOOR  # the trap
+        assert resolve_stage_timeout(float("nan")) == TIMEOUT_STAGE_FLOOR
+
+    @pytest.mark.parametrize("bad", [float("inf"), float("-inf")])
+    def test_infinities_fall_back_to_floor(self, bad):
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert resolve_stage_timeout(bad) == TIMEOUT_STAGE_FLOOR
+
+    def test_non_numeric_falls_back_to_floor(self):
+        """The helper documents a fallback, so it must not raise on garbage."""
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert resolve_stage_timeout("not-a-number") == TIMEOUT_STAGE_FLOOR
+
+    @pytest.mark.parametrize("ms_value", [45_000.0, 90_000.0, 300_000.0])
+    def test_millisecond_slip_is_rejected_not_trusted(self, ms_value):
+        """A raw TierContract._ms field must not become a multi-hour budget.
+
+        The argument is SECONDS. Passing per_model_timeout_ms would yield a
+        300,000s (3.5-day) budget — i.e. silently disable the stage timeout.
+        A unit slip is always a bug, so it lands on the floor.
+        """
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert resolve_stage_timeout(ms_value) == TIMEOUT_STAGE_FLOOR
+
+    def test_largest_legitimate_configuration_is_accepted(self):
+        """The ceiling must not clip a real config: reasoning 300s x max 10.0."""
+        from llm_council.council_usage import _MAX_STAGE_TIMEOUT, resolve_stage_timeout
+
+        assert resolve_stage_timeout(3000.0) == 3000.0
+        assert _MAX_STAGE_TIMEOUT >= 3000.0
+
+    def test_rejection_is_logged_never_silent(self, caplog):
+        """ADR-024 ethos: a downgrade must be auditable."""
+        import logging
+
+        from llm_council.council_usage import resolve_stage_timeout
+
+        with caplog.at_level(logging.WARNING, logger="llm_council.council_usage"):
+            resolve_stage_timeout(300_000.0)
+
+        assert any("per_model_timeout_ms" in r.getMessage() for r in caplog.records)
+
     def test_reexported_from_council(self):
         """council.py re-exports moved names (ADR-046 P0 convention)."""
         import llm_council.council as council_module
@@ -295,6 +348,96 @@ class TestRunFullCouncilTimeoutParameter:
         params = inspect.signature(run_full_council).parameters
         assert "per_model_timeout" in params
         assert params["per_model_timeout"].default is None
+
+    def test_per_model_timeout_is_keyword_only(self):
+        """A new positional parameter would silently rebind existing callers.
+
+        run_full_council(query, bypass_cache, models) has positional callers in
+        the wild; inserting anything ahead of them would bind the wrong value.
+        """
+        from llm_council.council import run_full_council
+
+        param = inspect.signature(run_full_council).parameters["per_model_timeout"]
+        assert param.kind is inspect.Parameter.KEYWORD_ONLY
+
+    def test_positional_callers_are_unaffected(self):
+        """The historical positional call shape must still mean what it did."""
+        from llm_council.council import run_full_council
+
+        bound = inspect.signature(run_full_council).bind("query", True, ["m-a"])
+        assert bound.arguments["user_query"] == "query"
+        assert bound.arguments["bypass_cache"] is True
+        assert bound.arguments["models"] == ["m-a"]
+        assert "per_model_timeout" not in bound.arguments
+
+
+class TestUnitsContractAtEveryCaller:
+    """Every caller must hand resolve_stage_timeout SECONDS, not milliseconds.
+
+    TierContract stores the figure as per_model_timeout_ms. A caller forwarding
+    it raw would ask for a 300,000s budget. The helper now rejects that, but the
+    real defence is that no caller makes the mistake — pinned here structurally,
+    since it is exactly the kind of slip a future edit reintroduces silently.
+    """
+
+    @pytest.mark.parametrize(
+        "module_name", ["llm_council.facade", "llm_council.http_server"]
+    )
+    def test_contract_derived_callers_divide_by_1000(self, module_name):
+        import ast
+        import importlib
+        from pathlib import Path
+
+        module = importlib.import_module(module_name)
+        source = Path(module.__file__).read_text()
+        tree = ast.parse(source)
+
+        # A bare truthiness guard (`if contract.per_model_timeout_ms:`) reads the
+        # field without consuming its magnitude, so it needs no conversion.
+        guard_only = {
+            id(node)
+            for stmt in ast.walk(tree)
+            if isinstance(stmt, (ast.If, ast.IfExp))
+            for node in ast.walk(stmt.test)
+        }
+        divided = {
+            id(node.left)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.BinOp)
+            and isinstance(node.op, ast.Div)
+            and getattr(node.right, "value", None) == 1000
+        }
+
+        uses = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute) and node.attr == "per_model_timeout_ms"
+        ]
+        assert uses, f"expected {module_name} to read per_model_timeout_ms"
+
+        value_uses = [u for u in uses if id(u) not in guard_only]
+        assert value_uses, f"expected {module_name} to consume per_model_timeout_ms"
+
+        for use in value_uses:
+            assert id(use) in divided, (
+                f"{module_name}:{use.lineno} consumes per_model_timeout_ms without "
+                "'/ 1000' — a milliseconds value would reach a seconds-denominated "
+                "timeout (#648 council review)"
+            )
+
+    def test_every_caller_passes_a_plausible_seconds_value(self):
+        """The real per-tier values must survive the helper's sanity ceiling."""
+        from llm_council.council_usage import resolve_stage_timeout
+        from llm_council.tier_contract import create_tier_contract
+
+        for tier in ("quick", "balanced", "high", "reasoning", "frontier"):
+            contract = create_tier_contract(tier)
+            seconds = contract.per_model_timeout_ms / 1000
+            resolved = resolve_stage_timeout(seconds)
+            assert resolved >= 120.0
+            assert resolved == max(seconds, 120.0), (
+                f"{tier}: a real tier value was rejected by the sanity ceiling"
+            )
 
     @pytest.mark.asyncio
     async def test_passes_resolved_timeout_to_stage3(self):
