@@ -191,7 +191,7 @@ The flow is async/parallel wherever possible to minimize latency.
 5. Open PR: `gh pr create --title "Release v0.X.0" --body "…"`.
 6. Wait for required checks: **Test, Lint, Type Check, DCO** (DCO needs `--signoff`). Do not merge until green.
 7. `gh pr merge --squash --delete-branch`.
-8. **After merge**, tag from updated master: `git tag -a v0.X.0 -m "…" && git push origin v0.X.0` — this triggers `publish.yml` (build → test wheel → publish to PyPI → announce: auto-creates the GitHub Release with `--generate-notes` and posts a Discord embed via `DISCORD_RELEASES_WEBHOOK` secret; both idempotent/soft-fail, #644).
+8. **After merge**, tag from updated master: `git tag -a v0.X.0 -m "…" && git push origin v0.X.0` — this triggers `publish.yml` (build → test wheel → publish to PyPI → announce: auto-creates the GitHub Release with `--generate-notes` and posts a Discord embed via `DISCORD_RELEASES_WEBHOOK` secret; both idempotent/soft-fail, #644). Release creation authenticates with the `RELEASE_PAT` secret (fine-grained PAT, Contents: read+write) so the `release: published` event triggers `release-security.yml` (SBOM + SLSA provenance, #646) — default-token releases don't emit workflow triggers; falls back to `github.token` (release still created, SBOM skipped) when the PAT is unset/expired, so **rotate the PAT before it expires**.
 9. Verify: `gh run list --workflow=publish.yml --limit=1`, then `pip index versions llm-council-core`. The GitHub Release no longer needs manual backfill (announce job creates it).
 
 **Versioning:** git tags via `hatch-vcs`/setuptools-scm; `src/llm_council/_version.py` is auto-generated + gitignored. SemVer (MAJOR breaking / MINOR feature / PATCH fix).
