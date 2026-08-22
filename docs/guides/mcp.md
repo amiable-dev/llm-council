@@ -75,6 +75,16 @@ response tells you which). Two things to know:
     `high`, 600000 for `reasoning` — or the client will drop the connection
     while the council deliberates.
 
+    `MCP_TIMEOUT` is the *client transport* budget. Server-side, each tier also
+    budgets its own stages: Stage 1 gets the tier's per-model timeout, and
+    Stage 2 (peer review) and Stage 3 (chairman synthesis) get
+    `max(per-model, 120s)` — 120s at quick/balanced/high, 300s at `reasoning`.
+    Set `LLM_COUNCIL_TIMEOUT_MULTIPLIER` to scale all of them together if your
+    chairman model is slow (e.g. `3` triples every tier budget). Before
+    [#648](https://github.com/amiable-dev/llm-council/issues/648) both of those
+    stages were pinned at 120s regardless of tier, which cost reasoning-tier
+    runs their synthesis.
+
 **Example:**
 
 ```

@@ -64,6 +64,7 @@
 | `LLM_COUNCIL_SHADOW_DISAGREEMENT_THRESHOLD` | Shadow disagreement alarm threshold | 0.08 |
 | `LLM_COUNCIL_SHADOW_SAMPLING_RATE` | Shadow-sample rate for fast-path QA (ADR-020) | 0.05 |
 | `LLM_COUNCIL_SHADOW_WINDOW_SIZE` | Shadow metrics rolling window | code |
+| `LLM_COUNCIL_TIMEOUT_MULTIPLIER` | Scales **every** tier timeout — `total` and `per_model` for all tiers (`timeouts.multiplier`, clamped to 0.1–10.0). Since #648 it also reaches the consult path's Stage 2 / Stage 3 budgets, which are derived from the tier's per-model timeout. Not to be confused with the verify path's fixed `VERIFICATION_TIMEOUT_MULTIPLIER` (2.0, ADR-040), which is a code constant and not configurable | 1.0 |
 | `LLM_COUNCIL_TRIAGE_ENABLED` | L2 triage layer (ADR-020) | false |
 | `LLM_COUNCIL_USE_NOT_DIAMOND` | Enable Not Diamond routing (ADR-020) | false |
 | `LLM_COUNCIL_WILDCARD_ENABLED` | Wildcard specialist selection (ADR-020) | false |
@@ -134,7 +135,6 @@
 | `LLM_COUNCIL_REVIEW_SVG` | ADR-053 Q2: review `.svg` in `content` mode instead of omitting it as noise (SVG decodes as text but is usually a generated asset). Content-mode only — allowlist mode always reviews `.svg` via `TEXT_EXTENSIONS` | false |
 | `LLM_COUNCIL_COVERAGE_POLICY` | ADR-053 #556 coverage clamp: `clamp` (a `pass` over an unreviewed changed/explicit file becomes `unclear(incomplete_coverage)`), `fail` (hard 422 instead), or `warn` (receipt only, no verdict effect). **Ships opt-in — default `warn` (byte-identical); flips to `clamp` in a later release after shadow telemetry (#557), which also makes `gate` refuse an explicit `warn` downgrade.** Invalid ⇒ the current default | warn |
 | `LLM_COUNCIL_COVERAGE_ACK_REASONS` | ADR-053 #556: comma-separated omission reasons the operator pre-accepts, so the clamp ignores them. Unset ⇒ `binary,generated,vendored,too_large,ignored,noise` (the clamp then fires only on `non-text`/`not_found`/`truncated`/`denied_secret`). Explicit-origin omissions clamp regardless | (default set above) |
-| `LLM_COUNCIL_TIMEOUT_MULTIPLIER` | Verification global-deadline multiplier (ADR-040) | 2.0 |
 | `LLM_COUNCIL_TRANSCRIPT_PATH` | Verification transcript root | .council/logs |
 
 ## Benchmark (ADR-048)
