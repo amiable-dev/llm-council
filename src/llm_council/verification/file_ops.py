@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ..log_safety import safe_log
 from .constants import (
     ASYNC_SUBPROCESS_TIMEOUT,
     GARBAGE_FILENAMES,
@@ -172,15 +173,17 @@ async def _get_git_object_type(snapshot_id: str, path: str) -> Optional[str]:
             stderr_text = stderr.decode("utf-8", errors="replace").strip()
             logger.warning(
                 "git cat-file failed for %s:%s (rc=%s): %s",
-                snapshot_id,
-                path,
+                safe_log(snapshot_id),
+                safe_log(path),
                 proc.returncode,
-                stderr_text or "<no stderr>",
+                safe_log(stderr_text) or "<no stderr>",
             )
         except Exception as e:
             # Issue #340: log the exception so subprocess failures are
             # diagnosable (timeouts, missing git binary, etc).
-            logger.warning("git cat-file raised for %s:%s: %s", snapshot_id, path, e)
+            logger.warning(
+                "git cat-file raised for %s:%s: %s", safe_log(snapshot_id), safe_log(path), e
+            )
 
     return None
 
@@ -228,10 +231,10 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
                 stderr_text = stderr.decode("utf-8", errors="replace").strip()
                 logger.warning(
                     "git ls-tree failed for %s:%s (rc=%s): %s",
-                    snapshot_id,
-                    tree_path,
+                    safe_log(snapshot_id),
+                    safe_log(tree_path),
                     proc.returncode,
-                    stderr_text or "<no stderr>",
+                    safe_log(stderr_text) or "<no stderr>",
                 )
                 return []
 
@@ -273,7 +276,9 @@ async def _git_ls_tree_z_name_only(snapshot_id: str, tree_path: str) -> List[str
 
         except Exception as e:
             # Issue #340: log so subprocess/timeout failures are diagnosable.
-            logger.warning("git ls-tree raised for %s:%s: %s", snapshot_id, tree_path, e)
+            logger.warning(
+                "git ls-tree raised for %s:%s: %s", safe_log(snapshot_id), safe_log(tree_path), e
+            )
             return []
 
 
@@ -1070,8 +1075,8 @@ async def _fetch_file_at_commit_async(
                     "git show for %s:%s produced all stdout but did not exit "
                     "within %ss — likely blocked writing to an unread stderr "
                     "pipe (LFS/submodule/CRLF chatter); force-killed",
-                    snapshot_id,
-                    file_path,
+                    safe_log(snapshot_id),
+                    safe_log(file_path),
                     ASYNC_SUBPROCESS_TIMEOUT,
                 )
                 proc.kill()

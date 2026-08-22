@@ -4,7 +4,7 @@
 # Build: docker build -f deploy/railway/Dockerfile -t llm-council .
 # Run:   docker run -p 8000:8000 -e OPENROUTER_API_KEY=sk-... -e LLM_COUNCIL_API_TOKEN=... llm-council
 
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:9c900dea9e8fb7e16277c179b555cc72d29a352dbc33cff48ad5a0412fd5bfc7
 
 # Set working directory
 WORKDIR /app

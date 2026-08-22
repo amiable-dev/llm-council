@@ -265,12 +265,18 @@ class TestReleaseSecurityWorkflow:
         assert "sbom-attach" in jobs, "Workflow should have SBOM attachment job"
 
     def test_release_security_has_proper_permissions(self, workflow_config: dict):
-        """Verify workflow has required permissions for release attachment."""
-        permissions = workflow_config.get("permissions", {})
-        # Need write access to attach files to releases
+        """Verify the sbom-attach job has contents: write to attach files to releases.
+
+        Scoped to the job (not the workflow top level) per OSSF Scorecard's
+        least-privilege guidance: the top level defaults to contents: read and
+        only the job that needs elevated access declares it.
+        """
+        jobs = workflow_config.get("jobs", {})
+        sbom_job = jobs.get("sbom-attach", {})
+        permissions = sbom_job.get("permissions", {})
         assert (
             permissions.get("contents") == "write"
-        ), "Workflow needs contents: write to attach files to releases"
+        ), "sbom-attach job needs contents: write to attach files to releases"
 
     def test_release_security_has_provenance_job(self, workflow_config: dict):
         """Verify workflow has SLSA provenance generation job."""
@@ -293,18 +299,30 @@ class TestReleaseSecurityWorkflow:
         assert attest_step is not None, "Should use actions/attest-build-provenance"
 
     def test_release_security_has_attestations_permission(self, workflow_config: dict):
-        """Verify workflow has attestations: write for SLSA provenance."""
-        permissions = workflow_config.get("permissions", {})
+        """Verify the provenance job has attestations: write for SLSA provenance.
+
+        Scoped to the job (not the workflow top level) per OSSF Scorecard's
+        least-privilege guidance.
+        """
+        jobs = workflow_config.get("jobs", {})
+        provenance = jobs.get("provenance", {})
+        permissions = provenance.get("permissions", {})
         assert (
             permissions.get("attestations") == "write"
-        ), "Workflow needs attestations: write for SLSA provenance"
+        ), "provenance job needs attestations: write for SLSA provenance"
 
     def test_release_security_has_id_token_permission(self, workflow_config: dict):
-        """Verify workflow has id-token: write for Sigstore signing."""
-        permissions = workflow_config.get("permissions", {})
+        """Verify the provenance job has id-token: write for Sigstore signing.
+
+        Scoped to the job (not the workflow top level) per OSSF Scorecard's
+        least-privilege guidance.
+        """
+        jobs = workflow_config.get("jobs", {})
+        provenance = jobs.get("provenance", {})
+        permissions = provenance.get("permissions", {})
         assert (
             permissions.get("id-token") == "write"
-        ), "Workflow needs id-token: write for Sigstore OIDC signing"
+        ), "provenance job needs id-token: write for Sigstore OIDC signing"
 
     def test_release_security_sbom_uses_correct_format_flag(self, workflow_config: dict):
         """Verify SBOM generation uses --output-format (not --format)."""

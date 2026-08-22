@@ -10,6 +10,7 @@ import time
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 
 # ADR-032: Migrated to unified_config
+from llm_council.log_safety import safe_log
 from llm_council.unified_config import get_api_key
 
 from llm_council.gateway.resolver import resolve_endpoint, resolve_model_name
@@ -252,7 +253,7 @@ async def query_model_with_status(
         # collapse failures to None) and #403 (distinguish infra from defect);
         # an empty detail defeats both.
         detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
-        logger.warning("Error querying model %s: %s", model, detail)
+        logger.warning("Error querying model %s: %s", safe_log(model), safe_log(detail))
         return {
             "status": STATUS_ERROR,
             "latency_ms": latency_ms,
