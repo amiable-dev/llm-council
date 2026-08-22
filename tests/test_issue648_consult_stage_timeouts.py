@@ -106,6 +106,28 @@ class TestResolveStageTimeout:
         assert resolve_stage_timeout(3000.0) == 3000.0
         assert _MAX_STAGE_TIMEOUT >= 3000.0
 
+    def test_ceiling_boundary_is_inclusive(self):
+        """Exactly _MAX_STAGE_TIMEOUT is accepted; just above it is rejected.
+
+        Rejection goes to the FLOOR, not to the ceiling: above this line the
+        value is a unit slip, and 120s is the safe reading of a slip. Pinned
+        because the difference is a silent, large downgrade (#650 gate).
+        """
+        from llm_council.council_usage import (
+            _MAX_STAGE_TIMEOUT,
+            TIMEOUT_STAGE_FLOOR,
+            resolve_stage_timeout,
+        )
+
+        assert resolve_stage_timeout(_MAX_STAGE_TIMEOUT) == _MAX_STAGE_TIMEOUT
+        assert resolve_stage_timeout(_MAX_STAGE_TIMEOUT + 0.1) == TIMEOUT_STAGE_FLOOR
+
+    def test_overflowing_value_falls_back_to_floor(self):
+        """float() raises OverflowError on huge ints — the contract says fallback."""
+        from llm_council.council_usage import TIMEOUT_STAGE_FLOOR, resolve_stage_timeout
+
+        assert resolve_stage_timeout(10**400) == TIMEOUT_STAGE_FLOOR
+
     def test_rejection_is_logged_never_silent(self, caplog):
         """ADR-024 ethos: a downgrade must be auditable."""
         import logging
@@ -394,11 +416,13 @@ class TestUnitsContractAtEveryCaller:
 
         # A bare truthiness guard (`if contract.per_model_timeout_ms:`) reads the
         # field without consuming its magnitude, so it needs no conversion.
+        # Only the test EXPRESSION ITSELF is exempt — exempting everything
+        # inside the test would also excuse a real magnitude use such as
+        # `x = c.per_model_timeout_ms if flag else 0` (#650 gate).
         guard_only = {
-            id(node)
+            id(stmt.test)
             for stmt in ast.walk(tree)
             if isinstance(stmt, (ast.If, ast.IfExp))
-            for node in ast.walk(stmt.test)
         }
         divided = {
             id(node.left)
@@ -551,12 +575,23 @@ class TestNoStageCallSiteRelaxesToTheDefault:
         import llm_council.council as council_module
 
         tree = ast.parse(Path(council_module.__file__).read_text())
+        def _names(node):
+            """The stage function's name, however the call spells it.
+
+            Matching only ast.Name would let a future module-qualified call
+            (``council_stages.stage2_collect_rankings(...)``) evade the guard
+            entirely while the remaining direct calls kept it green (#650 gate).
+            """
+            if isinstance(node, ast.Name):
+                return node.id
+            if isinstance(node, ast.Attribute):
+                return node.attr
+            return None
+
         calls = [
             node
             for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == func
+            if isinstance(node, ast.Call) and _names(node.func) == func
         ]
 
         assert calls, f"no {func} call sites found in council.py"

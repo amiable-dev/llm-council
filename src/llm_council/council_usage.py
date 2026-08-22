@@ -79,7 +79,9 @@ def resolve_stage_timeout(per_model_timeout: Optional[float]) -> float:
         return TIMEOUT_STAGE_FLOOR
     try:
         value = float(per_model_timeout)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: float(10**400) and friends. The docstring promises a
+        # fallback for anything unusable, so the tuple must cover it (#650 gate).
         # CWE-117 (#651): the rejected value is arbitrary by definition here,
         # so it is CR/LF-collapsed before it reaches the log line.
         logger.warning(

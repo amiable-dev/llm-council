@@ -279,15 +279,19 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
         if evidence_prep:
             effective_prompt = request.prompt + evidence_prep["section"]
 
-    # #648: this endpoint has no confidence tier, but it runs the full council —
-    # the same high tier the evidence budget above already assumes. Sourcing the
-    # Stage 2/3 budgets from that contract is what makes
-    # LLM_COUNCIL_TIMEOUT_MULTIPLIER reach this path; at multiplier 1.0 the high
-    # tier's 90s per-model budget sits under the 120s floor, so the effective
-    # budget is unchanged.
-    high_tier_per_model = create_tier_contract("high").per_model_timeout_ms / 1000
-
     try:
+        # #648: this endpoint has no confidence tier, but it runs the full
+        # council — the same high tier the evidence budget above already
+        # assumes. Sourcing the Stage 2/3 budgets from that contract is what
+        # makes LLM_COUNCIL_TIMEOUT_MULTIPLIER reach this path; at multiplier
+        # 1.0 the high tier's 90s per-model budget sits under the 120s floor,
+        # so the effective budget is unchanged.
+        # Resolved per request, inside the try, deliberately: a module-level
+        # constant would freeze the import-time config (cf. #609), and a
+        # construction failure belongs on the endpoint's error path, not as an
+        # unhandled 500 (#650 gate).
+        high_tier_per_model = create_tier_contract("high").per_model_timeout_ms / 1000
+
         # Run the full council deliberation
         stage1, stage2, stage3, metadata = await run_full_council(
             effective_prompt,
