@@ -203,7 +203,7 @@ def emit_layer_event(
         event_type.value,
         safe_log(layer_from),
         safe_log(layer_to),
-        data,
+        safe_log(data),
     )
 
     # Notify subscribed metrics adapters (ADR-030)
