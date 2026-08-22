@@ -13,7 +13,7 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     cooldown:
-      default-days: 5
+      default-days: 7
     groups:
       dev-dependencies:
         patterns:
@@ -39,7 +39,7 @@ updates:
       interval: "weekly"
       day: "monday"
     cooldown:
-      default-days: 5
+      default-days: 7
     labels:
       - "dependencies"
       - "ci"
