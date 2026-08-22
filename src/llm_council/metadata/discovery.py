@@ -20,6 +20,7 @@ Example:
 import logging
 from typing import TYPE_CHECKING, List, Optional, Set
 
+from ..log_safety import safe_log
 from .types import ModelInfo, QualityTier
 
 if TYPE_CHECKING:
@@ -257,8 +258,10 @@ def discover_tier_candidates(
     # 2. Static fallback (only if registry empty/insufficient)
     if len(candidates) < MIN_CANDIDATES_PER_TIER:
         logger.warning(
-            f"Insufficient dynamic candidates for tier {tier}: "
-            f"{len(candidates)} < {MIN_CANDIDATES_PER_TIER}. Using static fallback."
+            "Insufficient dynamic candidates for tier %s: %d < %d. Using static fallback.",
+            safe_log(tier),
+            len(candidates),
+            MIN_CANDIDATES_PER_TIER,
         )
 
         static = _get_static_fallback(tier)
