@@ -128,24 +128,24 @@ council:
       min_samples_high: 100
 
   # =========================================================================
-  # Bias Auditing (ADR-015, ADR-018) - ENABLED for self-improvement
+  # Evaluation (ADR-031 consolidated section: rubric / safety / bias)
+  # Migrated from the pre-ADR-024 `bias_audit`/`bias_persistence`/`scoring`
+  # sections, which the schema never read — silently before #591, with a
+  # warning since. Bias auditing stays ENABLED for self-improvement
+  # (ADR-015, ADR-018).
   # =========================================================================
-  bias_audit:
-    enabled: true
-    length_correlation_threshold: 0.7
-    position_variance_threshold: 0.5
-
-  bias_persistence:
-    enabled: true
-    store_path: "${HOME}/.llm-council/bias_data.jsonl"
-    consent_level: LOCAL_ONLY
-
-  # =========================================================================
-  # Scoring Configuration (ADR-016)
-  # =========================================================================
-  scoring:
-    rubric_enabled: false          # Enable for detailed scoring
-    safety_gate_enabled: false     # Enable if safety filtering needed
+  evaluation:
+    bias:
+      audit_enabled: true
+      persistence_enabled: true
+      store_path: "${HOME}/.llm-council/bias_data.jsonl"
+      consent_level: LOCAL_ONLY
+      length_correlation_threshold: 0.7
+      position_variance_threshold: 0.5
+    rubric:
+      enabled: false               # Enable for detailed scoring (ADR-016)
+    safety:
+      enabled: false               # Enable if safety filtering needed
 
   # =========================================================================
   # Council Behavior
