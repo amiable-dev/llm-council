@@ -5,15 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.45.1] - 2026-08-22
+
+**Reasoning-tier consults get their synthesis back, plus the supply-chain hardening pass.** The headline fix ([#648](https://github.com/amiable-dev/llm-council/issues/648)) is a regression introduced by the 0.45.0 chairman change; the rest is code-scanning remediation and release-automation plumbing that landed after the 0.45.0 tag.
 
 ### Fixed
 
 - **Consult-path Stage 2 and Stage 3 now get tier-aware timeouts ([#648](https://github.com/amiable-dev/llm-council/issues/648))** — both council orchestrators called `stage2_collect_rankings` and `stage3_synthesize_final` without a `timeout`, so peer review and chairman synthesis each ran at their own hard-coded 120s default no matter the tier, and `LLM_COUNCIL_TIMEOUT_MULTIPLIER` never reached either stage. Latent until the 0.45.0 chairman moved to `anthropic/claude-opus-5` ([#635](https://github.com/amiable-dev/llm-council/issues/635)), which reliably exceeds 120s on a substantial reasoning-tier synthesis: **every reasoning-tier consult lost its synthesis**, returning `"Error: Unable to generate final synthesis (timeout: Timeout after 120.0s)"` while all member responses, rankings, and dissent completed normally. Both stages now derive their budget from the tier's per-model timeout (`max(per_model, 120s)`), so reasoning tier gets 300s — 900s at `LLM_COUNCIL_TIMEOUT_MULTIPLIER=3`. ADR-040 fixed this same class of bug on the verify path ([#545](https://github.com/amiable-dev/llm-council/issues/545)); this brings the consult path into line. The 120s floor is deliberate: it guarantees no tier's stage budget can *shrink* (high tier's per-model budget is 90s, balanced's 45s), so quick/balanced/high behavior is unchanged at the default multiplier. `POST /v1/council/run` has no tier parameter and now sources its budgets from the high-tier contract it already assumes. **Migration:** none — no configuration changes, and the only behavior change at default settings is that reasoning-tier consults now complete.
 
+### Security
+
+- **Code-scanning remediation across the repo ([#649](https://github.com/amiable-dev/llm-council/pull/649), [#651](https://github.com/amiable-dev/llm-council/pull/651))** — CR/LF in log arguments is now collapsed before interpolation via a new `log_safety.safe_log()` helper (CWE-117 `py/log-injection`, 11 sites across `verification/file_ops.py`, `openrouter.py`, `gateway/openrouter.py`, `layer_contracts.py`, `budget/estimator.py`, `metadata/discovery.py`); github-context data is routed through `env:` instead of inline `${{ }}` interpolation in `council-gate.yml`, `sync-action.yml`, and `release-security.yml` (shell/script injection); the verify cache-affinity hash moves from SHA-1 to SHA-256 (it is an affinity key, never a security use, so the algorithm was always arbitrary); every third-party GitHub Action across all 15 workflows is pinned to an immutable commit SHA and the Railway Dockerfile's `python:3.11-slim` base to a digest; least-privilege `permissions:` blocks were added to workflows that lacked a top-level scope or held overly broad write scopes; and both dependabot ecosystems gained a 7-day cooldown.
+
 ### Changed
 
 - `LLM_COUNCIL_TIMEOUT_MULTIPLIER` is documented correctly in the environment reference: it scales every tier timeout (default `1.0`), and is unrelated to the verify path's fixed `VERIFICATION_TIMEOUT_MULTIPLIER` code constant (2.0) it was previously described as.
+- **Releases are created and announced automatically after publish ([#645](https://github.com/amiable-dev/llm-council/pull/645), [#646](https://github.com/amiable-dev/llm-council/issues/646))** — `publish.yml` now creates the GitHub Release and posts a Discord announcement. Release creation authenticates with a fine-grained `RELEASE_PAT` so the `release: published` event actually fires `release-security.yml` (releases created with the default `GITHUB_TOKEN` emit no workflow triggers, which is why SBOM and SLSA provenance were never attached); it falls back to `github.token` when the secret is unset or expired, so publish never blocks on PAT rotation — the release is still created, only the SBOM is skipped.
+- CVE-2026-77304 is recorded for GHSA-fpxw-qr53-pxfp ([#643](https://github.com/amiable-dev/llm-council/pull/643)).
 
 ## [0.45.0] - 2026-08-22
 
