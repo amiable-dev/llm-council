@@ -74,36 +74,39 @@ def get_tier_timeout(tier: str) -> Dict[str, int]:
 
 
 # Default pools used when config isn't loaded yet
+# Aug-2026 model refresh (#635): IDs verified against the live OpenRouter
+# catalog 2026-08-22. gemini-3.1-pro-preview is held deliberately — Google
+# ships no Pro-class successor; swap when a stable 3.x Pro lands.
 _DEFAULT_TIER_MODEL_POOLS = {
     "quick": [
-        "openai/gpt-5-mini",
+        "openai/gpt-5.6-luna",
         "anthropic/claude-haiku-4.5",
-        "google/gemini-3.1-flash-lite",
-        "deepseek/deepseek-v3.2",
+        "google/gemini-3.5-flash-lite",
+        "deepseek/deepseek-v4-flash",
     ],
     "balanced": [
-        "openai/gpt-5.4-mini",
-        "anthropic/claude-sonnet-4.6",
-        "google/gemini-3.1-flash-lite",
-        "deepseek/deepseek-v3.2",
+        "openai/gpt-5.6-luna",
+        "anthropic/claude-sonnet-5",
+        "google/gemini-3.7-flash",
+        "deepseek/deepseek-v4-flash",
     ],
     "high": [
-        "openai/gpt-5.4",
-        "anthropic/claude-opus-4.8",
+        "openai/gpt-5.6-sol",
+        "anthropic/claude-opus-5",
         "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-v4-pro-0813",
     ],
     "reasoning": [
-        "openai/gpt-5.4-pro",
-        "anthropic/claude-opus-4.8",
+        "openai/gpt-5.6-sol-pro",
+        "anthropic/claude-opus-5",
         "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-r1",
+        "z-ai/glm-5.3",
     ],
     "frontier": [
-        "openai/gpt-5.5-pro",
-        "anthropic/claude-opus-4.8",
+        "anthropic/claude-fable-5",
+        "openai/gpt-5.6-sol-pro",
+        "x-ai/grok-4.6",
         "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-v4-pro",
     ],
 }
 
@@ -119,11 +122,11 @@ if TYPE_CHECKING:
 # Tier-appropriate aggregator models (ADR-022 council recommendation)
 # Warning: Do not use a "mini" model to aggregate reasoning model outputs.
 TIER_AGGREGATORS: Dict[str, str] = {
-    "quick": "openai/gpt-5-mini",  # Speed-matched
-    "balanced": "openai/gpt-5.4-mini",  # Quality-matched
-    "high": "openai/gpt-5.4",  # Full capability
-    "reasoning": "anthropic/claude-opus-4.8",  # Can understand reasoning outputs
-    "frontier": "anthropic/claude-opus-4.8",  # Best available for cutting-edge synthesis (ADR-027)
+    "quick": "openai/gpt-5.6-luna",  # Speed-matched
+    "balanced": "anthropic/claude-sonnet-5",  # Quality-matched
+    "high": "openai/gpt-5.6-sol",  # Full capability
+    "reasoning": "anthropic/claude-opus-5",  # Can understand reasoning outputs
+    "frontier": "anthropic/claude-opus-5",  # Best available for cutting-edge synthesis (ADR-027)
 }
 
 

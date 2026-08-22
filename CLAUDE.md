@@ -39,7 +39,7 @@ Council core
 
 Tiering & model selection
 - `tier_contract.py` (ADR-022), `unified_config.py` (ADR-024, see below).
-- `metadata/` (ADR-026/028) — model metadata abstraction. `StaticRegistryProvider` (offline, bundled `models/registry.yaml`, ~31 models / 8 providers) and `DynamicMetadataProvider` (OpenRouter API + TTL cache). Background discovery worker + request-time discovery (ADR-028). `intersection.py` resolves tier membership for multi-tier models (e.g. o1-preview).
+- `metadata/` (ADR-026/028) — model metadata abstraction. `StaticRegistryProvider` (offline, bundled `models/registry.yaml`, ~61 models / 10 providers) and `DynamicMetadataProvider` (OpenRouter API + TTL cache). Background discovery worker + request-time discovery (ADR-028). `intersection.py` resolves tier membership for multi-tier models (e.g. o1-preview).
 - `triage/` (ADR-020), `reasoning/` (ADR-026 Phase 2 — effort levels), `performance/` (ADR-026 Phase 3 — internal performance index from real sessions).
 
 Frontier tier lifecycle (ADR-027/029)

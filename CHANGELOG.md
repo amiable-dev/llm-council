@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Default model configuration refreshed to the August 2026 market ([#635](https://github.com/amiable-dev/llm-council/issues/635))** — every tier pool, the chairman, and all tier aggregators move to current-generation OpenRouter IDs, verified live against the catalog on 2026-08-22. Highlights: `anthropic/claude-opus-5` replaces `claude-opus-4.8` at the identical $5/$25 price (chairman moves from `google/gemini-3.1-pro-preview` to `claude-opus-5`, activating the ADR-049 prompt-cache path on chairman calls); `openai/gpt-5.6-sol[-pro]` replaces `gpt-5.4`/`gpt-5.4-pro` (the reasoning tier's OpenAI seat drops from $30/$180 to $2/$10 per 1M); two new provider families join — `x-ai/grok-4.6` (frontier) and `z-ai/glm-5.3` (reasoning, replacing the stale `deepseek/deepseek-r1`) — motivated by correlated-judge-error evidence (arXiv 2605.29800; follow-ups [#637](https://github.com/amiable-dev/llm-council/issues/637), [#638](https://github.com/amiable-dev/llm-council/issues/638)). `google/gemini-3.1-pro-preview` is deliberately held: Google ships no Pro-class successor. Full research: [discussion #636](https://github.com/amiable-dev/llm-council/discussions/636). **Migration:** none required — `LLM_COUNCIL_MODELS`, `LLM_COUNCIL_CHAIRMAN`, and YAML pool overrides keep working; prior-generation IDs remain valid on OpenRouter (set them explicitly to keep them). `models/registry.yaml` grows to 61 models / 10 providers (v1.4) with cache-read price classes for the new entries.
+
 ## [0.44.0] - 2026-08-22
 
 **Two decided defaults land (ADR-053 #557 / ADR-054 #563).** Both are behavior changes from the 2026-08-21 maintainer decision batch; each has a one-variable escape hatch or a no-op migration. Release tracking: [#632](https://github.com/amiable-dev/llm-council/issues/632).
