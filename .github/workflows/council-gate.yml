@@ -21,6 +21,10 @@ concurrency:
   group: council-gate-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+# Least-privilege default; the job below elevates only the scopes it needs.
+permissions:
+  contents: read
+
 jobs:
   quality-gate:
     runs-on: ubuntu-latest
@@ -32,7 +36,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 0  # Need full history for diff
 
@@ -49,7 +53,7 @@ jobs:
       - name: LLM Council Quality Gate
         if: steps.check-key.outputs.has_key == 'true'
         id: council
-        uses: amiable-dev/llm-council-action@v1
+        uses: amiable-dev/llm-council-action@214ec367341a41e7449b7fc69f294dfa7082f9cf  # v1
         with:
           snapshot: ${{ github.sha }}
           confidence-threshold: ${{ github.event.inputs.confidence-threshold || '0.75' }}
@@ -59,11 +63,18 @@ jobs:
 
       - name: Comment on PR
         if: github.event_name == 'pull_request' && steps.check-key.outputs.has_key == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
+        env:
+          COUNCIL_VERDICT: ${{ steps.council.outputs.verdict }}
+          COUNCIL_CONFIDENCE: ${{ steps.council.outputs.confidence }}
+          CONFIDENCE_THRESHOLD: ${{ github.event.inputs.confidence-threshold || '0.75' }}
+          COMMIT_SHA: ${{ github.sha }}
         with:
           script: |
-            const verdict = '${{ steps.council.outputs.verdict }}';
-            const confidence = '${{ steps.council.outputs.confidence }}';
+            const verdict = process.env.COUNCIL_VERDICT || '';
+            const confidence = process.env.COUNCIL_CONFIDENCE || '';
+            const threshold = process.env.CONFIDENCE_THRESHOLD;
+            const sha = process.env.COMMIT_SHA;
 
             const emoji = verdict === 'PASS' ? '✅' : verdict === 'FAIL' ? '❌' : '⚠️';
             const status = verdict || 'UNKNOWN';
@@ -71,8 +82,8 @@ jobs:
             const body = `## ${emoji} LLM Council Quality Gate: ${status}
 
             **Confidence Score:** ${confidence}
-            **Threshold:** ${{ github.event.inputs.confidence-threshold || '0.75' }}
-            **Snapshot:** \`${{ github.sha }}\`
+            **Threshold:** ${threshold}
+            **Snapshot:** \`${sha}\`
 
             ---
             *Evaluated by [LLM Council](https://github.com/amiable-dev/llm-council) using [llm-council-action](https://github.com/amiable-dev/llm-council-action)*`;

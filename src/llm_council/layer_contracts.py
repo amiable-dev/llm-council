@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 # Re-export layer interface types
+from .log_safety import safe_log
 from .tier_contract import TierContract, create_tier_contract
 from .triage.types import TriageResult, TriageRequest, DomainCategory, WildcardConfig
 from .gateway.types import (
@@ -200,8 +201,8 @@ def emit_layer_event(
     logger.info(
         "Layer event: %s from=%s to=%s data=%s",
         event_type.value,
-        layer_from,
-        layer_to,
+        safe_log(layer_from),
+        safe_log(layer_to),
         data,
     )
 

@@ -16,6 +16,7 @@ from typing import AsyncIterator, Dict, Any, List, Optional
 import httpx
 
 # ADR-032: Migrated to unified_config
+from llm_council.log_safety import safe_log
 from llm_council.unified_config import get_api_key
 
 # ADR-011: per-gateway cost resolution. OpenRouter returns authoritative cost,
@@ -146,7 +147,7 @@ def build_openrouter_payload(
         # anomaly we want the known-good baseline, not a partial mode).
         logging.getLogger(__name__).debug(
             "prompt-cache injection failed for %s; reverting to plain payload",
-            model,
+            safe_log(model),
             exc_info=True,
         )
         payload["messages"] = messages

@@ -20,13 +20,16 @@ on:
       - 'render.yaml'
       - 'docker-compose.yml'
 
+permissions:
+  contents: read
+
 jobs:
   validate-configs:
     name: Validate Configuration Files
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
 
       - name: Validate railway.json
         run: |
@@ -51,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 0  # Fetch all history for git describe
 
@@ -68,10 +71,10 @@ jobs:
           echo "Raw: ${RAW_VERSION} -> PEP 440: ${VERSION}"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e  # v4
 
       - name: Build Docker image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7
         with:
           context: .
           file: deploy/railway/Dockerfile
@@ -88,7 +91,7 @@ jobs:
     needs: build-docker
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           fetch-depth: 0  # Fetch all history for git describe
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, List, Optional
 
+from ..log_safety import safe_log
 from .types import CostEstimate
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,11 @@ class CostEstimator:
             except Exception as exc:
                 # Estimation is best-effort; a tracker failure must not crash it,
                 # but it is logged rather than silently swallowed.
-                logger.debug("cost estimate: %r lookup failed (ignored): %s", model_id, exc)
+                logger.debug(
+                    "cost estimate: %r lookup failed (ignored): %s",
+                    safe_log(model_id),
+                    safe_log(exc),
+                )
                 mean_cost = None
             # A known $0 (free/local) contributes 0 but is NOT "unknown".
             # Clamp defensively: a cost must never be negative.
