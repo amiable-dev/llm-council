@@ -149,8 +149,8 @@ class TestTierAggregators:
         from llm_council.tier_contract import TIER_AGGREGATORS
 
         aggregator = TIER_AGGREGATORS["quick"]
-        # Should be a mini/flash model
-        assert any(fast in aggregator.lower() for fast in ["mini", "flash", "haiku"])
+        # Should be a mini/flash-class model (luna = GPT-5.6 cost-efficient line)
+        assert any(fast in aggregator.lower() for fast in ["mini", "flash", "haiku", "luna"])
 
     def test_balanced_tier_uses_mid_aggregator(self):
         """Balanced tier should use a mid-tier model for aggregation."""

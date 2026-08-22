@@ -52,6 +52,7 @@ MAX_BREAKPOINTS = 4  # Anthropic hard limit per request
 _ANTHROPIC_MIN_PREFIX: Dict[str, int] = {
     "anthropic/claude-fable-5": 512,
     "anthropic/claude-opus-4.8": 1024,
+    "anthropic/claude-opus-5": 1024,
     "anthropic/claude-sonnet-5": 1024,
     "anthropic/claude-haiku-4.5": 4096,
 }

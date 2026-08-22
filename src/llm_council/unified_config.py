@@ -14,8 +14,8 @@ apart exactly, because UnifiedConfig and CouncilConfig field names are disjoint.
 This is the shape ``llm_council.yaml.example`` ships:
 
     council:
-      models: [openai/gpt-5.4, anthropic/claude-opus-4.8]
-      chairman: google/gemini-3.1-pro-preview
+      models: [openai/gpt-5.6-sol, anthropic/claude-opus-5]
+      chairman: anthropic/claude-opus-5
     tiers:
       default: high
     gateways:
@@ -29,7 +29,7 @@ is the shape this repo's own ``llm_council.yaml`` uses:
         default: high
         pools:
           quick:
-            models: [openai/gpt-5-mini, anthropic/claude-haiku-4.5]
+            models: [openai/gpt-5.6-luna, anthropic/claude-haiku-4.5]
             timeout_seconds: 30
       triage:
         enabled: false
@@ -199,51 +199,54 @@ class TierConfig(BaseModel):
     @model_validator(mode="after")
     def ensure_default_pools(self) -> "TierConfig":
         """Ensure all standard tier pools exist with defaults."""
+        # Aug-2026 model refresh (#635): IDs verified against the live
+        # OpenRouter catalog 2026-08-22. gemini-3.1-pro-preview is held
+        # deliberately — Google ships no Pro-class successor.
         default_pools = {
             "quick": TierPoolConfig(
                 models=[
-                    "openai/gpt-5-mini",
+                    "openai/gpt-5.6-luna",
                     "anthropic/claude-haiku-4.5",
-                    "google/gemini-3.1-flash-lite",
-                    "deepseek/deepseek-v3.2",
+                    "google/gemini-3.5-flash-lite",
+                    "deepseek/deepseek-v4-flash",
                 ],
                 timeout_seconds=30,
                 peer_review="lightweight",
             ),
             "balanced": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4-mini",
-                    "anthropic/claude-sonnet-4.6",
-                    "google/gemini-3.1-flash-lite",
-                    "deepseek/deepseek-v3.2",
+                    "openai/gpt-5.6-luna",
+                    "anthropic/claude-sonnet-5",
+                    "google/gemini-3.7-flash",
+                    "deepseek/deepseek-v4-flash",
                 ],
                 timeout_seconds=90,
             ),
             "high": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4",
-                    "anthropic/claude-opus-4.8",
+                    "openai/gpt-5.6-sol",
+                    "anthropic/claude-opus-5",
                     "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v4-pro",
+                    "deepseek/deepseek-v4-pro-0813",
                 ],
                 timeout_seconds=180,
             ),
             "reasoning": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.4-pro",
-                    "anthropic/claude-opus-4.8",
+                    "openai/gpt-5.6-sol-pro",
+                    "anthropic/claude-opus-5",
                     "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-r1",
+                    "z-ai/glm-5.3",
                 ],
                 timeout_seconds=600,
             ),
             # ADR-027: Frontier tier for cutting-edge/preview models
             "frontier": TierPoolConfig(
                 models=[
-                    "openai/gpt-5.5-pro",
-                    "anthropic/claude-opus-4.8",
+                    "anthropic/claude-fable-5",
+                    "openai/gpt-5.6-sol-pro",
+                    "x-ai/grok-4.6",
                     "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v4-pro",
                 ],
                 timeout_seconds=600,
             ),
@@ -750,15 +753,15 @@ class CouncilConfig(BaseModel):
 
     models: ModelList = Field(
         default_factory=lambda: [
-            "openai/gpt-5.4",
+            "openai/gpt-5.6-sol",
             "google/gemini-3.1-pro-preview",
-            "anthropic/claude-opus-4.8",
-            "deepseek/deepseek-v4-pro",
+            "anthropic/claude-opus-5",
+            "deepseek/deepseek-v4-pro-0813",
         ],
         alias="LLM_COUNCIL_MODELS",
     )
     chairman: str = Field(
-        default="google/gemini-3.1-pro-preview",
+        default="anthropic/claude-opus-5",
         alias="LLM_COUNCIL_CHAIRMAN",
     )
     chairman_disabled: bool = Field(
@@ -778,7 +781,7 @@ class CouncilConfig(BaseModel):
         alias="LLM_COUNCIL_STYLE_NORMALIZATION",
     )
     normalizer_model: str = Field(
-        default="google/gemini-3.1-flash-lite-preview",
+        default="google/gemini-3.5-flash-lite",
         alias="LLM_COUNCIL_NORMALIZER_MODEL",
     )
     max_reviewers: Optional[int] = Field(
