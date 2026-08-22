@@ -23,7 +23,7 @@
 </p>
 
 > [!WARNING]
-> **Security advisory (2026-07-10) — upgrade to `>= 0.39.0`.** Versions `0.22.0`–`0.38.2` could transmit credential files (`.env`, `.npmrc`, `.yarnrc`, …) **that were committed to your git repository** to your configured LLM provider during `verify` / `gate` runs. Untracked and `.gitignore`d files were never affected. If you committed credentials and ran a verification over a commit touching them, **rotate those credentials**. See [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp).
+> **Security advisory (2026-07-10) — upgrade to `>= 0.39.0`.** Versions `0.22.0`–`0.38.2` could transmit credential files (`.env`, `.npmrc`, `.yarnrc`, …) **that were committed to your git repository** to your configured LLM provider during `verify` / `gate` runs. Untracked and `.gitignore`d files were never affected. If you committed credentials and ran a verification over a commit touching them, **rotate those credentials**. See [GHSA-fpxw-qr53-pxfp / CVE-2026-77304](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp).
 
 ## What is This?
 

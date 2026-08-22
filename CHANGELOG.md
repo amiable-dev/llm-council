@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.0] - 2026-08-22
+
+**The Aug-2026 council model refresh.** One change, every tier: the default councils, chairman, and aggregators move to current-generation OpenRouter models per the accepted research in [discussion #636](https://github.com/amiable-dev/llm-council/discussions/636) (tracking: [#635](https://github.com/amiable-dev/llm-council/issues/635)).
+
+### Changed
+
+- **Default model configuration refreshed to the August 2026 market ([#635](https://github.com/amiable-dev/llm-council/issues/635))** — every tier pool, the chairman, and all tier aggregators move to current-generation OpenRouter IDs, verified live against the catalog on 2026-08-22. Highlights: `anthropic/claude-opus-5` replaces `claude-opus-4.8` at the identical $5/$25 price (chairman moves from `google/gemini-3.1-pro-preview` to `claude-opus-5`, activating the ADR-049 prompt-cache path on chairman calls); `openai/gpt-5.6-sol[-pro]` replaces `gpt-5.4`/`gpt-5.4-pro` (the reasoning tier's OpenAI seat drops from $30/$180 to $2/$10 per 1M); two new provider families join — `x-ai/grok-4.6` (frontier) and `z-ai/glm-5.3` (reasoning, replacing the stale `deepseek/deepseek-r1`) — motivated by correlated-judge-error evidence (arXiv 2605.29800; follow-ups [#637](https://github.com/amiable-dev/llm-council/issues/637), [#638](https://github.com/amiable-dev/llm-council/issues/638)). `google/gemini-3.1-pro-preview` is deliberately held: Google ships no Pro-class successor. Full research: [discussion #636](https://github.com/amiable-dev/llm-council/discussions/636). **Migration:** none required — `LLM_COUNCIL_MODELS`, `LLM_COUNCIL_CHAIRMAN`, and YAML pool overrides keep working; prior-generation IDs remain valid on OpenRouter (set them explicitly to keep them). `models/registry.yaml` grows to 61 models / 10 providers (v1.4) with cache-read price classes for the new entries.
+
+## [0.44.0] - 2026-08-22
+
+**Two decided defaults land (ADR-053 #557 / ADR-054 #563).** Both are behavior changes from the 2026-08-21 maintainer decision batch; each has a one-variable escape hatch or a no-op migration. Release tracking: [#632](https://github.com/amiable-dev/llm-council/issues/632).
+
+### Changed
+
+- **`LLM_COUNCIL_FILE_SELECTION` now defaults to `content` ([#557](https://github.com/amiable-dev/llm-council/issues/557), PR [#631](https://github.com/amiable-dev/llm-council/pull/631))** — `verify`/`gate` review **any text file** by default, regardless of extension, closing the gap where a commit touching a `.zig`/`.tf`/`Justfile` could PASS without those files ever being read ([#542](https://github.com/amiable-dev/llm-council/issues/542)). Strictly stricter: nothing reviewed before stops being reviewed, but commits touching previously-unlisted files can gain findings and modest prompt cost; a few extra git calls per verify. The secret denylist and garbage filter are unchanged and still run first. **Migration:** set `LLM_COUNCIL_FILE_SELECTION=allowlist` to restore the previous behavior exactly. Decision evidence: 35 real shadow-mode runs with zero `would_drop` deltas. This release also satisfies the precondition for the coverage-clamp default flip (its own later release, per the sequencing recorded on #557).
+- **`confidence` is now explicitly telemetry, and the calibrated PASS gate is removed (ADR-054 D3a, [#563](https://github.com/amiable-dev/llm-council/issues/563), PR [#629](https://github.com/amiable-dev/llm-council/pull/629))** — verify's `confidence`/`confidence_calibrated` are reviewer-agreement-derived heuristics, not calibrated probabilities, and are now documented as such everywhere; no verdict threshold consumes the calibrated value. The `LLM_COUNCIL_CALIBRATED_CONFIDENCE` env flag is **deleted** (it defaulted off and no calibration mapping was ever fittable in practice, so flag-off users — everyone — see byte-identical behavior). **Migration:** none for flag-off users; a flag-on user loses calibrated thresholding. The raw-confidence low-confidence softening on the legacy verdict path is unchanged. D3b (findings-uncertainty confidence) is scoped as [#628](https://github.com/amiable-dev/llm-council/issues/628).
+
+### Fixed
+
+- Corrupt calibration mappings with coordinates outside `[0, 1]` are now rejected on load (soft-fail to identity), matching the existing monotonicity check (found by the [#629](https://github.com/amiable-dev/llm-council/pull/629) council gate).
+
 ## [0.43.0] - 2026-08-21
 
 **The #579 extraction chain: grounded consultation + compute-optimal telemetry.** Two features extracted from the STORM/Co-STORM research-mode proposal ([#579](https://github.com/amiable-dev/llm-council/issues/579)) — each justified on its own merits — plus the evidence-hardening their council reviews demanded. Design records: ADR-042 Amendment 1, ADR-044 implementation note.

@@ -39,7 +39,7 @@ Council core
 
 Tiering & model selection
 - `tier_contract.py` (ADR-022), `unified_config.py` (ADR-024, see below).
-- `metadata/` (ADR-026/028) — model metadata abstraction. `StaticRegistryProvider` (offline, bundled `models/registry.yaml`, ~31 models / 8 providers) and `DynamicMetadataProvider` (OpenRouter API + TTL cache). Background discovery worker + request-time discovery (ADR-028). `intersection.py` resolves tier membership for multi-tier models (e.g. o1-preview).
+- `metadata/` (ADR-026/028) — model metadata abstraction. `StaticRegistryProvider` (offline, bundled `models/registry.yaml`, ~61 models / 10 providers) and `DynamicMetadataProvider` (OpenRouter API + TTL cache). Background discovery worker + request-time discovery (ADR-028). `intersection.py` resolves tier membership for multi-tier models (e.g. o1-preview).
 - `triage/` (ADR-020), `reasoning/` (ADR-026 Phase 2 — effort levels), `performance/` (ADR-026 Phase 3 — internal performance index from real sessions).
 
 Frontier tier lifecycle (ADR-027/029)
@@ -191,8 +191,8 @@ The flow is async/parallel wherever possible to minimize latency.
 5. Open PR: `gh pr create --title "Release v0.X.0" --body "…"`.
 6. Wait for required checks: **Test, Lint, Type Check, DCO** (DCO needs `--signoff`). Do not merge until green.
 7. `gh pr merge --squash --delete-branch`.
-8. **After merge**, tag from updated master: `git tag -a v0.X.0 -m "…" && git push origin v0.X.0` — this triggers `publish.yml` (build → test wheel → publish to PyPI).
-9. Verify: `gh run list --workflow=publish.yml --limit=1`, then `pip index versions llm-council-core`.
+8. **After merge**, tag from updated master: `git tag -a v0.X.0 -m "…" && git push origin v0.X.0` — this triggers `publish.yml` (build → test wheel → publish to PyPI → announce: auto-creates the GitHub Release with `--generate-notes` and posts a Discord embed via `DISCORD_RELEASES_WEBHOOK` secret; both idempotent/soft-fail, #644). Release creation authenticates with the `RELEASE_PAT` secret (fine-grained PAT, Contents: read+write) so the `release: published` event triggers `release-security.yml` (SBOM + SLSA provenance, #646) — default-token releases don't emit workflow triggers; falls back to `github.token` (release still created, SBOM skipped) when the PAT is unset/expired, so **rotate the PAT before it expires**.
+9. Verify: `gh run list --workflow=publish.yml --limit=1`, then `pip index versions llm-council-core`. The GitHub Release no longer needs manual backfill (announce job creates it).
 
 **Versioning:** git tags via `hatch-vcs`/setuptools-scm; `src/llm_council/_version.py` is auto-generated + gitignored. SemVer (MAJOR breaking / MINOR feature / PATCH fix).
 

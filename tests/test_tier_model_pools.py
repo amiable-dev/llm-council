@@ -69,6 +69,29 @@ class TestDefaultTierModelPools:
             r in model_names for r in ["o1", "r1", "gpt-5"]
         ), "Reasoning tier should have reasoning model variants"
 
+    def test_default_pools_are_aug_2026_refresh(self):
+        """Default pools reflect the Aug-2026 model refresh (#635)."""
+        from llm_council.tier_contract import _DEFAULT_TIER_MODEL_POOLS, TIER_AGGREGATORS
+
+        assert _DEFAULT_TIER_MODEL_POOLS["high"] == [
+            "openai/gpt-5.6-sol",
+            "anthropic/claude-opus-5",
+            "google/gemini-3.1-pro-preview",
+            "deepseek/deepseek-v4-pro-0813",
+        ]
+        assert "z-ai/glm-5.3" in _DEFAULT_TIER_MODEL_POOLS["reasoning"]
+        assert "anthropic/claude-fable-5" in _DEFAULT_TIER_MODEL_POOLS["frontier"]
+        assert "x-ai/grok-4.6" in _DEFAULT_TIER_MODEL_POOLS["frontier"]
+        # gpt-5.5-pro exits (Pareto-dominated by the GPT-5.6 family)
+        assert "openai/gpt-5.5-pro" not in _DEFAULT_TIER_MODEL_POOLS["frontier"]
+        assert TIER_AGGREGATORS == {
+            "quick": "openai/gpt-5.6-luna",
+            "balanced": "anthropic/claude-sonnet-5",
+            "high": "openai/gpt-5.6-sol",
+            "reasoning": "anthropic/claude-opus-5",
+            "frontier": "anthropic/claude-opus-5",
+        }
+
     def test_high_tier_is_default_equivalent(self):
         """High tier should be similar to current default COUNCIL_MODELS."""
         from llm_council.tier_contract import _DEFAULT_TIER_MODEL_POOLS

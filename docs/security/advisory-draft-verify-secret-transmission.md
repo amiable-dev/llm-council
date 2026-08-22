@@ -1,7 +1,7 @@
 # GitHub Security Advisory (record): verify() transmits committed credential files to third-party LLM providers
 
 > **Status: PUBLISHED 2026-07-10.** [GHSA-fpxw-qr53-pxfp](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-fpxw-qr53-pxfp)
-> — CVE **pending** (GitHub CNA review; the advisory records the CVE id once assigned).
+> — CVE **CVE-2026-77304**.
 >
 > This file is the repo-side record of the advisory. The **Form fields** below map
 > to the discrete GHSA form inputs; the **Description** section is verbatim the
