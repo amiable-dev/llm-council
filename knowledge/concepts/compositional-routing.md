@@ -33,6 +33,7 @@ The field's systematic survey finds no single routing paradigm wins: effective s
 
 - [[portfolio-model-selection]] — extends the composition question from one model to a deliberating set
 - [[cascade-structural-cost]] — prices one of the compositional paradigms
+- [[cost-quality-frontier-evaluation]] — is measured on the frontier curves this evaluation defines
 
 ## Applications
 

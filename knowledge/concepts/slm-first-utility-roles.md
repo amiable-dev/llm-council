@@ -33,6 +33,7 @@ The SLM-first thesis holds that most agentic substeps are narrow and repetitive,
 
 - [[effort-routing]] — complements it: right-size effort on big models, right-size the model on small tasks
 - [[policy-taxonomy-routing]] — is itself an SLM utility role — a compact local matcher
+- [[portfolio-model-selection]] — keeps mechanical substeps off the frontier models the portfolio spends on
 
 ## Applications
 

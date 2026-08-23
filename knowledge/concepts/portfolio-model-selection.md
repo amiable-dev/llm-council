@@ -37,6 +37,7 @@ Every routing product and platform feature (Bedrock, Azure, OpenRouter auto) sel
 
 - [[deliberation-ground-truth-index]] — supplies the quality signal portfolio scoring blends in
 - [[cascade-structural-cost]] — bounds how cheaply a portfolio can be engaged incrementally
+- [[slm-first-utility-roles]] — delegates its mechanical substeps to SLM utility roles
 
 ## Applications
 

@@ -33,6 +33,7 @@ Point metrics hide the trade-off that routing exists to manage: a router that wi
 
 - [[deliberation-ground-truth-index]] — supplies the quality axis the frontier plots
 - [[calibrated-consensus-stopping]] — is one of the policies the frontier makes comparable
+- [[compositional-routing]] — gives composed routing stacks one comparable surface across budgets
 
 ## Applications
 

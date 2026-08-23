@@ -1,0 +1,34 @@
+{
+  "envelope": {
+    "task_id": "b8c614fe097c00cc",
+    "verb": "link",
+    "task_class": "drafting",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "f3e9aa5eb218ea703d5e32dd4c549cbab4b89d73",
+    "input_hashes": {
+      "concepts/cost-quality-frontier-evaluation.md": "sha256:b09bf0a7ef590c74e10ab5538ac3274f585e0549427a34e0be944d4c198ec90e",
+      "concepts/slm-first-utility-roles.md": "sha256:9e8eac5dba570405228c17845c7029d91d83223c7ff7ec0ac5de936c958ae0f5",
+      "schema:link-draft.schema.json": "sha256:e713aca39f650c312adb6e8921abe1fead499fc2ae57267da2cf69356ba1661a"
+    },
+    "allowed_writes": [
+      "concepts/*.md",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:d26f56af8c57ff029fabe7d7b5b2e6d7fde821b1c8c97a393e373c8f3b2e51d0",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    "concepts/cost-quality-frontier-evaluation.md",
+    "concepts/compositional-routing.md",
+    "concepts/slm-first-utility-roles.md",
+    "concepts/portfolio-model-selection.md"
+  ]
+}
