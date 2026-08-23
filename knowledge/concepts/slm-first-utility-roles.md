@@ -8,6 +8,9 @@ tags: [concept, model-routing, domain/llm, maturity/emerging, source-type/practi
 status: draft
 sources:
   - url: https://arize.com/blog/nvidias-small-language-models-are-the-future-of-agentic-ai-paper/
+    hash: sha256:0f0914fbd94b49c8714064ca1607ce0edf9a655816cdfb1425b4ec009dbba7e6
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # SLM-First Utility Roles

@@ -8,6 +8,9 @@ tags: [concept, model-routing, domain/llm, maturity/established, source-type/res
 status: draft
 sources:
   - url: https://arxiv.org/abs/2603.04445
+    hash: sha256:fb8001e3a8818886199a91077b181fcdb3d79408536778fbab5ae952c5397877
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Compositional Routing

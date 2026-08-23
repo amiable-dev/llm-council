@@ -8,6 +8,9 @@ tags: [concept, model-routing, domain/llm, maturity/emerging, source-type/resear
 status: draft
 sources:
   - url: https://arxiv.org/abs/2605.04236
+    hash: sha256:e3121f630af4593557ee72993d4771830561b4e0de432d4cf94202c17c55cb4d
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Calibrated Consensus Stopping

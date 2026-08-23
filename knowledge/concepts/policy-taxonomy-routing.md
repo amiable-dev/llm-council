@@ -8,6 +8,9 @@ tags: [concept, model-routing, domain/llm, maturity/emerging, source-type/resear
 status: draft
 sources:
   - url: https://arxiv.org/abs/2506.16655
+    hash: sha256:f93d1a414a730f820473e575027024dbe446e471abf7a0daf507fb14fb4b32c8
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Policy Taxonomy Routing

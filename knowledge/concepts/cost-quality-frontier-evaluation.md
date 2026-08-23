@@ -8,6 +8,9 @@ tags: [concept, model-routing, domain/llm, maturity/established, source-type/res
 status: draft
 sources:
   - url: https://arxiv.org/abs/2403.12031
+    hash: sha256:6ae010d0c7a59e8deb5cb4dd36be7e55ced0bbef4cb8f730c65d76e3fae5d685
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Cost-Quality Frontier Evaluation
