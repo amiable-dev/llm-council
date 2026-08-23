@@ -12,9 +12,6 @@ sources:
     retrieved: 2026-08-23
     reachability: ok
   - url: https://arxiv.org/abs/2606.06924
-    hash: sha256:0585285cfeb6d1207fd5856aa367354af5e8b1f65d8f46043b4f26d67c23c90d
-    retrieved: 2026-08-23
-    reachability: ok
 ---
 
 # Deliberation Ground-Truth Index

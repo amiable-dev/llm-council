@@ -1,0 +1,32 @@
+{
+  "envelope": {
+    "task_id": "ffc1cb591e3aa756",
+    "verb": "support",
+    "task_class": "evidence-verdict",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "adc44845d51433c3d114bcbae1befdf19eecdda5",
+    "input_hashes": {
+      "concepts/effort-routing.md": "sha256:be986d4f918df4a7390b9dff4c40fdf99504b98d55fa47fd65c18b18f33867c7",
+      "cite:b06b15474a1b": "sha256:a8799a2caa6c781fe5f13df27d34c1c690c3c37d8213c11779411d65a392715d",
+      "cite:9a39dfcdd118": "sha256:ec53c745d94bb923a6a3d04078a2e7be0bac718f40d7a94119b5919f56bdf1c1",
+      "schema:support-verdict.schema.json": "sha256:3564618e3bdd4e02b567897af881feb1d42864a01ee2856b634c8484e8c7d109"
+    },
+    "allowed_writes": [
+      ".kb/evidence/*.jsonl",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:314cc2454fb74764da3e1e9042f01e1dfdc9a50c7123c6b386534df897c3c074",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    ".kb/evidence/effort-routing.jsonl"
+  ]
+}
