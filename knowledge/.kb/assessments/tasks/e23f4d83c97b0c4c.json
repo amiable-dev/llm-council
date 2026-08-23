@@ -1,0 +1,31 @@
+{
+  "envelope": {
+    "task_id": "e23f4d83c97b0c4c",
+    "verb": "assess",
+    "task_class": "rubric-ordinal",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "869ecf2ba3dd7ecd50e5289390c0472376b14d70",
+    "input_hashes": {
+      "staging/arch-router.md": "sha256:298546bdcd0688bc1352fc3b90f1161f5bba4879724acaaeda5b9054cbf13deb",
+      "rubric:promotion": "sha256:a802b14a95af152602962fe052eb92741949c67d097a20c084ca32be1b938366",
+      "schema:rubric-verdict.schema.json": "sha256:754aaad81a54661fed1d4549994a0d2b311ab4e58d51ec47c914d6efec7077ee"
+    },
+    "allowed_writes": [
+      ".kb/queue/*.jsonl",
+      ".kb/assessments/*.json"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:7d3fb345e81535ea9f8c2fb17a4f35f2aba514685d5ec20723747b32722c4079",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    ".kb/assessments/arch-router.json"
+  ]
+}

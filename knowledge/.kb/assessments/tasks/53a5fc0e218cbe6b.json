@@ -1,0 +1,31 @@
+{
+  "envelope": {
+    "task_id": "53a5fc0e218cbe6b",
+    "verb": "promote",
+    "task_class": "drafting",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "869ecf2ba3dd7ecd50e5289390c0472376b14d70",
+    "input_hashes": {
+      "staging/routerbench.md": "sha256:1c215206fd4528cca94d4efaa814c36fb3f51ef802404283ec632ba90a3439d6",
+      "assessment:routerbench": "sha256:767ec777640e85c6cf8740d3643ab4decc623fcbab6965070c8aff3bc4468475",
+      "schema:concept-draft.schema.json": "sha256:d5b67763c3b464428850c6da56022a89b3f02c91571f0521d58d94eaa7d78de6"
+    },
+    "allowed_writes": [
+      "concepts/*.md",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:87b66bb6f21b4e9c7844f85864d17822b8c29697d2141b6dac29e4fe3a9ec9a8",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    "concepts/cost-quality-frontier-evaluation.md"
+  ]
+}

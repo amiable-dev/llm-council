@@ -1,0 +1,50 @@
+{
+  "target": "staging/arch-router.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "promote",
+  "reason": "matched {\"durability\":[\"strong\"],\"actionability\":[\"strong\",\"weak\"],\"atomicity\":[\"strong\"]}",
+  "ratings": {
+    "durability": "strong",
+    "actionability": "strong",
+    "atomicity": "strong"
+  },
+  "verdict": {
+    "task_id": "e23f4d83c97b0c4c",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/arch-router.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "Not an announcement."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "No overlapping concept in the corpus."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "strong",
+        "rationale": "The taxonomy-routing pattern with a decoupled route-to-model table outlives any given model."
+      },
+      "actionability": {
+        "rating": "strong",
+        "rationale": "The direct successor pattern to keyword-heuristic classifiers (R2)."
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "One idea: preference-aligned routing via a policy taxonomy."
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "target": "staging/is-escalation-worth-it-a-decision.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "discard",
+  "reason": "disqualified: duplicate",
+  "disqualifiers": [
+    "duplicate"
+  ],
+  "verdict": {
+    "task_id": "d86fb20e86365ddb",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/is-escalation-worth-it-a-decision.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "Not an announcement."
+      },
+      "duplicate": {
+        "triggered": true,
+        "rationale": "Its contribution is already promoted as cascade-structural-cost, which cites it."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "strong",
+        "rationale": "x"
+      },
+      "actionability": {
+        "rating": "strong",
+        "rationale": "x"
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "x"
+      }
+    }
+  }
+}

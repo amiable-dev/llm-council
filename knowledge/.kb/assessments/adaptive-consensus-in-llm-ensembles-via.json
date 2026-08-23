@@ -1,0 +1,50 @@
+{
+  "target": "staging/adaptive-consensus-in-llm-ensembles-via.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "promote",
+  "reason": "matched {\"durability\":[\"strong\"],\"actionability\":[\"strong\",\"weak\"],\"atomicity\":[\"strong\"]}",
+  "ratings": {
+    "durability": "strong",
+    "actionability": "strong",
+    "atomicity": "strong"
+  },
+  "verdict": {
+    "task_id": "17af42eea8f191ec",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/adaptive-consensus-in-llm-ensembles-via.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "Not an announcement."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "No overlapping concept in the corpus."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "strong",
+        "rationale": "A stopping mechanism with measured routing gaps; mechanisms age well."
+      },
+      "actionability": {
+        "rating": "strong",
+        "rationale": "Directly shapes a calibrated early-consensus mode (R5)."
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "One contribution: calibrated commit signals for adaptive stopping."
+      }
+    }
+  }
+}

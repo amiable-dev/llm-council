@@ -1,0 +1,50 @@
+{
+  "target": "staging/nvidias-peter-belcak-distills-why-small.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "promote",
+  "reason": "matched {\"durability\":[\"strong\"],\"actionability\":[\"strong\",\"weak\"],\"atomicity\":[\"strong\"]}",
+  "ratings": {
+    "durability": "strong",
+    "actionability": "strong",
+    "atomicity": "strong"
+  },
+  "verdict": {
+    "task_id": "454d01719fb7b968",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/nvidias-peter-belcak-distills-why-small.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "Not an announcement."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "No overlapping concept in the corpus."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "strong",
+        "rationale": "The SLM-first economics thesis for mechanical subtasks is a standing trade-off."
+      },
+      "actionability": {
+        "rating": "strong",
+        "rationale": "Names the substeps to move off frontier models (R9)."
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "One thesis: small models for narrow repetitive roles, escalate the hard turns."
+      }
+    }
+  }
+}

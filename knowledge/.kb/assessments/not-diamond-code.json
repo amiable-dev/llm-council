@@ -1,0 +1,48 @@
+{
+  "target": "staging/not-diamond-code.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "discard",
+  "reason": "disqualified: pure-announcement",
+  "disqualifiers": [
+    "pure-announcement"
+  ],
+  "verdict": {
+    "task_id": "4c72428ea553bf35",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/not-diamond-code.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": true,
+        "rationale": "A product launch post; the market fact it evidences (the vendor pivot) belongs in a note's sources, not as a concept."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "No overlapping concept in the corpus."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "weak",
+        "rationale": "x"
+      },
+      "actionability": {
+        "rating": "weak",
+        "rationale": "x"
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "x"
+      }
+    }
+  }
+}

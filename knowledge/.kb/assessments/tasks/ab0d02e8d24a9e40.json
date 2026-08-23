@@ -1,0 +1,31 @@
+{
+  "envelope": {
+    "task_id": "ab0d02e8d24a9e40",
+    "verb": "promote",
+    "task_class": "drafting",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "869ecf2ba3dd7ecd50e5289390c0472376b14d70",
+    "input_hashes": {
+      "staging/adaptive-consensus-in-llm-ensembles-via.md": "sha256:363473e4f4e2bb9b25a7da90a0a01ac1fff192e1b57dd9391441e34a8c332e72",
+      "assessment:adaptive-consensus-in-llm-ensembles-via": "sha256:01195d503234ee3c6ba157ef9e4249b3d29b84d12ae8ab51a20f8b58a4a89761",
+      "schema:concept-draft.schema.json": "sha256:d5b67763c3b464428850c6da56022a89b3f02c91571f0521d58d94eaa7d78de6"
+    },
+    "allowed_writes": [
+      "concepts/*.md",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:0927160b714522f98b728e958b771e147d8b6223c6f5f67c89a9b07f288aa2f5",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    "concepts/calibrated-consensus-stopping.md"
+  ]
+}

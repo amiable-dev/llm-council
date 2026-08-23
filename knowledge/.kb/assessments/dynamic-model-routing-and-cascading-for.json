@@ -1,0 +1,50 @@
+{
+  "target": "staging/dynamic-model-routing-and-cascading-for.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "promote",
+  "reason": "matched {\"durability\":[\"strong\"],\"actionability\":[\"strong\",\"weak\"],\"atomicity\":[\"strong\"]}",
+  "ratings": {
+    "durability": "strong",
+    "actionability": "strong",
+    "atomicity": "strong"
+  },
+  "verdict": {
+    "task_id": "7ea2560fdc54a0d1",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/dynamic-model-routing-and-cascading-for.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "Not an announcement."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "No overlapping concept in the corpus."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "strong",
+        "rationale": "The when/what/how framework and the compositional finding are structural, not market-dated."
+      },
+      "actionability": {
+        "rating": "strong",
+        "rationale": "Positions any routing stack; validates compositional architectures."
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "The note carries the framework, one idea, not the whole survey."
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "target": "staging/intelligent-model-selection.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "queue",
+  "reason": "no routing rule matched",
+  "ratings": {
+    "durability": "weak",
+    "actionability": "weak",
+    "atomicity": "strong"
+  },
+  "verdict": {
+    "task_id": "49259e7ad9777f12",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/intelligent-model-selection.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "Not an announcement."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "No overlapping concept in the corpus."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Makes checkable claims."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "weak",
+        "rationale": "A product doc describing the current auto-router; it changes with the vendor's roadmap."
+      },
+      "actionability": {
+        "rating": "weak",
+        "rationale": "At most a pool-entry note; it changes no design decision by itself."
+      },
+      "atomicity": {
+        "rating": "strong",
+        "rationale": "One thing: market-spend-ranked automatic model selection."
+      }
+    }
+  }
+}

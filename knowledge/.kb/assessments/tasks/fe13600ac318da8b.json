@@ -1,0 +1,31 @@
+{
+  "envelope": {
+    "task_id": "fe13600ac318da8b",
+    "verb": "promote",
+    "task_class": "drafting",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "869ecf2ba3dd7ecd50e5289390c0472376b14d70",
+    "input_hashes": {
+      "staging/arch-router.md": "sha256:298546bdcd0688bc1352fc3b90f1161f5bba4879724acaaeda5b9054cbf13deb",
+      "assessment:arch-router": "sha256:449802bc686468493abe03ba69b9ff2ba666a92de0ee98b5d83dee13636031d9",
+      "schema:concept-draft.schema.json": "sha256:d5b67763c3b464428850c6da56022a89b3f02c91571f0521d58d94eaa7d78de6"
+    },
+    "allowed_writes": [
+      "concepts/*.md",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:ad67102f06868a9a55474b1eac9cae1a088f3570fc04440b5d3084e6db3d8a5e",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    "concepts/policy-taxonomy-routing.md"
+  ]
+}

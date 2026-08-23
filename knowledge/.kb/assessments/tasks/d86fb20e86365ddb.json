@@ -1,0 +1,31 @@
+{
+  "envelope": {
+    "task_id": "d86fb20e86365ddb",
+    "verb": "assess",
+    "task_class": "rubric-ordinal",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "869ecf2ba3dd7ecd50e5289390c0472376b14d70",
+    "input_hashes": {
+      "staging/is-escalation-worth-it-a-decision.md": "sha256:9feade46038830bfc7bf2973975a6ce190efe75f9d169b99489abbe8d6c5d5ea",
+      "rubric:promotion": "sha256:a802b14a95af152602962fe052eb92741949c67d097a20c084ca32be1b938366",
+      "schema:rubric-verdict.schema.json": "sha256:754aaad81a54661fed1d4549994a0d2b311ab4e58d51ec47c914d6efec7077ee"
+    },
+    "allowed_writes": [
+      ".kb/queue/*.jsonl",
+      ".kb/assessments/*.json"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:ce9de47735b4f482d9df77df6f0140e6bafad2d2251477dbfb1e250c10ff9229",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    ".kb/assessments/is-escalation-worth-it-a-decision.json"
+  ]
+}
