@@ -1,0 +1,81 @@
+# Should this staging note become a concept?
+#
+# Deliberately NOT a weighted sum of 0-1 scores. Three reasons that shape
+# matters (docs/adrs/004-rubric-shape.md):
+#   - a weighted sum lets a fatal flaw be averaged away by high marks elsewhere;
+#   - a fixed 0.70 threshold is calibrated to one model's stringency and rots
+#     the moment the model changes;
+#   - asked for a float, models cluster at 0.8 to avoid being wrong.
+#
+# So: knockouts that cannot be compensated for, then ordinal judgments anchored
+# to real notes in this repo, then a deterministic routing table.
+id: promotion
+version: 3
+applies_to: staging
+
+# Stage 1 — any YES discards outright. No arithmetic, no compensation.
+disqualifiers:
+  - id: pure-announcement
+    prompt: >-
+      Is this solely a product launch, release note, or funding announcement,
+      with no idea that transfers beyond the specific product? Coverage OF a
+      durable technique is not disqualified; "X released version 4" is.
+  - id: duplicate
+    prompt: >-
+      Is the central idea already substantively covered by one of the nearest
+      existing concepts supplied below? Overlap in topic is fine; a duplicate
+      is one where a reader of the existing concept learns nothing new here.
+  - id: unfalsifiable
+    prompt: >-
+      Are the central claims unsourced AND unverifiable — no primary source, no
+      reproducible mechanism, no way for a reader to check them?
+
+# Stage 2 — ordinal only. Exemplars are live notes, so the anchors stay honest
+# as the corpus evolves and never drift from what the repo actually contains.
+dimensions:
+  - id: durability
+    scale: [fail, weak, strong]
+    prompt: >-
+      Will this still be true and useful in twelve months? Mechanisms, patterns
+      and trade-offs age well; version numbers, pricing and vendor feature
+      matrices do not.
+    exemplars:
+      strong: .kb/exemplars/context-engineering.md
+      weak: .kb/exemplars/llms-txt.md
+
+  - id: actionability
+    scale: [fail, weak, strong]
+    prompt: >-
+      Does this change how someone would build or decide? A concept a reader
+      can act on scores strong; one that only describes a landscape scores weak.
+    exemplars:
+      strong: .kb/exemplars/prompt-caching.md
+      weak: .kb/exemplars/ai-code-slop.md
+
+  - id: atomicity
+    scale: [fail, weak, strong]
+    prompt: >-
+      Can the core idea be stated in one paragraph, independent of the source's
+      framing? A note carrying several unrelated ideas scores weak — it should
+      be split, and the split is the finding.
+    exemplars:
+      strong: .kb/exemplars/agent-harness.md
+      weak: .kb/exemplars/ai-code-slop.md
+
+# Stage 3 — a lookup over discrete values. Auditable, and it does not shift when
+# the model's internal scale does. Never routes to a silent discard.
+routing:
+  - when: { durability: [strong], actionability: [strong, weak], atomicity: [strong] }
+    action: promote
+  - when: { durability: [strong], actionability: [strong], atomicity: [weak] }
+    action: split          # good material, wrong shape — propose a split
+  - when: { durability: [strong, weak], actionability: [strong], atomicity: [fail] }
+    action: split          # several separable ideas, at least one worth acting on:
+                           # the split is judged per-part, so a weak container
+                           # durability must not block extraction (first real-world
+                           # gap: a strategy whitepaper carrying durable mechanisms)
+  - when: { durability: [fail] }
+    action: discard
+  - when: { actionability: [fail], atomicity: [fail] }
+    action: discard
+  - default: queue         # anything unclear goes to a human, never to /dev/null

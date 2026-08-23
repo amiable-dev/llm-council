@@ -1,0 +1,62 @@
+# Collection registry — the extension point.
+#
+# Adding a collection here (plus a schema) is what makes per-collection
+# operations work without new code. See docs/architecture/overview.md.
+version: 1
+
+collections:
+  staging:
+    path: staging
+    # Staging notes carry markers under the H1, not YAML frontmatter.
+    frontmatter: markers
+    markers: [Source, Added, Tags]
+    exclude: [README.md]
+
+  concepts:
+    path: concepts
+    frontmatter: yaml
+    schema: concept.schema.json
+    exclude: [_index.md]
+    index: concepts/_index.md
+    # Required in this relative order. Extra sections are permitted between
+    # them; reordering these is not.
+    sections:
+      - Definition
+      - Explanation
+      - Key Properties
+      - Relationships
+      - Applications
+      - Sources
+      - See Also
+
+  flashcards:
+    path: flashcards
+    frontmatter: yaml
+    schema: flashcard.schema.json
+    # A flashcard is derived from the concept sharing its slug. The `source:`
+    # wikilink was stripped when the corpus left its predecessor vault, so slug identity is the
+    # derivation edge. Enforced by the derivation check.
+    derives_from: concepts
+    derives_by: slug
+    # Deck bodies contain cards: `## Heading` blocks with a lone `?` separator.
+    # Each needs a stable id so refresh matches on identity, not on heading prose.
+    cards: true
+
+checks:
+  # Dangling wikilinks are findings, never errors: an unresolved link is the
+  # corpus asserting a page should exist. See .kb/POLICY.md.
+  links: warn
+  schema: error
+  sections: error
+  derivation: error
+  index: error
+  card_ids: error
+  # A novel value never fails a write — it becomes a proposal. Verify fails only
+  # once a proposal has gone unreviewed this long, so drift surfaces without
+  # teaching agents to route around a wall. See .kb/POLICY.md.
+  stale_proposals: error
+  facets: error
+  adapters: error
+
+queue:
+  stale_after_days: 14

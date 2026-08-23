@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "flashcard.schema.json",
+  "title": "Flashcard deck frontmatter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tags", "sr-due", "sr-interval", "sr-ease"],
+  "properties": {
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9/-]*$" }
+    },
+
+    "sr-due": { "type": "string", "format": "date" },
+    "sr-interval": { "type": "integer", "minimum": 0 },
+    "sr-ease": { "type": "integer", "minimum": 0 },
+
+    "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "updated": { "type": "string", "format": "date" },
+
+    "domain": { "type": "string" },
+    "maturity": { "enum": ["emerging", "established", "deprecated"] },
+    "source_type": { "enum": ["vendor-doc", "research", "practitioner", "announcement"] },
+    "topics": { "type": "array", "items": { "type": "string" } }
+  },
+
+  "$comment": "P1 moves scheduling per-card via inline <!--SR:...--> markers beside minted card IDs. The file-level sr-* fields stay required until that migration lands and this schema is revised; see docs/architecture/overview.md.1."
+}

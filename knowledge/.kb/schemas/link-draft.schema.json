@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "link-draft.schema.json",
+  "title": "Cross-link proposals returned by a model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "links",
+    "task_id"
+  ],
+  "properties": {
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "target",
+          "clause"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "target": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "clause": {
+            "type": "string",
+            "minLength": 20,
+            "$comment": "Says HOW the two relate. 'Related to X' is not a relationship; the minimum length is deliberate."
+          },
+          "reciprocal": {
+            "type": "boolean",
+            "default": false,
+            "$comment": "Also add the backlink. Without this, a promoted concept stays isolated no matter how well it links outward."
+          },
+          "reciprocal_clause": {
+            "type": "string",
+            "minLength": 20
+          }
+        }
+      }
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "Copied verbatim from the emitted envelope \u2014 binds this answer to its task."
+    },
+    "supplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "human",
+            "model-single",
+            "model-panel"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class"
+      ],
+      "description": "Attestation of who answered; recorded in the C6 artifact, never in notes."
+    },
+    "proposer_overlap": {
+      "enum": [
+        true,
+        false,
+        "unknown"
+      ],
+      "description": "true when the answering supplier also produced the material under judgment."
+    }
+  }
+}

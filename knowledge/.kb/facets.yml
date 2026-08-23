@@ -1,0 +1,143 @@
+# Classification facets. Two tiers — see docs/adrs/006-two-tier-facets.md.
+#
+# REVISED after a 25-note sample (evenly spaced, not the alphabetical head).
+# The first seed took the top TAGS and made them domains. Frequency is not the
+# same property as being a subject area, and the sample proved it: a 24%
+# force-fit rate, three axis values never used once, and four real clusters with
+# nowhere to go. What changed and why:
+#
+#   REMOVED architecture  - 40% of the corpus carries this tag. A value that
+#                           broad classifies nothing; it is an aspect that cuts
+#                           across domains, not a domain.
+#   REMOVED devtools      - never used in the sample; subsumed by
+#                           software-engineering.
+#   REMOVED data          - never used. A corpus probe found exactly one
+#                           genuinely data-science concept. Despite this repo's
+#                           name, its AI content is LLM/agents, not classical ML.
+#   ADDED ai-safety       - 6 concepts (reward-hacking, scalable-oversight,
+#                           weak-to-strong-supervision, ...) previously forced
+#                           into ai-agents.
+#   ADDED reliability     - 5 concepts (redundancy-as-investment,
+#                           weakest-link-reliability, blameless-postmortems, ...).
+#                           Adjacent to observability but a different subject.
+#   ADDED human-factors   - 6 concepts about human cognition (cognitive-debt,
+#                           cognitive-offloading, neural-dimming, ...) which are
+#                           not about software at all.
+#   ADDED quantum-computing - 3 concepts with no plausible alternative. A small
+#                           bucket beats three notes with no home.
+#
+# SECOND REVISION, after the full 216-note run. Two domains came back that the
+# 25-note sample could not have found — a sample validates the axes it happens to
+# exercise, and it exercised neither cluster:
+#
+#   ADDED software-distribution - 8 concepts (licensing-as-a-service, open-core-model,
+#                           perpetual-fallback-licensing, isv-distribution-platform, ...).
+#                           Two independent classifiers proposed it unprompted, one as
+#                           `software-distribution` and one as `business-model`.
+#   RESTORED data         - 9 concepts. Removed in the first revision as "never used",
+#                           which was true of the sample and false of the corpus. THREE
+#                           independent classifiers proposed it back, as data-governance,
+#                           data-platform and data-science respectively. Convergence from
+#                           agents that could not see each other's work is the strongest
+#                           signal available here.
+#
+# ai-agents stays the largest domain at roughly a third of the sample. That is
+# concentration, not miscategorisation: this corpus really is mostly about
+# agents, and unlike `architecture` the value still discriminates.
+#
+# Measured distribution that justifies the two tiers:
+#   11 tags used 16x+   ->  43% of all applications   (the working head)
+#   26 tags used 6-15x  ->  20%
+#   62 tags used 3-5x   ->  18%
+#   40 tags used 2x     ->   6%
+#  159 tags used once   ->  12%                       (the noise)
+version: 1
+
+# Tier 1 — CLOSED axes. Derived at ingest, enum-validated, extended only by an
+# accepted queue proposal. Every concept carries exactly one value per axis.
+axes:
+  domain:
+    - ai-agents
+    - ai-safety
+    - llm
+    - security
+    - observability
+    - reliability
+    - infrastructure
+    - software-engineering
+    - knowledge-management
+    - human-factors
+    - governance
+    - standards
+    - quantum-computing
+    - software-distribution
+    - data
+
+  # Judge maturity from THE NOTE, not from what you happen to know about the
+  # field. A spot-check found the two diverge badly: classifying 25 notes from
+  # familiarity gave 44% emerging, while reading the same kind of notes against
+  # this rule gives ~75%, matching the corpus. Head-to-head on 12 notes, the
+  # two readings agreed 11 times once the rule was actually applied.
+  #   emerging    - the note presents it as current-wave: coined recently, dated
+  #                 2025/26, still contested, or framed as a proposal.
+  #   established - settled practice the note treats as background, typically
+  #                 predating the current wave (AST analysis, SLO alerting,
+  #                 Thompson's trusting-trust). If the note gives no signal
+  #                 either way, prefer emerging: this corpus is 72% recent.
+  #   deprecated  - only when the note itself says so.
+  maturity:
+    - emerging
+    - established
+    - deprecated
+
+  source_type:
+    - vendor-doc
+    - research
+    - practitioner
+    - announcement
+
+# Tier 2 — OPEN but governed. Genuine topic markers from the middle band.
+# A topic below `min_uses` is a queue proposal, not a tag: this is what stops
+# the 159-singleton tail regrowing.
+topics:
+  min_uses: 3
+  curated:
+    - multi-agent
+    - supply-chain
+    - static-analysis
+    - mcp
+    - protocols
+    - devops
+    - workflow
+    - memory
+    - agentic-coding
+    - rag
+    - evaluation
+    - safety
+    - enterprise
+    - pkm
+    - patterns
+    # Added from the sample: each is a real cluster the axes cannot express.
+    - context-engineering   # 13 concepts
+    - cost-control          #  9
+    - orchestration         #  7
+    - provenance            #  3  (clears min_uses)
+    # Proposed by 2+ independent classifiers in the full run and clearing min_uses:
+    - prompt-injection      #  4
+    - prompt-engineering    #  5
+    - licensing             #  6
+    - code-review           #  4
+    - vulnerability-management  # 6
+
+# Every facet value is emitted twice, generated from this file and cross-checked
+# by `kb verify`: as a scalar property (drives Bases, Dataview, Docusaurus) and
+# as a mirrored nested tag (drives the tag pane, graph groups, search
+# autocomplete). Hand-editing either form is a lint failure.
+emit:
+  scalars: true
+  nested_tags: true
+  tag_prefixes:
+    domain: domain
+    maturity: maturity
+    source_type: source-type
+    topics: topic

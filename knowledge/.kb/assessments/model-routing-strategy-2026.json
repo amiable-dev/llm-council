@@ -1,0 +1,50 @@
+{
+  "target": "staging/model-routing-strategy-2026.md",
+  "rubric": "promotion@3",
+  "assessed": "2026-08-23",
+  "action": "split",
+  "reason": "matched {\"durability\":[\"strong\",\"weak\"],\"actionability\":[\"strong\"],\"atomicity\":[\"fail\"]}",
+  "ratings": {
+    "durability": "weak",
+    "actionability": "strong",
+    "atomicity": "fail"
+  },
+  "verdict": {
+    "task_id": "478d91f2c5d1fd25",
+    "supplier": {
+      "class": "model-single",
+      "id": "claude-fable-5"
+    },
+    "proposer_overlap": true,
+    "rubric": "promotion@3",
+    "target": "staging/model-routing-strategy-2026.md",
+    "disqualifiers": {
+      "pure-announcement": {
+        "triggered": false,
+        "rationale": "A strategy review with verdicts and evidence, not a product announcement."
+      },
+      "duplicate": {
+        "triggered": false,
+        "rationale": "The corpus is empty; nothing overlaps."
+      },
+      "unfalsifiable": {
+        "triggered": false,
+        "rationale": "Verdicts carry market evidence and explicit revisit triggers that can prove them wrong."
+      }
+    },
+    "dimensions": {
+      "durability": {
+        "rating": "weak",
+        "rationale": "The strategic verdicts are pinned to the August 2026 market state and will rot, though the mechanisms inside them age well."
+      },
+      "actionability": {
+        "rating": "strong",
+        "rationale": "An R-register with effort/impact and a sequencing plan directly drives build decisions."
+      },
+      "atomicity": {
+        "rating": "fail",
+        "rationale": "At least six separable concepts (portfolio selection, cascade structural cost, ground-truth index, effort routing, cache affinity, SLM roles) share one document."
+      }
+    }
+  }
+}

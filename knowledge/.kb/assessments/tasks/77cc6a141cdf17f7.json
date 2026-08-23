@@ -1,0 +1,37 @@
+{
+  "envelope": {
+    "task_id": "77cc6a141cdf17f7",
+    "verb": "facets",
+    "task_class": "classification",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "9b8b3f45403538f85b3af71bb8a5837fa92d722f",
+    "input_hashes": {
+      "concepts/cascade-structural-cost.md": "sha256:3416eb2c847c81a0f7f056475134e87d3b5e9ec9b80b4e25b78eb6b214be44fb",
+      "concepts/deliberation-ground-truth-index.md": "sha256:99cd0fd69b783aa828e22bcb8e2f29220e5679dcb6277d6b83abe3923fee1810",
+      "concepts/effort-routing.md": "sha256:2ced37a67d3f8df840969e76a5b3872df5af2694510b31dd6337259346d3f524",
+      "concepts/portfolio-model-selection.md": "sha256:5779b94ce00f81245e88ca00070a66e11c158b794742f9e26394e4d32e83cb89",
+      "facets.yml": "sha256:62afa0cbf3f4eec64d0b866a21315734ee58eaf77627ea84f4c8a97c1aeb511c",
+      "schema:facet-draft.schema.json": "sha256:5d6d1031e7ab526fc47f1cadbf47c4ed614474265875721fdddab2d5672a1e40"
+    },
+    "allowed_writes": [
+      "concepts/*.md",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:a5c51943a8881e76a346b5f45467562fb6c494c58bd856288283b8e917afae77",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    "concepts/portfolio-model-selection.md",
+    "concepts/cascade-structural-cost.md",
+    "concepts/deliberation-ground-truth-index.md",
+    "concepts/effort-routing.md"
+  ]
+}

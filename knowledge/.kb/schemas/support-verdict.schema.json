@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "support verdicts — claim-within-note x citation snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "verdicts"],
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "supplier": {
+      "type": "object", "additionalProperties": false,
+      "required": ["class"],
+      "properties": {
+        "class": { "enum": ["human", "model-single", "model-panel"] },
+        "id": { "type": "string" }, "version": { "type": "string" }
+      }
+    },
+    "proposer_overlap": { "enum": [true, false, "unknown"] },
+    "verdicts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["cite_id", "claim_quote", "verdict", "rationale"],
+        "properties": {
+          "cite_id": { "type": "string", "pattern": "^[0-9a-f]{12}$" },
+          "claim_quote": { "type": "string", "minLength": 12, "maxLength": 600 },
+          "verdict": { "enum": ["SUPPORTED", "UNCERTAIN", "CONTRADICTED"] },
+          "rationale": { "type": "string", "minLength": 1, "maxLength": 500 }
+        }
+      }
+    }
+  }
+}

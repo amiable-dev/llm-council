@@ -1,0 +1,12 @@
+# Decay-language patterns for the stale-claims check (design/audit.md).
+# Versioned: the version rides in every audit task's params hash, so a
+# pattern edit visibly changes candidate generation instead of silently
+# shifting it.
+version: 1
+patterns:
+  - 'currently'
+  - 'as of 20\d\d'
+  - 'at the time of writing'
+  - 'recently'
+  - 'the latest version'
+  - 'v?\d+\.\d+(\.\d+)? is the (latest|current)'

@@ -1,0 +1,19 @@
+# Task -> the policy excerpts that bind it (context-compiler spec).
+# Each anchor is (file, heading); a dangling anchor is KB020. The compiler
+# embeds the section text under each heading — editing a heading here or in
+# the file is a lint failure, never a silent change to every bundle.
+version: 1
+tasks:
+  cards-refresh:
+    - { file: .kb/POLICY.md, heading: "An automated pass MUST NOT, ever" }
+    - { file: .kb/procedures/kb-cards.md, heading: null }   # whole file: the procedure IS the policy
+  promote-review:
+    - { file: .kb/POLICY.md, heading: "An automated pass MUST NOT, ever" }
+    - { file: .kb/procedures/kb-promote.md, heading: null }
+  audit-pair:
+    - { file: .kb/POLICY.md, heading: "An automated pass MAY, unattended" }
+    - { file: .kb/POLICY.md, heading: "An automated pass MUST NOT, ever" }
+  research-brief:
+    - { file: .kb/procedures/kb-query.md, heading: null }
+  query-answer:
+    - { file: .kb/procedures/kb-query.md, heading: null }

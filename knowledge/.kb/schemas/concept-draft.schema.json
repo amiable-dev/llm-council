@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "concept-draft.schema.json",
+  "title": "Concept draft returned by a model, before rendering",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "concepts",
+    "task_id"
+  ],
+  "properties": {
+    "concepts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "title",
+          "tags",
+          "definition",
+          "explanation",
+          "key_properties",
+          "relationships",
+          "applications",
+          "see_also"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "maxLength": 60
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tags": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9/-]*$"
+            }
+          },
+          "definition": {
+            "type": "string",
+            "minLength": 40,
+            "$comment": "One paragraph, no lists \u2014 enforced by the renderer refusing list markers."
+          },
+          "explanation": {
+            "type": "string",
+            "minLength": 40
+          },
+          "key_properties": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string",
+              "minLength": 3
+            }
+          },
+          "relationships": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "target",
+                "clause"
+              ],
+              "properties": {
+                "target": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "clause": {
+                  "type": "string",
+                  "minLength": 10,
+                  "$comment": "Says HOW the two relate. A bare link is not a relationship."
+                }
+              }
+            }
+          },
+          "applications": {
+            "type": "string",
+            "minLength": 20
+          },
+          "extra_sources": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "see_also": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            }
+          }
+        }
+      }
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "Copied verbatim from the emitted envelope \u2014 binds this answer to its task."
+    },
+    "supplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "human",
+            "model-single",
+            "model-panel"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class"
+      ],
+      "description": "Attestation of who answered; recorded in the C6 artifact, never in notes."
+    },
+    "proposer_overlap": {
+      "enum": [
+        true,
+        false,
+        "unknown"
+      ],
+      "description": "true when the answering supplier also produced the material under judgment."
+    }
+  },
+  "$comment": "The model supplies content; the CLI supplies structure. Because sections are rendered from these fields rather than written as prose, a promoted concept cannot have a missing or misordered section."
+}

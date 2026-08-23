@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "audit findings — discriminated per check",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "findings"],
+  "properties": {
+    "task_id": { "type": "string", "pattern": "^[0-9a-f]{16}$" },
+    "supplier": {
+      "type": "object", "additionalProperties": false, "required": ["class"],
+      "properties": {
+        "class": { "enum": ["human", "model-single", "model-panel"] },
+        "id": { "type": "string" }, "version": { "type": "string" }
+      }
+    },
+    "proposer_overlap": { "enum": [true, false, "unknown"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["check", "candidate_id", "a", "b", "quote_a", "quote_b", "verdict", "rationale"],
+            "properties": {
+              "check": { "const": "contradictions" },
+              "candidate_id": { "type": "string" },
+              "a": { "type": "string" }, "b": { "type": "string" },
+              "quote_a": { "type": "string", "minLength": 12, "maxLength": 600 },
+              "quote_b": { "type": "string", "minLength": 12, "maxLength": 600 },
+              "verdict": { "enum": ["contradiction", "tension", "no-conflict", "cannot-tell"] },
+              "more_likely_correct": { "enum": ["a", "b", "neither", "unknown"] },
+              "rationale": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["check", "candidate_id", "slug", "verdict", "rationale"],
+            "properties": {
+              "check": { "const": "stale-claims" },
+              "candidate_id": { "type": "string" },
+              "slug": { "type": "string" },
+              "quote": { "type": "string", "minLength": 12, "maxLength": 600 },
+              "verdict": { "enum": ["stale", "current", "cannot-tell"] },
+              "rationale": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["check", "candidate_id", "term", "verdict", "rationale"],
+            "properties": {
+              "check": { "const": "concept-gaps" },
+              "candidate_id": { "type": "string" },
+              "term": { "type": "string" },
+              "referencing": { "type": "array", "items": { "type": "string" } },
+              "verdict": { "enum": ["gap", "alias-of-existing", "not-a-concept", "cannot-tell"] },
+              "alias_target": { "type": "string" },
+              "rationale": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["check", "candidate_id", "from", "to", "verdict", "rationale"],
+            "properties": {
+              "check": { "const": "graph-rot" },
+              "candidate_id": { "type": "string" },
+              "from": { "type": "string" }, "to": { "type": "string" },
+              "verdict": { "enum": ["stale-edge", "missing-edge", "fine", "cannot-tell"] },
+              "rationale": { "type": "string", "minLength": 1, "maxLength": 500 }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

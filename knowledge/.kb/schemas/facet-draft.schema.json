@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "facet-draft.schema.json",
+  "title": "Facet assignments returned by a model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assignments",
+    "task_id"
+  ],
+  "properties": {
+    "assignments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "domain",
+          "maturity",
+          "source_type"
+        ],
+        "properties": {
+          "slug": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "maturity": {
+            "enum": [
+              "emerging",
+              "established",
+              "deprecated"
+            ]
+          },
+          "source_type": {
+            "enum": [
+              "vendor-doc",
+              "research",
+              "practitioner",
+              "announcement"
+            ]
+          },
+          "topics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rationale": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "axis_proposals": {
+      "type": "array",
+      "$comment": "A value an axis lacks entirely. Distinct from a topic proposal: closed axes are meant to span the corpus, so a gap here is a defect in the axis, not a missing detail.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "axis",
+          "value",
+          "rationale"
+        ],
+        "properties": {
+          "axis": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 10
+          },
+          "for_slug": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "topic_proposals": {
+      "type": "array",
+      "$comment": "Where nothing fitted. A proposal never blocks the write \u2014 it goes to the queue, and only an accepted proposal changes facets.yml.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value",
+          "rationale"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 10
+          },
+          "for_slug": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "Copied verbatim from the emitted envelope \u2014 binds this answer to its task."
+    },
+    "supplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "human",
+            "model-single",
+            "model-panel"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class"
+      ],
+      "description": "Attestation of who answered; recorded in the C6 artifact, never in notes."
+    },
+    "proposer_overlap": {
+      "enum": [
+        true,
+        false,
+        "unknown"
+      ],
+      "description": "true when the answering supplier also produced the material under judgment."
+    }
+  }
+}

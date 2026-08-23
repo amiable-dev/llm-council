@@ -1,0 +1,34 @@
+{
+  "envelope": {
+    "task_id": "2310d77347611308",
+    "verb": "promote",
+    "task_class": "drafting",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "9b8b3f45403538f85b3af71bb8a5837fa92d722f",
+    "input_hashes": {
+      "staging/model-routing-strategy-2026.md": "sha256:ab39ee42fa9db272ff9d8c4b56254a4475799716461042cdc2c00a7fb3ac482f",
+      "assessment:model-routing-strategy-2026": "sha256:053a2e60a6c596c9677f1336836465634f3c41b928f7792182c12ec21b062311",
+      "schema:concept-draft.schema.json": "sha256:d5b67763c3b464428850c6da56022a89b3f02c91571f0521d58d94eaa7d78de6"
+    },
+    "allowed_writes": [
+      "concepts/*.md",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:c5427e86018345e7c1d74c1523b6f8a435a1ff0f5aa2f4d201bc1efd109a2ca9",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    "concepts/portfolio-model-selection.md",
+    "concepts/cascade-structural-cost.md",
+    "concepts/deliberation-ground-truth-index.md",
+    "concepts/effort-routing.md"
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "concept.schema.json",
+  "title": "Concept note frontmatter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "date",
+    "tags",
+    "status"
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9/-]*$"
+      }
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "living",
+        "stable",
+        "superseded"
+      ]
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300
+    },
+    "updated": {
+      "type": "string",
+      "format": "date"
+    },
+    "domain": {
+      "type": "string"
+    },
+    "maturity": {
+      "enum": [
+        "emerging",
+        "established",
+        "deprecated"
+      ]
+    },
+    "source_type": {
+      "enum": [
+        "vendor-doc",
+        "research",
+        "practitioner",
+        "announcement"
+      ]
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "retrieved": {
+            "type": "string",
+            "format": "date"
+          },
+          "unreachable": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "checked": {
+            "type": "string",
+            "format": "date"
+          },
+          "reachability": {
+            "enum": [
+              "ok",
+              "dead-no-archive",
+              "dead-with-archive",
+              "blocked-4xx",
+              "paywall",
+              "js-required",
+              "rate-limited",
+              "redirect-drift",
+              "dns-transient",
+              "malformed",
+              "not-fetchable"
+            ]
+          },
+          "class": {
+            "enum": [
+              "external-primary",
+              "external-secondary",
+              "internal-synthesis",
+              "model-inference",
+              "unclassified"
+            ],
+            "description": "Source provenance (ADR-009 \u00a76); unclassified is an honest sentinel, not a claim."
+          },
+          "archive": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    },
+    "derived_from": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "minItems": 1,
+      "description": "Checked convenience; superseded_by on the old note is authoritative (ADR-003)."
+    },
+    "superseded_by": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "minItems": 1,
+      "description": "Authoritative supersession direction; requires status: superseded."
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rubric": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "object"
+        },
+        "next_due": {
+          "type": "string",
+          "format": "date"
+        }
+      }
+    }
+  },
+  "$comment": "Fields below `status` are optional at P0 and added by the P1 migration. They are declared here so additionalProperties:false still catches typos without rejecting P1 output."
+}

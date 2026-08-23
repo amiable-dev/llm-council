@@ -1,0 +1,31 @@
+{
+  "envelope": {
+    "task_id": "478d91f2c5d1fd25",
+    "verb": "assess",
+    "task_class": "rubric-ordinal",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "9b8b3f45403538f85b3af71bb8a5837fa92d722f",
+    "input_hashes": {
+      "staging/model-routing-strategy-2026.md": "sha256:ab39ee42fa9db272ff9d8c4b56254a4475799716461042cdc2c00a7fb3ac482f",
+      "rubric:promotion": "sha256:a802b14a95af152602962fe052eb92741949c67d097a20c084ca32be1b938366",
+      "schema:rubric-verdict.schema.json": "sha256:754aaad81a54661fed1d4549994a0d2b311ab4e58d51ec47c914d6efec7077ee"
+    },
+    "allowed_writes": [
+      ".kb/queue/*.jsonl",
+      ".kb/assessments/*.json"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:5b334c317059328bfab3b98dd30c9edabd60e1e6771813c6862a8ae4444c322c",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    ".kb/assessments/model-routing-strategy-2026.json"
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rubric-verdict.schema.json",
+  "title": "Rubric verdict returned by a model",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rubric",
+    "target",
+    "disqualifiers",
+    "dimensions",
+    "task_id"
+  ],
+  "properties": {
+    "rubric": {
+      "type": "string"
+    },
+    "target": {
+      "type": "string"
+    },
+    "disqualifiers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "triggered",
+          "rationale"
+        ],
+        "properties": {
+          "triggered": {
+            "type": "boolean"
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rating",
+          "rationale"
+        ],
+        "properties": {
+          "rating": {
+            "enum": [
+              "fail",
+              "weak",
+              "strong"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "proposed_concepts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "definition"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "definition": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$",
+      "description": "Copied verbatim from the emitted envelope \u2014 binds this answer to its task."
+    },
+    "supplier": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "enum": [
+            "human",
+            "model-single",
+            "model-panel"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "class"
+      ],
+      "description": "Attestation of who answered; recorded in the C6 artifact, never in notes."
+    },
+    "proposer_overlap": {
+      "enum": [
+        true,
+        false,
+        "unknown"
+      ],
+      "description": "true when the answering supplier also produced the material under judgment."
+    }
+  },
+  "$comment": "Ratings are ordinal, never numeric. Every judgment carries a rationale so a queued item can be reviewed without re-reading the source."
+}
