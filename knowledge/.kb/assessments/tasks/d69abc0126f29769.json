@@ -1,0 +1,22 @@
+{
+  "envelope": {
+    "task_id": "d69abc0126f29769",
+    "verb": "support",
+    "task_class": "evidence-verdict",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "33308b247dc5a460d96739847d77e4c90d0e3f3a",
+    "input_hashes": {
+      "concepts/effort-routing.md": "sha256:29c372e1a81ecc1246b23cde17c0cb1767b4e97c7639c0e85ba9d77eff59e5bb",
+      "cite:b06b15474a1b": "sha256:a8799a2caa6c781fe5f13df27d34c1c690c3c37d8213c11779411d65a392715d",
+      "cite:96c9752747f6": "sha256:8914e64dd5b4598f2ca7c5970ca486f1bd8cf621cc7407e1ea39d499e88273ab",
+      "schema:support-verdict.schema.json": "sha256:3564618e3bdd4e02b567897af881feb1d42864a01ee2856b634c8484e8c7d109"
+    },
+    "allowed_writes": [
+      ".kb/evidence/*.jsonl",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "open"
+}

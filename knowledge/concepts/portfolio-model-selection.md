@@ -8,7 +8,13 @@ tags: [concept, model-routing, multi-agent, domain/llm, maturity/emerging, sourc
 status: draft
 sources:
   - url: https://claude.ai/code/artifact/ccaabd90-28b1-442a-b7ba-bceda6aab4a0
+    hash: sha256:0038079bd727e643eae55c497ad8bdf15e16587ecb0c7603797f796be0fbb4e8
+    retrieved: 2026-08-23
+    reachability: ok
   - url: https://arxiv.org/abs/2503.10657
+    hash: sha256:85b1e7d6bd9218dd93676c44a890ef517d57337f21176480372e501f9bf9c37b
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Portfolio Model Selection

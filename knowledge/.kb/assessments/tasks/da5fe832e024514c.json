@@ -1,0 +1,32 @@
+{
+  "envelope": {
+    "task_id": "da5fe832e024514c",
+    "verb": "support",
+    "task_class": "evidence-verdict",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "33308b247dc5a460d96739847d77e4c90d0e3f3a",
+    "input_hashes": {
+      "concepts/portfolio-model-selection.md": "sha256:203aafcb722fd3d562de3230ff410587402b64c52ca2f32e5dbfe1478e2b6909",
+      "cite:29647041d426": "sha256:a8799a2caa6c781fe5f13df27d34c1c690c3c37d8213c11779411d65a392715d",
+      "cite:16bc4d097b83": "sha256:5e91b494c7f91a29660d9954236312b61b857d3678f9397c6aaa8cbe2ef9569e",
+      "schema:support-verdict.schema.json": "sha256:3564618e3bdd4e02b567897af881feb1d42864a01ee2856b634c8484e8c7d109"
+    },
+    "allowed_writes": [
+      ".kb/evidence/*.jsonl",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:2044d9d0c02db9401a27ae553dc7bbf1c79d93a7b6dded13e01ecc8c9ff2dde5",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    ".kb/evidence/portfolio-model-selection.jsonl"
+  ]
+}

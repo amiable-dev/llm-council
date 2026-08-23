@@ -8,7 +8,13 @@ tags: [concept, model-routing, evaluation, domain/llm, maturity/emerging, source
 status: draft
 sources:
   - url: https://claude.ai/code/artifact/ccaabd90-28b1-442a-b7ba-bceda6aab4a0
-  - url: https://arxiv.org/pdf/2606.06924
+    hash: sha256:0038079bd727e643eae55c497ad8bdf15e16587ecb0c7603797f796be0fbb4e8
+    retrieved: 2026-08-23
+    reachability: ok
+  - url: https://arxiv.org/abs/2606.06924
+    hash: sha256:0585285cfeb6d1207fd5856aa367354af5e8b1f65d8f46043b4f26d67c23c90d
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Deliberation Ground-Truth Index
@@ -38,7 +44,7 @@ llm-council's performance-blended selection (ADR-044 P1); the §7 strategic verd
 ## Sources
 
 - https://claude.ai/code/artifact/ccaabd90-28b1-442a-b7ba-bceda6aab4a0
-- https://arxiv.org/pdf/2606.06924
+- https://arxiv.org/abs/2606.06924
 
 ## See Also
 

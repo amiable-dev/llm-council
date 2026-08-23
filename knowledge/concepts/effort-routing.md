@@ -8,7 +8,13 @@ tags: [concept, model-routing, cost-optimisation, domain/llm, maturity/emerging,
 status: draft
 sources:
   - url: https://claude.ai/code/artifact/ccaabd90-28b1-442a-b7ba-bceda6aab4a0
-  - url: https://arxiv.org/pdf/2606.23181
+    hash: sha256:0038079bd727e643eae55c497ad8bdf15e16587ecb0c7603797f796be0fbb4e8
+    retrieved: 2026-08-23
+    reachability: ok
+  - url: https://arxiv.org/abs/2606.23181
+    hash: sha256:d086e6415129f64a0ec130028e2cc46d262e145f005dce6c338f8633dc3a0fc7
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Effort Routing
@@ -38,7 +44,7 @@ R6 in the 2026-08 routing review: making reasoning_effort per-query in llm-counc
 ## Sources
 
 - https://claude.ai/code/artifact/ccaabd90-28b1-442a-b7ba-bceda6aab4a0
-- https://arxiv.org/pdf/2606.23181
+- https://arxiv.org/abs/2606.23181
 
 ## See Also
 

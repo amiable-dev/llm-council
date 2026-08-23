@@ -1,0 +1,32 @@
+{
+  "envelope": {
+    "task_id": "03511a0df68dd7a0",
+    "verb": "support",
+    "task_class": "evidence-verdict",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "33308b247dc5a460d96739847d77e4c90d0e3f3a",
+    "input_hashes": {
+      "concepts/cascade-structural-cost.md": "sha256:9250d65515cc19f34376a8b04ef0b82cd227a5edc5eb50276a26233e393d250f",
+      "cite:b55c00902d62": "sha256:a8799a2caa6c781fe5f13df27d34c1c690c3c37d8213c11779411d65a392715d",
+      "cite:76a2f9cebb16": "sha256:f0841cfc9c33b72de3f32100c50e74b9de2a3a877e678f1a1f0a96655fbb7c21",
+      "schema:support-verdict.schema.json": "sha256:3564618e3bdd4e02b567897af881feb1d42864a01ee2856b634c8484e8c7d109"
+    },
+    "allowed_writes": [
+      ".kb/evidence/*.jsonl",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "applied",
+  "answer_digest": "sha256:0935354c235e09d7a354bd4d6340992188be81f19eb80f7c6e98cf9b6d04863a",
+  "supplier": {
+    "class": "model-single",
+    "id": "claude-fable-5"
+  },
+  "proposer_overlap": true,
+  "decision_provenance": "model",
+  "written": [
+    ".kb/evidence/cascade-structural-cost.jsonl"
+  ]
+}

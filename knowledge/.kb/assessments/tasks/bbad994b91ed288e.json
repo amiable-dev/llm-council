@@ -1,0 +1,22 @@
+{
+  "envelope": {
+    "task_id": "bbad994b91ed288e",
+    "verb": "support",
+    "task_class": "evidence-verdict",
+    "envelope_version": "1",
+    "schema_version": "1",
+    "corpus_commit": "33308b247dc5a460d96739847d77e4c90d0e3f3a",
+    "input_hashes": {
+      "concepts/deliberation-ground-truth-index.md": "sha256:e7d577a811f009154d0cc7580fd85cf7508578d12268338404847119bf20d93f",
+      "cite:f22f5e779d5d": "sha256:a8799a2caa6c781fe5f13df27d34c1c690c3c37d8213c11779411d65a392715d",
+      "cite:bcee180445d9": "sha256:40437ef67c9da8aa7f1d05eb07758999b36fbe0b523188c22c0adf99156c625a",
+      "schema:support-verdict.schema.json": "sha256:3564618e3bdd4e02b567897af881feb1d42864a01ee2856b634c8484e8c7d109"
+    },
+    "allowed_writes": [
+      ".kb/evidence/*.jsonl",
+      ".kb/queue/*.jsonl"
+    ],
+    "untrusted_payload": true
+  },
+  "status": "open"
+}

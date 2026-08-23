@@ -8,7 +8,13 @@ tags: [concept, model-routing, cost-optimisation, domain/llm, maturity/establish
 status: draft
 sources:
   - url: https://claude.ai/code/artifact/ccaabd90-28b1-442a-b7ba-bceda6aab4a0
+    hash: sha256:0038079bd727e643eae55c497ad8bdf15e16587ecb0c7603797f796be0fbb4e8
+    retrieved: 2026-08-23
+    reachability: ok
   - url: https://arxiv.org/abs/2605.06350
+    hash: sha256:bc461cb4ba11460a8ed9bcd1f69cc1b93c2a0bae881b06dd4e4995d24dd9c67b
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Cascade Structural Cost
