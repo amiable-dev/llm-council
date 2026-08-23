@@ -12,6 +12,9 @@ sources:
     retrieved: 2026-08-23
     reachability: ok
   - url: https://arxiv.org/abs/2606.23181
+    hash: sha256:9f4d4000b9e1831635f8e3a063b0920588350c33abd71a2721c3f089043b4dd7
+    retrieved: 2026-08-23
+    reachability: ok
 ---
 
 # Effort Routing
