@@ -74,6 +74,41 @@ council:
 
 ## Gateway Options
 
+### OpenClaw OAuth gateway
+
+Use `openclaw` when OpenClaw already owns provider OAuth profiles and LLM Council
+should not receive provider API keys. LLM Council reads only the local gateway
+operator token; OpenClaw refreshes the upstream OAuth credentials and routes each
+`openclaw/<agentId>` model to that agent's configured provider/runtime.
+
+```yaml
+council:
+  models: [openclaw/council-gpt, openclaw/council-gemini]
+  chairman: openclaw/council-gpt
+tiers:
+  default: balanced
+  pools:
+    balanced:
+      models: [openclaw/council-gpt, openclaw/council-gemini]
+      timeout_seconds: 180
+gateways:
+  default: openclaw
+  providers:
+    openclaw:
+      enabled: true
+```
+
+By default, LLM Council reads the gateway port and operator token from
+`~/.openclaw/openclaw.json`. Use `OPENCLAW_CONFIG_PATH` to select another local
+OpenClaw configuration, `OPENCLAW_GATEWAY_PORT` or `OPENCLAW_GATEWAY_TOKEN` for
+runtime overrides, or set `providers.openclaw.base_url` explicitly for an
+operator-managed route.
+
+This route does not convert a subscription into a provider API key. It delegates
+requests to a local OpenClaw instance whose provider integrations explicitly
+support subscription OAuth. Keep the gateway on loopback or another trusted
+operator-only boundary.
+
 LLM Council supports multiple gateways:
 
 | Gateway | Best For | Setup |

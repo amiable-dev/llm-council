@@ -371,7 +371,7 @@ class GatewayConfig(BaseModel):
     @field_validator("default")
     @classmethod
     def validate_gateway_name(cls, v: str) -> str:
-        valid_gateways = {"openrouter", "requesty", "direct", "auto", "ollama"}
+        valid_gateways = {"openrouter", "requesty", "direct", "auto", "ollama", "openclaw"}
         if v not in valid_gateways:
             raise ValueError(f"invalid gateway '{v}', must be one of {valid_gateways}")
         return v
@@ -403,6 +403,10 @@ class GatewayConfig(BaseModel):
                 base_url="https://router.requesty.ai/v1/chat/completions",
             ),
             "direct": GatewayProviderConfig(enabled=True),
+            # Leave base_url unset so resolver.py can discover the live local
+            # gateway port from OpenClaw's own config. Operators can still set
+            # an explicit providers.openclaw.base_url to override discovery.
+            "openclaw": GatewayProviderConfig(enabled=True),
             "ollama": OllamaProviderConfig(
                 enabled=True,
                 base_url="http://localhost:11434",

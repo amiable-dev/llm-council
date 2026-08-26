@@ -45,6 +45,7 @@ from llm_council.unified_config import (
 from llm_council.tier_contract import create_tier_contract
 from llm_council.openrouter import query_model_with_status, STATUS_OK
 from llm_council.gateway.base import DEFAULT_HEALTH_CHECK_MODEL
+from llm_council.gateway.resolver import resolve_endpoint
 
 
 def _get_council_models() -> list:
@@ -60,6 +61,16 @@ def _get_chairman_model() -> str:
 def _get_openrouter_api_key() -> str:
     """Get OpenRouter API key via ADR-013 resolution chain."""
     return get_api_key("openrouter") or ""
+
+
+def _get_effective_gateway_credential() -> tuple[str, str]:
+    """Return the active gateway bearer and a non-secret source label."""
+    if get_config().gateways.default == "openclaw":
+        _url, bearer, _route = resolve_endpoint()
+        return bearer, "openclaw_gateway"
+    # Keep the public wrapper as the compatibility seam used by callers and
+    # tests that patch key-source reporting independently of key retrieval.
+    return _get_openrouter_api_key(), get_key_source()
 
 
 def _get_tier_model_pools() -> dict:
@@ -592,10 +603,9 @@ async def council_health_check(deep: bool = True, tier: str = "high") -> str:
         chairman_model = _get_chairman_model()
         # #609: resolved live. Read from the module global this was a frozen
         # import-time snapshot, so a key configured afterwards stayed invisible.
-        api_key = _get_openrouter_api_key()
+        api_key, key_source = _get_effective_gateway_credential()
         # Also re-resolves the key underneath, so it belongs inside the
         # same guard rather than able to bypass the not-ready path.
-        key_source = get_key_source()
     except Exception as e:
         config_error = f"{type(e).__name__}: {e}"
         return json.dumps(
@@ -668,8 +678,13 @@ async def council_health_check(deep: bool = True, tier: str = "high") -> str:
     if checks["api_key_configured"]:
         try:
             start = time.time()
+            probe_model = (
+                effective_models[0]
+                if get_config().gateways.default == "openclaw" and effective_models
+                else DEFAULT_HEALTH_CHECK_MODEL
+            )
             response = await query_model_with_status(
-                DEFAULT_HEALTH_CHECK_MODEL,  # Fast, cheap, GA probe model
+                probe_model,
                 [{"role": "user", "content": "ping"}],
                 timeout=10.0,
             )
@@ -678,7 +693,7 @@ async def council_health_check(deep: bool = True, tier: str = "high") -> str:
             checks["api_connectivity"] = {
                 "status": response["status"],
                 "latency_ms": latency_ms,
-                "test_model": DEFAULT_HEALTH_CHECK_MODEL,
+                "test_model": probe_model,
                 # #596: say what this probe does and does not cover. It pings a
                 # cheap lite model, so it answers "is the API reachable", not
                 # "will the council complete" — during a chairman outage those
@@ -731,10 +746,48 @@ async def council_health_check(deep: bool = True, tier: str = "high") -> str:
                     f"API connectivity issue: {response.get('error', 'Unknown error')}"
                 )
 
-            # #596/#660: probe the model that actually performs synthesis.
-            # Skipped when connectivity already failed — the chairman probe
-            # cannot add information then, and it would bill a second failing
-            # call during an outage.
+            # OpenClaw is an OAuth broker for per-agent provider runtimes. A
+            # healthy chairman does not prove that every council member has a
+            # usable provider login, so probe each selected agent explicitly.
+            # Skip the additional probes when connectivity already failed: they
+            # cannot make the council ready and would bill more failing calls.
+            if (
+                get_config().gateways.default == "openclaw"
+                and effective_models
+                and response["status"] == STATUS_OK
+            ):
+                model_checks = {}
+                for model in effective_models:
+                    model_response = (
+                        response
+                        if model == probe_model
+                        else await query_model_with_status(
+                            model,
+                            [{"role": "user", "content": "ping"}],
+                            timeout=30.0,
+                        )
+                    )
+                    model_checks[model] = {
+                        "status": model_response["status"],
+                    }
+                    if model_response["status"] != STATUS_OK:
+                        model_checks[model]["error"] = (
+                            model_response.get("error") or "unknown error"
+                        )
+                checks["model_connectivity"] = model_checks
+                failed_models = [
+                    model for model, result in model_checks.items() if result["status"] != STATUS_OK
+                ]
+                if failed_models:
+                    checks["ready"] = False
+                    checks["message"] = (
+                        "OpenClaw OAuth is unavailable for council member(s): "
+                        + ", ".join(failed_models)
+                    )
+
+            # #596/#660: opt-in probe of the model that actually performs
+            # synthesis. Skip it when connectivity already failed — the probe
+            # cannot add information then and would bill another failing call.
             if deep and response["status"] == STATUS_OK:
                 try:
                     chair_start = time.time()
@@ -779,7 +832,7 @@ async def council_health_check(deep: bool = True, tier: str = "high") -> str:
             checks["message"] = f"Health check failed: {e}"
     else:
         checks["ready"] = False
-        checks["message"] = "OPENROUTER_API_KEY not configured. Set it in environment or .env file."
+        checks["message"] = "The configured gateway authentication credential is not configured."
 
     return json.dumps(checks, indent=2)
 
