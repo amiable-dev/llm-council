@@ -8,8 +8,16 @@ climbing.
 
 This is the intermediate ratchet #642 asks for at step 4, applied before the
 count reaches zero: new type errors fail here, existing ones don't. When you
-fix some, lower ``MAX_MYPY_ERRORS`` in the same PR — the number only ever goes
-down, and the final decrement to 0 is when the `|| echo` comes out of CI.
+fix some, lower ``MAX_MYPY_ERRORS`` — the number only ever goes down, and the
+final decrement to 0 is when the `|| echo` comes out of CI.
+
+**Improving the count never fails this test**, it only warns. The first draft
+did fail, and CI immediately showed why that was wrong: #665 — a PR about
+evidence-disposition parsing — incidentally removed two type errors and would
+have been red for it. A ratchet that punishes unrelated improvement teaches
+people not to improve. The cost of the softer rule is that the ceiling can go
+stale above the real count, so regressions *within* the slack pass unnoticed;
+the warning is loud so the gap gets closed by whoever notices it.
 
 Runs the same invocation as `make typecheck`, so the two cannot drift.
 """
@@ -18,16 +26,17 @@ import re
 import shutil
 import subprocess
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 
-# Measured on master 2026-08-27 after the #642 mechanical pass
-# (implicit-Optional codemod, yaml stubs, six missing annotations, two dead
-# guards). Was 97 before it. LOWER THIS when you fix more; never raise it.
-MAX_MYPY_ERRORS = 73
+# Measured on master 2026-08-27 (92) after the #642 mechanical pass:
+# implicit-Optional codemod, yaml stubs, six missing annotations, two dead
+# constructs. LOWER THIS when you fix more; never raise it.
+MAX_MYPY_ERRORS = 71
 
 _SUMMARY = re.compile(r"Found (\d+) errors? in \d+ files?")
 
@@ -68,8 +77,12 @@ def test_mypy_error_count_does_not_regress():
     )
 
     if count < MAX_MYPY_ERRORS:
-        pytest.fail(
-            f"mypy errors are down to {count}, below the ratchet of "
-            f"{MAX_MYPY_ERRORS}. Lower MAX_MYPY_ERRORS to {count} in this file "
-            "so the improvement is locked in."
+        # Warn, never fail — see the module docstring. Improving the count is
+        # the goal; the only cost of not locking it in immediately is slack.
+        warnings.warn(
+            f"mypy errors are down to {count}, below the #642 ratchet of "
+            f"{MAX_MYPY_ERRORS}. Lower MAX_MYPY_ERRORS to {count} in "
+            f"{Path(__file__).name} to lock the improvement in — until then, a "
+            f"regression of up to {MAX_MYPY_ERRORS - count} errors will pass.",
+            stacklevel=2,
         )
