@@ -363,42 +363,97 @@ class TestDissentIsNotSilentlyDropped:
 
 
 class TestHealthCheckHonesty:
-    @pytest.mark.asyncio
-    async def test_ready_declares_what_it_actually_probed(self):
-        """F5: `ready: true` from a lite-model ping does not predict a council
-        run. #596 added the caveat inside api_connectivity, but the top-level
-        field a caller reads still promised more than it checked."""
-        from llm_council.mcp_server import council_health_check
+    """F5: `ready` must predict the thing a caller is about to spend money on.
+
+    The reporter's ask was "default deep=true, **or at minimum** make
+    `ready: true` conditional on the chairman being reachable". Both halves
+    require a chairman call — there is no way to make `ready` chairman-
+    conditional without probing it — so the minimum and the maximum are the
+    same change. `ready_scope` alone (rev 1 of this fix) only *labelled* the
+    gap; it did not close it.
+    """
+
+    @staticmethod
+    def _probe(chairman_status="ok", lite_status="ok"):
+        """Distinguish the lite probe from the chairman probe by model id."""
         from llm_council.openrouter import STATUS_OK
 
+        from llm_council.mcp_server import DEFAULT_HEALTH_CHECK_MODEL
+
+        calls = []
+
+        async def fake(model, messages, **kwargs):
+            calls.append(model)
+            wanted = lite_status if model == DEFAULT_HEALTH_CHECK_MODEL else chairman_status
+            if wanted == "ok":
+                return {"status": STATUS_OK, "latency_ms": 10}
+            return {"status": wanted, "error": f"{wanted} detail", "latency_ms": 10}
+
+        return fake, calls
+
+    @pytest.mark.asyncio
+    async def test_chairman_is_probed_by_default(self):
+        from llm_council.mcp_server import council_health_check
+
+        fake, calls = self._probe()
         with (
             patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
-            patch(
-                "llm_council.mcp_server.query_model_with_status",
-                new=AsyncMock(return_value={"status": STATUS_OK, "latency_ms": 10}),
-            ),
+            patch("llm_council.mcp_server.query_model_with_status", new=fake),
         ):
             data = json.loads(await council_health_check())
 
         assert data["ready"] is True
-        assert data["ready_scope"] == "connectivity_only"
+        assert data["ready_scope"] == "chairman_probed"
+        assert "chairman_connectivity" in data
+        assert any("opus" in c or c != calls[0] for c in calls[1:]), (
+            f"expected a second, chairman probe; models called were {calls!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_unreachable_chairman_makes_ready_false_by_default(self):
+        """The 2026-07-16 scenario: API up, chairman down, ready said true."""
+        from llm_council.mcp_server import council_health_check
+
+        fake, _ = self._probe(chairman_status="timeout")
+        with (
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
+            patch("llm_council.mcp_server.query_model_with_status", new=fake),
+        ):
+            data = json.loads(await council_health_check())
+
+        assert data["ready"] is False
         assert "chairman" in data["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_deep_probe_upgrades_the_declared_scope(self):
+    async def test_opting_out_declares_the_narrower_scope(self):
         from llm_council.mcp_server import council_health_check
-        from llm_council.openrouter import STATUS_OK
 
+        fake, calls = self._probe()
         with (
             patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
-            patch(
-                "llm_council.mcp_server.query_model_with_status",
-                new=AsyncMock(return_value={"status": STATUS_OK, "latency_ms": 10}),
-            ),
+            patch("llm_council.mcp_server.query_model_with_status", new=fake),
         ):
-            data = json.loads(await council_health_check(deep=True))
+            data = json.loads(await council_health_check(deep=False))
 
-        assert data["ready_scope"] == "chairman_probed"
+        assert data["ready_scope"] == "connectivity_only"
+        assert len(calls) == 1, f"deep=False must not spend a chairman call; got {calls!r}"
+
+    @pytest.mark.asyncio
+    async def test_dead_api_does_not_spend_a_chairman_call(self):
+        """If connectivity already failed, the chairman probe cannot add
+        information — and billing for it during an outage is the wrong move."""
+        from llm_council.mcp_server import council_health_check
+
+        fake, calls = self._probe(lite_status="auth_error")
+        with (
+            patch("llm_council.mcp_server._get_openrouter_api_key", return_value="k"),
+            patch("llm_council.mcp_server.query_model_with_status", new=fake),
+        ):
+            data = json.loads(await council_health_check())
+
+        assert data["ready"] is False
+        assert len(calls) == 1, f"expected no chairman probe after a dead lite probe; {calls!r}"
+        assert "connectivity issue" in data["message"].lower()
 
     @pytest.mark.asyncio
     async def test_estimates_come_from_the_tier_budget_not_prose(self):
@@ -422,3 +477,105 @@ class TestHealthCheckHonesty:
                 f"{tier} estimate {data['estimated_duration'][tier]!r} does not "
                 f"mention its configured {budget}s budget"
             )
+
+
+class TestOnPartial:
+    """The reporter's fourth suggestion, and the one that gives a caller a
+    choice rather than a disclosure:
+
+    > for `high` tier, a caller who asked for a full council may prefer an
+    > error to a confident single opinion. An `on_partial: "error" |
+    > "synthesise" | "return_raw"` argument would let the caller choose.
+
+    Honest labelling (the rest of this file) helps a human reading the output.
+    It does not help an automated caller that will act on the text regardless.
+    """
+
+    @pytest.mark.asyncio
+    async def test_default_is_todays_behaviour(self):
+        out = await _consult(REPORTED_RUN["metadata"], REPORTED_RUN["model_responses"])
+        explicit = await _consult(
+            REPORTED_RUN["metadata"], REPORTED_RUN["model_responses"], on_partial="synthesise"
+        )
+        assert out == explicit
+
+    @pytest.mark.asyncio
+    async def test_error_refuses_to_answer_a_partial_run(self):
+        out = await _consult(
+            REPORTED_RUN["metadata"], REPORTED_RUN["model_responses"], on_partial="error"
+        )
+        payload = json.loads(out)
+        assert payload["error"] == "council_incomplete"
+        assert payload["status"] == "partial"
+        assert payload["models_responded"] == 2
+        assert payload["models_requested"] == 4
+        assert payload["peer_review"] is False
+        # The content must NOT be smuggled through under an error banner.
+        assert "A confident, well-structured answer." not in out
+
+    @pytest.mark.asyncio
+    async def test_error_names_which_models_failed_and_why(self):
+        out = await _consult(
+            REPORTED_RUN["metadata"], REPORTED_RUN["model_responses"], on_partial="error"
+        )
+        failed = {e["model"]: e["status"] for e in json.loads(out)["failed_models"]}
+        assert failed == {
+            "anthropic/claude-opus-5": "timeout",
+            "deepseek/deepseek-v4-pro-0813": "timeout",
+        }
+
+    @pytest.mark.asyncio
+    async def test_error_does_not_fire_on_a_complete_run(self):
+        out = await _consult(
+            COMPLETE["metadata"], COMPLETE["model_responses"], on_partial="error"
+        )
+        assert out.startswith(CHAIRMAN_HEADING)
+
+    @pytest.mark.asyncio
+    async def test_return_raw_gives_the_responses_without_a_synthesis_gloss(self):
+        responses = {
+            "openai/gpt-5.6-sol": {"status": "ok", "response": "sol's actual take"},
+            "anthropic/claude-opus-5": {"status": "timeout"},
+            "google/gemini-3.1-pro-preview": {"status": "ok", "response": "gemini's actual take"},
+            "deepseek/deepseek-v4-pro-0813": {"status": "timeout"},
+        }
+        out = await _consult(
+            REPORTED_RUN["metadata"], responses, on_partial="return_raw"
+        )
+        assert "sol's actual take" in out
+        assert "gemini's actual take" in out
+        # No chairman voice over the top of them.
+        assert CHAIRMAN_HEADING not in out
+        assert "A confident, well-structured answer." not in out
+
+    @pytest.mark.asyncio
+    async def test_return_raw_attributes_each_response_to_its_model(self):
+        responses = {
+            "openai/gpt-5.6-sol": {"status": "ok", "response": "first take"},
+            "anthropic/claude-opus-5": {"status": "timeout"},
+        }
+        out = await _consult(REPORTED_RUN["metadata"], responses, on_partial="return_raw")
+        assert "openai/gpt-5.6-sol" in out
+        assert out.index("openai/gpt-5.6-sol") < out.index("first take")
+
+    @pytest.mark.asyncio
+    async def test_unknown_value_is_rejected_not_silently_permissive(self):
+        """`confidence` silently falls back to "high" on an unknown value. That
+        is exactly wrong here: a caller who typos `on_partial="fail"` while
+        intending strictness would silently get the permissive behaviour — the
+        failure mode this whole issue is about."""
+        out = await _consult(
+            COMPLETE["metadata"], COMPLETE["model_responses"], on_partial="fail"
+        )
+        payload = json.loads(out)
+        assert payload["error"] == "invalid_on_partial"
+        assert "synthesise" in json.dumps(payload)
+
+    @pytest.mark.asyncio
+    async def test_every_mode_still_carries_the_machine_readable_status(self):
+        for mode in ("synthesise", "return_raw"):
+            out = await _consult(
+                REPORTED_RUN["metadata"], REPORTED_RUN["model_responses"], on_partial=mode
+            )
+            payload = json.loads(re.search(r"```json\n(.*?)\n```", out, re.S).group(1))
+            assert payload["status"] == "partial", f"mode {mode} dropped the status block"

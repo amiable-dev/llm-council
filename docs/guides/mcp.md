@@ -48,6 +48,7 @@ Ask the LLM council a question.
 | `include_details` | boolean | `false` | Individual responses + full cost breakdown |
 | `include_dissent` | boolean | `false` | Include minority opinions |
 | `evidence` | list | none | Caller-supplied grounding context (#619, ADR-042) |
+| `on_partial` | string | `"synthesise"` | What to do when the council doesn't complete: `synthesise`, `error`, `return_raw` |
 
 Every response ends with a one-line **Cost & Tokens** summary (ADR-011);
 `include_details=true` adds the per-model/per-stage breakdown.
@@ -87,6 +88,28 @@ mode (previously it was only rendered for `binary`/`tie_breaker`, so the
 extracted dissent was silently discarded). When nothing is surfaced you get a
 **Dissent** section saying why — an empty section and no section at all mean
 different things.
+
+#### Choosing what a partial council does (`on_partial`)
+
+Labelling helps a human reading the output. It does nothing for an automated
+caller that will act on the text either way, so `on_partial` lets you decide
+up front:
+
+| Value | Behaviour |
+|---|---|
+| `synthesise` (default) | Answer anyway, with the shortfall in the heading and above the content |
+| `error` | Return a `council_incomplete` JSON blob **instead of** an answer — the synthesis text is not included, so there is nothing to accidentally act on |
+| `return_raw` | Return the surviving members' responses attributed individually, with no chairman synthesis over the top |
+
+Use `error` when you asked for a full council and would rather retry than act
+on a short one — for a gate, or any automated decision. Use `return_raw` when
+you want to judge the disagreement yourself: an unsynthesised set of attributed
+answers shows the divergence a synthesis would have ironed out.
+
+An unrecognised value is **rejected** with `invalid_on_partial` rather than
+silently defaulting. (`confidence` does silently fall back to `high`; that
+would be the wrong choice here, since a typo would turn a strictness request
+into permissiveness.)
 
 **Grounding the council with your own context (`evidence`).** If your client
 already has retrieval — web search, a RAG index, repo files — you can hand the
@@ -164,7 +187,7 @@ Verify the council is ready.
 **Parameters:**
 
 - `tier` (default `"high"`): report readiness for the tier a real run would use. Mirrors `consult_council`'s resolution, including its fallback to `high` for an unrecognised value.
-- `deep` (default `false`): also probe the configured **chairman** model. Costs one real chairman call. The default probe only checks general API reachability via a cheap lite model, which cannot detect a chairman-specific outage.
+- `deep` (default **`true`** since #660): probe the configured **chairman** model as well as general API reachability. Costs one small chairman call (~2-3s) on top of the lite ping. Pass `deep=false` for the old cheap-ping-only behaviour. Skipped automatically when general connectivity has already failed — a chairman probe adds nothing then, and billing for one during an outage is the wrong move.
 
 **Returns:**
 
@@ -179,9 +202,11 @@ Verify the council is ready.
 - `ready`: Whether council is operational — see `ready_scope` for what that claim covers
 - `ready_scope`: `connectivity_only` (default) or `chairman_probed` (`deep=true`). Sits beside `ready` deliberately: a caveat nested inside `api_connectivity` is one a caller has to go looking for
 
-!!! warning "`ready: true` does not mean synthesis will succeed"
+!!! info "Read `ready_scope` before trusting `ready`"
 
-    The default probe pings a lite model, so it answers *"is the API reachable"*, not *"will the council complete"*. During a chairman outage those diverge: stage-3 synthesis is a single point of failure, so a healthy API can still yield runs with no verdict. Pass `deep=true` before a high-stakes run to probe the chairman itself.
+    `ready: true` under `ready_scope: "connectivity_only"` means *"the API is reachable"*, not *"the council will complete"*. Those diverge during a chairman outage — stage-3 synthesis is a single point of failure, so a healthy API can still yield runs with no verdict, which is what happened for ~an hour on 2026-07-16 ([#596](https://github.com/amiable-dev/llm-council/issues/596)).
+
+    Since [#660](https://github.com/amiable-dev/llm-council/issues/660) the default is `ready_scope: "chairman_probed"`, where `ready` does account for the chairman. You only get the narrower claim if you asked for it with `deep=false`, or if connectivity failed before the chairman could be probed. Either way the field tells you which claim you're holding — never infer it from the `deep` argument you passed, since a skipped probe reports the narrower scope.
 
 ## Jury Mode
 

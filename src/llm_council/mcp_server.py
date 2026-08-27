@@ -183,6 +183,7 @@ async def consult_council(
     verdict_type: str = "synthesis",
     include_dissent: bool = False,
     evidence: Optional[List[Dict[str, Any]]] = None,
+    on_partial: str = "synthesise",
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -227,6 +228,20 @@ async def consult_council(
             truncated). NOTE: consult has no gate, so strength="blocking" is
             DOWNGRADED to informational with an explicit warning — use
             verify() for gate semantics.
+        on_partial: What to do when the council does not complete — fewer
+            models than requested, or no peer review (#660). One of:
+            - "synthesise" (default): answer anyway, with the shortfall
+              declared in the heading and above the content. Today's behaviour.
+            - "error": return a structured `council_incomplete` blob INSTEAD of
+              an answer. For callers who asked for a full council and would
+              rather retry than act on a partial one — note that the models
+              which time out are the slowest, hence generally the strongest,
+              so a short council is skewed rather than merely smaller.
+            - "return_raw": return the surviving members' responses attributed
+              individually, with no chairman synthesis over the top.
+            An unrecognised value is REJECTED with an `invalid_on_partial`
+            error rather than silently falling back — a caller who typos this
+            while intending strictness must not silently get permissiveness.
         ctx: MCP context for progress reporting (injected automatically).
 
     Returns:
@@ -236,6 +251,27 @@ async def consult_council(
         - Deliberation Depth Index (DDI): Thoroughness of deliberation (0.0-1.0)
         - Synthesis Attribution Score (SAS): How well synthesis is grounded in sources
     """
+    # #660: validate on_partial BEFORE spending anything. Unlike `confidence`,
+    # which silently falls back to "high", an unrecognised value here is an
+    # error: the whole point of the argument is strictness, and silently
+    # downgrading a caller's strictness request is the failure this fixes.
+    from .consult_render import ON_PARTIAL_MODES
+
+    if on_partial not in ON_PARTIAL_MODES:
+        return json.dumps(
+            {
+                "error": "invalid_on_partial",
+                "detail": f"unrecognised on_partial value {on_partial!r}",
+                "allowed": list(ON_PARTIAL_MODES),
+                "hint": (
+                    "on_partial controls what happens when the council does not "
+                    "complete; it is not silently defaulted because a typo would "
+                    "turn a strictness request into permissiveness."
+                ),
+            },
+            indent=2,
+        )
+
     # Parse verdict_type string to enum
     try:
         verdict_type_enum = VerdictType(verdict_type.lower())
@@ -315,7 +351,27 @@ async def consult_council(
     # "### Chairman's Synthesis" with the "N of M models" disclosure appended
     # underneath, so a single surviving member's raw response was presented with
     # the authority of a completed council.
-    from .consult_render import peer_review_ran, render_consult_body, status_block
+    from .consult_render import (
+        incomplete_error,
+        is_partial,
+        peer_review_ran,
+        render_consult_body,
+        render_raw_responses,
+        status_block,
+    )
+
+    # #660: the caller's declared policy for an incomplete council, applied
+    # before any answer is rendered.
+    if is_partial(metadata):
+        if on_partial == "error":
+            return json.dumps(incomplete_error(metadata, model_responses), indent=2)
+        if on_partial == "return_raw":
+            return (
+                render_raw_responses(metadata, model_responses)
+                + "\n### Council Status\n"
+                + status_block(metadata, model_responses)
+                + "\n"
+            )
 
     result = render_consult_body(metadata, model_responses, synthesis)
 
@@ -484,7 +540,7 @@ def _estimated_durations(council_size: int) -> dict:
 
 
 @mcp.tool()
-async def council_health_check(deep: bool = False, tier: str = "high") -> str:
+async def council_health_check(deep: bool = True, tier: str = "high") -> str:
     """
     Check LLM Council health before expensive operations (ADR-012).
 
@@ -493,11 +549,18 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     calling consult_council.
 
     Args:
-        deep: Also probe the configured chairman model (#596). Costs one real
-            chairman call. The default probe only checks general API
-            connectivity via a cheap lite model, which cannot detect a
-            chairman-specific outage — stage 3 is the single point of failure
-            that turns an otherwise-successful run into a verdict-less one.
+        deep: Probe the configured chairman model as well as general API
+            connectivity. **Default changed to True in #660.** #596 added this
+            flag but left it off, so the default check still did not exercise
+            the component its own docstring calls the single point of failure —
+            and `ready: true` went on being a green light that did not predict
+            the outcome. There is no way to make `ready` chairman-conditional
+            without a chairman call, so the honest default is to make it.
+            Pass `deep=False` for the old cheap-ping behaviour; `ready_scope`
+            in the response says which you got. Skipped automatically when
+            general connectivity has already failed — a chairman probe cannot
+            add information then, and billing for one during an outage is the
+            wrong move.
     """
     from importlib.metadata import version as pkg_version
 
@@ -579,8 +642,11 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
         "version": council_version,
         # #660 (F5): what `ready` below is actually a statement about. Sits
         # beside `ready` rather than nested inside api_connectivity, because a
-        # caveat a caller has to go looking for is not a caveat.
-        "ready_scope": "chairman_probed" if deep else "connectivity_only",
+        # caveat a caller has to go looking for is not a caveat. Starts narrow
+        # and is widened ONLY once a chairman probe has actually run — deriving
+        # it from the `deep` argument would claim a probe that a dead lite
+        # probe, or a raising one, skipped.
+        "ready_scope": "connectivity_only",
         "api_key_configured": bool(api_key),
         "key_source": key_source,  # ADR-013: where the key came from, never the key
         "default_tier": default_tier,
@@ -620,8 +686,9 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                 # real run failed.
                 "probe_scope": "connectivity_only",
                 "caveat": (
-                    "Probes a lite model only; does not exercise the chairman or "
-                    "the council models. Pass deep=true to probe the chairman."
+                    "This probe covers a lite model only; it does not exercise the "
+                    "chairman or the council models. See the top-level ready_scope "
+                    "for whether the chairman was probed separately."
                 ),
             }
 
@@ -645,16 +712,18 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                 else:
                     checks["ready"] = True
                     # #660 (F5): `ready` is read as a go/no-go gate before an
-                    # expensive run, but a lite-model ping answers "is the API
-                    # up", not "will the council complete". #596 added the
-                    # caveat inside api_connectivity; the top-level fields a
-                    # caller actually reads still promised more than was
-                    # checked. State the scope where `ready` itself is.
+                    # expensive run. The deep block below can still set it back
+                    # to False on an unreachable chairman — which is the point
+                    # of probing by default.
                     checks["message"] = (
-                        "API is reachable and the tier resolves to models. This does "
-                        "NOT probe the chairman, whose stage-3 synthesis is the single "
-                        "point of failure that turns an otherwise-successful run into a "
-                        "verdict-less one — pass deep=true to include it."
+                        "Council is ready. Use consult_council to ask questions."
+                        if deep
+                        else (
+                            "API is reachable and the tier resolves to models. This does "
+                            "NOT probe the chairman, whose stage-3 synthesis is the single "
+                            "point of failure that turns an otherwise-successful run into "
+                            "a verdict-less one — omit deep=false to include it."
+                        )
                     )
             else:
                 checks["ready"] = False
@@ -662,8 +731,11 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                     f"API connectivity issue: {response.get('error', 'Unknown error')}"
                 )
 
-            # #596: opt-in probe of the model that actually performs synthesis.
-            if deep:
+            # #596/#660: probe the model that actually performs synthesis.
+            # Skipped when connectivity already failed — the chairman probe
+            # cannot add information then, and it would bill a second failing
+            # call during an outage.
+            if deep and response["status"] == STATUS_OK:
                 try:
                     chair_start = time.time()
                     chair_response = await query_model_with_status(
@@ -672,6 +744,9 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                         timeout=30.0,
                     )
                     chair_latency = int((time.time() - chair_start) * 1000)
+                    # The probe completed, so `ready` is now a statement about
+                    # the chairman too. Widened here and nowhere else.
+                    checks["ready_scope"] = "chairman_probed"
                     checks["chairman_connectivity"] = {
                         "status": chair_response["status"],
                         "latency_ms": chair_latency,
