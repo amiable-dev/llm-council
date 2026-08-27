@@ -100,8 +100,8 @@ def plan_escalation(
     css: Optional[float],
     confidence: Optional[float],
     budget_remaining: Optional[float] = None,
-    estimator: Any = None,
-    enforcer: Any = None,
+    estimator: Optional[Any] = None,
+    enforcer: Optional[Any] = None,
 ) -> EscalationPlan:
     """Decide whether to escalate one rung (the ADR-044 P3 opt-in hook).
 

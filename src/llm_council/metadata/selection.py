@@ -32,6 +32,10 @@ logger = logging.getLogger(__name__)  # (re-bound identically further down)
 
 if TYPE_CHECKING:
     from .protocol import MetadataProvider
+    # #642: `_create_synthetic_model_info` is annotated `-> "ModelInfo"` but the
+    # name was never in scope, so the annotation went unchecked rather than
+    # enforced — the string form makes that silent.
+    from .types import ModelInfo
 
 
 # Quality tier to numeric score mapping (ADR-026 Phase 1)

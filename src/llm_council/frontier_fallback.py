@@ -90,7 +90,7 @@ def get_fallback_tier_from_config() -> str:
 
         config = get_config()
         # Check if frontier tier config has a fallback tier specified
-        frontier_config = config.tiers.pools.get("frontier", {})
+        frontier_config: Any = config.tiers.pools.get("frontier", {})
         if hasattr(frontier_config, "fallback_tier"):
             return frontier_config.fallback_tier
     except Exception:

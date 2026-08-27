@@ -14,6 +14,7 @@ import argparse
 import sys
 
 from llm_council import __version__
+from typing import Optional
 
 # Optional keyring import - may not be installed
 keyring = None
@@ -45,7 +46,7 @@ def bench_command(
     set_flag: bool,
     output_format: str,
     configs: str = "council",
-    publish: str = None,
+    publish: Optional[str] = None,
 ) -> int:
     """ADR-048 bench CLI. Returns the process exit code (0/1/2)."""
     import asyncio
@@ -662,9 +663,9 @@ def setup_key(from_stdin: bool = False):
 
 
 def bias_report(
-    input_path: str = None,
-    max_sessions: int = None,
-    max_days: int = None,
+    input_path: Optional[str] = None,
+    max_sessions: Optional[int] = None,
+    max_days: Optional[int] = None,
     output_format: str = "text",
     verbose: bool = False,
     amplification: bool = False,
@@ -823,9 +824,9 @@ def install_skills(
 
 def run_gate(
     snapshot: str,
-    file_paths: list = None,
+    file_paths: Optional[list] = None,
     confidence_threshold: float = 0.7,
-    rubric_focus: str = None,
+    rubric_focus: Optional[str] = None,
     output_format: str = "text",
     tier: str = "balanced",
 ) -> int:

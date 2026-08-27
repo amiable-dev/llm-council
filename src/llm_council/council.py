@@ -1011,7 +1011,7 @@ async def run_full_council(
     if num_responses == 1:
         # Single model: skip peer review entirely
         degraded_mode = "single_model"
-        stage2_results = []
+        stage2_results: List[Dict[str, Any]] = []
         # Enhanced format (v0.3.0+) with explicit display_index
         label_to_model = {"Response A": {"model": stage1_results[0]["model"], "display_index": 0}}
         aggregate_rankings = [

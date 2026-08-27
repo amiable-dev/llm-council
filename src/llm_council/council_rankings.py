@@ -130,7 +130,7 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
     import re
     import json
 
-    result = {"ranking": [], "scores": {}}
+    result: Dict[str, Any] = {"ranking": [], "scores": {}}
 
     # Check for safety refusals or inability to evaluate
     # Note: patterns are lowercase since we search in lowercased text

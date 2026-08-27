@@ -30,7 +30,7 @@ _HIGH_FACTOR = 1.5
 class CostEstimator:
     """Estimate query cost from per-model performance-index cost history."""
 
-    def __init__(self, tracker: Any = None) -> None:
+    def __init__(self, tracker: Optional[Any] = None) -> None:
         self._tracker = tracker  # InternalPerformanceTracker; injectable for tests
 
     def _get_tracker(self) -> Any:

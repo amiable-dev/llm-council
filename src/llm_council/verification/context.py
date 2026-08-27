@@ -124,7 +124,7 @@ class IsolatedVerificationContext:
         """Set a state value in this context."""
         self._state[key] = value
 
-    def get_state(self, key: str, default: Any = None) -> Any:
+    def get_state(self, key: str, default: Optional[Any] = None) -> Any:
         """Get a state value from this context."""
         return self._state.get(key, default)
 
