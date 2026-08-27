@@ -417,6 +417,26 @@ per-model/per-stage breakdown.
   - `"binary"`: Go/no-go decision (approved/rejected) with confidence score
   - `"tie_breaker"`: Chairman resolves deadlocked decisions
 - `include_dissent` (boolean, optional): Extract minority opinions from Stage 2 (default: false)
+- `evidence` (list, optional): Caller-supplied grounding context — retrieved
+  snippets, tool output, repo files — rendered into the question for every
+  council member under a per-tier budget (ADR-042)
+- `on_partial` (string, optional): What to do when the council **doesn't
+  complete** (default: `"synthesise"`)
+  - `"synthesise"`: answer anyway, with the shortfall declared in the heading
+    and above the content
+  - `"error"`: return a `council_incomplete` blob **instead of** an answer
+  - `"return_raw"`: return the surviving members' responses individually, with
+    no chairman synthesis over the top
+
+**Reading a degraded answer.** A run can complete with fewer models than it
+asked for. The heading says which kind of answer you got — `### Chairman's
+Synthesis` is reserved for a full deliberation, and a chairman-failed fallback
+is labelled as one model's raw response. Every response also ends with a
+machine-readable `### Council Status` block so automation can branch on
+`status` / `peer_review` without parsing prose. This matters because the models
+that time out are the slowest, hence generally the strongest — a short council
+is skewed, not merely smaller. See the
+[MCP guide](https://llm-council.dev/guides/mcp/#reading-a-degraded-answer).
 
 **Example:**
 ```
@@ -435,16 +455,25 @@ Use consult_council with verdict_type="binary" and include_dissent=true to ask: 
 
 ### `council_health_check`
 
-Verify the council is working before expensive operations. Returns API connectivity status, configured models, and estimated response times.
+Verify the council is working before expensive operations. Returns API connectivity status, the models a real run would use, and each tier's server budget.
 
-**Arguments:** None
+**Arguments:**
+- `deep` (boolean, optional): Probe the configured **chairman** model as well as
+  general API reachability (default: **true**). Costs one small extra call
+  (~2-3s). Pass `deep=false` for a cheap connectivity-only ping. Skipped
+  automatically if general connectivity has already failed.
+- `tier` (string, optional): Report readiness for the tier a real run would use
+  (default: `"high"`)
 
 **Returns:**
 - `api_key_configured`: Whether an API key was found
 - `key_source`: Where the key came from ("environment", "keychain", or "config_file")
-- `council_size`: Number of models in the council
-- `estimated_duration`: Expected response times for each confidence level
+- `default_tier` / `council_size` / `models`: The tier reported on, and the models a real `consult_council` run at that tier would actually use — resolved from the tier pool, not the flat config list
+- `chairman_model` / `chairman_connectivity`: The synthesis model, and its probe result when `deep` ran
+- `estimated_duration`: Each tier's configured **server budget** (an upper bound, not a typical latency)
+- `config_warnings`: Present only when two config surfaces disagree — e.g. `council.models` naming different models than the resolved tier pool
 - `ready`: Whether the council is ready to accept queries
+- `ready_scope`: What `ready` is a statement about — `chairman_probed` (default) or `connectivity_only`. Read this before trusting `ready`: a connectivity-only check answers *"is the API up"*, not *"will the council complete"*, and those diverge during a chairman outage
 
 **Example:**
 ```
