@@ -183,6 +183,7 @@ async def consult_council(
     verdict_type: str = "synthesis",
     include_dissent: bool = False,
     evidence: Optional[List[Dict[str, Any]]] = None,
+    on_partial: str = "synthesise",
     ctx: Optional[Context] = None,
 ) -> str:
     """
@@ -227,6 +228,20 @@ async def consult_council(
             truncated). NOTE: consult has no gate, so strength="blocking" is
             DOWNGRADED to informational with an explicit warning — use
             verify() for gate semantics.
+        on_partial: What to do when the council does not complete — fewer
+            models than requested, or no peer review (#660). One of:
+            - "synthesise" (default): answer anyway, with the shortfall
+              declared in the heading and above the content. Today's behaviour.
+            - "error": return a structured `council_incomplete` blob INSTEAD of
+              an answer. For callers who asked for a full council and would
+              rather retry than act on a partial one — note that the models
+              which time out are the slowest, hence generally the strongest,
+              so a short council is skewed rather than merely smaller.
+            - "return_raw": return the surviving members' responses attributed
+              individually, with no chairman synthesis over the top.
+            An unrecognised value is REJECTED with an `invalid_on_partial`
+            error rather than silently falling back — a caller who typos this
+            while intending strictness must not silently get permissiveness.
         ctx: MCP context for progress reporting (injected automatically).
 
     Returns:
@@ -236,6 +251,27 @@ async def consult_council(
         - Deliberation Depth Index (DDI): Thoroughness of deliberation (0.0-1.0)
         - Synthesis Attribution Score (SAS): How well synthesis is grounded in sources
     """
+    # #660: validate on_partial BEFORE spending anything. Unlike `confidence`,
+    # which silently falls back to "high", an unrecognised value here is an
+    # error: the whole point of the argument is strictness, and silently
+    # downgrading a caller's strictness request is the failure this fixes.
+    from .consult_render import ON_PARTIAL_MODES
+
+    if on_partial not in ON_PARTIAL_MODES:
+        return json.dumps(
+            {
+                "error": "invalid_on_partial",
+                "detail": f"unrecognised on_partial value {on_partial!r}",
+                "allowed": list(ON_PARTIAL_MODES),
+                "hint": (
+                    "on_partial controls what happens when the council does not "
+                    "complete; it is not silently defaulted because a typo would "
+                    "turn a strictness request into permissiveness."
+                ),
+            },
+            indent=2,
+        )
+
     # Parse verdict_type string to enum
     try:
         verdict_type_enum = VerdictType(verdict_type.lower())
@@ -310,22 +346,37 @@ async def consult_council(
     metadata = council_result.get("metadata", {})
     model_responses = council_result.get("model_responses", {})
 
-    # Build result with metadata (ADR-012 structured output)
-    result = f"### Chairman's Synthesis\n\n{synthesis}\n"
+    # #660: heading reflects what actually happened, and the degradation notice
+    # sits ABOVE the content it qualifies. This used to be a constant
+    # "### Chairman's Synthesis" with the "N of M models" disclosure appended
+    # underneath, so a single surviving member's raw response was presented with
+    # the authority of a completed council.
+    from .consult_render import (
+        incomplete_error,
+        is_partial,
+        peer_review_ran,
+        render_consult_body,
+        render_raw_responses,
+        status_block,
+    )
 
-    # Add warning if partial results
-    warning = metadata.get("warning")
-    if warning:
-        result += f"\n> **Note**: {warning}\n"
+    # #660: the caller's declared policy for an incomplete council, applied
+    # before any answer is rendered.
+    if is_partial(metadata):
+        if on_partial == "error":
+            return json.dumps(incomplete_error(metadata, model_responses), indent=2)
+        if on_partial == "return_raw":
+            return (
+                render_raw_responses(metadata, model_responses)
+                + "\n### Council Status\n"
+                + status_block(metadata, model_responses)
+                + "\n"
+            )
 
-    # Add status info
-    status = metadata.get("status", "unknown")
+    result = render_consult_body(metadata, model_responses, synthesis)
+
     tier_used = metadata.get("tier")
-    if status != "complete":
-        synthesis_type = metadata.get("synthesis_type", "unknown")
-        tier_info = f", tier: {tier_used}" if tier_used else ""
-        result += f"\n*Council status: {status} ({synthesis_type} synthesis{tier_info})*\n"
-    elif tier_used:
+    if metadata.get("status") == "complete" and tier_used:
         result += f"\n*Tier: {tier_used}*\n"
 
     # #619 (ADR-042): surface what happened to caller-supplied evidence.
@@ -360,6 +411,26 @@ async def consult_council(
             result += f"\n> *Note: Council was deadlocked. Chairman cast deciding vote.*\n"
         if verdict.get("dissent"):
             result += f"\n**Dissent**: {verdict.get('dissent')}\n"
+
+    # #660 (F4): council.py stores dissent under metadata["dissent"] for
+    # SYNTHESIS mode, but the only rendering here was the ADR-025b verdict block
+    # above — which exists solely for binary/tie_breaker. So in the DEFAULT
+    # verdict_type, include_dissent=true ran the extraction and threw the result
+    # away. Absence is now explained rather than left to look like agreement.
+    if include_dissent and not (verdict and verdict.get("dissent")):
+        dissent_text = metadata.get("dissent")
+        if dissent_text:
+            result += f"\n### Dissent\n{dissent_text}\n"
+        elif not peer_review_ran(metadata):
+            result += (
+                "\n### Dissent\n*None extracted: peer review did not run, so there "
+                "are no reviewer evaluations to draw a minority opinion from.*\n"
+            )
+        else:
+            result += (
+                "\n### Dissent\n*None extracted: no reviewer scored a response far "
+                "enough from the median to register as a minority opinion.*\n"
+            )
 
     # Add council rankings if available
     aggregate = metadata.get("aggregate_rankings", [])
@@ -433,11 +504,43 @@ async def consult_council(
             result += "\n#### Stage 2: Peer Review\n"
             result += f"*Label mappings: {json.dumps(label_to_model)}*\n"
 
+    # #660 (F1c): machine-readable outcome, emitted unconditionally so a caller
+    # can branch on `status`/`peer_review` without parsing the prose above. A
+    # block that appeared only on degradation would itself need detecting.
+    result += "\n### Council Status\n" + status_block(metadata, model_responses) + "\n"
+
     return result
 
 
+def _estimated_durations(council_size: int) -> dict:
+    """Per-tier duration estimates taken from the tier's own timeout budget.
+
+    A council run is bounded by its tier's total budget, so that number — not a
+    hand-written range that drifts from the config beside it — is the honest
+    thing to quote. Reads through `_get_tier_timeout`, so environment overrides
+    (ADR-012 Section 5) are reflected rather than contradicted.
+    """
+    notes = {
+        "quick": "fastest models",
+        "balanced": "most models",
+        "high": f"all {council_size} models",
+        "reasoning": "extended thinking; raise MCP_TIMEOUT",
+    }
+    estimates = {}
+    for tier_name, note in notes.items():
+        try:
+            budget = int(_get_tier_timeout(tier_name)["total"])
+        except Exception:
+            # A health check that throws is strictly worse than one that admits
+            # it could not read a budget.
+            estimates[tier_name] = f"unknown ({note})"
+            continue
+        estimates[tier_name] = f"up to {budget}s server budget ({note})"
+    return estimates
+
+
 @mcp.tool()
-async def council_health_check(deep: bool = False, tier: str = "high") -> str:
+async def council_health_check(deep: bool = True, tier: str = "high") -> str:
     """
     Check LLM Council health before expensive operations (ADR-012).
 
@@ -446,11 +549,18 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
     calling consult_council.
 
     Args:
-        deep: Also probe the configured chairman model (#596). Costs one real
-            chairman call. The default probe only checks general API
-            connectivity via a cheap lite model, which cannot detect a
-            chairman-specific outage — stage 3 is the single point of failure
-            that turns an otherwise-successful run into a verdict-less one.
+        deep: Probe the configured chairman model as well as general API
+            connectivity. **Default changed to True in #660.** #596 added this
+            flag but left it off, so the default check still did not exercise
+            the component its own docstring calls the single point of failure —
+            and `ready: true` went on being a green light that did not predict
+            the outcome. There is no way to make `ready` chairman-conditional
+            without a chairman call, so the honest default is to make it.
+            Pass `deep=False` for the old cheap-ping behaviour; `ready_scope`
+            in the response says which you got. Skipped automatically when
+            general connectivity has already failed — a chairman probe cannot
+            add information then, and billing for one during an outage is the
+            wrong move.
     """
     from importlib.metadata import version as pkg_version
 
@@ -524,22 +634,30 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
             f"tiers.pools.{default_tier}.models to match, or rely on the tier pool."
         )
 
-    checks = {
+    # Heterogeneous by design (strings, bools, nested dicts) and mutated below,
+    # so annotate rather than let mypy infer a union from the literal — the
+    # inferred type made `checks["chairman_connectivity"]["error"] = ...` an
+    # error, and adding a key would silently change which error it reported.
+    checks: Dict[str, Any] = {
         "version": council_version,
+        # #660 (F5): what `ready` below is actually a statement about. Sits
+        # beside `ready` rather than nested inside api_connectivity, because a
+        # caveat a caller has to go looking for is not a caveat. Starts narrow
+        # and is widened ONLY once a chairman probe has actually run — deriving
+        # it from the `deep` argument would claim a probe that a dead lite
+        # probe, or a raising one, skipped.
+        "ready_scope": "connectivity_only",
         "api_key_configured": bool(api_key),
         "key_source": key_source,  # ADR-013: where the key came from, never the key
         "default_tier": default_tier,
         "council_size": len(effective_models),
         "chairman_model": chairman_model,
         "models": effective_models,
-        "estimated_duration": {
-            "quick": "~20-30 seconds (fastest models)",
-            "balanced": "~45-60 seconds (most models)",
-            "high": f"~60-90 seconds (all {len(effective_models)} models)",
-            # `reasoning` is a tier consult_council accepts; omitting it left a
-            # real option undocumented in the health check's own output.
-            "reasoning": "~3-6 minutes (extended thinking; raise MCP_TIMEOUT)",
-        },
+        # #660 (F6): derived from each tier's CONFIGURED budget, not prose. The
+        # hard-coded strings said "~60-90 seconds" for high while the same repo
+        # configures tiers.pools.high.timeout_seconds: 180 — an estimate under
+        # half its own budget, which trains callers to ignore estimates.
+        "estimated_duration": _estimated_durations(len(effective_models)),
     }
 
     if config_warnings:
@@ -568,8 +686,9 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                 # real run failed.
                 "probe_scope": "connectivity_only",
                 "caveat": (
-                    "Probes a lite model only; does not exercise the chairman or "
-                    "the council models. Pass deep=true to probe the chairman."
+                    "This probe covers a lite model only; it does not exercise the "
+                    "chairman or the council models. See the top-level ready_scope "
+                    "for whether the chairman was probed separately."
                 ),
             }
 
@@ -592,15 +711,31 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                     )
                 else:
                     checks["ready"] = True
-                    checks["message"] = "Council is ready. Use consult_council to ask questions."
+                    # #660 (F5): `ready` is read as a go/no-go gate before an
+                    # expensive run. The deep block below can still set it back
+                    # to False on an unreachable chairman — which is the point
+                    # of probing by default.
+                    checks["message"] = (
+                        "Council is ready. Use consult_council to ask questions."
+                        if deep
+                        else (
+                            "API is reachable and the tier resolves to models. This does "
+                            "NOT probe the chairman, whose stage-3 synthesis is the single "
+                            "point of failure that turns an otherwise-successful run into "
+                            "a verdict-less one — omit deep=false to include it."
+                        )
+                    )
             else:
                 checks["ready"] = False
                 checks["message"] = (
                     f"API connectivity issue: {response.get('error', 'Unknown error')}"
                 )
 
-            # #596: opt-in probe of the model that actually performs synthesis.
-            if deep:
+            # #596/#660: probe the model that actually performs synthesis.
+            # Skipped when connectivity already failed — the chairman probe
+            # cannot add information then, and it would bill a second failing
+            # call during an outage.
+            if deep and response["status"] == STATUS_OK:
                 try:
                     chair_start = time.time()
                     chair_response = await query_model_with_status(
@@ -609,6 +744,9 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                         timeout=30.0,
                     )
                     chair_latency = int((time.time() - chair_start) * 1000)
+                    # The probe completed, so `ready` is now a statement about
+                    # the chairman too. Widened here and nowhere else.
+                    checks["ready_scope"] = "chairman_probed"
                     checks["chairman_connectivity"] = {
                         "status": chair_response["status"],
                         "latency_ms": chair_latency,

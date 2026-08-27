@@ -24,6 +24,13 @@ TIMEOUT_PER_MODEL_HARD = 25.0
 TIMEOUT_SYNTHESIS_TRIGGER = 40.0
 TIMEOUT_RESPONSE_DEADLINE = 50.0
 
+# #660: default budget for the fallback chairman call in `quick_synthesis`,
+# preserved at its historical hard-coded value so direct callers that pass no
+# tier context behave as before. Callers WITH a tier budget must pass it
+# explicitly — 15s is far below any tier's per-model budget, and this is the
+# only synthesis attempt on the global-timeout path.
+TIMEOUT_QUICK_SYNTHESIS = 15.0
+
 # #648: floor for the Stage 2 / Stage 3 budgets on the consult path, in SECONDS.
 # Equal to the historical hard-coded default in stage2_collect_rankings /
 # stage3_synthesize_final. Every call site converted in #648 previously OMITTED

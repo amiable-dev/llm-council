@@ -291,8 +291,10 @@ async def test_quick_synthesis_handles_chairman_failure():
 
         synthesis, usage = await quick_synthesis("test query", partial_responses)
 
-        # Should fall back to returning best available response
-        assert "Best response here" in synthesis or synthesis is not None
+        # #660: was `... in synthesis or synthesis is not None` — the right-hand
+        # clause is true for any non-None return, so the assertion passed
+        # whatever the fallback produced (same weak-OR pattern as #621).
+        assert "Best response here" in synthesis
 
 
 # =============================================================================

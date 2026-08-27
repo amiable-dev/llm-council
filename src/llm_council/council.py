@@ -340,7 +340,8 @@ async def run_council_with_fallback(
                 "status": "complete" | "partial" | "failed",
                 "completed_models": int,
                 "requested_models": int,
-                "synthesis_type": "full" | "partial" | "stage1_only",
+                "synthesis_type": "full" | "partial" | "stage1_only"
+                                  | "single_model_raw" | "none",
                 "warning": str | None,
                 "tier": str | None (when tier_contract provided),
                 "triage": dict | None (when triage used),
@@ -803,11 +804,26 @@ async def run_council_with_fallback(
             # We have some responses - do quick synthesis
             await report_progress(total_steps - 1, total_steps, "Timeout - quick synthesis...")
 
-            synthesis, usage = await quick_synthesis(user_query, result["model_responses"])
-            result["synthesis"] = synthesis
-            result["metadata"]["synthesis_type"] = (
-                "partial" if len(successful_responses) > 1 else "stage1_only"
+            # #660: pass the tier's per-model budget explicitly. The default is
+            # 15s, which a heavyweight chairman cannot meet — and this is the
+            # only synthesis attempt left, so failing it costs the verdict.
+            fallback_outcome: Dict[str, Any] = {}
+            synthesis, usage = await quick_synthesis(
+                user_query,
+                result["model_responses"],
+                timeout=per_model_timeout,
+                outcome=fallback_outcome,
             )
+            result["synthesis"] = synthesis
+            if fallback_outcome.get("chairman") == "failed":
+                # Not a synthesis at all — one member's raw text. Labelling it
+                # "partial" let the consult surface present it as deliberation.
+                result["metadata"]["synthesis_type"] = "single_model_raw"
+                result["metadata"]["fallback_source_model"] = fallback_outcome.get("source_model")
+            else:
+                result["metadata"]["synthesis_type"] = (
+                    "partial" if len(successful_responses) > 1 else "stage1_only"
+                )
             result["metadata"]["warning"] = generate_partial_warning(
                 result["model_responses"], requested_models
             )
