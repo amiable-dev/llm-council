@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **A degraded consult result is no longer presented with undegraded authority ([#660](https://github.com/amiable-dev/llm-council/issues/660))** — from a v0.45.1 field report: a `high`-tier `consult_council` run lost 2 of 4 models to timeout, one of them `anthropic/claude-opus-5`, which is *both* a council member and the chairman. The tool returned one surviving member's **raw response** under the heading `### Chairman's Synthesis` — wrong twice, since it was not a synthesis and the chairman is what failed — with the "2 of 4 models" disclosure appended below the content as a footnote. That disclosure also under-sells the problem: the models that time out are the slowest, which are generally the strongest reasoners, so a partial result is skewed toward the faster and weaker members rather than being a smaller random sample. Fixed on four fronts:
+    - **The heading is now a function of the outcome** (`consult_render.py`). `### Chairman's Synthesis` is reserved for output the chairman actually produced; a stage-1-only fallback renders as `### Partial synthesis — N of M models, no peer review`, and a chairman-failed fallback as `### Single-model response from <model> — council incomplete (N/M), chairman unavailable`. Missing/unknown status renders as unknown rather than inheriting the success heading.
+    - **Degradation is disclosed above the content it qualifies**, not after it.
+    - **Every response carries a machine-readable `### Council Status` block** (`status`, `synthesis_type`, `models_responded`/`models_requested`, `peer_review`, `tier`, per-model failure reasons), emitted unconditionally so callers never have to detect degradation by parsing prose.
+    - **The fallback chairman call is no longer tier-blind.** `quick_synthesis` used a hard-coded `timeout=15.0` for what is the *only* synthesis attempt on the global-timeout path, so a heavyweight chairman that had just exceeded a 90s stage-1 budget was asked again with 15s and near-certainly failed again — the fallback failed hardest in exactly the case it exists to rescue. It now takes the tier's per-model budget, with the call site AST-pinned (the #648 lesson: an omitted kwarg reads as correct code).
+- **`include_dissent=true` is no longer a silent no-op in the default mode ([#660](https://github.com/amiable-dev/llm-council/issues/660))** — the council stored extracted dissent under `metadata["dissent"]` for `verdict_type="synthesis"`, but the MCP surface only ever rendered dissent inside the ADR-025b verdict block, which exists solely for `binary`/`tie_breaker`. So in the **default** verdict type the extraction ran and the result was thrown away. Dissent is now rendered, and when none is surfaced the response says why (no peer review vs no outlier reviewer) instead of omitting the section — an empty section and no section meant different things.
+
+### Changed
+
+- **`council_health_check` states what its `ready` field actually covers ([#660](https://github.com/amiable-dev/llm-council/issues/660))** — a new top-level `ready_scope` (`connectivity_only` | `chairman_probed`) sits beside `ready`, and the ready message names the chairman as the unprobed single point of failure. [#596](https://github.com/amiable-dev/llm-council/issues/596) added the `deep` probe and an honest `probe_scope` caveat, but nested it inside `api_connectivity` where a caller reading `ready: true` would not see it. `deep` still defaults to `false` — flipping it costs a real chairman call on every health check.
+- **`estimated_duration` is derived from each tier's configured budget ([#660](https://github.com/amiable-dev/llm-council/issues/660))** — it advertised "~60-90 seconds" for `high` while the same repo configures `tiers.pools.high.timeout_seconds: 180`, an estimate under half its own budget. It now reports the tier's server budget (honouring `LLM_COUNCIL_TIMEOUT_MULTIPLIER`) as an upper bound.
+- The fallback's "best available response" is named for what it is: the first survivor in tier-pool order. Stage 2 never runs on that path, so no quality signal exists to rank by, and calling an arbitrary pick "best" misrepresented it.
+
+### Not changed (tracked elsewhere)
+
+- The chairman being a single point of failure with no dynamic fallback remains [#598](https://github.com/amiable-dev/llm-council/issues/598) (ADR-worthy). Field evidence and a new angle — the chairman is simultaneously a `high`-tier council member, so one timeout removes a member *and* the aggregator — are recorded there.
+- The report's claim that per-model timeouts are not enforced independently did **not** reproduce: `openrouter.py` wraps each model call in its own `asyncio.wait_for` and `run_council_with_fallback` also enforces a global deadline. The sibling orchestrator does have that bug — [#653](https://github.com/amiable-dev/llm-council/issues/653).
+
 ## [0.45.1] - 2026-08-22
 
 **Reasoning-tier consults get their synthesis back, plus the supply-chain hardening pass.** The headline fix ([#648](https://github.com/amiable-dev/llm-council/issues/648)) is a regression introduced by the 0.45.0 chairman change; the rest is code-scanning remediation and release-automation plumbing that landed after the 0.45.0 tag.

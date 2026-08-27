@@ -52,6 +52,42 @@ Ask the LLM council a question.
 Every response ends with a one-line **Cost & Tokens** summary (ADR-011);
 `include_details=true` adds the per-model/per-stage breakdown.
 
+#### Reading a degraded answer
+
+A council run can complete with fewer models than it asked for, and the
+heading tells you which kind of answer you got. This matters more than it
+looks: the models that time out are the slowest, which are generally the
+strongest reasoners, so a short council is not a random sample of the full
+one — it is skewed toward the faster and weaker members.
+
+| Heading | What it is |
+|---------|-----------|
+| `### Chairman's Synthesis` | Full deliberation: every member responded, peer review ran, the chairman synthesised |
+| `### Chairman's Synthesis — N of M models` | Real synthesis including peer review; only the membership was short |
+| `### Partial synthesis — N of M models, no peer review` | The run hit its global deadline; the chairman synthesised stage-1 drafts directly, **stage 2 never ran** |
+| `### Single-model response from <model> — council incomplete (N/M), chairman unavailable` | Not a synthesis: the chairman failed too, so this is one surviving member's raw text |
+| `### Council Failed` | No usable responses |
+
+Any shortfall is disclosed in a `> **Note**` **above** the answer, never below
+it. Every response also ends with a machine-readable block so automation can
+branch without parsing prose:
+
+```json
+{"status": "partial", "synthesis_type": "single_model_raw", "models_responded": 2,
+ "models_requested": 4, "peer_review": false, "tier": "high",
+ "failed_models": [{"model": "anthropic/claude-opus-5", "status": "timeout"}]}
+```
+
+Treat `peer_review: false` as the important flag: anonymised peer review is
+the mechanism that filters confident-but-wrong answers, and without it you
+are reading opinions rather than a deliberated verdict.
+
+`include_dissent=true` now works in the default `verdict_type="synthesis"`
+mode (previously it was only rendered for `binary`/`tie_breaker`, so the
+extracted dissent was silently discarded). When nothing is surfaced you get a
+**Dissent** section saying why — an empty section and no section at all mean
+different things.
+
 **Grounding the council with your own context (`evidence`).** If your client
 already has retrieval — web search, a RAG index, repo files — you can hand the
 retrieved snippets to the council instead of hoping the models know them.
@@ -139,7 +175,9 @@ Verify the council is ready.
 - `configured_council_models` / `config_warnings`: Present **only** when the flat `council.models` list disagrees with the resolved tier pool, so the two cannot diverge silently
 - `api_connectivity.probe_scope`: `connectivity_only` for the default probe, with a `caveat` naming what it does not cover
 - `chairman_connectivity`: Present only with `deep=true`
-- `ready`: Whether council is operational
+- `estimated_duration`: Per-tier **server budget**, derived from each tier's configured `timeout_seconds` (and any `LLM_COUNCIL_TIMEOUT_MULTIPLIER`) rather than hand-written prose — an upper bound, not a typical latency
+- `ready`: Whether council is operational — see `ready_scope` for what that claim covers
+- `ready_scope`: `connectivity_only` (default) or `chairman_probed` (`deep=true`). Sits beside `ready` deliberately: a caveat nested inside `api_connectivity` is one a caller has to go looking for
 
 !!! warning "`ready: true` does not mean synthesis will succeed"
 

@@ -310,22 +310,17 @@ async def consult_council(
     metadata = council_result.get("metadata", {})
     model_responses = council_result.get("model_responses", {})
 
-    # Build result with metadata (ADR-012 structured output)
-    result = f"### Chairman's Synthesis\n\n{synthesis}\n"
+    # #660: heading reflects what actually happened, and the degradation notice
+    # sits ABOVE the content it qualifies. This used to be a constant
+    # "### Chairman's Synthesis" with the "N of M models" disclosure appended
+    # underneath, so a single surviving member's raw response was presented with
+    # the authority of a completed council.
+    from .consult_render import peer_review_ran, render_consult_body, status_block
 
-    # Add warning if partial results
-    warning = metadata.get("warning")
-    if warning:
-        result += f"\n> **Note**: {warning}\n"
+    result = render_consult_body(metadata, model_responses, synthesis)
 
-    # Add status info
-    status = metadata.get("status", "unknown")
     tier_used = metadata.get("tier")
-    if status != "complete":
-        synthesis_type = metadata.get("synthesis_type", "unknown")
-        tier_info = f", tier: {tier_used}" if tier_used else ""
-        result += f"\n*Council status: {status} ({synthesis_type} synthesis{tier_info})*\n"
-    elif tier_used:
+    if metadata.get("status") == "complete" and tier_used:
         result += f"\n*Tier: {tier_used}*\n"
 
     # #619 (ADR-042): surface what happened to caller-supplied evidence.
@@ -360,6 +355,26 @@ async def consult_council(
             result += f"\n> *Note: Council was deadlocked. Chairman cast deciding vote.*\n"
         if verdict.get("dissent"):
             result += f"\n**Dissent**: {verdict.get('dissent')}\n"
+
+    # #660 (F4): council.py stores dissent under metadata["dissent"] for
+    # SYNTHESIS mode, but the only rendering here was the ADR-025b verdict block
+    # above — which exists solely for binary/tie_breaker. So in the DEFAULT
+    # verdict_type, include_dissent=true ran the extraction and threw the result
+    # away. Absence is now explained rather than left to look like agreement.
+    if include_dissent and not (verdict and verdict.get("dissent")):
+        dissent_text = metadata.get("dissent")
+        if dissent_text:
+            result += f"\n### Dissent\n{dissent_text}\n"
+        elif not peer_review_ran(metadata):
+            result += (
+                "\n### Dissent\n*None extracted: peer review did not run, so there "
+                "are no reviewer evaluations to draw a minority opinion from.*\n"
+            )
+        else:
+            result += (
+                "\n### Dissent\n*None extracted: no reviewer scored a response far "
+                "enough from the median to register as a minority opinion.*\n"
+            )
 
     # Add council rankings if available
     aggregate = metadata.get("aggregate_rankings", [])
@@ -433,7 +448,39 @@ async def consult_council(
             result += "\n#### Stage 2: Peer Review\n"
             result += f"*Label mappings: {json.dumps(label_to_model)}*\n"
 
+    # #660 (F1c): machine-readable outcome, emitted unconditionally so a caller
+    # can branch on `status`/`peer_review` without parsing the prose above. A
+    # block that appeared only on degradation would itself need detecting.
+    result += "\n### Council Status\n" + status_block(metadata, model_responses) + "\n"
+
     return result
+
+
+def _estimated_durations(council_size: int) -> dict:
+    """Per-tier duration estimates taken from the tier's own timeout budget.
+
+    A council run is bounded by its tier's total budget, so that number — not a
+    hand-written range that drifts from the config beside it — is the honest
+    thing to quote. Reads through `_get_tier_timeout`, so environment overrides
+    (ADR-012 Section 5) are reflected rather than contradicted.
+    """
+    notes = {
+        "quick": "fastest models",
+        "balanced": "most models",
+        "high": f"all {council_size} models",
+        "reasoning": "extended thinking; raise MCP_TIMEOUT",
+    }
+    estimates = {}
+    for tier_name, note in notes.items():
+        try:
+            budget = int(_get_tier_timeout(tier_name)["total"])
+        except Exception:
+            # A health check that throws is strictly worse than one that admits
+            # it could not read a budget.
+            estimates[tier_name] = f"unknown ({note})"
+            continue
+        estimates[tier_name] = f"up to {budget}s server budget ({note})"
+    return estimates
 
 
 @mcp.tool()
@@ -524,22 +571,27 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
             f"tiers.pools.{default_tier}.models to match, or rely on the tier pool."
         )
 
-    checks = {
+    # Heterogeneous by design (strings, bools, nested dicts) and mutated below,
+    # so annotate rather than let mypy infer a union from the literal — the
+    # inferred type made `checks["chairman_connectivity"]["error"] = ...` an
+    # error, and adding a key would silently change which error it reported.
+    checks: Dict[str, Any] = {
         "version": council_version,
+        # #660 (F5): what `ready` below is actually a statement about. Sits
+        # beside `ready` rather than nested inside api_connectivity, because a
+        # caveat a caller has to go looking for is not a caveat.
+        "ready_scope": "chairman_probed" if deep else "connectivity_only",
         "api_key_configured": bool(api_key),
         "key_source": key_source,  # ADR-013: where the key came from, never the key
         "default_tier": default_tier,
         "council_size": len(effective_models),
         "chairman_model": chairman_model,
         "models": effective_models,
-        "estimated_duration": {
-            "quick": "~20-30 seconds (fastest models)",
-            "balanced": "~45-60 seconds (most models)",
-            "high": f"~60-90 seconds (all {len(effective_models)} models)",
-            # `reasoning` is a tier consult_council accepts; omitting it left a
-            # real option undocumented in the health check's own output.
-            "reasoning": "~3-6 minutes (extended thinking; raise MCP_TIMEOUT)",
-        },
+        # #660 (F6): derived from each tier's CONFIGURED budget, not prose. The
+        # hard-coded strings said "~60-90 seconds" for high while the same repo
+        # configures tiers.pools.high.timeout_seconds: 180 — an estimate under
+        # half its own budget, which trains callers to ignore estimates.
+        "estimated_duration": _estimated_durations(len(effective_models)),
     }
 
     if config_warnings:
@@ -592,7 +644,18 @@ async def council_health_check(deep: bool = False, tier: str = "high") -> str:
                     )
                 else:
                     checks["ready"] = True
-                    checks["message"] = "Council is ready. Use consult_council to ask questions."
+                    # #660 (F5): `ready` is read as a go/no-go gate before an
+                    # expensive run, but a lite-model ping answers "is the API
+                    # up", not "will the council complete". #596 added the
+                    # caveat inside api_connectivity; the top-level fields a
+                    # caller actually reads still promised more than was
+                    # checked. State the scope where `ready` itself is.
+                    checks["message"] = (
+                        "API is reachable and the tier resolves to models. This does "
+                        "NOT probe the chairman, whose stage-3 synthesis is the single "
+                        "point of failure that turns an otherwise-successful run into a "
+                        "verdict-less one — pass deep=true to include it."
+                    )
             else:
                 checks["ready"] = False
                 checks["message"] = (

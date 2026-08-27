@@ -53,6 +53,7 @@ from llm_council.verdict import (
 from llm_council.council_usage import (
     MODEL_STATUS_ERROR,
     TIMEOUT_PER_MODEL_HARD,
+    TIMEOUT_QUICK_SYNTHESIS,
     ProgressCallback,
     _add_cost_to_usage,
 )
@@ -257,6 +258,8 @@ def generate_partial_warning(
 async def quick_synthesis(
     user_query: str,
     model_responses: Dict[str, Dict[str, Any]],
+    timeout: float = TIMEOUT_QUICK_SYNTHESIS,
+    outcome: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, Dict[str, int]]:
     """
     Generate a quick synthesis from partial responses (ADR-012 fallback).
@@ -267,10 +270,27 @@ async def quick_synthesis(
     Args:
         user_query: The original user query
         model_responses: Dict mapping model names to their response info
+        timeout: Budget for the chairman call. #660: this was a hard-coded 15.0
+            and is the ONLY synthesis attempt on the global-timeout path, so a
+            heavyweight chairman that had just exceeded a 90s stage-1 budget was
+            asked again with 15s and near-certainly failed again — the fallback
+            failed hardest in exactly the case it exists to rescue. Callers pass
+            the tier's per-model budget; the default survives only for direct
+            callers with no tier in hand.
+        outcome: Optional dict the caller supplies to learn what happened —
+            ``chairman`` (ok|failed|disabled) and ``source_model`` when the text
+            is one member's raw response rather than a synthesis. Mirrors the
+            ``shared_raw_responses`` pattern: this function cannot label its own
+            output, so it hands the facts back to whoever can.
 
     Returns:
         Tuple of (synthesis text, usage dict)
     """
+
+    def _record(**facts: Any) -> None:
+        if outcome is not None:
+            outcome.update(facts)
+
     # Filter to only successful responses
     successful = {
         model: info
@@ -279,12 +299,25 @@ async def quick_synthesis(
     }
 
     if not successful:
+        _record(chairman="unused", source_model=None)
         return "Error: No model responses available for synthesis.", {}
+
+    # #660: this is the first surviving model in dict order — i.e. the order the
+    # tier pool lists them — not a quality ranking. Stage 2 never ran on this
+    # path, so no quality signal exists to rank by. It used to be called
+    # `best_response`, which misrepresented an arbitrary pick; the survivor set
+    # is already skewed toward the faster (generally weaker) members, so the
+    # honest move is to name the model rather than imply it was chosen.
+    first_survivor_model = next(iter(successful))
+    first_survivor_text = successful[first_survivor_model].get("response", "")
 
     # If chairman is disabled, return the first successful response directly
     if _get_chairman_disabled():
-        best_response = list(successful.values())[0].get("response", "")
-        return best_response, {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        _record(chairman="disabled", source_model=first_survivor_model)
+        return (
+            first_survivor_text,
+            {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        )
 
     # Build context from available responses
     responses_text = "\n\n".join(
@@ -305,15 +338,20 @@ and highlight any important insights. Be clear that this is based on partial dat
     messages = [{"role": "user", "content": synthesis_prompt}]
 
     # Use chairman model for synthesis
-    response = await query_model(_get_chairman_model(), messages, timeout=15.0, disable_tools=True)
+    response = await query_model(
+        _get_chairman_model(), messages, timeout=timeout, disable_tools=True
+    )
 
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     if response is None:
-        # Chairman failed - return best available response
-        best_response = list(successful.values())[0].get("response", "")
-        return f"(Fallback - single model response)\n\n{best_response}", usage
+        # Chairman failed — this is no longer a synthesis of any kind, just one
+        # member's raw text. Report that upward so the caller can say so in the
+        # heading instead of burying it in a prose marker (#660).
+        _record(chairman="failed", source_model=first_survivor_model)
+        return first_survivor_text, usage
 
+    _record(chairman="ok", source_model=None)
     usage = response.get("usage", {})
     return response.get("content", ""), usage
 
