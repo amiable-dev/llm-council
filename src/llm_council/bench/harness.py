@@ -328,7 +328,7 @@ async def run_bench(
     items_filter: Optional[List[str]] = None,
     max_usd: Optional[float] = None,
     runs_dir: Optional[Path] = None,
-    council_runner: Any = None,
+    council_runner: Optional[Any] = None,
     ignore_score_floor: bool = False,
 ) -> BenchRun:
     """Execute the bench. ``council_runner`` is injectable for tests

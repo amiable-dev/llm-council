@@ -119,7 +119,11 @@ class CostResolver:
         if gateway in _LOCAL_GATEWAYS:
             return 0.0, "local_zero"
 
-        pricing = self._pricing_lookup(model_id) if self._pricing_lookup else {}
+        # #642: the `if self._pricing_lookup` guard here was dead code — the
+        # constructor assigns `pricing_lookup or registry_pricing_lookup`, so
+        # the attribute is never falsy. A guard that cannot fail reads as a
+        # handled None case that was never handled.
+        pricing = self._pricing_lookup(model_id)
         price_in = _safe_price(pricing.get("prompt"))
         price_out = _safe_price(pricing.get("completion"))
         if price_in is not None or price_out is not None:

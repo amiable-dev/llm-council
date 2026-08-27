@@ -301,7 +301,7 @@ class GatewayRouter:
         Returns:
             Dict with gateway stats.
         """
-        stats = {"gateways": {}}
+        stats: Dict[str, Dict[str, Any]] = {"gateways": {}}
 
         for gateway_id in self.gateways:
             cb = self._get_circuit_breaker(gateway_id)

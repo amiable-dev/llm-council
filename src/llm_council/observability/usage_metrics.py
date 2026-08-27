@@ -25,7 +25,7 @@ TOKEN_USAGE_METRIC = "gen_ai.client.token.usage"
 COST_METRIC = "llm_council.cost.usd"
 
 
-def emit_usage_metrics(usage: Optional[Dict[str, Any]], adapter: Any = None) -> None:
+def emit_usage_metrics(usage: Optional[Dict[str, Any]], adapter: Optional[Any] = None) -> None:
     """Emit per-model OTel GenAI token/cost metrics from a usage summary.
 
     Args:

@@ -15,7 +15,7 @@ Usage:
 import json
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
@@ -258,7 +258,7 @@ def calculate_aggregate_stats(results: List[BenchmarkResult]) -> Dict[str, Any]:
         return {}
 
     # Collect all models that were benchmarked
-    all_models = set()
+    all_models: Set[str] = set()
     for r in results:
         all_models.update(r.single_model_scores.keys())
 

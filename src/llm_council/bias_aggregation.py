@@ -782,7 +782,7 @@ def detect_anomalies(
     Returns:
         List of anomaly descriptions
     """
-    anomalies = []
+    anomalies: List[Dict[str, Any]] = []
 
     if len(records) < 10:
         return anomalies
