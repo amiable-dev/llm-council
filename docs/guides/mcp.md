@@ -128,11 +128,16 @@ response tells you which). Two things to know:
   note** in the response. Use `verify()` when you want gate semantics.
 - No `evidence` ⇒ the query is sent byte-identically as before.
 
-!!! warning "Set MCP_TIMEOUT for `high`/`reasoning`"
+!!! warning "Set MCP_TIMEOUT for `high`/`reasoning` — these numbers are for `consult_council` only"
     These tiers exceed many clients' default transport timeout (~60s). Set
     `MCP_TIMEOUT` (milliseconds) in your client config — e.g. 180000 for
     `high`, 600000 for `reasoning` — or the client will drop the connection
     while the council deliberates.
+
+    **`verify` needs roughly double these values.** Its global deadline is
+    `tier_deadline × 2.0`, so a `reasoning` verify can run to 1200s and these
+    numbers would cut it off at the halfway mark. See
+    [the verify guide's tier table](verify.md#tiers).
 
     `MCP_TIMEOUT` is the *client transport* budget. Server-side, each tier also
     budgets its own stages: Stage 1 gets the tier's per-model timeout, and

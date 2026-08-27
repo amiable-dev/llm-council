@@ -278,6 +278,65 @@ def parse_tie_breaker_verdict(chairman_response: str) -> VerdictResult:
     return result
 
 
+def _dispositions_from_fences(text: str) -> Optional[List[Dict[str, Any]]]:
+    """First fenced ```json block carrying an `evidence_dispositions` list."""
+    for block in re.findall(r"```(?:json)?\s*\n(.*?)```", text, re.DOTALL):
+        try:
+            data = json.loads(block.strip())
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(data, dict) and isinstance(data.get("evidence_dispositions"), list):
+            return data["evidence_dispositions"]
+    return None
+
+
+def _find_dispositions(chairman_response: str) -> Optional[List[Dict[str, Any]]]:
+    """Locate the ADR-042 dispositions list wherever the chairman put it.
+
+    #664: the fence-only search silently lost every disposition under
+    ``LLM_COUNCIL_STRUCTURED_FINDINGS``. Structured findings (ADR-051) asks for
+    ONE top-level JSON object, so the chairman nests the ADR-042 fence inside
+    that object's ``rationale`` **string** — where the newlines are the escape
+    sequence ``\\n`` rather than real newlines, and the fence regex's mandatory
+    ``\\n`` never matches. Result: a well-formed dispositions array, present in
+    the response, reported as ``parser_error`` for every item.
+
+    Three locations, in order of directness. Every step is soft-fail: an
+    unparseable candidate is skipped, never raised, so a genuinely absent
+    block still yields ``None`` and the caller's ``parser_error`` path.
+    """
+    # 1. A fenced block in the raw text — the pre-#664 path, unchanged.
+    found = _dispositions_from_fences(chairman_response)
+    if found is not None:
+        return found
+
+    # 2/3. Anything reachable through a top-level JSON object.
+    try:
+        from .json_extract import extract_json_object
+
+        obj = extract_json_object(chairman_response)
+    except Exception:
+        obj = None
+    if not isinstance(obj, dict):
+        return None
+
+    # 2. Dispositions as a key of that object. Costs nothing to support and is
+    #    the shape to prefer if the chairman prompt is ever unified (#664
+    #    option 3), so honour it now rather than after another silent loss.
+    if isinstance(obj.get("evidence_dispositions"), list):
+        return obj["evidence_dispositions"]
+
+    # 3. A fence nested in one of its string values — the observed case. The
+    #    values are already JSON-decoded here, so the escapes are real
+    #    characters again and the fence regex works.
+    for value in obj.values():
+        if isinstance(value, str):
+            found = _dispositions_from_fences(value)
+            if found is not None:
+                return found
+    return None
+
+
 def parse_evidence_dispositions(
     chairman_response: str,
     submitted_items: List[Tuple[int, "EvidenceItem"]],
@@ -316,19 +375,7 @@ def parse_evidence_dispositions(
         item_id = item.evidence_id or f"auto-{req_idx}"
         by_id[item_id] = (req_idx, item)
 
-    # Find ALL fenced json blocks; pick the first one with evidence_dispositions key.
-    fenced_blocks = re.findall(r"```(?:json)?\s*\n(.*?)```", chairman_response, re.DOTALL)
-    parsed_dispositions: Optional[List[Dict[str, Any]]] = None
-    for block in fenced_blocks:
-        try:
-            data = json.loads(block.strip())
-        except (json.JSONDecodeError, ValueError):
-            continue
-        if isinstance(data, dict) and "evidence_dispositions" in data:
-            candidate = data["evidence_dispositions"]
-            if isinstance(candidate, list):
-                parsed_dispositions = candidate
-                break
+    parsed_dispositions = _find_dispositions(chairman_response)
 
     warnings: List["EvidenceWarning"] = []
 
@@ -364,8 +411,10 @@ def parse_evidence_dispositions(
     dispositions: List["EvidenceDisposition"] = []
     for req_idx, item in submitted_items:
         item_id = item.evidence_id or f"auto-{req_idx}"
-        raw = matched.get(item_id)
-        if raw is None:
+        # Distinct name from the matching loop above: reusing `raw` gave it two
+        # types in one scope (dict, then Optional[dict]).
+        entry = matched.get(item_id)
+        if entry is None:
             # Submitted but Chairman didn't produce a disposition — parser_error.
             dispositions.append(
                 EvidenceDisposition(
@@ -381,7 +430,7 @@ def parse_evidence_dispositions(
             continue
 
         # Sanitise + validate fields.
-        status_raw = raw.get("status")
+        status_raw: Any = entry.get("status")
         if status_raw not in {
             "acknowledged",
             "confirmed",
@@ -395,7 +444,7 @@ def parse_evidence_dispositions(
         else:
             council_confirmed = None  # Force None for other statuses.
 
-        rationale = raw.get("council_rationale")
+        rationale = entry.get("council_rationale")
         if not isinstance(rationale, str):
             rationale = None
 
