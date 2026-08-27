@@ -96,6 +96,28 @@ class TestAdrNavDrift:
         ]
         assert not missing, f"ADRs unreachable from the site nav: {missing}"
 
+    def test_every_adr_listed_on_the_index_page(self):
+        """The ADR index is hand-maintained, so nothing kept it honest.
+
+        It had rotted to ADR-031 while the repo was on ADR-055 — 24 missing,
+        including every ADR the recent work cites. The nav test above passed
+        throughout, because the nav and the index page are different artefacts:
+        a reader scrolling the sidebar saw all of them, a reader who clicked
+        "Index" saw a list two years of decisions out of date.
+        """
+        index = (REPO / "docs" / "architecture" / "adrs.md").read_text()
+        skip = {"ADR-000-template.md"}
+        missing = [
+            f.name
+            for f in sorted((REPO / "docs" / "adr").glob("ADR-*.md"))
+            if f.name not in skip and f.name not in index
+        ]
+        assert not missing, (
+            "ADRs missing from docs/architecture/adrs.md: "
+            f"{missing}\nAdd a row per file; Status comes from the ADR's own "
+            "**Status:** line."
+        )
+
 
 class TestGuideSnippets:
     GUIDES = [
