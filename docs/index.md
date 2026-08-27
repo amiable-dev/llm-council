@@ -13,6 +13,7 @@
 <a href="https://pypi.org/project/llm-council-core/"><img src="https://img.shields.io/pypi/dm/llm-council-core.svg?color=blue" alt="Downloads"></a>
 <a href="https://pypi.org/project/llm-council-core/"><img src="https://img.shields.io/pypi/pyversions/llm-council-core.svg" alt="Python versions"></a>
 <a href="https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml"><img src="https://github.com/amiable-dev/llm-council/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://www.bestpractices.dev/projects/14204"><img src="https://www.bestpractices.dev/projects/14204/badge" alt="OpenSSF Best Practices"></a>
 <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/pypi/l/llm-council-core.svg?color=green" alt="License: MIT"></a>
 <a href="https://discord.gg/y467DGHF"><img src="https://img.shields.io/badge/Discord-join-7289da?logo=discord&logoColor=white" alt="Discord"></a>
 </p>

@@ -85,8 +85,14 @@ def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bo
     if not ranking or not scores:
         return False
 
-    # Only check labels that have scores
-    ranked_with_scores = [label for label in ranking if label in scores]
+    # Only check labels that have scores. `ranking` originates from parsed
+    # model output (Dict[str, Any] JSON) with no element-type guarantee — a
+    # non-string entry (e.g. a nested object) is unhashable and would crash
+    # `label in scores` (found by Hypothesis fuzzing, #657); real labels are
+    # always strings, so filtering first is both correct and crash-proof.
+    ranked_with_scores = [
+        label for label in ranking if isinstance(label, str) and label in scores
+    ]
 
     if len(ranked_with_scores) < 2:
         return False
@@ -152,6 +158,11 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
     if json_match:
         try:
             parsed = json.loads(json_match.group(1))
+            # The fenced block can be *any* valid JSON, not just an object
+            # (e.g. `null`, a bare array/number) — `.get` on a non-dict would
+            # crash (found by Hypothesis fuzzing, #657).
+            if not isinstance(parsed, dict):
+                parsed = {}
             if isinstance(parsed.get("ranking"), list):
                 result["ranking"] = parsed["ranking"]
             if isinstance(parsed.get("scores"), dict):

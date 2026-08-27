@@ -188,12 +188,19 @@ async def test_council_health_check_no_api_key():
 @pytest.mark.asyncio
 @pytest.mark.vcr()
 async def test_council_health_check_success():
-    """Test health check with successful API connectivity."""
+    """Test health check with successful API connectivity.
+
+    #660: pinned to `deep=False`. This is the cassette-backed connectivity
+    test, and its recording contains only the lite-model interaction; the
+    default now also probes the chairman, which the cassette cannot serve.
+    The default path is covered with mocks in
+    `tests/test_issue660_honest_degradation.py::TestHealthCheckHonesty`.
+    """
     from llm_council.mcp_server import council_health_check
     from llm_council.openrouter import STATUS_OK
 
     with patch("llm_council.mcp_server._get_openrouter_api_key", return_value="test-key"):
-        result = await council_health_check()
+        result = await council_health_check(deep=False)
         data = json.loads(result)
 
         assert data["api_key_configured"] is True
@@ -573,8 +580,17 @@ class TestHealthCheckReportsEffectiveConfig:
         assert "chairman" in data["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_deep_probe_is_opt_in(self):
-        """Default stays cheap: one lite ping, no chairman call."""
+    async def test_cheap_probe_is_now_the_opt_out(self):
+        """#660 inverted this default.
+
+        This test used to assert `deep` was opt-in, i.e. that the DEFAULT check
+        made one lite ping and no chairman call. That default was the #596 gap
+        left open: the cheap check could not detect the single point of failure
+        its own docstring named, so `ready: true` stayed unpredictive. Probing
+        the chairman is now the default and the cheap ping is the opt-out —
+        so what needs pinning is that `deep=False` still buys the old
+        behaviour, not that it is what you get by accident.
+        """
         from llm_council.mcp_server import council_health_check
         from llm_council.openrouter import STATUS_OK
 
@@ -589,10 +605,11 @@ class TestHealthCheckReportsEffectiveConfig:
             patch("llm_council.mcp_server._get_chairman_model", return_value="chair/model"),
             patch("llm_council.mcp_server.query_model_with_status", side_effect=fake),
         ):
-            data = json.loads(await council_health_check())
+            data = json.loads(await council_health_check(deep=False))
 
         assert calls == [__import__("llm_council.gateway.base", fromlist=["x"]).DEFAULT_HEALTH_CHECK_MODEL]
         assert "chairman_connectivity" not in data
+        assert data["ready_scope"] == "connectivity_only"
 
     @pytest.mark.asyncio
     async def test_tier_resolution_failure_is_not_ready(self):

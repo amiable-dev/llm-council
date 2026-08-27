@@ -48,9 +48,68 @@ Ask the LLM council a question.
 | `include_details` | boolean | `false` | Individual responses + full cost breakdown |
 | `include_dissent` | boolean | `false` | Include minority opinions |
 | `evidence` | list | none | Caller-supplied grounding context (#619, ADR-042) |
+| `on_partial` | string | `"synthesise"` | What to do when the council doesn't complete: `synthesise`, `error`, `return_raw` |
 
 Every response ends with a one-line **Cost & Tokens** summary (ADR-011);
 `include_details=true` adds the per-model/per-stage breakdown.
+
+#### Reading a degraded answer
+
+A council run can complete with fewer models than it asked for, and the
+heading tells you which kind of answer you got. This matters more than it
+looks: the models that time out are the slowest, which are generally the
+strongest reasoners, so a short council is not a random sample of the full
+one — it is skewed toward the faster and weaker members.
+
+| Heading | What it is |
+|---------|-----------|
+| `### Chairman's Synthesis` | Full deliberation: every member responded, peer review ran, the chairman synthesised |
+| `### Chairman's Synthesis — N of M models` | Real synthesis including peer review; only the membership was short |
+| `### Partial synthesis — N of M models, no peer review` | The run hit its global deadline; the chairman synthesised stage-1 drafts directly, **stage 2 never ran** |
+| `### Single-model response from <model> — council incomplete (N/M), chairman unavailable` | Not a synthesis: the chairman failed too, so this is one surviving member's raw text |
+| `### Council Failed` | No usable responses |
+
+Any shortfall is disclosed in a `> **Note**` **above** the answer, never below
+it. Every response also ends with a machine-readable block so automation can
+branch without parsing prose:
+
+```json
+{"status": "partial", "synthesis_type": "single_model_raw", "models_responded": 2,
+ "models_requested": 4, "peer_review": false, "tier": "high",
+ "failed_models": [{"model": "anthropic/claude-opus-5", "status": "timeout"}]}
+```
+
+Treat `peer_review: false` as the important flag: anonymised peer review is
+the mechanism that filters confident-but-wrong answers, and without it you
+are reading opinions rather than a deliberated verdict.
+
+`include_dissent=true` now works in the default `verdict_type="synthesis"`
+mode (previously it was only rendered for `binary`/`tie_breaker`, so the
+extracted dissent was silently discarded). When nothing is surfaced you get a
+**Dissent** section saying why — an empty section and no section at all mean
+different things.
+
+#### Choosing what a partial council does (`on_partial`)
+
+Labelling helps a human reading the output. It does nothing for an automated
+caller that will act on the text either way, so `on_partial` lets you decide
+up front:
+
+| Value | Behaviour |
+|---|---|
+| `synthesise` (default) | Answer anyway, with the shortfall in the heading and above the content |
+| `error` | Return a `council_incomplete` JSON blob **instead of** an answer — the synthesis text is not included, so there is nothing to accidentally act on |
+| `return_raw` | Return the surviving members' responses attributed individually, with no chairman synthesis over the top |
+
+Use `error` when you asked for a full council and would rather retry than act
+on a short one — for a gate, or any automated decision. Use `return_raw` when
+you want to judge the disagreement yourself: an unsynthesised set of attributed
+answers shows the divergence a synthesis would have ironed out.
+
+An unrecognised value is **rejected** with `invalid_on_partial` rather than
+silently defaulting. (`confidence` does silently fall back to `high`; that
+would be the wrong choice here, since a typo would turn a strictness request
+into permissiveness.)
 
 **Grounding the council with your own context (`evidence`).** If your client
 already has retrieval — web search, a RAG index, repo files — you can hand the
@@ -128,7 +187,7 @@ Verify the council is ready.
 **Parameters:**
 
 - `tier` (default `"high"`): report readiness for the tier a real run would use. Mirrors `consult_council`'s resolution, including its fallback to `high` for an unrecognised value.
-- `deep` (default `false`): also probe the configured **chairman** model. Costs one real chairman call. The default probe only checks general API reachability via a cheap lite model, which cannot detect a chairman-specific outage.
+- `deep` (default **`true`** since #660): probe the configured **chairman** model as well as general API reachability. Costs one small chairman call (~2-3s) on top of the lite ping. Pass `deep=false` for the old cheap-ping-only behaviour. Skipped automatically when general connectivity has already failed — a chairman probe adds nothing then, and billing for one during an outage is the wrong move.
 
 **Returns:**
 
@@ -139,11 +198,15 @@ Verify the council is ready.
 - `configured_council_models` / `config_warnings`: Present **only** when the flat `council.models` list disagrees with the resolved tier pool, so the two cannot diverge silently
 - `api_connectivity.probe_scope`: `connectivity_only` for the default probe, with a `caveat` naming what it does not cover
 - `chairman_connectivity`: Present only with `deep=true`
-- `ready`: Whether council is operational
+- `estimated_duration`: Per-tier **server budget**, derived from each tier's configured `timeout_seconds` (and any `LLM_COUNCIL_TIMEOUT_MULTIPLIER`) rather than hand-written prose — an upper bound, not a typical latency
+- `ready`: Whether council is operational — see `ready_scope` for what that claim covers
+- `ready_scope`: `connectivity_only` (default) or `chairman_probed` (`deep=true`). Sits beside `ready` deliberately: a caveat nested inside `api_connectivity` is one a caller has to go looking for
 
-!!! warning "`ready: true` does not mean synthesis will succeed"
+!!! info "Read `ready_scope` before trusting `ready`"
 
-    The default probe pings a lite model, so it answers *"is the API reachable"*, not *"will the council complete"*. During a chairman outage those diverge: stage-3 synthesis is a single point of failure, so a healthy API can still yield runs with no verdict. Pass `deep=true` before a high-stakes run to probe the chairman itself.
+    `ready: true` under `ready_scope: "connectivity_only"` means *"the API is reachable"*, not *"the council will complete"*. Those diverge during a chairman outage — stage-3 synthesis is a single point of failure, so a healthy API can still yield runs with no verdict, which is what happened for ~an hour on 2026-07-16 ([#596](https://github.com/amiable-dev/llm-council/issues/596)).
+
+    Since [#660](https://github.com/amiable-dev/llm-council/issues/660) the default is `ready_scope: "chairman_probed"`, where `ready` does account for the chairman. You only get the narrower claim if you asked for it with `deep=false`, or if connectivity failed before the chairman could be probed. Either way the field tells you which claim you're holding — never infer it from the `deep` argument you passed, since a skipped probe reports the narrower scope.
 
 ## Jury Mode
 

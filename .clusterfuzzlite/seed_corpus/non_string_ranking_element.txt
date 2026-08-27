@@ -1,0 +1,3 @@
+```json
+{"ranking": [{"nested": "object"}, "Response A"], "scores": {"Response A": 5}}
+```
