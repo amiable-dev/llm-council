@@ -22,12 +22,40 @@ Exit codes: `0` PASS · `1` FAIL · `2` UNCLEAR.
 
 ## Tiers
 
-| Tier | Budget | Max input | Use |
-|---|---|---|---|
-| `quick` | ~30s | 15K chars | sanity checks, small diffs |
-| `balanced` | ~90s | 30K chars | **default** — routine verification |
-| `high` | ~180s | 50K chars | security-critical reviews |
-| `reasoning` | ~600s | 50K chars | complex architectural decisions |
+| Tier | Tier budget | **Verify deadline** | Max input | Use |
+|---|---|---|---|---|
+| `quick` | ~30s | **60s** | 15K chars | sanity checks, small diffs |
+| `balanced` | ~90s | **180s** | 30K chars | **default** — routine verification |
+| `high` | ~180s | **360s** | 50K chars | security-critical reviews |
+| `reasoning` | ~600s | **1200s** | 50K chars | complex architectural decisions |
+
+!!! warning "`verify` runs to **twice** the tier budget — size `MCP_TIMEOUT` for that"
+
+    `run_verification` wraps the pipeline in a global deadline of
+    `tier_deadline × VERIFICATION_TIMEOUT_MULTIPLIER (2.0)`, so stage 3 isn't
+    starved on a slow day. The **Verify deadline** column above is the number
+    your client transport has to accommodate — not the tier budget.
+
+    The `MCP_TIMEOUT` guidance in the [MCP guide](mcp.md) is sized for
+    `consult_council`, which *does* use the tier budget. Carrying those numbers
+    over to `verify` sets a timeout at **half** what a verify can legitimately
+    take. Set at least:
+
+    | Tier | `MCP_TIMEOUT` for verify |
+    |---|---|
+    | `balanced` | `240000` |
+    | `high` | `480000` |
+    | `reasoning` | `1500000` |
+
+    A client-side kill is worse than a server-side timeout: it returns **no
+    verdict, no transcript reference, and no `unclear_reason`**, so none of the
+    routing below applies and the run is indistinguishable from a hang. A
+    server-side timeout, by contrast, still salvages a partial result with
+    `timeout_fired` and `completed_stages` set.
+
+    `LLM_COUNCIL_TIMEOUT_MULTIPLIER` scales the tier budget (and therefore the
+    verify deadline with it). `VERIFICATION_TIMEOUT_MULTIPLIER` is a fixed code
+    constant, not an environment variable.
 
 ## Reading an UNCLEAR verdict (ADR-047)
 
