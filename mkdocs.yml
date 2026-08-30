@@ -87,6 +87,9 @@ nav:
   - Reference:
     - Environment Variables: reference/environment-variables.md
     - API Reference: api.md
+  - Engineering Contracts:
+    - OpenClaw OAuth Requirements: requirements/openclaw-oauth-gateway.md
+    - OpenClaw OAuth Test Coverage: testing/openclaw-oauth-gateway.md
   - Benchmark Results: bench-results.md
   - Deployment:
     - Overview: deployment/index.md
