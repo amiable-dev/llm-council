@@ -67,7 +67,7 @@ all = ["llm-council-core[http,mcp]"]
 # Development dependencies
 dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0", "ruff>=0.1.0", "pytest-cov>=4.0.0", "tomli>=2.0.0; python_version<'3.11'", "pytest-recording>=0.13.0", "vcrpy>=6.0.0", "mypy>=1.0.0", "hypothesis>=6.100.0", "types-PyYAML>=6.0.0"]
 # Documentation dependencies
-docs = ["mkdocs-material>=9.5.0", "mkdocs>=1.5.0"]
+docs = ["mkdocs-material>=9.7.7", "mkdocs>=1.5.0"]
 
 [project.urls]
 Homepage = "https://github.com/amiable-dev/llm-council"
