@@ -117,7 +117,7 @@
 | `BIAS_AUDIT_ENABLED` | Per-session bias audit (ADR-015/031) | false |
 | `BIAS_PERSISTENCE_ENABLED` | Cross-session bias storage (ADR-018/031) | false |
 | `LLM_COUNCIL_HASH_SECRET` | HMAC secret for query hashing (RESEARCH consent) | dev secret |
-| `LLM_COUNCIL_QUALITY_METRICS` | Output quality metrics (ADR-036) | false |
+| `LLM_COUNCIL_QUALITY_METRICS` | Output quality metrics (ADR-036): CSS / DDI / SAS annotation on the response. Annotation only — no verdict or control flow consumes it (#677), and a failure inside it can never fail a deliberation | true |
 | `LLM_COUNCIL_QUALITY_TIER` | Tier gating for quality metrics | code |
 | `RUBRIC_RANDOMIZE_DIMENSION_ORDER` | Permute the rubric criteria order per council call, so a judge's position preference does not apply systematically (#592). Off ⇒ byte-identical prompt | false |
 | `RUBRIC_SCORING_ENABLED` | Multi-dimensional rubric scoring (ADR-016/031) | false |

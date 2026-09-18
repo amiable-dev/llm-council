@@ -27,6 +27,8 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+from .council_rankings import rankings_to_position_tuples
+
 # Escalate when consensus or confidence is BELOW these (known) values.
 DEFAULT_CSS_THRESHOLD = 0.7
 DEFAULT_CONFIDENCE_THRESHOLD = 0.7
@@ -223,13 +225,18 @@ def _css_from(stage2_results: Any, aggregate_rankings: Any) -> Optional[float]:
     response annotation, not internal control-flow signals (#618 design review).
     """
     try:
+        from .council_rankings import rankings_to_position_tuples
         from .quality.consensus import consensus_strength_score
 
-        tuples = [
-            (r["model"], r.get("average_position", r.get("borda_score", 0.0)))
-            for r in aggregate_rankings
-        ]
-        if not tuples:
+        # #677: entries for zero-vote models carry average_position=None and
+        # must be dropped, not defaulted — the old `.get(k, default)` coalesce
+        # returned the stored None and the CSS math raised, which this
+        # function's own except turned into a silent `signals_unavailable`
+        # (96% of the #618 corpus).
+        tuples = rankings_to_position_tuples(aggregate_rankings)
+        if len(tuples) < 2:
+            # One ranked candidate cannot evidence consensus; CSS would report
+            # a trivial 1.0. Genuinely unavailable.
             return None
         return consensus_strength_score(tuples, stage2_results)
     except Exception:
@@ -306,12 +313,27 @@ def evaluate_and_log_shadow_depth(
         mini_models = models_for_rung(council_models, DepthRung.MINI)
         css_mini = _counterfactual_mini_css(stage2_results, label_to_model, mini_models)
 
+        # #677: name what was missing. `signals_unavailable` was an
+        # undiagnosable bucket — 68 records deep before anyone could ask why.
+        unavailable_reason: Optional[str] = None
+        ranked = len(rankings_to_position_tuples(aggregate_rankings))
+
         if css_full is None:
             decision = "signals_unavailable"
+            unavailable_reason = (
+                f"only {ranked} ranked candidate(s) in the aggregate"
+                if ranked < 2
+                else "css computation failed over a well-formed aggregate"
+            )
         elif len(council_models) <= _MINI_COUNCIL_SIZE:
             decision = "ladder_inapplicable"
+            unavailable_reason = (
+                f"council size {len(council_models)} <= mini rung "
+                f"{_MINI_COUNCIL_SIZE}"
+            )
         elif css_mini is None:
             decision = "counterfactual_unavailable"
+            unavailable_reason = "mini-rung subset yielded fewer than 2 ranked candidates"
         elif should_escalate(css_mini, confidence):
             decision = "would_escalate"
         elif should_escalate(css_full, confidence):
@@ -323,11 +345,16 @@ def evaluate_and_log_shadow_depth(
             "ts": time.time(),
             "entry_point": entry_point,
             "council_size": len(council_models),
+            # #677: how much of the council the CSS actually covers. Without
+            # it a record cannot distinguish "high consensus" from "high
+            # consensus among the 2 of 6 candidates anyone ranked".
+            "ranked_candidates": ranked,
             "mini_council_models": list(mini_models),
             "css_full": css_full,
             "css_mini_counterfactual": css_mini,
             "confidence": confidence,
             "decision": decision,
+            "unavailable_reason": unavailable_reason,
             "hypothetical_saved_models": (
                 len(council_models) - len(mini_models)
                 if decision == "mini_would_suffice"

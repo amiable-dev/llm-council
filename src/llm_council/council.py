@@ -262,6 +262,7 @@ from llm_council.council_rankings import (  # noqa: E402
     detect_score_rank_mismatch,
     emit_shadow_vote_events,
     parse_ranking_from_text,
+    rankings_to_position_tuples,
     should_track_shadow_votes,
 )
 from llm_council.council_stages import (  # noqa: E402
@@ -1180,25 +1181,42 @@ async def run_full_council(
             "score_cap": eval_config.safety.score_cap,
         }
 
-    # ADR-036: Add quality metrics if enabled
+    # ADR-036: Add quality metrics if enabled.
+    #
+    # #677: this was the one telemetry path with no guard at either end. A model
+    # that received no position votes carries `average_position=None` (ADR-027
+    # keeps 0-vote candidates), the old coalesce returned that stored None, and
+    # CSS raised TypeError — failing an otherwise COMPLETED deliberation on the
+    # HTTP path, where metrics default ON. Annotation never fails a run (same
+    # contract as cost accounting, PostHog emission and shadow depth).
     if should_include_quality_metrics() and len(stage1_results) > 0:
-        # Convert stage1_results list to dict format expected by quality metrics
-        stage1_dict = {r["model"]: {"content": r.get("response", "")} for r in stage1_results}
+        try:
+            # Convert stage1_results list to dict format expected by quality metrics
+            stage1_dict = {
+                r["model"]: {"content": r.get("response", "")} for r in stage1_results
+            }
 
-        # Convert aggregate_rankings to tuple format (model_id, avg_position)
-        rankings_tuples = [
-            (r["model"], r.get("average_position", r.get("borda_score", 0.0)))
-            for r in aggregate_rankings
-        ]
+            # (model_id, avg_position) tuples; unranked candidates are dropped.
+            rankings_tuples = rankings_to_position_tuples(aggregate_rankings)
 
-        quality_metrics = calculate_quality_metrics(
-            stage1_responses=stage1_dict,
-            stage2_rankings=stage2_results,
-            stage3_synthesis=stage3_result,
-            aggregate_rankings=rankings_tuples,
-            label_to_model=label_to_model,
-        )
-        metadata["quality_metrics"] = quality_metrics.to_dict()
+            if len(rankings_tuples) >= 2:
+                quality_metrics = calculate_quality_metrics(
+                    stage1_responses=stage1_dict,
+                    stage2_rankings=stage2_results,
+                    stage3_synthesis=stage3_result,
+                    aggregate_rankings=rankings_tuples,
+                    label_to_model=label_to_model,
+                )
+                metadata["quality_metrics"] = quality_metrics.to_dict()
+            else:
+                # One ranked candidate cannot evidence consensus; CSS would
+                # report a trivial 1.0. Report nothing rather than a fiction.
+                logger.debug(
+                    "quality metrics skipped: %d ranked candidate(s)",
+                    len(rankings_tuples),
+                )
+        except Exception as exc:
+            logger.warning("quality metrics failed (ignored): %s", exc, exc_info=True)
 
     # ADR-044 P3 (#618): shadow depth telemetry — internally soft-fail,
     # writes .council/depth/decisions.jsonl, response payload unchanged.

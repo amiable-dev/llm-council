@@ -6,8 +6,9 @@ working (the orchestrators that call these stayed in council.py).
 """
 
 import logging
+import math
 import re
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from llm_council.layer_contracts import LayerEventType, emit_layer_event
 from llm_council.voting import VotingAuthority, get_vote_weight
@@ -315,6 +316,17 @@ def calculate_aggregate_rankings(
         # Get vote weight (1.0 for FULL, 0.0 for ADVISORY)
         vote_weight = get_vote_weight(authority)
 
+        # #677: sanitise the ballot BEFORE it drives any position.
+        # `ranking_list` is raw model output. Left alone it corrupts the
+        # aggregate three ways, all measured: an unknown label consumed a
+        # position (pushing a valid label to index >= N, producing a
+        # `borda = -1.0` outside the documented [0,1] range), a repeated label
+        # let one reviewer vote several times (`vote_count = 3`), and an
+        # unhashable label raised TypeError at `label in label_to_model` (the
+        # #657 crash class). Keep known labels only, first occurrence only,
+        # and renumber positions over what survives.
+        ranking_list = _sanitize_ballot(ranking_list, label_to_model)
+
         # Track shadow votes for ADVISORY reviewers
         if authority == VotingAuthority.ADVISORY and ranking_list:
             # Get the top pick (first in ranking)
@@ -404,7 +416,20 @@ def calculate_aggregate_rankings(
         aggregate.append(entry)
 
     # Sort by Borda score (higher is better), then by raw score as tiebreaker
-    aggregate.sort(key=lambda x: (-(x["borda_score"] or -999), -(x["average_score"] or 0)))
+    # #677: `or -999` treated a legitimate last-place borda of 0.0 as missing,
+    # sorting a genuinely ranked candidate down among the unranked. Test None
+    # explicitly; unranked candidates sort last by construction.
+    # #678 gate: `all_models` is a set and list.sort is stable, so a fully tied
+    # aggregate (e.g. an ADVISORY-only council where every score is None) got
+    # hash-order-dependent ranks, making any downstream `aggregate[0]` winner
+    # nondeterministic across runs. Model id is the final, deterministic key.
+    aggregate.sort(
+        key=lambda x: (
+            -(x["borda_score"] if x["borda_score"] is not None else -999),
+            -(x["average_score"] if x["average_score"] is not None else 0),
+            x["model"],
+        )
+    )
 
     # Add rank numbers
     for i, entry in enumerate(aggregate, start=1):
@@ -463,3 +488,66 @@ def emit_shadow_vote_events(
         )
 
 
+
+
+def rankings_to_position_tuples(aggregate_rankings: Any) -> List[Tuple[str, float]]:
+    """Aggregate entries → ``(model, average_position)`` tuples for ADR-036 CSS (#677).
+
+    A model that received no position votes carries ``average_position: None``
+    (ADR-027 keeps 0-vote candidates in the aggregate; the single-model degraded
+    path in ``council.py`` sets it too). Such an entry is **dropped**: a model
+    nobody ranked carries no consensus information, and the caller can decide
+    whether what remains is enough.
+
+    Deliberately NO ``borda_score`` fallback. Borda is higher-is-better on 0–1
+    while a position is lower-is-better on 1–N, so substituting one for the
+    other inside a single list corrupts the ordering CSS measures — and in the
+    zero-vote case borda is ``None`` as well, so it buys nothing. The previous
+    expression ``r.get("average_position", r.get("borda_score", 0.0))`` never
+    fell back at all: ``.get`` returns the STORED ``None`` for a present key
+    (the #594 bug class), so the ``None`` reached the CSS math and raised.
+
+    Total function: malformed entries are skipped rather than raised on.
+    """
+    tuples: List[Tuple[str, float]] = []
+    if not isinstance(aggregate_rankings, (list, tuple)):
+        # #677: the docstring promises a total function, but `x or []` raised
+        # TypeError for any truthy non-iterable.
+        return tuples
+    for entry in aggregate_rankings:
+        if not isinstance(entry, dict):
+            continue
+        model = entry.get("model")
+        position = entry.get("average_position")
+        # bool is an int subclass — never a position
+        if not isinstance(model, str) or isinstance(position, bool):
+            continue
+        if isinstance(position, (int, float)) and math.isfinite(position) and position >= 1:
+            # #677: NaN/inf/0/negative all passed a bare isinstance check. NaN is
+            # worse than the TypeError this function exists to prevent — it
+            # silently corrupts CSS's ordering instead of reporting the signal
+            # as unavailable. A position is 1-based by construction.
+            tuples.append((model, float(position)))
+    return tuples
+
+
+def _sanitize_ballot(ranking_list: Any, label_to_model: Dict[str, Any]) -> List[str]:
+    """Known labels only, first occurrence only (#677).
+
+    Unhashable entries (a nested list/dict from a malformed parse) are skipped
+    rather than raised on — the same defence `detect_score_rank_mismatch`
+    already applies for #657.
+    """
+    if not isinstance(ranking_list, (list, tuple)):
+        return []
+    seen: set = set()
+    clean: List[str] = []
+    for label in ranking_list:
+        try:
+            if label in seen or label not in label_to_model:
+                continue
+            seen.add(label)
+        except TypeError:  # unhashable label
+            continue
+        clean.append(label)
+    return clean
