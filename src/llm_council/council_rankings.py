@@ -7,7 +7,7 @@ working (the orchestrators that call these stayed in council.py).
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 from llm_council.layer_contracts import LayerEventType, emit_layer_event
 from llm_council.voting import VotingAuthority, get_vote_weight
@@ -463,3 +463,36 @@ def emit_shadow_vote_events(
         )
 
 
+
+
+def rankings_to_position_tuples(aggregate_rankings: Any) -> List[Tuple[str, float]]:
+    """Aggregate entries → ``(model, average_position)`` tuples for ADR-036 CSS (#677).
+
+    A model that received no position votes carries ``average_position: None``
+    (ADR-027 keeps 0-vote candidates in the aggregate; the single-model degraded
+    path in ``council.py`` sets it too). Such an entry is **dropped**: a model
+    nobody ranked carries no consensus information, and the caller can decide
+    whether what remains is enough.
+
+    Deliberately NO ``borda_score`` fallback. Borda is higher-is-better on 0–1
+    while a position is lower-is-better on 1–N, so substituting one for the
+    other inside a single list corrupts the ordering CSS measures — and in the
+    zero-vote case borda is ``None`` as well, so it buys nothing. The previous
+    expression ``r.get("average_position", r.get("borda_score", 0.0))`` never
+    fell back at all: ``.get`` returns the STORED ``None`` for a present key
+    (the #594 bug class), so the ``None`` reached the CSS math and raised.
+
+    Total function: malformed entries are skipped rather than raised on.
+    """
+    tuples: List[Tuple[str, float]] = []
+    for entry in aggregate_rankings or []:
+        if not isinstance(entry, dict):
+            continue
+        model = entry.get("model")
+        position = entry.get("average_position")
+        # bool is an int subclass — never a position
+        if not isinstance(model, str) or isinstance(position, bool):
+            continue
+        if isinstance(position, (int, float)):
+            tuples.append((model, float(position)))
+    return tuples
