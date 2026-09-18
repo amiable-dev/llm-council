@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-09-18
+
+**The coverage clamp becomes the default, and a silent ranking bug gets pulled out by the root.** ADR-053's rollout finishes here. Along the way, an investigation into why the ADR-044 depth telemetry was unusable found one expression corrupting three different things — including a path that could fail a completed deliberation outright.
+
+### Changed
+
+> [!IMPORTANT]
+> **The coverage clamp is now the default ([#557](https://github.com/amiable-dev/llm-council/issues/557)).** A `verify`/`gate` `pass` over a changed-or-explicitly-named file the council did **not** review now returns `unclear(incomplete_coverage)` instead of `pass`, and `llm-council gate` **refuses** an explicit `LLM_COUNCIL_COVERAGE_POLICY=warn` (post-flip that means "ignore coverage", which is a foot-gun rather than the pre-clamp status quo).
+>
+> **Migration:** set `LLM_COUNCIL_COVERAGE_POLICY=warn` to restore receipt-only behaviour. Expected omissions (`binary`, `generated`, `vendored`, `too_large`, `ignored`, `noise`) are acknowledged and never clamp; the clamp fires only on the surprising residue (`not_found`, `truncated`, `denied_secret`, plus `non-text` for anyone who opted back into `allowlist` file selection).
+>
+> **One case deserves explicit notice:** an omission whose origin is `explicit` — a path *you named* — clamps regardless of reason, including acknowledged ones. Naming a path is a caller contract, so a `binary` you asked for by name still clamps. This behaviour pre-existed but is newly reachable by default.
+>
+> Both gating conditions were met before flipping: ≥2 minor releases' notice (0.41–0.46), and a telemetry review. Every real verify transcript carrying a coverage receipt was replayed through the actual clamp function — 30 receipts, 11 of them `pass`, **zero omissions of any kind**, so the flip changes 0 runs on the observed corpus. That measures prevalence, not classification accuracy: the guarantee is prospective.
+
+- **Default model pools refreshed** against the live OpenRouter catalogue (445 models) and this deployment's own recorded performance index. `google/gemini-3.1-pro-preview` is out of the `high` and `reasoning` pools: ADR-027 makes **frontier** the entry path for preview models (ADVISORY voting + audition gating), so a preview sitting in a default tier bypassed that machinery — and it was also the most expensive member per run. Replaced with measured, registry-known members (`z-ai/glm-5.3`, `deepseek/deepseek-v4-pro-0813`), which keeps both pools at four and cuts `high`'s per-run cost by roughly a third. No stale model ids were found.
+
+### Fixed
+
+- **A model that received no ranking votes could fail an entire council run ([#677](https://github.com/amiable-dev/llm-council/issues/677)).** `calculate_aggregate_rankings` emits `average_position: None` for zero-vote candidates (ADR-027 keeps them in the aggregate). Two consumers coalesced it with `r.get("average_position", r.get("borda_score", 0.0))` — which returns the **stored `None`**, because `.get`'s default never fires for a present-but-`None` key (the [#594](https://github.com/amiable-dev/llm-council/issues/594) bug class). CSS then did ordering maths on `None`. On the HTTP path `run_full_council` fed that straight into `calculate_quality_metrics` with **no guard at either end**, so a *completed* deliberation raised `TypeError` and failed the request; quality metrics default on. Annotation now never fails a run, matching cost accounting and PostHog emission.
+- **Ballots are sanitised at source ([#677](https://github.com/amiable-dev/llm-council/issues/677)).** Borda positions were derived from the raw, model-emitted ranking list. Measured in a three-candidate council: unknown labels **consumed positions**, so a valid label at index ≥ N scored `borda = -1.0` — outside the documented `[0,1]` range — with `average_position = 5.0`; one reviewer repeating a label registered `vote_count = 3`; and an unhashable label raised `TypeError` (the [#657](https://github.com/amiable-dev/llm-council/issues/657) crash class). Now: known labels only, first occurrence only, positions renumbered over survivors, unhashable entries skipped — applied before both the Borda loop and the shadow-vote block.
+- Ranking order is deterministic for fully tied aggregates (previously hash-order dependent, making any downstream winner nondeterministic across runs).
+- A last-place `borda_score` of `0.0` no longer sorts among *unranked* candidates (`or -999` treated a legitimate zero as missing).
+- `LLM_COUNCIL_COVERAGE_ACK_REASONS` is now case-insensitive — `"Binary"` silently failed to acknowledge `binary`, which only became load-bearing with the clamp flip — and a malformed coverage receipt degrades instead of raising.
+- `mkdocs-material` floor raised to 9.7.7 (DOM XSS in search suggestions, Dependabot alert #81). Docs extra only; the floor is package metadata, so it protects `llm-council-core[docs]` installs, not just this repo's lockfile.
+- The env reference documented `LLM_COUNCIL_QUALITY_METRICS` as defaulting to `false`; it defaults to **`true`**. The wrong default is what made the crash above look unreachable.
+
+### Added
+
+- **Depth telemetry is diagnosable.** `.council/depth/decisions.jsonl` records gain `unavailable_reason` and `ranked_candidates`, so an unusable record says *why*, and a reading can distinguish "high consensus" from "high consensus among the 2 of 6 candidates anyone ranked". Before this release **96% of that corpus was unusable** (60% `signals_unavailable`, 22% `counterfactual_unavailable`, 0 savings candidates) — all of it the `None` bug above. The pre-fix corpus is not comparable; [#623](https://github.com/amiable-dev/llm-council/issues/623)'s evidence count restarts here.
+- `tests/test_tier_pool_hygiene.py` pins pool invariants rather than picks: multi-provider panels, no preview models outside `frontier`, and every measured selected model inside its own tier's latency budget.
+
+
 ## [0.46.0] - 2026-08-27
 
 **Honest degradation.** A v0.45.1 field report showed `consult_council` handing back one surviving model's raw response under a heading claiming a chairman synthesis, with the shortfall as a footnote ([#660](https://github.com/amiable-dev/llm-council/issues/660)). This release makes every degraded result say so — in the heading, above the content, and in a machine-readable status block — gives callers `on_partial` to refuse a partial council outright, and makes `council_health_check` probe the chairman by default so `ready: true` means something. Two defects found while reviewing the follow-up ADR with the council ship alongside it, plus the mechanical tier of the type-debt burn-down.
