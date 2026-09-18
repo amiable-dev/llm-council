@@ -151,3 +151,62 @@ class TestCheapestCapableFirst:
             f"quick selects {selected} but its fastest measured members are "
             f"{sorted(fastest_two)}"
         )
+
+
+# --- registry coverage --------------------------------------------------
+# A pool entry is a claim that a model may sit on a council; `registry.yaml`
+# is what lets `select_tier_models` SCORE that claim (context window, pricing,
+# quality tier). A pool model with no registry entry falls through to the crude
+# `static_pool[:count]` path — chosen by position in a list rather than on
+# merit, with no context or cost filtering. That is selection by assertion.
+
+REGISTRY = REPO_ROOT / "src/llm_council/models/registry.yaml"
+
+# Added 2026-09-18 from the live OpenRouter catalogue. They enter via
+# `frontier` (ADR-027/029): ADVISORY voting, zero consensus weight, promoted
+# only by the audition pipeline once real sessions back them.
+NEWLY_REGISTERED = [
+    "openai/gpt-6-astra",
+    "anthropic/claude-fable-5.1",
+    "google/gemini-3.8-flash",
+    "deepseek/deepseek-v4.1-flash",
+]
+
+
+@pytest.fixture(scope="module")
+def registry():
+    return {m["id"]: m for m in yaml.safe_load(REGISTRY.read_text())["models"]}
+
+
+class TestRegistryCoversEveryPoolModel:
+    def test_no_pool_model_lacks_registry_metadata(self, pools, registry):
+        gaps = {
+            tier: [m for m in body["models"] if m not in registry]
+            for tier, body in pools.items()
+        }
+        gaps = {t: g for t, g in gaps.items() if g}
+        assert not gaps, (
+            f"pool models with no registry entry: {gaps}. Without metadata they "
+            "cannot be scored, so selection falls back to list position."
+        )
+
+    @pytest.mark.parametrize("model_id", NEWLY_REGISTERED)
+    def test_new_models_are_registered_with_usable_metadata(self, registry, model_id):
+        entry = registry.get(model_id)
+        assert entry, f"{model_id} is not in registry.yaml"
+        assert entry["context_window"] > 0
+        pricing = entry["pricing"]
+        # per-1K USD, matching the rest of the file
+        assert pricing["prompt"] > 0 and pricing["completion"] > 0
+        assert entry["quality_tier"] in {"economy", "standard", "frontier", "local"}
+        assert entry["modalities"]
+
+    @pytest.mark.parametrize("model_id", NEWLY_REGISTERED)
+    def test_new_models_enter_via_frontier_not_a_default_tier(self, pools, model_id):
+        assert model_id in pools["frontier"]["models"], (
+            f"{model_id} should audition in frontier first (ADR-027/029)"
+        )
+        for tier in ("quick", "balanced", "high", "reasoning"):
+            assert model_id not in pools[tier]["models"], (
+                f"{model_id} is unmeasured here — it must not start in {tier}"
+            )
