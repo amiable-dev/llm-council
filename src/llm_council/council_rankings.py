@@ -6,6 +6,7 @@ working (the orchestrators that call these stayed in council.py).
 """
 
 import logging
+import math
 import re
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
@@ -315,6 +316,17 @@ def calculate_aggregate_rankings(
         # Get vote weight (1.0 for FULL, 0.0 for ADVISORY)
         vote_weight = get_vote_weight(authority)
 
+        # #677: sanitise the ballot BEFORE it drives any position.
+        # `ranking_list` is raw model output. Left alone it corrupts the
+        # aggregate three ways, all measured: an unknown label consumed a
+        # position (pushing a valid label to index >= N, producing a
+        # `borda = -1.0` outside the documented [0,1] range), a repeated label
+        # let one reviewer vote several times (`vote_count = 3`), and an
+        # unhashable label raised TypeError at `label in label_to_model` (the
+        # #657 crash class). Keep known labels only, first occurrence only,
+        # and renumber positions over what survives.
+        ranking_list = _sanitize_ballot(ranking_list, label_to_model)
+
         # Track shadow votes for ADVISORY reviewers
         if authority == VotingAuthority.ADVISORY and ranking_list:
             # Get the top pick (first in ranking)
@@ -404,7 +416,15 @@ def calculate_aggregate_rankings(
         aggregate.append(entry)
 
     # Sort by Borda score (higher is better), then by raw score as tiebreaker
-    aggregate.sort(key=lambda x: (-(x["borda_score"] or -999), -(x["average_score"] or 0)))
+    # #677: `or -999` treated a legitimate last-place borda of 0.0 as missing,
+    # sorting a genuinely ranked candidate down among the unranked. Test None
+    # explicitly; unranked candidates sort last by construction.
+    aggregate.sort(
+        key=lambda x: (
+            -(x["borda_score"] if x["borda_score"] is not None else -999),
+            -(x["average_score"] if x["average_score"] is not None else 0),
+        )
+    )
 
     # Add rank numbers
     for i, entry in enumerate(aggregate, start=1):
@@ -485,7 +505,11 @@ def rankings_to_position_tuples(aggregate_rankings: Any) -> List[Tuple[str, floa
     Total function: malformed entries are skipped rather than raised on.
     """
     tuples: List[Tuple[str, float]] = []
-    for entry in aggregate_rankings or []:
+    if not isinstance(aggregate_rankings, (list, tuple)):
+        # #677: the docstring promises a total function, but `x or []` raised
+        # TypeError for any truthy non-iterable.
+        return tuples
+    for entry in aggregate_rankings:
         if not isinstance(entry, dict):
             continue
         model = entry.get("model")
@@ -493,6 +517,32 @@ def rankings_to_position_tuples(aggregate_rankings: Any) -> List[Tuple[str, floa
         # bool is an int subclass — never a position
         if not isinstance(model, str) or isinstance(position, bool):
             continue
-        if isinstance(position, (int, float)):
+        if isinstance(position, (int, float)) and math.isfinite(position) and position >= 1:
+            # #677: NaN/inf/0/negative all passed a bare isinstance check. NaN is
+            # worse than the TypeError this function exists to prevent — it
+            # silently corrupts CSS's ordering instead of reporting the signal
+            # as unavailable. A position is 1-based by construction.
             tuples.append((model, float(position)))
     return tuples
+
+
+def _sanitize_ballot(ranking_list: Any, label_to_model: Dict[str, Any]) -> List[str]:
+    """Known labels only, first occurrence only (#677).
+
+    Unhashable entries (a nested list/dict from a malformed parse) are skipped
+    rather than raised on — the same defence `detect_score_rank_mismatch`
+    already applies for #657.
+    """
+    if not isinstance(ranking_list, (list, tuple)):
+        return []
+    seen: set = set()
+    clean: List[str] = []
+    for label in ranking_list:
+        try:
+            if label in seen or label not in label_to_model:
+                continue
+            seen.add(label)
+        except TypeError:  # unhashable label
+            continue
+        clean.append(label)
+    return clean

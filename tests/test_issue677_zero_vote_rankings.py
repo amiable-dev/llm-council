@@ -21,6 +21,8 @@ ordering CSS measures — and it is None in the same cases anyway.
 import ast
 import pathlib
 
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
 import pytest
 
 from llm_council import graduated_depth as gd
@@ -151,7 +153,7 @@ class TestQualityMetricsCannotFailARun:
     telemetry path with no guard at either end."""
 
     def _quality_block(self):
-        src = pathlib.Path("src/llm_council/council.py").read_text()
+        src = (REPO_ROOT / "src/llm_council/council.py").read_text()
         tree = ast.parse(src)
         for fn in ast.walk(tree):
             if isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef) and (
@@ -173,11 +175,24 @@ class TestQualityMetricsCannotFailARun:
             and any(call is c for c in ast.walk(t) if isinstance(c, ast.Call))
         ]
         assert guarded, "calculate_quality_metrics must be wrapped in try/except"
-        assert any(h.type is not None or h.body for h in guarded[0].handlers)
+        # #678 gate: "a try structurally contains the call" is not enough — the
+        # handler must catch the type that actually bit us (TypeError out of
+        # CSS), i.e. a bare except or one naming Exception/BaseException.
+        names = []
+        for h in guarded[0].handlers:
+            if h.type is None:
+                names.append("bare")
+            else:
+                for n in ast.walk(h.type):
+                    if isinstance(n, ast.Name):
+                        names.append(n.id)
+        assert {"bare", "Exception", "BaseException"} & set(names), (
+            f"handler(s) {names} would not swallow a TypeError from CSS"
+        )
 
     def test_call_site_uses_the_shared_helper_not_the_buggy_coalesce(self):
-        src = pathlib.Path("src/llm_council/council.py").read_text()
-        assert 'get("average_position"' not in src, (
+        src = (REPO_ROOT / "src/llm_council/council.py").read_text()
+        assert 'r.get("average_position", r.get("borda_score"' not in src, (
             "the .get(...) coalesce returns a stored None; use "
             "rankings_to_position_tuples instead"
         )

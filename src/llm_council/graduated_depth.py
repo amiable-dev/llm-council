@@ -345,6 +345,10 @@ def evaluate_and_log_shadow_depth(
             "ts": time.time(),
             "entry_point": entry_point,
             "council_size": len(council_models),
+            # #677: how much of the council the CSS actually covers. Without
+            # it a record cannot distinguish "high consensus" from "high
+            # consensus among the 2 of 6 candidates anyone ranked".
+            "ranked_candidates": ranked,
             "mini_council_models": list(mini_models),
             "css_full": css_full,
             "css_mini_counterfactual": css_mini,
