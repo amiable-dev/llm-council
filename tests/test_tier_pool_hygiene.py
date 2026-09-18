@@ -36,6 +36,7 @@ rather than papered over:
 
 import math
 import pathlib
+import re
 
 import pytest
 import yaml
@@ -84,9 +85,12 @@ KNOWN_BUDGET_VIOLATIONS = {
     ("high", "anthropic/claude-opus-5"): "#686",
 }
 
-# Matched against '/'- and '-'-delimited id segments rather than as bare
-# substrings, so 'vendor/model-export-tuned' does not trip '-exp'.
-PREVIEW_MARKERS = {"preview", "exp", "free", "beta", "rc"}
+# Matched against tokens of the id's LAST path segment, split on -, :, . and _,
+# with trailing digits stripped so 'rc1' matches 'rc'. Round 3 of the gate found
+# the previous version split only on '/' and '-', which made the "free" marker
+# UNREACHABLE for the canonical `vendor/model:free` form — a dead invariant in
+# the very module written to prevent them.
+PREVIEW_MARKERS = {"preview", "exp", "experimental", "free", "beta", "rc", "alpha"}
 
 # Per-1K USD plausibility bounds. Honest about what this is: it bounds GROSS
 # unit errors (a per-token value pasted as per-1K, or dollars-per-million
@@ -100,8 +104,25 @@ def _is_free(model_id: str) -> bool:
     return model_id.endswith(":free")
 
 
-def _segments(model_id: str):
-    return {seg for part in model_id.split("/") for seg in part.split("-")}
+def _is_preview(model_id: str) -> bool:
+    tail = model_id.split("/")[-1]
+    tokens = {t for t in re.split(r"[-:._]", tail) if t}
+    tokens |= {t.rstrip("0123456789") for t in tokens}
+    return bool(tokens & PREVIEW_MARKERS)
+
+
+def _plausible_price(model_id: str, value) -> bool:
+    """One rule for every price field, so the free-model carve-out cannot
+    diverge between the prompt/completion path and the cache path — round 3 of
+    the gate found it had. A `:free` model prices at exactly 0 by definition;
+    everything else must sit inside the plausibility band."""
+    if _is_free(model_id):
+        return (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and value == 0
+        )
+    return _positive_number(value) and MIN_PRICE_PER_1K <= value <= MAX_PRICE_PER_1K
 
 
 @pytest.fixture(scope="module")
@@ -121,7 +142,19 @@ def registry():
 def _models(pools, tier):
     body = pools.get(tier)
     assert isinstance(body, dict), f"tier {tier!r} is missing or malformed"
-    return body.get("models") or []
+    models = body.get("models") or []
+    assert isinstance(models, list) and all(isinstance(m, str) for m in models), (
+        f"tier {tier!r}: models must be a list of strings, got {models!r}"
+    )
+    return models
+
+
+def _budget(pools, tier):
+    body = pools.get(tier)
+    assert isinstance(body, dict), f"tier {tier!r} is missing or malformed"
+    budget = body.get("timeout_seconds")
+    assert _positive_number(budget), f"{tier}: timeout_seconds={budget!r}"
+    return budget
 
 
 def _all_pool_models(pools):
@@ -143,10 +176,15 @@ class TestTierClassification:
             f"{AUDITION_TIER} must exist — it is the ADR-027/029 entry path"
         )
 
-    def test_default_tiers_are_derived_from_the_config(self, pools):
-        """If a tier is added to the config it joins DEFAULT_TIERS automatically,
-        rather than silently escaping every tier-specific rule below."""
-        assert DEFAULT_TIERS == sorted(set(pools) - {AUDITION_TIER})
+    def test_the_tier_sets_partition_the_config(self, pools):
+        """NOT the mechanism. The guarantee that a new tier gets covered comes
+        from import-time derivation plus parametrization over ALL_TIERS /
+        DEFAULT_TIERS. Round 3 of the gate correctly called the previous
+        version of this test tautological — it compared DEFAULT_TIERS against
+        the same object it was derived from, using the same expression. It
+        survives only as a tripwire against someone re-hardcoding either set."""
+        assert set(DEFAULT_TIERS) | {AUDITION_TIER} == set(ALL_TIERS)
+        assert AUDITION_TIER not in DEFAULT_TIERS
         assert DEFAULT_TIERS, "no default tiers found"
 
 
@@ -193,14 +231,7 @@ class TestRegistryCoversEveryPoolModel:
             pricing = entry.get("pricing") or {}
             for field in ("prompt", "completion"):
                 price = pricing.get(field)
-                if _is_free(model_id):
-                    # A genuinely free model prices at 0; the floor would
-                    # otherwise leave it with no valid home anywhere.
-                    if not (isinstance(price, (int, float)) and price >= 0):
-                        problems.append(f"{model_id}: pricing.{field}={price!r}")
-                elif not _positive_number(price) or not (
-                    MIN_PRICE_PER_1K < price < MAX_PRICE_PER_1K
-                ):
+                if not _plausible_price(model_id, price):
                     problems.append(f"{model_id}: pricing.{field}={price!r} per 1K")
             if entry.get("quality_tier") not in VALID_QUALITY_TIERS:
                 problems.append(f"{model_id}: quality_tier={entry.get('quality_tier')!r}")
@@ -220,7 +251,7 @@ class TestRegistryCoversEveryPoolModel:
                 value = pricing.get(field)
                 if value is None:
                     continue  # optional
-                if not _positive_number(value) or value >= MAX_PRICE_PER_1K:
+                if not _plausible_price(model_id, value):
                     problems.append(f"{model_id}: pricing.{field}={value!r} per 1K")
                 elif field == "cache_read" and _positive_number(prompt) and value >= prompt:
                     problems.append(
@@ -236,8 +267,7 @@ class TestEveryPoolMemberFitsItsTierBudget:
 
     @pytest.mark.parametrize("tier", ALL_TIERS)
     def test_measured_models_fit_the_tier_budget(self, pools, tier):
-        budget = pools[tier].get("timeout_seconds")
-        assert _positive_number(budget), f"{tier}: timeout_seconds={budget!r}"
+        budget = _budget(pools, tier)
         violations = [
             f"{m} measured {MEASURED_LATENCY_S[m]}s > {budget}s budget"
             for m in _models(pools, tier)
@@ -257,7 +287,7 @@ class TestEveryPoolMemberFitsItsTierBudget:
                 stale.append(f"{model} is no longer in {tier} — drop the {issue} entry")
                 continue
             measured = MEASURED_LATENCY_S.get(model)
-            budget = pools[tier].get("timeout_seconds")
+            budget = _budget(pools, tier)
             if measured is None:
                 stale.append(f"{model} has no measured latency — {issue} unprovable")
             elif measured <= budget:
@@ -275,7 +305,7 @@ class TestAuditionGatesDefaultTiers:
     @pytest.mark.parametrize("tier", DEFAULT_TIERS)
     def test_no_preview_models_in_default_tiers(self, pools, tier):
         offenders = [
-            m for m in _models(pools, tier) if _segments(m) & PREVIEW_MARKERS
+            m for m in _models(pools, tier) if _is_preview(m)
         ]
         assert not offenders, (
             f"{tier} carries preview model(s) {offenders}; ADR-027 puts these in "
