@@ -222,15 +222,18 @@ logic on `coverage`, not on `expansion_warnings`.
   `not_found`, `truncated`, `denied_secret`).
 - `fail` — the same condition raises a hard 422 instead.
 
-> **Upcoming default change.** The clamp default will flip from `warn` to `clamp`
-> in a future minor release (with ≥2 releases' notice). When it does, a
-> `verify`/`gate` `pass` over an unreviewed changed/explicit file returns
-> `unclear(incomplete_coverage)`, and `gate` refuses an explicit `warn`. With
-> `content` file selection now the default, unlisted-extension source files
-> are reviewed rather than dropped, so the clamp's remaining triggers are the
-> genuinely surprising omissions (`not_found`, `truncated`, `denied_secret` —
-> and `non-text` for users who opted back into `allowlist` selection).
-> **Adopt early** with `LLM_COUNCIL_COVERAGE_POLICY=clamp`.
+> **The clamp is the default.** Since the #557 flip, a `verify`/`gate` `pass`
+> over an unreviewed changed-or-explicitly-named file returns
+> `unclear(incomplete_coverage)` instead, and `gate` refuses an explicit
+> `LLM_COUNCIL_COVERAGE_POLICY=warn` (post-flip that means "ignore coverage",
+> which is a foot-gun rather than the status quo). Because `content` file
+> selection is also the default, unlisted-extension source files are reviewed
+> rather than dropped, so the clamp's triggers are the genuinely surprising
+> omissions — `not_found`, `truncated`, `denied_secret`, and `non-text` for
+> anyone who opted back into `allowlist` selection. Expected omissions
+> (`binary`, `generated`, `vendored`, `too_large`, `ignored`, `noise`) are
+> acknowledged and never clamp. **To opt out**, set
+> `LLM_COUNCIL_COVERAGE_POLICY=warn` — receipt only, no verdict effect.
 
 ## Response fields
 
