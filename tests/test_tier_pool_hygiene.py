@@ -4,33 +4,37 @@ The pools in `llm_council.yaml` are the default councils. They were audited
 against the live OpenRouter catalogue (445 models) and against this machine's
 recorded performance index (`~/.llm-council/performance_metrics.jsonl`).
 
-**Every invariant here is DERIVED from the pools, never enumerated.** The first
-cut of this module enumerated four model ids and sliced list prefixes; the
-#685 council gate rejected it with three criticals, all correct:
+## What is derived, and what is not
 
-* the metadata and placement checks were parametrized over a hardcoded list, so
-  any *future* addition was checked for bare presence and nothing else — which
-  is precisely the regression this module exists to prevent;
-* the budget check asserted `models[:count]`, a list prefix, while this
-  module's own docstring says selection is score-driven and order is only a
-  fallback tiebreaker. Since the quick pool had been reordered to put its slow
-  member third, the test could only ever inspect the fastest models. It was
-  green *because* it could not see the violation its own table recorded
-  (`openai/gpt-5.6-luna` at 35.3 s in a 30 s tier).
+Both the model set and the tier set are **read from the config**, so a future
+pool entry — or a future *tier* — is covered automatically. That took two
+council-gate rounds to get right, and the history is worth keeping:
 
-So: a pool member is checked because it is in a pool, not because someone
-remembered to add it to a list here.
+* **Round 1** enumerated four model ids and sliced list prefixes. The budget
+  check asserted `models[:count]` while this module's own docstring said
+  selection is score-driven and order is only a fallback tiebreaker — and
+  since `quick` had been reordered to put its slow member third, the test
+  could only ever inspect the fastest models. It was green *because* it could
+  not see the violation its own table recorded.
+* **Round 2** fixed that at model granularity but left `DEFAULT_TIERS` a
+  hardcoded tuple driving every tier-specific rule — the same defect one axis
+  up — and a "tracked debt" test that checked only pool membership, so raising
+  a budget would have turned a temporary waiver into a permanent silent one.
 
-Two structural facts the invariants encode:
+Two residues remain enumerated, deliberately and with their limits stated
+rather than papered over:
 
-1. **Any pool member can convene**, so every pool member must fit its tier's
-   budget — not just whichever ones happen to sort first.
-2. **Preview and unmeasured models belong in `frontier`.** ADR-027/029 make it
-   the audition entry path: ADVISORY voting, zero consensus weight, promotion
-   only once real sessions back the model. A model in a default tier that
-   nothing has measured bypasses that machinery.
+* `MEASURED_LATENCY_S` is a hand-copied snapshot: CI has no performance store,
+  so this is the only deterministic oracle available. It is both the audition
+  gate and the budget oracle, which means **a fabricated line here would
+  satisfy both**. Narrowing that to the ADR-029 audition state (the real
+  authority on whether a model has earned a seat) is tracked separately.
+* `PREVIEW_MARKERS` is a naming heuristic because `registry.yaml` carries no
+  preview flag. It is matched on id segments to limit false positives, but a
+  preview named without these tokens is still missed.
 """
 
+import math
 import pathlib
 
 import pytest
@@ -40,18 +44,21 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONFIG = REPO_ROOT / "llm_council.yaml"
 REGISTRY = REPO_ROOT / "src/llm_council/models/registry.yaml"
 
-# Tiers that serve real traffic. `frontier` is deliberately excluded: it exists
-# to carry models that have NOT yet earned a default seat.
-DEFAULT_TIERS = ("quick", "balanced", "high", "reasoning")
+# Loaded at import so the tier set can drive parametrization. `frontier` is the
+# audition tier: it exists to carry models that have NOT yet earned a default
+# seat, so it is excluded from the default-tier rules but still budget-checked.
+_POOLS = yaml.safe_load(CONFIG.read_text())["council"]["tiers"]["pools"]
+AUDITION_TIER = "frontier"
+DEFAULT_TIERS = sorted(set(_POOLS) - {AUDITION_TIER})
+ALL_TIERS = sorted(_POOLS)
 
 VALID_QUALITY_TIERS = {"economy", "standard", "frontier", "local"}
 
-# Snapshot of ~/.llm-council/performance_metrics.jsonl, 2026-09-18. It is a
-# hand-copied developer-machine sample — CI has no performance store — so it is
-# the *floor* of what we know, not a live feed. Latency and cost are
-# uncontaminated; the borda column of that store is NOT (it contains negative
-# values, the signature of the unsanitised-ballot bug fixed in #677), so
-# quality is deliberately never asserted from it.
+# Snapshot of ~/.llm-council/performance_metrics.jsonl, 2026-09-18 (mean
+# latency per model over that store). Latency and cost there are
+# uncontaminated; the borda column is NOT — it contains negative values, the
+# signature of the unsanitised-ballot bug fixed in #677 — so quality is never
+# asserted from it.
 MEASURED_LATENCY_S = {
     "google/gemini-3.5-flash-lite": 3.2,
     "deepseek/deepseek-v4-flash": 12.2,
@@ -67,52 +74,97 @@ MEASURED_LATENCY_S = {
     "anthropic/claude-opus-5": 204.3,
 }
 
-# Known, TRACKED violations. An entry here is visible debt with an issue behind
-# it, not an exemption — anything not listed fails.
+# Tracked debt, not exemptions: each entry must STILL be a live violation, or
+# `test_tracked_debt_is_still_a_real_violation` fails and the entry has to go.
 KNOWN_BUDGET_VIOLATIONS = {
-    # The configured chairman averages 204.3s against high's 180s budget. This
-    # is the subject of #686 (it makes verify report unclear(infra_failure) on
-    # a completed deliberation) and the fix is a contract decision — stage
-    # floor vs waterfall share vs a faster chairman — not a pool edit.
+    # The configured chairman averages 204.3s against high's 180s budget, which
+    # makes verify report unclear(infra_failure) on a completed deliberation.
+    # The fix is a contract decision — stage floor vs waterfall share vs a
+    # faster chairman — not a pool edit.
     ("high", "anthropic/claude-opus-5"): "#686",
 }
 
-# ID substrings that mark a pre-GA model. A naming heuristic, not authoritative
-# metadata — registry.yaml carries no preview flag. Kept because the failure it
-# guards (a preview silently seated on a default council) is worth catching
-# even imperfectly.
-PREVIEW_MARKERS = ("-preview", "-exp", ":free", "-beta", "-rc")
+# Matched against '/'- and '-'-delimited id segments rather than as bare
+# substrings, so 'vendor/model-export-tuned' does not trip '-exp'.
+PREVIEW_MARKERS = {"preview", "exp", "free", "beta", "rc"}
+
+# Per-1K USD plausibility bounds. Honest about what this is: it bounds GROSS
+# unit errors (a per-token value pasted as per-1K, or dollars-per-million
+# pasted raw). It does NOT detect an arbitrary x1000 slip — the band spans
+# ~6.7 orders of magnitude, so 0.001 mistyped as 1e-6 sits inside it.
+MIN_PRICE_PER_1K = 1e-7
+MAX_PRICE_PER_1K = 0.5
+
+
+def _is_free(model_id: str) -> bool:
+    return model_id.endswith(":free")
+
+
+def _segments(model_id: str):
+    return {seg for part in model_id.split("/") for seg in part.split("-")}
 
 
 @pytest.fixture(scope="module")
 def pools():
-    return yaml.safe_load(CONFIG.read_text())["council"]["tiers"]["pools"]
+    return _POOLS
 
 
 @pytest.fixture(scope="module")
 def registry():
-    return {m["id"]: m for m in yaml.safe_load(REGISTRY.read_text())["models"]}
+    raw = yaml.safe_load(REGISTRY.read_text())["models"]
+    ids = [m["id"] for m in raw]
+    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    assert not duplicates, f"registry.yaml registers these ids twice: {duplicates}"
+    return {m["id"]: m for m in raw}
+
+
+def _models(pools, tier):
+    body = pools.get(tier)
+    assert isinstance(body, dict), f"tier {tier!r} is missing or malformed"
+    return body.get("models") or []
 
 
 def _all_pool_models(pools):
-    return sorted({m for body in pools.values() for m in body.get("models", [])})
+    return sorted({m for tier in pools for m in _models(pools, tier)})
+
+
+def _positive_number(value):
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+    )
+
+
+class TestTierClassification:
+    def test_the_audition_tier_exists(self, pools):
+        assert AUDITION_TIER in pools, (
+            f"{AUDITION_TIER} must exist — it is the ADR-027/029 entry path"
+        )
+
+    def test_default_tiers_are_derived_from_the_config(self, pools):
+        """If a tier is added to the config it joins DEFAULT_TIERS automatically,
+        rather than silently escaping every tier-specific rule below."""
+        assert DEFAULT_TIERS == sorted(set(pools) - {AUDITION_TIER})
+        assert DEFAULT_TIERS, "no default tiers found"
 
 
 class TestPoolsAreWellFormed:
-    def test_every_tier_has_models(self, pools):
-        for tier, body in pools.items():
-            assert body.get("models"), f"{tier} pool is empty"
+    @pytest.mark.parametrize("tier", ALL_TIERS)
+    def test_tier_has_models(self, pools, tier):
+        assert _models(pools, tier), f"{tier} pool is empty"
 
-    def test_no_duplicate_models_within_a_tier(self, pools):
-        for tier, body in pools.items():
-            models = body.get("models", [])
-            assert len(models) == len(set(models)), f"{tier} repeats a model"
+    @pytest.mark.parametrize("tier", ALL_TIERS)
+    def test_no_duplicate_models_within_a_tier(self, pools, tier):
+        models = _models(pools, tier)
+        assert len(models) == len(set(models)), f"{tier} repeats a model"
 
-    def test_every_default_tier_spans_multiple_providers(self, pools):
+    @pytest.mark.parametrize("tier", DEFAULT_TIERS)
+    def test_tier_spans_multiple_providers(self, pools, tier):
         """Anonymised peer review is worth less when the panel is one vendor."""
-        for tier in DEFAULT_TIERS:
-            providers = {m.split("/")[0] for m in pools[tier].get("models", [])}
-            assert len(providers) >= 2, f"{tier} is a single-provider council"
+        providers = {m.split("/")[0] for m in _models(pools, tier)}
+        assert len(providers) >= 2, f"{tier} is a single-provider council"
 
 
 class TestRegistryCoversEveryPoolModel:
@@ -123,74 +175,96 @@ class TestRegistryCoversEveryPoolModel:
 
     def test_no_pool_model_lacks_registry_metadata(self, pools, registry):
         gaps = {
-            tier: [m for m in body.get("models", []) if m not in registry]
-            for tier, body in pools.items()
+            tier: [m for m in _models(pools, tier) if m not in registry]
+            for tier in pools
         }
         gaps = {t: g for t, g in gaps.items() if g}
         assert not gaps, f"pool models with no registry entry: {gaps}"
 
     def test_every_pool_model_has_usable_metadata(self, pools, registry):
-        """Derived over the pools — a future addition is checked automatically."""
         problems = []
         for model_id in _all_pool_models(pools):
             entry = registry.get(model_id)
             if entry is None:
                 continue  # reported by the test above
             ctx = entry.get("context_window")
-            pricing = entry.get("pricing") or {}
-            if not isinstance(ctx, int) or ctx <= 0:
+            if not (isinstance(ctx, int) and not isinstance(ctx, bool) and ctx > 0):
                 problems.append(f"{model_id}: context_window={ctx!r}")
+            pricing = entry.get("pricing") or {}
             for field in ("prompt", "completion"):
                 price = pricing.get(field)
-                # per-1K USD. The band catches a x1000 transcription slip in
-                # either direction, which a bare `> 0` would pass silently.
-                if not isinstance(price, (int, float)) or not (1e-7 < price < 0.5):
+                if _is_free(model_id):
+                    # A genuinely free model prices at 0; the floor would
+                    # otherwise leave it with no valid home anywhere.
+                    if not (isinstance(price, (int, float)) and price >= 0):
+                        problems.append(f"{model_id}: pricing.{field}={price!r}")
+                elif not _positive_number(price) or not (
+                    MIN_PRICE_PER_1K < price < MAX_PRICE_PER_1K
+                ):
                     problems.append(f"{model_id}: pricing.{field}={price!r} per 1K")
             if entry.get("quality_tier") not in VALID_QUALITY_TIERS:
                 problems.append(f"{model_id}: quality_tier={entry.get('quality_tier')!r}")
-            if not entry.get("modalities"):
-                problems.append(f"{model_id}: no modalities")
+            if not isinstance(entry.get("modalities"), list) or not entry["modalities"]:
+                problems.append(f"{model_id}: modalities={entry.get('modalities')!r}")
         assert not problems, "unusable registry metadata:\n  " + "\n  ".join(problems)
 
-    def test_cache_pricing_is_cheaper_than_prompt_pricing(self, pools, registry):
+    def test_cache_pricing_is_plausible(self, pools, registry):
         """Cache classes are registered so ADR-049 D3 can price cache reads. A
-        cache_read at or above the prompt price is a transcription error."""
+        cache_read at or above the prompt price, or outside the price band, is
+        a transcription error."""
         problems = []
         for model_id in _all_pool_models(pools):
             pricing = (registry.get(model_id) or {}).get("pricing") or {}
             prompt = pricing.get("prompt")
-            cache_read = pricing.get("cache_read")
-            if isinstance(prompt, (int, float)) and isinstance(cache_read, (int, float)):
-                if cache_read >= prompt:
+            for field in ("cache_read", "cache_write_5m", "cache_write_1h"):
+                value = pricing.get(field)
+                if value is None:
+                    continue  # optional
+                if not _positive_number(value) or value >= MAX_PRICE_PER_1K:
+                    problems.append(f"{model_id}: pricing.{field}={value!r} per 1K")
+                elif field == "cache_read" and _positive_number(prompt) and value >= prompt:
                     problems.append(
-                        f"{model_id}: cache_read {cache_read} >= prompt {prompt}"
+                        f"{model_id}: cache_read {value} >= prompt {prompt}"
                     )
         assert not problems, "implausible cache pricing:\n  " + "\n  ".join(problems)
 
 
 class TestEveryPoolMemberFitsItsTierBudget:
     """Any pool member can be selected, so the budget applies to all of them —
-    not to whichever ones happen to sort first (the #685 gate's finding)."""
+    not to whichever ones happen to sort first (the round-1 gate finding).
+    Frontier is included: its members convene too, in ADVISORY mode."""
 
-    @pytest.mark.parametrize("tier", DEFAULT_TIERS)
+    @pytest.mark.parametrize("tier", ALL_TIERS)
     def test_measured_models_fit_the_tier_budget(self, pools, tier):
         budget = pools[tier].get("timeout_seconds")
-        assert budget, f"{tier} has no timeout_seconds"
-        violations = []
-        for model in pools[tier].get("models", []):
-            measured = MEASURED_LATENCY_S.get(model)
-            if measured is None:
-                continue  # unmeasured: caught by the audition invariant below
-            if measured > budget and (tier, model) not in KNOWN_BUDGET_VIOLATIONS:
-                violations.append(f"{model} measured {measured}s > {budget}s budget")
+        assert _positive_number(budget), f"{tier}: timeout_seconds={budget!r}"
+        violations = [
+            f"{m} measured {MEASURED_LATENCY_S[m]}s > {budget}s budget"
+            for m in _models(pools, tier)
+            if m in MEASURED_LATENCY_S
+            and MEASURED_LATENCY_S[m] > budget
+            and (tier, m) not in KNOWN_BUDGET_VIOLATIONS
+        ]
         assert not violations, f"{tier}:\n  " + "\n  ".join(violations)
 
-    def test_known_violations_are_still_real(self, pools):
-        """If a tracked violation gets fixed, stop advertising it as debt."""
+    def test_tracked_debt_is_still_a_real_violation(self, pools):
+        """A waiver that outlives its violation is a permanent silent
+        exemption. Each entry must still be in the pool AND still exceed the
+        budget, or it has to be deleted."""
         stale = []
         for (tier, model), issue in KNOWN_BUDGET_VIOLATIONS.items():
-            if model not in pools.get(tier, {}).get("models", []):
+            if model not in _models(pools, tier):
                 stale.append(f"{model} is no longer in {tier} — drop the {issue} entry")
+                continue
+            measured = MEASURED_LATENCY_S.get(model)
+            budget = pools[tier].get("timeout_seconds")
+            if measured is None:
+                stale.append(f"{model} has no measured latency — {issue} unprovable")
+            elif measured <= budget:
+                stale.append(
+                    f"{model} now measures {measured}s <= {budget}s in {tier}: "
+                    f"{issue} is resolved, drop the waiver"
+                )
         assert not stale, "\n  ".join(stale)
 
 
@@ -201,28 +275,17 @@ class TestAuditionGatesDefaultTiers:
     @pytest.mark.parametrize("tier", DEFAULT_TIERS)
     def test_no_preview_models_in_default_tiers(self, pools, tier):
         offenders = [
-            m
-            for m in pools[tier].get("models", [])
-            if any(tag in m for tag in PREVIEW_MARKERS)
+            m for m in _models(pools, tier) if _segments(m) & PREVIEW_MARKERS
         ]
         assert not offenders, (
             f"{tier} carries preview model(s) {offenders}; ADR-027 puts these in "
-            "frontier so audition gates their promotion"
+            f"{AUDITION_TIER} so audition gates their promotion"
         )
 
     @pytest.mark.parametrize("tier", DEFAULT_TIERS)
     def test_no_unmeasured_models_in_default_tiers(self, pools, tier):
-        """Derived, not enumerated: this is what keeps a newly-registered model
-        out of a default council until something has actually measured it."""
-        unmeasured = [
-            m for m in pools[tier].get("models", []) if m not in MEASURED_LATENCY_S
-        ]
+        unmeasured = [m for m in _models(pools, tier) if m not in MEASURED_LATENCY_S]
         assert not unmeasured, (
             f"{tier} carries model(s) with no measured history: {unmeasured}. "
-            "New models audition in frontier first (ADR-027/029)."
-        )
-
-    def test_frontier_is_populated(self, pools):
-        assert pools.get("frontier", {}).get("models"), (
-            "frontier must stay populated — it is the audition entry path"
+            f"New models audition in {AUDITION_TIER} first (ADR-027/029)."
         )
