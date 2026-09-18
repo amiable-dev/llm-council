@@ -108,3 +108,27 @@ class TestSortKeyDistinguishesZeroFromUnranked:
         assert order.index("m3") < order.index("m2"), (
             "a ranked-last candidate must outrank one nobody ranked"
         )
+
+
+class TestDeterministicRanking:
+    """#678 gate (minor, accepted): `all_models` is a set and list.sort is
+    stable, so a fully tied aggregate produced hash-order-dependent ranks and a
+    nondeterministic `aggregate[0]` winner across runs."""
+
+    def test_fully_tied_aggregate_is_deterministic(self):
+        from llm_council.voting import VotingAuthority
+
+        # ADVISORY-only council: every borda_score and average_score is None.
+        orders = [
+            calculate_aggregate_rankings(
+                [_ballot("m2", ["Response A", "Response B", "Response C"])],
+                _l2m(),
+                voting_authorities={"m2": VotingAuthority.ADVISORY},
+            )
+            for _ in range(5)
+        ]
+        seen = {tuple(r["model"] for r in agg) for agg in orders}
+        assert len(seen) == 1, f"ranking order varied across runs: {seen}"
+        assert list(seen)[0] == tuple(sorted(list(seen)[0])), (
+            "ties should fall back to a stable model-id ordering"
+        )

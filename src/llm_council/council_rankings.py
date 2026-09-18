@@ -419,10 +419,15 @@ def calculate_aggregate_rankings(
     # #677: `or -999` treated a legitimate last-place borda of 0.0 as missing,
     # sorting a genuinely ranked candidate down among the unranked. Test None
     # explicitly; unranked candidates sort last by construction.
+    # #678 gate: `all_models` is a set and list.sort is stable, so a fully tied
+    # aggregate (e.g. an ADVISORY-only council where every score is None) got
+    # hash-order-dependent ranks, making any downstream `aggregate[0]` winner
+    # nondeterministic across runs. Model id is the final, deterministic key.
     aggregate.sort(
         key=lambda x: (
             -(x["borda_score"] if x["borda_score"] is not None else -999),
             -(x["average_score"] if x["average_score"] is not None else 0),
+            x["model"],
         )
     )
 
