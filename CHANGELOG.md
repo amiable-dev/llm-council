@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-18
+
+**The tier pools now have one definition, and it ships.** v0.48.0's release notes described pool changes that never reached anybody who installed from PyPI. This makes those notes true, and makes the class of failure unrepresentable.
+
+### Fixed
+
+- **Tier pools were defined three times; a model refresh updated one of them** ([#690](https://github.com/amiable-dev/llm-council/issues/690)). The copies were `llm_council.yaml` (**not in the wheel**), `unified_config.TierConfig.ensure_default_pools`, and `tier_contract._DEFAULT_TIER_MODEL_POOLS`. [#685](https://github.com/amiable-dev/llm-council/issues/685) edited only the unpackaged one, so every install kept the August catalogue while the changelog said otherwise:
+
+  - `openai/gpt-5.6-luna` stayed in `quick` at a measured 35.3 s against a 30 s budget;
+  - `google/gemini-3.1-pro-preview` stayed in `high` and `reasoning`, against the ADR-027 rule that previews audition in `frontier`;
+  - `frontier` never received the four 2026-09 flagships it was registered to audition.
+
+  **If you install from PyPI, your default councils change with this release** — to the pools v0.48.0 described. If you already keep your own `llm_council.yaml`, nothing changes: a tier you declare still wins.
+
+- **`CouncilConfig.models` was a fourth copy**, still naming the preview model. It now derives from the `high` pool. This is more than cosmetic: `LLM_COUNCIL_MODELS` is what the **tier-agnostic** entry points use — `POST /v1/council/run` and library `run_full_council()` — so **the default council for the HTTP endpoint changes** from `[gpt-5.6-sol, gemini-3.1-pro-preview, claude-opus-5, deepseek-v4-pro-0813]` to `[gpt-5.6-sol, claude-opus-5, deepseek-v4-pro-0813, z-ai/glm-5.3]`, matching what MCP consults at `high` have run since v0.48.0. Set `LLM_COUNCIL_MODELS` explicitly to keep the old set. It also silences the `config_warnings` entry `council_health_check` emitted on every clean install — a drift detector that fires by default is one people learn to ignore.
+
+  Known limitation: the default reads the `high` pool via `TierConfig`'s class default, not a user's `tiers.default`. If you set `tiers.default: balanced` you still get the `high` pool here, and still get the health-check warning. That was true before this change too; the fix belongs at the parent config validator.
+
+- **`TIER_AGGREGATORS["quick"]` was `gpt-5.6-luna`**, commented "Speed-matched" while exceeding `quick`'s own 30 s budget — the same defect as the pool entry, in a different dict forty lines away, and missed because a pool review looks at pools. Now `anthropic/claude-haiku-4.5` (15.1 s).
+
+### Added
+
+- **`src/llm_council/models/default_pools.yaml`** — the single source of truth for tier pools, packaged alongside `registry.yaml` so it travels in the wheel. `default_pools.py` loads it; a missing or malformed file raises `DefaultPoolsError` rather than degrading to a partial council, because pool membership decides who deliberates and what it costs.
+
+  The loader also enforces that **all five tiers are present and no unknown tier is declared** — a packaged file that lost a tier would otherwise load cleanly and produce a partial configuration, and a wheel does not run the test suite. The tier names themselves become a shared `TIER_NAMES` constant that `unified_config.TierConfig.validate_tier_name` imports instead of restating: a second list of tier names drifts exactly the way the second list of models did, one axis up.
+
+  The loader validates structurally, and one of those checks is there because the council gate caught it on this very module: `isinstance(models, list)` is load-bearing, not redundant with the element check next to it. A `str` is an iterable of one-character `str`s, so a scalar `models: gpt-4` satisfied `all(isinstance(m, str) for m in models)` and expanded to `['g','p','t','-','4']` — a silently bogus council, in the module written to make silently bogus councils impossible. It also rejects a non-mapping root, blank or duplicate model ids, and a missing or non-positive `timeout_seconds`, and normalises `OSError`/`UnicodeDecodeError` into `DefaultPoolsError` so the documented error contract is actually true.
+
+### Changed
+
+- **The repo's `llm_council.yaml` no longer declares `tiers.pools`.** This project now runs the packaged defaults unmodified, so it dogfoods what it publishes instead of shadowing it. Per-tier overrides work exactly as before for everyone else: declare the tiers you want to change, omit the rest.
+
+  Two deltas for this repo specifically, both from dropping the shadow: `quick` now uses `peer_review: lightweight` (the packaged default, which its declared pool had been suppressing by omission), and `frontier` loses `allow_preview`/`allow_beta` — keys `TierPoolConfig` has never had a field for and has always discarded, so nothing reads them either way. The pool membership and every `timeout_seconds` are unchanged.
+- `docs/getting-started/configuration.md` gains a **Default model pools** section: where the defaults live, how to read the pool a tier will actually use, that overriding is per tier, and the two rules the defaults follow (every member must fit the tier's timeout; new and preview models audition in `frontier`). It also corrects the precedence: a run picks explicit models > the tier's pool > `LLM_COUNCIL_MODELS`, so `LLM_COUNCIL_MODELS` is a fallback, **not** a tier override.
+
+### Testing
+
+- `tests/test_issue690_pool_single_source.py` asserts that one definition exists, that it resolves as package data, that all three former copies derive from it, and — the load-bearing one — an **AST check that a literal model list cannot come back** into either pool definition or into `CouncilConfig.models`. Equality between copies only detects drift that already happened; this detects the fourth copy.
+- `tests/test_tier_pool_hygiene.py` now reads the **packaged** file. Every invariant in it was real and every one was unenforced on the path users take, because it parsed the one copy that happened to be correct.
+- `tests/test_tier_model_pools.py` no longer pastes the `high` pool out in full — that pin was itself a transcription of the pools, and would have stayed green against a stale wheel. It asserts the catalogue decisions instead, each naming why it holds.
+- The loader's rejection paths are covered as tests rather than as a one-off script: fifteen malformed-document cases (scalar `models` among them), an unreadable file, a directory in the file's place, non-UTF-8 bytes, a missing file, and mutation isolation for both accessors.
+- All the above were mutation-checked: each invariant was confirmed to fail when its specific defect is reintroduced, including the false-positive case (`chairman` and `normalizer_model` are legitimate single-model settings and must not trip the AST rule).
+
+
 ## [0.48.0] - 2026-09-18
 
 **New flagship models enter by audition, not by assertion.** Follow-up to v0.47.0's pool refresh, which deliberately left the 2026-09 releases out until they had metadata to be scored against.

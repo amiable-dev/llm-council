@@ -4,9 +4,11 @@
 # This configuration enables the Model Intelligence Layer (ADR-026)
 # with appropriate settings for development and self-improvement use cases.
 #
-# NOTE: These static pools are FALLBACKS for when dynamic selection is unavailable.
-# With model_intelligence.enabled=true, the system should dynamically select
-# the latest models. See GitHub Issue #109 for dynamic candidate discovery.
+# NOTE: The tier pools are NOT here — they ship with the package, in
+# src/llm_council/models/default_pools.yaml (#690). Edit them there. Static
+# pools are FALLBACKS for when dynamic selection is unavailable; with
+# model_intelligence.enabled=true the system selects the latest models
+# dynamically. See GitHub Issue #109 for dynamic candidate discovery.
 
 council:
   # =========================================================================
@@ -17,81 +19,14 @@ council:
     # Use 'frontier' for cutting-edge/preview models
     default: high
 
-    pools:
-      # QUICK: Fast models for simple queries (<5s latency)
-      quick:
-        # MEASURED latency (2026-09-18 index): flash-lite 3.2s, v4-flash 12.2s,
-        # haiku-4.5 15.1s — all inside this tier's 30s budget. gpt-5.6-luna was
-        # removed: it measures 35.3s, OVER the budget of the tier whose whole
-        # point is speed. It remains in `balanced`, where 35.3s fits the 90s
-        # budget comfortably. (#685 gate: any pool member can be selected, so
-        # the budget applies to every member, not just the ones that sort first.)
-        # flash-lite 3.2s/$0.0038, v4-flash 12.2s/$0.0007, luna 35.3s (over
-        # this tier's own 30s budget), haiku-4.5 15.1s/$0.0192 (priciest).
-        models:
-          - google/gemini-3.5-flash-lite
-          - deepseek/deepseek-v4-flash
-          - anthropic/claude-haiku-4.5
-        timeout_seconds: 30
-
-      # BALANCED: Good quality with reasonable latency
-      balanced:
-        # v4-flash ahead of gemini-3.7-flash on measured cost ($0.0007 vs
-        # $0.0247 per run); both inside the 90s budget. Fallback-path order
-        # only — the scored path picks on metadata.
-        models:
-          - openai/gpt-5.6-luna
-          - anthropic/claude-sonnet-5
-          - deepseek/deepseek-v4-flash
-          - google/gemini-3.7-flash
-        timeout_seconds: 90
-
-      # HIGH: Full council deliberation with frontier models
-      high:
-        # gemini-3.1-pro-preview REPLACED by z-ai/glm-5.3 (ADR-027: previews
-        # enter via audition, not the default council; frontier already carries
-        # it). The replacement is registry-known and measured (n=42), keeps the
-        # pool at four, adds a fourth distinct provider, and costs less per run
-        # ($0.183 vs $0.245).
-        models:
-          - openai/gpt-5.6-sol
-          - anthropic/claude-opus-5
-          - deepseek/deepseek-v4-pro-0813
-          - z-ai/glm-5.3
-        timeout_seconds: 180
-
-      # REASONING: Deep reasoning with extended thinking
-      reasoning:
-        # As above: the preview lives in frontier. deepseek-v4-pro-0813 keeps
-        # this pool at four with a measured, low-cost member ($0.033/run).
-        models:
-          - openai/gpt-5.6-sol-pro
-          - anthropic/claude-opus-5
-          - z-ai/glm-5.3
-          - deepseek/deepseek-v4-pro-0813
-        timeout_seconds: 600
-
-      # FRONTIER: Cutting-edge/preview models (may be unstable)
-      # Use for testing latest capabilities before promoting to 'high'
-      frontier:
-        # The audition entry path (ADR-027/029): members vote ADVISORY — scored
-        # and recorded, but zero weight in consensus — until enough real
-        # sessions promote them. The 2026-09-18 catalogue additions land here
-        # rather than in a default tier precisely because nothing has measured
-        # them yet; gemini-3.1-pro-preview sits here for the same reason.
-        models:
-          - anthropic/claude-fable-5.1
-          - openai/gpt-6-astra
-          - google/gemini-3.8-flash
-          - deepseek/deepseek-v4.1-flash
-          - anthropic/claude-fable-5
-          - openai/gpt-5.6-sol-pro
-          - x-ai/grok-4.6
-          - google/gemini-3.1-pro-preview
-        timeout_seconds: 600
-        # Frontier-specific: accept higher latency/cost for newest models
-        allow_preview: true
-        allow_beta: true
+    # Pools are NOT declared here. #690: this file is not in the wheel, so a
+    # pool list here is a copy that only this checkout sees — which is how
+    # #685's model refresh shipped a changelog entry that was false for every
+    # PyPI install. The defaults now live in
+    # src/llm_council/models/default_pools.yaml and ship with the package;
+    # this project deliberately runs them unmodified so it dogfoods what it
+    # publishes. To override a tier locally, add `pools: {<tier>: ...}` back —
+    # any tier you omit still falls back to the packaged definition.
 
     escalation:
       enabled: true

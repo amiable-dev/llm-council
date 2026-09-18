@@ -128,7 +128,9 @@ De-anonymization is for display only. Metadata (`label_to_model`, `aggregate_ran
 
 ## Configuration (`unified_config.py`, ADR-024)
 
-Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Priority: **YAML file > env vars > defaults**. YAML searched at `$LLM_COUNCIL_CONFIG` → `./llm_council.yaml` → `~/.config/llm-council/llm_council.yaml`. Supports `${VAR}` substitution. Sections: `tiers`, `triage`, `gateways`, `model_intelligence`, `evaluation` (rubric/safety/bias/scoring/circuit_breaker/audition), `metrics`. Models (council + chairman) are configured in `llm_council.yaml`.
+Single Pydantic source of truth consolidating ADR-020/022/023/026/030/031. Priority: **YAML file > env vars > defaults**. YAML searched at `$LLM_COUNCIL_CONFIG` → `./llm_council.yaml` → `~/.config/llm-council/llm_council.yaml`. Supports `${VAR}` substitution. Sections: `tiers`, `triage`, `gateways`, `model_intelligence`, `evaluation` (rubric/safety/bias/scoring/circuit_breaker/audition), `metrics`.
+
+**Tier pools have ONE definition: `src/llm_council/models/default_pools.yaml` (#690), which ships in the wheel.** `default_pools.py` loads it; `tier_contract._DEFAULT_TIER_MODEL_POOLS`, `TierConfig.ensure_default_pools` and `CouncilConfig.models` all derive from it and hold no literals — `tests/test_issue690_pool_single_source.py` AST-fails if one comes back, and `tests/test_tier_pool_hygiene.py` runs the budget/preview/registry invariants against it. **The repo's `llm_council.yaml` deliberately does NOT declare `tiers.pools`**, so this project runs the shipped defaults instead of shadowing them. GOTCHA: that file is not packaged, which is exactly how #685 shipped a changelog entry that was false for every PyPI install — it edited the unpackaged copy and left two Python literals stale. A user's `tiers.pools.<tier>` still wins per tier; omitted tiers fall back to the packaged definition. Model selection precedence at run time is explicit arg > tier pool > `council.models` (so `LLM_COUNCIL_MODELS` is a fallback, not a tier override).
 
 ### Environment variable index
 | Var | Effect |

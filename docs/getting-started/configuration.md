@@ -16,23 +16,14 @@ Create `llm_council.yaml` in your project root or `~/.config/llm-council/`:
 council:
   tiers:
     default: high
+    # `pools` is optional — see "Default model pools" below. Set it only for
+    # the tiers you want to change; the rest keep the shipped defaults.
     pools:
       quick:
         models:
-          - openai/gpt-4o-mini
-          - anthropic/claude-3-5-haiku-20241022
+          - google/gemini-3.5-flash-lite
+          - anthropic/claude-haiku-4.5
         timeout_seconds: 30
-      balanced:
-        models:
-          - openai/gpt-4o
-          - anthropic/claude-3-5-sonnet-20241022
-        timeout_seconds: 90
-      high:
-        models:
-          - openai/gpt-4o
-          - anthropic/claude-opus-4-7
-          - google/gemini-3-pro
-        timeout_seconds: 180
 
   gateways:
     default: openrouter
@@ -45,6 +36,49 @@ council:
       requesty:
         "some/model:free": "some/model"  # Requesty rejects OpenRouter's ":free" suffix
 ```
+
+## Default model pools
+
+You do not have to choose models. Each tier — `quick`, `balanced`, `high`,
+`reasoning` and `frontier` — ships with a default council, and a fresh install
+uses it with no configuration at all.
+
+Those defaults live in one file inside the installed package,
+`llm_council/models/default_pools.yaml`. To see the pool a tier will actually
+use:
+
+```bash
+python -c "from llm_council.tier_contract import TIER_MODEL_POOLS; print(TIER_MODEL_POOLS['high'])"
+```
+
+**Overriding is per tier.** Anything you put under `tiers.pools.<tier>` wins
+for that tier; every tier you leave out falls back to the packaged default. So
+the snippet above changes `quick` only — `balanced`, `high`, `reasoning` and
+`frontier` are untouched.
+
+Two rules the defaults follow, worth keeping if you write your own:
+
+- **Every model in a pool must fit that tier's `timeout_seconds`.** Selection
+  can pick any member, not just the first, so one slow model makes the whole
+  tier unreliable rather than occasionally slow.
+- **New and preview models go in `frontier`.** That is the audition tier
+  ([ADR-027](../adr/ADR-027-frontier-tier.md)): its members are scored and
+  recorded but carry no weight in consensus until they have a track record.
+
+`LLM_COUNCIL_MODELS` does **not** override a tier. A run picks its members in
+this order: models passed explicitly to the call, else the selected tier's
+pool, else `LLM_COUNCIL_MODELS`. Which of those applies depends on the entry
+point:
+
+| Entry point | Default council |
+|---|---|
+| MCP `consult_council`, `verify` | the selected tier's pool |
+| HTTP `POST /v1/council/run` | `LLM_COUNCIL_MODELS` — this endpoint is tier-agnostic |
+| Library `run_full_council()` | `LLM_COUNCIL_MODELS` |
+
+So editing a tier pool changes what MCP consults run; setting
+`LLM_COUNCIL_MODELS` changes what the HTTP endpoint runs. If you leave both
+alone they agree: `LLM_COUNCIL_MODELS` defaults to the `high` pool.
 
 ## Environment Variables
 
