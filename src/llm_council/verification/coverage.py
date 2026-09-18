@@ -51,12 +51,17 @@ def coverage_policy() -> str:
 
 
 def gate_rejects_warn() -> bool:
-    """`llm-council gate` refuses `warn` only once it is a DELIBERATE downgrade.
+    """`llm-council gate` refuses `warn`, which is now a DELIBERATE downgrade.
 
-    While `warn` is the default (`_DEFAULT_POLICY == "warn"`), a gate running in
-    `warn` is the pre-clamp status quo, not a foot-gun — so it is allowed. After
-    the flip to a `clamp` default, an explicit `warn` means "make this gate ignore
-    coverage", which IS a foot-gun, so it is refused.
+    Historically, while `warn` was the default, a gate running in `warn` was the
+    pre-clamp status quo rather than a foot-gun, so it was allowed. Since the
+    #557 flip to a `clamp` default, an explicit `warn` means "make this gate
+    ignore coverage", which IS a foot-gun — so it is refused.
+
+    The `_DEFAULT_POLICY == "clamp"` conjunct is now constant-True. It is kept
+    deliberately: it is the single dial this behaviour keys off, so a future
+    rollback of the default automatically restores the permissive rule instead
+    of silently leaving `gate` refusing the then-default policy.
     """
     return coverage_policy() == "warn" and _DEFAULT_POLICY == "clamp"
 
@@ -69,7 +74,9 @@ def coverage_ack_reasons() -> frozenset:
     raw = os.getenv("LLM_COUNCIL_COVERAGE_ACK_REASONS")
     if raw is None:
         return DEFAULT_ACK_REASONS
-    return frozenset(r.strip() for r in raw.split(",") if r.strip())
+    # #681 gate: `coverage_policy()` lowercases but this did not, so
+    # ACK_REASONS="Binary" silently failed to acknowledge `binary`.
+    return frozenset(r.strip().lower() for r in raw.split(",") if r.strip())
 
 
 def clamping_omissions(
@@ -85,7 +92,9 @@ def clamping_omissions(
     if not coverage:
         return []
     clampers: List[Dict[str, Any]] = []
-    for o in coverage.get("omitted", []):
+    for o in (coverage.get("omitted") or []):
+        if not isinstance(o, dict):
+            continue
         if o.get("origin") == "explicit" or o.get("reason") not in ack_reasons:
             clampers.append(o)
     return clampers

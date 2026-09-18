@@ -18,9 +18,21 @@ because after the flip an explicit `warn` means "make this gate ignore
 coverage", which is a foot-gun rather than the status quo.
 """
 
+import pathlib
+
 import pytest
 
 from llm_council.verification import coverage
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_env(monkeypatch):
+    """#681 gate: the clamp tests cleared the policy var but not the ack list,
+    so an ambient LLM_COUNCIL_COVERAGE_ACK_REASONS could reverse both the
+    `not_found` (clamps) and `binary` (does not clamp) expectations."""
+    monkeypatch.delenv("LLM_COUNCIL_COVERAGE_ACK_REASONS", raising=False)
 
 
 class TestDefaultIsNowClamp:
@@ -108,19 +120,71 @@ class TestClampFiresByDefault:
 
 
 class TestAdvanceNoticeRetired:
-    """The notice promised a flip; once flipped it must not still say 'will'."""
+    """The notice promised a flip; once flipped it must not still say 'will'.
+
+    #681 gate: the first cut asserted only `"clamp" in guide`, which any row
+    merely listing `warn|clamp|fail` as allowed values satisfies — the docs
+    could still have called `warn` the default and passed. Pinned properly now.
+    """
 
     def test_guide_no_longer_promises_a_future_flip(self):
-        import pathlib
-
-        guide = pathlib.Path("docs/guides/verify.md").read_text()
+        guide = (REPO_ROOT / "docs/guides/verify.md").read_text()
         assert "Upcoming default change" not in guide
-        assert "clamp" in guide
+        assert "will flip" not in guide
+        assert "The clamp is the default" in guide
 
     def test_env_reference_documents_clamp_as_the_default(self):
-        import pathlib
-
-        ref = pathlib.Path("docs/reference/environment-variables.md").read_text()
-        row = [ln for ln in ref.splitlines() if "LLM_COUNCIL_COVERAGE_POLICY" in ln]
+        ref = (REPO_ROOT / "docs/reference/environment-variables.md").read_text()
+        row = next(
+            (ln for ln in ref.splitlines() if "LLM_COUNCIL_COVERAGE_POLICY" in ln), None
+        )
         assert row, "coverage policy row missing"
-        assert "clamp" in row[0]
+        # the Default column is the last cell of the table row
+        default_cell = [c.strip() for c in row.strip().strip("|").split("|")][-1]
+        assert default_cell == "clamp", f"documented default is {default_cell!r}"
+        assert "default `warn`" not in row
+
+
+class TestExplicitOriginClampsUnconditionally:
+    """#681 gate (major): an explicitly-named path clamps regardless of reason,
+    and post-flip `gate` refuses the only workaround (`warn`). That is the
+    documented contract — a caller who NAMES a path is owed a review of it —
+    but it is newly reachable by default, so it is pinned and release-noted
+    rather than left implicit."""
+
+    def test_named_path_clamps_even_for_an_acknowledged_reason(self, monkeypatch):
+        monkeypatch.delenv("LLM_COUNCIL_COVERAGE_POLICY", raising=False)
+        cov = {
+            "requested": ["logo.png"],
+            "reviewed": [],
+            "omitted": [
+                {"path": "logo.png", "reason": "binary", "origin": "explicit"}
+            ],
+            "explicit_omitted": True,
+            "truncated": False,
+            "conservation_ok": True,
+        }
+        clampers = coverage.coverage_clamp_decision(
+            "pass", cov, coverage.coverage_policy(), coverage.coverage_ack_reasons()
+        )
+        assert clampers and clampers[0]["origin"] == "explicit", (
+            "`binary` is acknowledged, but naming the path is a caller contract"
+        )
+
+
+class TestRobustness:
+    def test_ack_reasons_are_case_insensitive(self, monkeypatch):
+        """#681 gate: coverage_policy() lowercased but this did not, so
+        ACK_REASONS="Binary" silently failed to acknowledge `binary`."""
+        monkeypatch.setenv("LLM_COUNCIL_COVERAGE_ACK_REASONS", "Binary, NOT_FOUND")
+        assert coverage.coverage_ack_reasons() == frozenset({"binary", "not_found"})
+
+    def test_malformed_receipt_degrades_instead_of_raising(self, monkeypatch):
+        monkeypatch.delenv("LLM_COUNCIL_COVERAGE_POLICY", raising=False)
+        for cov in (
+            {"omitted": None, "reviewed": []},
+            {"omitted": ["not-a-dict", None], "reviewed": []},
+        ):
+            coverage.coverage_clamp_decision(
+                "pass", cov, coverage.coverage_policy(), coverage.coverage_ack_reasons()
+            )
