@@ -33,13 +33,17 @@ def _om(path, reason, origin="discovered"):
 
 
 class TestPolicyAndAckParsing:
-    def test_policy_default_is_warn_during_rollout(self, monkeypatch):
-        # #556 ships opt-in: default warn = byte-identical verdicts. Flips to
-        # clamp (#557) after telemetry — a one-line change to _DEFAULT_POLICY.
+    def test_policy_default_is_clamp_after_the_flip(self, monkeypatch):
+        # #556 shipped opt-in (default warn = byte-identical verdicts); #557
+        # flipped the default to clamp after the telemetry review. The full
+        # post-flip contract lives in test_issue557_clamp_default_flip.py.
         monkeypatch.delenv("LLM_COUNCIL_COVERAGE_POLICY", raising=False)
-        assert coverage.coverage_policy() == "warn"
+        assert coverage.coverage_policy() == "clamp"
 
-    @pytest.mark.parametrize("val,expected", [("clamp", "clamp"), ("fail", "fail"), ("x", "warn")])
+    @pytest.mark.parametrize(
+        "val,expected",
+        [("clamp", "clamp"), ("fail", "fail"), ("warn", "warn"), ("x", "clamp")],
+    )
     def test_policy_values(self, monkeypatch, val, expected):
         monkeypatch.setenv("LLM_COUNCIL_COVERAGE_POLICY", val)
         assert coverage.coverage_policy() == expected
@@ -293,9 +297,11 @@ class TestPipelineAppliesClamp:
         assert result["verdict"] == "pass"
         assert "clamped" not in (result.get("coverage") or {})
 
-    def test_warn_default_leaves_pass_untouched(self, monkeypatch):
-        # default (unset) is warn during rollout ⇒ no clamp, byte-identical verdict
-        monkeypatch.delenv("LLM_COUNCIL_COVERAGE_POLICY", raising=False)
+    def test_explicit_warn_leaves_pass_untouched(self, monkeypatch):
+        # #557 flipped the default to clamp, so `warn` is now the explicit
+        # opt-out rather than the unset default — the receipt-only behaviour
+        # it selects is unchanged.
+        monkeypatch.setenv("LLM_COUNCIL_COVERAGE_POLICY", "warn")
         cov = {"reviewed": ["a.py"], "omitted": [_om("main.zig", "non-text")]}
         result = self._run(monkeypatch, cov)
         assert result["verdict"] == "pass"

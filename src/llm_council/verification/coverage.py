@@ -24,13 +24,18 @@ DEFAULT_ACK_REASONS = frozenset(
     {"binary", "generated", "vendored", "too_large", "ignored", "noise"}
 )
 
-# Rollout dial (#556 / #557). The clamp ships **opt-in**: the default is `warn`
-# (receipt only, byte-identical verdicts), so an upgrade changes no verdict. A
-# later release flips this to `clamp` after `LLM_COUNCIL_FILE_SELECTION=shadow`
-# telemetry (#557) — a ONE-LINE change here that simultaneously (a) makes the
-# clamp fire by default and (b) activates `gate`'s refusal of an explicit `warn`
-# downgrade. Until then `warn`-as-default is not a foot-gun; it is the status quo.
-_DEFAULT_POLICY = "warn"
+# Rollout dial (#556 / #557). The clamp shipped **opt-in** in v0.40.0 (default
+# `warn`: receipt only, byte-identical verdicts) and flipped to `clamp` in the
+# #557 release, after >=2 minor releases' notice and the gating telemetry
+# review: 30 real verify transcripts carrying a coverage receipt (11 of them
+# `pass`) recorded ZERO omissions of any kind, so the flip changed 0 runs on the
+# observed corpus. Sequenced deliberately after the `content` file-selection
+# default (v0.44.0), which removed the clamp's main noise source — `non-text`
+# omissions of unlisted-extension source files. This one line simultaneously
+# (a) makes the clamp fire by default and (b) activates `gate`'s refusal of an
+# explicit `warn`, which post-flip means "ignore coverage" rather than the
+# status quo.
+_DEFAULT_POLICY = "clamp"
 
 
 def coverage_policy() -> str:
@@ -38,19 +43,25 @@ def coverage_policy() -> str:
 
     - `clamp`: a clamped `pass` becomes `unclear(incomplete_coverage)`.
     - `fail`: a clamped `pass` raises (a hard 422) — for callers who want to stop.
-    - `warn`: receipt only, no verdict effect. Current default (see `_DEFAULT_POLICY`).
+    - `warn`: receipt only, no verdict effect. Explicit opt-out since the
+      #557 flip; `gate` refuses it (see `gate_rejects_warn`).
     """
     val = os.getenv("LLM_COUNCIL_COVERAGE_POLICY", _DEFAULT_POLICY).strip().lower()
     return val if val in ("clamp", "fail", "warn") else _DEFAULT_POLICY
 
 
 def gate_rejects_warn() -> bool:
-    """`llm-council gate` refuses `warn` only once it is a DELIBERATE downgrade.
+    """`llm-council gate` refuses `warn`, which is now a DELIBERATE downgrade.
 
-    While `warn` is the default (`_DEFAULT_POLICY == "warn"`), a gate running in
-    `warn` is the pre-clamp status quo, not a foot-gun — so it is allowed. After
-    the flip to a `clamp` default, an explicit `warn` means "make this gate ignore
-    coverage", which IS a foot-gun, so it is refused.
+    Historically, while `warn` was the default, a gate running in `warn` was the
+    pre-clamp status quo rather than a foot-gun, so it was allowed. Since the
+    #557 flip to a `clamp` default, an explicit `warn` means "make this gate
+    ignore coverage", which IS a foot-gun — so it is refused.
+
+    The `_DEFAULT_POLICY == "clamp"` conjunct is now constant-True. It is kept
+    deliberately: it is the single dial this behaviour keys off, so a future
+    rollback of the default automatically restores the permissive rule instead
+    of silently leaving `gate` refusing the then-default policy.
     """
     return coverage_policy() == "warn" and _DEFAULT_POLICY == "clamp"
 
@@ -63,7 +74,9 @@ def coverage_ack_reasons() -> frozenset:
     raw = os.getenv("LLM_COUNCIL_COVERAGE_ACK_REASONS")
     if raw is None:
         return DEFAULT_ACK_REASONS
-    return frozenset(r.strip() for r in raw.split(",") if r.strip())
+    # #681 gate: `coverage_policy()` lowercases but this did not, so
+    # ACK_REASONS="Binary" silently failed to acknowledge `binary`.
+    return frozenset(r.strip().lower() for r in raw.split(",") if r.strip())
 
 
 def clamping_omissions(
@@ -79,7 +92,9 @@ def clamping_omissions(
     if not coverage:
         return []
     clampers: List[Dict[str, Any]] = []
-    for o in coverage.get("omitted", []):
+    for o in (coverage.get("omitted") or []):
+        if not isinstance(o, dict):
+            continue
         if o.get("origin") == "explicit" or o.get("reason") not in ack_reasons:
             clampers.append(o)
     return clampers
