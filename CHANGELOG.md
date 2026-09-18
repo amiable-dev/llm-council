@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-18
+
+**New flagship models enter by audition, not by assertion.** Follow-up to v0.47.0's pool refresh, which deliberately left the 2026-09 releases out until they had metadata to be scored against.
+
+### Added
+
+- **Four flagship models registered** from the live OpenRouter catalogue, with per-1K pricing and cache classes so ADR-049 D3 can price cache reads: `anthropic/claude-fable-5.1` (1.00M ctx), `openai/gpt-6-astra` (1.05M), `google/gemini-3.8-flash` (1.05M), `deepseek/deepseek-v4.1-flash` (1.05M).
+- **All four audition in `frontier`** (ADR-027/029): ADVISORY voting — scored and recorded, **zero weight in consensus** — until real sessions promote them. No default tier changed; `quick`, `balanced`, `high` and `reasoning` resolve to the same members as before, while `frontier` now scores the newcomers on merit.
+
+  A pool entry claims a model may sit on a council; `registry.yaml` is what lets `select_tier_models` **score** that claim. Without an entry, selection falls through to `static_pool[:count]` — chosen by list position, with no context or cost filtering. Metadata first, then the sanctioned entry path.
+
+### Changed
+
+- **`openai/gpt-5.6-luna` removed from the `quick` pool.** It measures 35.3 s against that tier's 30 s budget — over the budget of the tier whose entire purpose is speed. It remains in `balanced`, where 35.3 s fits the 90 s budget comfortably. Surfaced by making the budget invariant honest (see below).
+
+### Testing
+
+- `tests/test_tier_pool_hygiene.py` pins pool invariants **derived from the config**, never enumerated: registry coverage, metadata and pricing plausibility, per-tier latency budgets across every pool member, provider diversity, and the audition rule that keeps preview or unmeasured models out of default tiers. Tracked debt (the #686 chairman-latency violation) must remain a *live* violation or the waiver fails.
+
+  This module took four council-gate rounds, each rejecting a version of the same defect — an invariant that looked derived but could not fail: a budget check that sliced the list prefix while the slow model sat third; a hardcoded tier list that let a new *tier* escape every tier rule; a waiver that checked only pool membership; and a preview marker that could never match the canonical `vendor/model:free` form. The invariants are now mutation-checked rather than assumed. Remaining gaps are filed as [#687](https://github.com/amiable-dev/llm-council/issues/687) and [#688](https://github.com/amiable-dev/llm-council/issues/688).
+
+
 ## [0.47.0] - 2026-09-18
 
 **The coverage clamp becomes the default, and a silent ranking bug gets pulled out by the root.** ADR-053's rollout finishes here. Along the way, an investigation into why the ADR-044 depth telemetry was unusable found one expression corrupting three different things — including a path that could fail a completed deliberation outright.
