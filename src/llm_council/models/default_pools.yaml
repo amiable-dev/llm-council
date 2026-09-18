@@ -1,0 +1,93 @@
+# Default tier model pools — THE single source of truth (#690).
+#
+# This file ships inside the wheel, next to registry.yaml. Both
+# `tier_contract._DEFAULT_TIER_MODEL_POOLS` and
+# `unified_config.TierConfig.ensure_default_pools` read it; neither holds a
+# literal, and `tests/test_issue690_pool_single_source.py` fails if one comes
+# back. The repo's own `llm_council.yaml` deliberately does NOT declare
+# `tiers.pools`, so this project runs exactly what it publishes.
+#
+# History: the pools used to be written out three times — here in spirit, in
+# both modules above as Python literals, and in `llm_council.yaml`. #685
+# updated only the last of those, which does not ship, so every published
+# claim about v0.48.0's pools was false for anyone installing from PyPI.
+#
+# A user overrides these per-tier via `tiers.pools.<tier>` in their own
+# llm_council.yaml; any tier they omit falls back to the entry here.
+#
+# Latency figures below are means from a real performance store
+# (`~/.llm-council/performance_metrics.jsonl`), snapshot 2026-09-18, and are
+# mirrored in tests/test_tier_pool_hygiene.py::MEASURED_LATENCY_S, which
+# enforces that every pool member fits its tier's budget. Cost figures are
+# measured $/run over the same store.
+
+pools:
+  # QUICK: fast models for simple queries.
+  quick:
+    # flash-lite 3.2s/$0.0038, v4-flash 12.2s/$0.0007, haiku-4.5 15.1s/$0.0192
+    # (priciest, best reasoner of the three) — all inside the 30s budget.
+    # gpt-5.6-luna is NOT here: it measures 35.3s, over the budget of the tier
+    # whose whole point is speed. It remains in `balanced`, where 35.3s fits
+    # the 90s budget comfortably. Any pool member can be selected, so the
+    # budget applies to every member, not just the ones that sort first.
+    models:
+      - google/gemini-3.5-flash-lite
+      - deepseek/deepseek-v4-flash
+      - anthropic/claude-haiku-4.5
+    timeout_seconds: 30
+    peer_review: lightweight
+
+  # BALANCED: good quality at reasonable latency.
+  balanced:
+    # v4-flash ahead of gemini-3.7-flash on measured cost ($0.0007 vs $0.0247
+    # per run); both inside the 90s budget. Fallback-path order only — the
+    # scored path picks on metadata.
+    models:
+      - openai/gpt-5.6-luna
+      - anthropic/claude-sonnet-5
+      - deepseek/deepseek-v4-flash
+      - google/gemini-3.7-flash
+    timeout_seconds: 90
+
+  # HIGH: full council deliberation.
+  high:
+    # gemini-3.1-pro-preview REPLACED by z-ai/glm-5.3 (ADR-027: previews enter
+    # via audition, not the default council; frontier already carries it). The
+    # replacement is registry-known and measured (n=42), keeps the pool at
+    # four, adds a fourth distinct provider, and costs less per run ($0.183 vs
+    # $0.245).
+    models:
+      - openai/gpt-5.6-sol
+      - anthropic/claude-opus-5
+      - deepseek/deepseek-v4-pro-0813
+      - z-ai/glm-5.3
+    timeout_seconds: 180
+
+  # REASONING: deep reasoning with extended thinking.
+  reasoning:
+    # As above: the preview lives in frontier. deepseek-v4-pro-0813 keeps this
+    # pool at four with a measured, low-cost member ($0.033/run).
+    models:
+      - openai/gpt-5.6-sol-pro
+      - anthropic/claude-opus-5
+      - z-ai/glm-5.3
+      - deepseek/deepseek-v4-pro-0813
+    timeout_seconds: 600
+
+  # FRONTIER: the audition entry path (ADR-027/029).
+  frontier:
+    # Members vote ADVISORY — scored and recorded, but zero weight in
+    # consensus — until enough real sessions promote them. The 2026-09-18
+    # catalogue additions land here rather than in a default tier precisely
+    # because nothing has measured them yet; gemini-3.1-pro-preview sits here
+    # for the same reason.
+    models:
+      - anthropic/claude-fable-5.1
+      - openai/gpt-6-astra
+      - google/gemini-3.8-flash
+      - deepseek/deepseek-v4.1-flash
+      - anthropic/claude-fable-5
+      - openai/gpt-5.6-sol-pro
+      - x-ai/grok-4.6
+      - google/gemini-3.1-pro-preview
+    timeout_seconds: 600

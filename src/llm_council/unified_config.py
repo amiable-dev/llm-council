@@ -29,7 +29,7 @@ is the shape this repo's own ``llm_council.yaml`` uses:
         default: high
         pools:
           quick:
-            models: [openai/gpt-5.6-luna, anthropic/claude-haiku-4.5]
+            models: [google/gemini-3.5-flash-lite, anthropic/claude-haiku-4.5]
             timeout_seconds: 30
       triage:
         enabled: false
@@ -61,6 +61,7 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 import yaml
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 
+from .default_pools import TIER_NAMES, default_pool_models, default_pools
 from .tier_contract import TierContract, create_tier_contract
 
 logger = logging.getLogger(__name__)
@@ -191,69 +192,30 @@ class TierConfig(BaseModel):
     @field_validator("default")
     @classmethod
     def validate_tier_name(cls, v: str) -> str:
-        valid_tiers = {"quick", "balanced", "high", "reasoning", "frontier"}
+        # #690: imported, not restated — a second list of tier names drifts
+        # the same way a second list of models did.
+        valid_tiers = set(TIER_NAMES)
         if v not in valid_tiers:
             raise ValueError(f"invalid tier '{v}', must be one of {valid_tiers}")
         return v
 
     @model_validator(mode="after")
     def ensure_default_pools(self) -> "TierConfig":
-        """Ensure all standard tier pools exist with defaults."""
-        # Aug-2026 model refresh (#635): IDs verified against the live
-        # OpenRouter catalog 2026-08-22. gemini-3.1-pro-preview is held
-        # deliberately — Google ships no Pro-class successor.
-        default_pools = {
-            "quick": TierPoolConfig(
-                models=[
-                    "openai/gpt-5.6-luna",
-                    "anthropic/claude-haiku-4.5",
-                    "google/gemini-3.5-flash-lite",
-                    "deepseek/deepseek-v4-flash",
-                ],
-                timeout_seconds=30,
-                peer_review="lightweight",
-            ),
-            "balanced": TierPoolConfig(
-                models=[
-                    "openai/gpt-5.6-luna",
-                    "anthropic/claude-sonnet-5",
-                    "google/gemini-3.7-flash",
-                    "deepseek/deepseek-v4-flash",
-                ],
-                timeout_seconds=90,
-            ),
-            "high": TierPoolConfig(
-                models=[
-                    "openai/gpt-5.6-sol",
-                    "anthropic/claude-opus-5",
-                    "google/gemini-3.1-pro-preview",
-                    "deepseek/deepseek-v4-pro-0813",
-                ],
-                timeout_seconds=180,
-            ),
-            "reasoning": TierPoolConfig(
-                models=[
-                    "openai/gpt-5.6-sol-pro",
-                    "anthropic/claude-opus-5",
-                    "google/gemini-3.1-pro-preview",
-                    "z-ai/glm-5.3",
-                ],
-                timeout_seconds=600,
-            ),
-            # ADR-027: Frontier tier for cutting-edge/preview models
-            "frontier": TierPoolConfig(
-                models=[
-                    "anthropic/claude-fable-5",
-                    "openai/gpt-5.6-sol-pro",
-                    "x-ai/grok-4.6",
-                    "google/gemini-3.1-pro-preview",
-                ],
-                timeout_seconds=600,
-            ),
-        }
-        for tier, pool in default_pools.items():
+        """Fill any tier the user's config did not declare.
+
+        #690: the pool specs are READ from the packaged
+        `models/default_pools.yaml`, never written out here. A literal at this
+        spot was one of three copies; #685 updated only the copy that does not
+        ship, so installs kept serving the previous catalogue. A user's own
+        `tiers.pools.<tier>` still wins — that is the point of this hook — but
+        a tier they omit now falls back to the same definition the wheel
+        advertises.
+        """
+        for tier, spec in default_pools().items():
             if tier not in self.pools:
-                self.pools[tier] = pool
+                self.pools[tier] = TierPoolConfig(
+                    **{k: v for k, v in spec.items() if k in TierPoolConfig.model_fields}
+                )
         return self
 
 
@@ -751,13 +713,12 @@ class CouncilConfig(BaseModel):
 
     model_config = {"populate_by_name": True}
 
+    # #690: the default is the default tier's pool, not a fourth hand-kept
+    # copy of it. When these two disagreed, `council_health_check` emitted a
+    # config warning on every clean install — a drift detector that fires by
+    # default is one people learn to ignore.
     models: ModelList = Field(
-        default_factory=lambda: [
-            "openai/gpt-5.6-sol",
-            "google/gemini-3.1-pro-preview",
-            "anthropic/claude-opus-5",
-            "deepseek/deepseek-v4-pro-0813",
-        ],
+        default_factory=lambda: default_pool_models()[TierConfig().default],
         alias="LLM_COUNCIL_MODELS",
     )
     chairman: str = Field(

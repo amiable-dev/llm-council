@@ -1,8 +1,17 @@
 """Tier-pool hygiene invariants (2026-09-18 OpenRouter model/cost review).
 
-The pools in `llm_council.yaml` are the default councils. They were audited
-against the live OpenRouter catalogue (445 models) and against this machine's
-recorded performance index (`~/.llm-council/performance_metrics.jsonl`).
+The pools in `src/llm_council/models/default_pools.yaml` are the default
+councils. They were audited against the live OpenRouter catalogue (445 models)
+and against this machine's recorded performance index
+(`~/.llm-council/performance_metrics.jsonl`).
+
+**Round 4 read the wrong file.** Every invariant below was asserted against
+`llm_council.yaml`, which does not ship in the wheel — so when #685 updated
+that file and left the two Python literals alone, this module stayed green
+while the published defaults kept an over-budget model in `quick` and a
+preview model in `high`. The invariants were real; they were simply pointed at
+the copy that happened to be correct. #690 collapsed the three copies into the
+packaged file, and this module now reads it.
 
 ## What is derived, and what is not
 
@@ -42,13 +51,13 @@ import pytest
 import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-CONFIG = REPO_ROOT / "llm_council.yaml"
+CONFIG = REPO_ROOT / "src/llm_council/models/default_pools.yaml"
 REGISTRY = REPO_ROOT / "src/llm_council/models/registry.yaml"
 
 # Loaded at import so the tier set can drive parametrization. `frontier` is the
 # audition tier: it exists to carry models that have NOT yet earned a default
 # seat, so it is excluded from the default-tier rules but still budget-checked.
-_POOLS = yaml.safe_load(CONFIG.read_text())["council"]["tiers"]["pools"]
+_POOLS = yaml.safe_load(CONFIG.read_text())["pools"]
 AUDITION_TIER = "frontier"
 DEFAULT_TIERS = sorted(set(_POOLS) - {AUDITION_TIER})
 ALL_TIERS = sorted(_POOLS)

@@ -14,6 +14,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List, Optional
 
+from .default_pools import default_pool_models
+
 # ADR-032: Migrated to unified_config (lazy import to avoid circular dependency)
 
 
@@ -73,42 +75,15 @@ def get_tier_timeout(tier: str) -> Dict[str, int]:
     return _get_tier_timeout(tier)
 
 
-# Default pools used when config isn't loaded yet
-# Aug-2026 model refresh (#635): IDs verified against the live OpenRouter
-# catalog 2026-08-22. gemini-3.1-pro-preview is held deliberately — Google
-# ships no Pro-class successor; swap when a stable 3.x Pro lands.
-_DEFAULT_TIER_MODEL_POOLS = {
-    "quick": [
-        "openai/gpt-5.6-luna",
-        "anthropic/claude-haiku-4.5",
-        "google/gemini-3.5-flash-lite",
-        "deepseek/deepseek-v4-flash",
-    ],
-    "balanced": [
-        "openai/gpt-5.6-luna",
-        "anthropic/claude-sonnet-5",
-        "google/gemini-3.7-flash",
-        "deepseek/deepseek-v4-flash",
-    ],
-    "high": [
-        "openai/gpt-5.6-sol",
-        "anthropic/claude-opus-5",
-        "google/gemini-3.1-pro-preview",
-        "deepseek/deepseek-v4-pro-0813",
-    ],
-    "reasoning": [
-        "openai/gpt-5.6-sol-pro",
-        "anthropic/claude-opus-5",
-        "google/gemini-3.1-pro-preview",
-        "z-ai/glm-5.3",
-    ],
-    "frontier": [
-        "anthropic/claude-fable-5",
-        "openai/gpt-5.6-sol-pro",
-        "x-ai/grok-4.6",
-        "google/gemini-3.1-pro-preview",
-    ],
-}
+# Default pools used when config isn't loaded yet.
+#
+# #690: these are READ from the packaged `models/default_pools.yaml`, not
+# written out here. The literal that used to sit at this spot was one of three
+# copies, and a model refresh (#685) updated only the copy that does not ship
+# — so the wheel kept serving the previous catalogue while the changelog said
+# otherwise. `tests/test_issue690_pool_single_source.py` fails if a literal
+# comes back.
+_DEFAULT_TIER_MODEL_POOLS: Dict[str, List[str]] = default_pool_models()
 
 
 # Module-level alias for backwards compatibility
@@ -121,8 +96,15 @@ if TYPE_CHECKING:
 
 # Tier-appropriate aggregator models (ADR-022 council recommendation)
 # Warning: Do not use a "mini" model to aggregate reasoning model outputs.
+#
+# #690: an aggregator has to fit its own tier's budget, which `quick` did not.
+# It named gpt-5.6-luna and called it "speed-matched" while luna measures 35.3s
+# against a 30s budget — the same defect as the pool entry dropped in #685,
+# forty lines away in a different dict, and missed because a pool review looks
+# at pools. haiku-4.5 (15.1s) is the fastest registry entry that can actually
+# synthesise a council.
 TIER_AGGREGATORS: Dict[str, str] = {
-    "quick": "openai/gpt-5.6-luna",  # Speed-matched
+    "quick": "anthropic/claude-haiku-4.5",  # Speed-matched: 15.1s < 30s budget
     "balanced": "anthropic/claude-sonnet-5",  # Quality-matched
     "high": "openai/gpt-5.6-sol",  # Full capability
     "reasoning": "anthropic/claude-opus-5",  # Can understand reasoning outputs
