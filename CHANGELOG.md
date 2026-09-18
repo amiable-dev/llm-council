@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Four flagship models registered** from the live OpenRouter catalogue, with per-1K pricing and cache classes so ADR-049 D3 can price cache reads: `anthropic/claude-fable-5.1` (1.00M ctx), `openai/gpt-6-astra` (1.05M), `google/gemini-3.8-flash` (1.05M), `deepseek/deepseek-v4.1-flash` (1.05M).
-- **All four audition in `frontier`** (ADR-027/029): ADVISORY voting — scored and recorded, **zero weight in consensus** — until real sessions promote them. No default tier changed; `quick`, `balanced`, `high` and `reasoning` resolve to the same members as before, while `frontier` now scores the newcomers on merit.
+- **All four audition in `frontier`** (ADR-027/029): ADVISORY voting — scored and recorded, **zero weight in consensus** — until real sessions promote them. No newly-registered model entered a default tier: `balanced`, `high` and `reasoning` resolve to exactly the same members as before, `quick` changes only as noted below, and `frontier` now scores the newcomers on merit.
 
   A pool entry claims a model may sit on a council; `registry.yaml` is what lets `select_tier_models` **score** that claim. Without an entry, selection falls through to `static_pool[:count]` — chosen by list position, with no context or cost filtering. Metadata first, then the sanctioned entry path.
 
