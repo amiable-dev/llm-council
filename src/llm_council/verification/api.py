@@ -1070,6 +1070,18 @@ async def run_verification(
                         # (None until present; fully populated with #366).
                         usage_by_model=(partial_state.get("usage") or {}).get("by_model"),
                     )
+                # ADR-056 / #695: the verify half of the external contract.
+                # Inside the same soft-fail block as the local persist — the
+                # two report the same run and neither may fail it.
+                from llm_council.observability.external_spend import (
+                    emit_external_spend,
+                )
+
+                emit_external_spend(
+                    operation="verify",
+                    usage_summary=partial_state.get("usage"),
+                    model=None,
+                )
             except Exception:
                 logger.debug("ADR-041: Performance telemetry persistence failed", exc_info=True)
 

@@ -106,6 +106,23 @@ alone they agree: `LLM_COUNCIL_MODELS` defaults to the `high` pool.
 | `LLM_COUNCIL_MODE` | `consensus`, `debate` | Synthesis mode |
 | `LLM_COUNCIL_VERDICT_TYPE` | `synthesis`, `binary` | Verdict format |
 
+### External Spend Telemetry (ADR-056)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | Where to send one OTLP span per council run, reporting what it cost. **Unset means no exporter, no network call and no added latency** — an install without it behaves exactly as before. |
+| `CLAUDE_CODE_SESSION_ID` | set by Claude Code | Read, never written. Stamped on the span as `session.id` so spend can be attributed to the agent session that caused it. Absent outside a Claude session, which is honest rather than invented. |
+
+Needs the `otel` extra: `pip install "llm-council-core[otel]"`. With an endpoint
+set but the extra missing, `council_health_check` reports
+`external_telemetry.reason = "sdk_missing"` rather than staying silent — so you
+can tell **"nothing was spent"** from **"nothing was recorded"**.
+
+Only a **provider-reported** cost is emitted. A registry estimate stays local,
+where it sits beside its `cost_source` label; the external contract has no
+attribute for provenance, so an estimate there would be indistinguishable from a
+bill once summed.
+
 ## Gateway Options
 
 LLM Council supports multiple gateways:
