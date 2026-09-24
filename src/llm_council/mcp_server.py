@@ -512,6 +512,20 @@ async def consult_council(
     return result
 
 
+def _external_telemetry_status() -> Dict[str, Any]:
+    """ADR-056 D8: whether council spend is being reported externally.
+
+    Soft-fail: a broken telemetry module must not fail a health check whose job
+    is to tell an operator what is working.
+    """
+    try:
+        from llm_council.observability.external_spend import telemetry_status
+
+        return telemetry_status()
+    except Exception as exc:  # pragma: no cover - defensive
+        return {"enabled": False, "reason": "unavailable", "detail": type(exc).__name__}
+
+
 def _estimated_durations(council_size: int) -> dict:
     """Per-tier duration estimates taken from the tier's own timeout budget.
 
@@ -658,6 +672,11 @@ async def council_health_check(deep: bool = True, tier: str = "high") -> str:
         # configures tiers.pools.high.timeout_seconds: 180 — an estimate under
         # half its own budget, which trains callers to ignore estimates.
         "estimated_duration": _estimated_durations(len(effective_models)),
+        # ADR-056 D8: a no-op emit path when the [otel] extra is absent is
+        # right; SILENCE is not. Without this, a council reporting nothing
+        # externally is indistinguishable from a council that spent nothing —
+        # which is the confusion #692 exists to end, one layer down.
+        "external_telemetry": _external_telemetry_status(),
     }
 
     if config_warnings:

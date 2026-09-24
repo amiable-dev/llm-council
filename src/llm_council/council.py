@@ -148,6 +148,7 @@ from llm_council.early_consensus import (
     estimate_reviewers_cost,
     unassailable_leader,
 )
+from llm_council.observability.external_spend import emit_external_spend
 from llm_council.observability.usage_metrics import emit_usage_metrics
 
 logger = logging.getLogger(__name__)
@@ -701,6 +702,16 @@ async def run_council_with_fallback(
             usage_summary=result["metadata"]["usage"],
         )
 
+        # ADR-056 / #695: report the same figure externally. Placed beside the
+        # local persist deliberately — one source, two destinations, so a
+        # discrepancy between the store and the warehouse is a bug in one
+        # transport rather than two different measurements.
+        emit_external_spend(
+            operation="consult",
+            usage_summary=result["metadata"]["usage"],
+            model=_get_chairman_model(),
+        )
+
         # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
         if verdict_result is not None:
             result["metadata"]["verdict"] = verdict_result.to_dict()
@@ -1141,6 +1152,13 @@ async def run_full_council(
         aggregate_rankings=aggregate_rankings,
         stage2_results=stage2_results,
         usage_summary=usage_summary,
+    )
+
+    # ADR-056 / #695: same figure, external destination.
+    emit_external_spend(
+        operation="consult",
+        usage_summary=usage_summary,
+        model=_get_chairman_model(),
     )
 
     # Collect abstention info and score/rank mismatches from Stage 2

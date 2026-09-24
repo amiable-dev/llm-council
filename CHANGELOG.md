@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Council spend is reportable as OpenTelemetry spans** ([#695](https://github.com/amiable-dev/llm-council/issues/695), [ADR-056](docs/adr/ADR-056-external-spend-telemetry.md)). One `std.artefact.activation` span per run, conforming to the `skills-telemetry` ADR-010 `external` artefact contract, so agent spend can be attributed to the work that caused it — the harness sees that a command ran, not what it cost, and only the spending process knows.
+
+  **Opt-in and inert by default.** With no `OTEL_EXPORTER_OTLP_ENDPOINT` there is no exporter, no network call, no added latency, and the OpenTelemetry SDK is never imported. Needs the new `otel` extra. Verified against the upstream checker: `2 span(s) checked; 2 external; cost reported on 2 of 2 (100%)`.
+
+  Three decisions worth knowing:
+
+  - **Only provider-reported cost is emitted.** #694 lets council price a call from `registry.yaml` when a provider reports none. That figure is honest locally, where it sits beside its `cost_source` label — but the external contract has no provenance attribute, so an estimate arriving as `std.external.cost_usd` would be indistinguishable from a bill the moment a warehouse summed it.
+  - **An unobserved cost omits the attribute.** Not zero, not null. The third layer in this release at which that rule has had to be stated.
+  - **`council_health_check` reports telemetry absence with a reason.** A no-op emit path is right; silence is not — without it, a council with no extra installed is indistinguishable from a council that spent nothing, which is precisely the confusion #692 exists to end, reintroduced one layer down.
+
+  The published attribute allowlist lives in one constant, compared **longhand and in both directions** against the contract in `tests/test_issue695_external_spend.py`. An attribute outside the published set is dropped *silently* downstream, so a rename on either side produces a column of nulls rather than an error — and a test comparing the constant against itself would pass straight through that. `stdtel-conform` is wired in as a second opinion, not as the gate: if it is missing, lagging or wrong, council's own test must still fail correctly.
+
+
+### Added
+
 - **The consult path now writes a performance record** ([#692](https://github.com/amiable-dev/llm-council/issues/692)). `performance_metrics.jsonl` had exactly one writer — the verify path. Every `consult`, the path an operator is actually billed for, left no local trace, so a recorded total could not be compared with a provider invoice and there was no way to tell "cheap" from "unrecorded". Both orchestrators now persist through a single helper, `council_usage.persist_council_performance`, so they cannot drift in what they record; the call sites are AST-pinned, because an absent call reads as correct code everywhere.
 
   **Partial and timed-out consults still record.** A run that was cut short still billed, and an unrecorded cost is a total that cannot be reconciled. This is a deliberate divergence from the verify path, which persists nothing on timeout.

@@ -62,6 +62,15 @@ secure = ["keyring>=23.0.0"]
 ollama = ["litellm>=1.50.0"]
 # PostHog LLM Analytics emission (ADR-050) - install with: pip install "llm-council-core[posthog]"
 posthog = ["posthog>=3.0.0"]
+# External spend telemetry as OTLP spans (ADR-056) - install with:
+#   pip install "llm-council-core[otel]"
+# Council does NOT depend on the stdtel package to emit: the contract is
+# attribute names on OTLP spans, and depending on it would pull Claude Code
+# hook machinery into the MCP server for nothing.
+otel = [
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+]
 # All server dependencies
 all = ["llm-council-core[http,mcp]"]
 # Development dependencies
