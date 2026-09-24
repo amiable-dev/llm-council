@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The test suite no longer writes fixture records into the operator's real performance store** ([#693](https://github.com/amiable-dev/llm-council/issues/693)). `~/.llm-council/performance_metrics.jsonl` on a developer machine had accumulated **1,869 `test/model-a` rows out of 7,598** — about a quarter of the file — and it was ongoing, not historical: the newest was written minutes before this fix, by the red test run that proved the bug.
+
+  The damage was not untidiness. Those rows carry `cost_usd: null`, so anyone totalling cost from the file saw roughly a third of rows missing one and concluded the cost pipeline was broken. It was not — every record from 2026-07-04 onward carries a cost, **2330 of 2330**, and the remaining nulls all predate cost capture. The fixtures made working code look faulty and sent the investigation at the wrong defect.
+
+  Cause: `performance/integration.py` resolved both the store path and the enabled flag **at import time**, so `LLM_COUNCIL_PERFORMANCE_STORE` could not be set from a test — collection imports the module before any test body runs — and `get_tracker()` memoised a singleton built from that path. Seven `run_verification` tests reached the real persist through three layers without mentioning it.
+
+  Resolution is now lazy: `resolve_store_path()` and `tracking_enabled()` read the environment per call, and `PERFORMANCE_STORE_PATH` / `PERFORMANCE_TRACKING_ENABLED` survive as optional overrides (default `None`) so the existing monkeypatch-by-name tests keep working. A blank env var falls back to the default rather than to a relative path, which would have scattered records through whatever directory the process started in.
+
+### Added
+
+- `docs/guides/performance-store.md` — what the store records, how to total cost from it correctly (a null cost is not a zero, and the two must not be summed together), and a copy-pasteable recipe for operators to strip historical `test/*` rows from their own file. **Council never rewrites this file** — no migration on upgrade, by design: it is a measurement record and the only copy.
+
+### Testing
+
+- `tests/conftest.py` gains an autouse `isolate_performance_store` fixture pointing every test at `tmp_path`, including the `get_tracker()` singleton reset — without which a tracker built before the fixture keeps the old path for the rest of the session.
+- `tests/test_issue693_store_isolation.py` fails if the resolved store path is ever under the real `HOME`. The fixture is a convention; the guard is the invariant. Verified end to end by checksumming the real store either side of a full 3,794-test run: byte-identical.
+
+
 ## [0.49.0] - 2026-09-18
 
 **The tier pools now have one definition, and it ships.** v0.48.0's release notes described pool changes that never reached anybody who installed from PyPI. This makes those notes true, and makes the class of failure unrepresentable.
