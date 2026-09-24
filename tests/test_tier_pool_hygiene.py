@@ -64,30 +64,39 @@ ALL_TIERS = sorted(_POOLS)
 
 VALID_QUALITY_TIERS = {"economy", "standard", "frontier", "local"}
 
-# Snapshot of ~/.llm-council/performance_metrics.jsonl, 2026-09-18 (mean
-# latency per model over that store). Latency and cost there are
-# uncontaminated; the borda column is NOT — it contains negative values, the
-# signature of the unsanitised-ballot bug fixed in #677 — so quality is never
-# asserted from it.
+# Snapshot of ~/.llm-council/performance_metrics.jsonl, re-taken 2026-09-24
+# (#696) — mean latency per model over that store, in seconds.
+#
+# Two exclusions make this trustworthy in a way the previous snapshot was not:
+#
+# * `test/*` fixture rows are gone (#693). They were a quarter of the file.
+# * Rows with a NULL latency are skipped rather than averaged in as 0 (#692).
+#   An unmeasured latency is not a fast one, and `run_full_council` records
+#   None because it measures none.
+#
+# 5,748 usable rows across 23 models. Latency and cost in this store are
+# uncontaminated; the borda column is NOT — it carried negative values before
+# #677 — so quality is never asserted from it.
 MEASURED_LATENCY_S = {
     "google/gemini-3.5-flash-lite": 3.2,
-    "deepseek/deepseek-v4-flash": 12.2,
+    "deepseek/deepseek-v4-flash": 13.3,
     "anthropic/claude-haiku-4.5": 15.1,
-    "google/gemini-3.7-flash": 16.2,
-    "anthropic/claude-sonnet-5": 32.1,
+    "google/gemini-3.7-flash": 15.9,
+    "anthropic/claude-sonnet-5": 30.9,
     "openai/gpt-5.6-luna": 35.3,
-    "deepseek/deepseek-v4-pro-0813": 49.7,
-    "openai/gpt-5.6-sol": 69.2,
-    "google/gemini-3.1-pro-preview": 74.1,
-    "openai/gpt-5.6-sol-pro": 134.4,
-    "z-ai/glm-5.3": 153.9,
-    "anthropic/claude-opus-5": 204.3,
+    "deepseek/deepseek-v4-pro-0813": 49.9,
+    "openai/gpt-5.6-sol": 69.4,
+    "google/gemini-3.1-pro-preview": 74.2,
+    "openai/gpt-5.6-sol-pro": 131.7,
+    "z-ai/glm-5.3": 147.5,
+    "anthropic/claude-opus-5": 195.2,
 }
 
 # Tracked debt, not exemptions: each entry must STILL be a live violation, or
 # `test_tracked_debt_is_still_a_real_violation` fails and the entry has to go.
 KNOWN_BUDGET_VIOLATIONS = {
-    # The configured chairman averages 204.3s against high's 180s budget, which
+    # The configured chairman averages 195.2s against high's 180s budget (re-measured 2026-09-24; it came
+    # down from 204.3s and is still over), which
     # makes verify report unclear(infra_failure) on a completed deliberation.
     # The fix is a contract decision — stage floor vs waterfall share vs a
     # faster chairman — not a pool edit.

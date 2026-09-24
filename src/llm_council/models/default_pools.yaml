@@ -15,6 +15,21 @@
 # A user overrides these per-tier via `tiers.pools.<tier>` in their own
 # llm_council.yaml; any tier they omit falls back to the entry here.
 #
+# CATALOGUE CHECKED 2026-09-24 (#696) against the live OpenRouter API (458
+# models). All 20 pool members still resolve. Registry pricing was corrected for
+# four of them — deepseek-v4-pro-0813, deepseek-v4.1-flash, glm-5.3 and
+# deepseek-v4-flash had all fallen BEHIND price cuts, by up to 186%, which the
+# ADR-011 registry_estimate fallback was billing at the stale rate.
+#
+# The standing question, answered: there is still NO stable Gemini 3.x Pro. The
+# only non-preview 3.x Pro in the catalogue is `gemini-3-pro-image`, an image
+# model. `gemini-3.1-pro-preview` therefore stays in frontier and the note below
+# stands — next reader, you do not need to re-check this before 2026-10.
+#
+# NOTHING WAS PROMOTED out of frontier, and that is the audition rule working
+# rather than an omission: ADR-029 wants >=30 days and >=100 sessions, and the
+# 2026-09-18 intake is six days old.
+#
 # Latency figures below are means from a real performance store
 # (`~/.llm-council/performance_metrics.jsonl`), snapshot 2026-09-18, and are
 # mirrored in tests/test_tier_pool_hygiene.py::MEASURED_LATENCY_S, which
@@ -82,10 +97,18 @@ pools:
     # because nothing has measured them yet; gemini-3.1-pro-preview sits here
     # for the same reason.
     models:
+      # 2026-09-24 intake (#696): the direct successors of models already on a
+      # council. ADVISORY here until real sessions earn them a default seat.
+      - anthropic/claude-opus-5.5
+      - openai/gpt-6-sol
+      - openai/gpt-6-sol-pro
+      - x-ai/grok-4.7
+      # 2026-09-18 intake
       - anthropic/claude-fable-5.1
       - openai/gpt-6-astra
       - google/gemini-3.8-flash
       - deepseek/deepseek-v4.1-flash
+      # earlier
       - anthropic/claude-fable-5
       - openai/gpt-5.6-sol-pro
       - x-ai/grok-4.6

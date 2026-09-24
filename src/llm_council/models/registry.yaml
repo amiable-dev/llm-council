@@ -225,6 +225,55 @@ models:
   # transcribed from the API's per-token values). These enter the council via
   # the frontier tier so the ADR-029 audition pipeline gates promotion — they
   # have no recorded performance history yet.
+  # 2026-09-24 catalogue check (#696). The direct successors of models already
+  # on a council, registered so `select_tier_models` can SCORE them — they
+  # enter `frontier` only, where ADR-027/029 gives them ADVISORY voting until
+  # real sessions earn them a seat. None is promoted: the 2026-09-18 intake is
+  # six days old and ADR-029 wants thirty days and a hundred sessions.
+  - id: "anthropic/claude-opus-5.5"
+    context_window: 1000000
+    pricing:
+      prompt: 0.004
+      completion: 0.02
+      cache_read: 0.0002
+      cache_write_5m: 0.005
+      cache_write_1h: 0.008
+    supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "openai/gpt-6-sol"
+    context_window: 1050000
+    pricing:
+      prompt: 0.002
+      completion: 0.01
+      cache_read: 0.0002
+      cache_write_5m: 0.0025
+    supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "openai/gpt-6-sol-pro"
+    context_window: 1050000
+    pricing:
+      prompt: 0.002
+      completion: 0.01
+      cache_read: 0.0002
+      cache_write_5m: 0.0025
+    supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  - id: "x-ai/grok-4.7"
+    context_window: 500000
+    pricing:
+      prompt: 0.0016
+      completion: 0.0048
+      cache_read: 0.0004
+    supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
   - id: "anthropic/claude-fable-5.1"
     context_window: 1000000
     pricing:
@@ -262,9 +311,9 @@ models:
   - id: "deepseek/deepseek-v4.1-flash"
     context_window: 1048576
     pricing:
-      prompt: 0.0003
-      completion: 0.0012
-      cache_read: 0.000006
+      prompt: 0.00014
+      completion: 0.00042
+      cache_read: 4.2e-06
     supported_parameters: ["temperature", "top_p", "reasoning", "response_format"]
     modalities: ["text", "vision"]
     quality_tier: "economy"
@@ -426,7 +475,7 @@ models:
     quality_tier: "economy"
 
   - id: "google/gemini-3.1-pro-preview"
-    context_window: 1040000
+    context_window: 1048576
     pricing:
       prompt: 0.002
       completion: 0.012
@@ -512,9 +561,9 @@ models:
   - id: "deepseek/deepseek-v4-pro-0813"
     context_window: 1048576
     pricing:
-      prompt: 0.00119
-      completion: 0.00356
-      cache_read: 0.00004
+      prompt: 0.000462
+      completion: 0.001386
+      cache_read: 1.54e-05
     supported_parameters: ["temperature", "top_p", "reasoning"]
     modalities: ["text"]
     quality_tier: "frontier"
@@ -522,9 +571,9 @@ models:
   - id: "deepseek/deepseek-v4-flash"
     context_window: 1048576
     pricing:
-      prompt: 0.00007
-      completion: 0.00014
-      cache_read: 0.00001
+      prompt: 8.8606e-05
+      completion: 0.000177212
+      cache_read: 1.77212e-05
     supported_parameters: ["temperature", "top_p", "reasoning"]
     modalities: ["text"]
     quality_tier: "economy"
@@ -582,11 +631,11 @@ models:
   # Z.ai Models (1)
   # ============================================================================
   - id: "z-ai/glm-5.3"
-    context_window: 1048576
+    context_window: 1310720
     pricing:
-      prompt: 0.0014
-      completion: 0.0044
-      cache_read: 0.00026
+      prompt: 0.00084
+      completion: 0.00264
+      cache_read: 0.000156
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
     modalities: ["text"]
     quality_tier: "frontier"
