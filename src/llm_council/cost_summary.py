@@ -48,9 +48,16 @@ def format_cost_summary(
     # only when cost is truly unknown.
     cost_known = bool(total.get("cost_known", False)) or cost > 0
 
+    # #694: an estimated portion must be visible in any user-facing total.
+    # A registry estimate summed silently alongside provider-reported figures
+    # is a number that reads as a bill and is not one.
+    estimated = total.get("cost_estimated_usd", 0.0) or 0.0
+
     line = f"Council usage: ~{_fmt_tokens(total_tokens)} tokens"
     if cost_known:
         line += f" · ~{_fmt_cost(cost)}"
+        if estimated > 0:
+            line += f" (incl. ~{_fmt_cost(estimated)} estimated)"
     cached = total.get("cached_tokens", 0)
     if cached:
         line += f" · {_fmt_tokens(cached)} cached"

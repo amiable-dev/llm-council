@@ -66,6 +66,74 @@ def _get_gateway_router():
         _gateway_router = GatewayRouter()
     return _gateway_router
 
+# #694 gate rounds 3-4: `reasoning_params` (ADR-026) is accepted by all FOUR
+# public entry points here — `query_model`, `query_model_with_status`,
+# `query_models_parallel` and `query_models_with_progress` — because the direct
+# implementations accept it and this module documents itself as the unified
+# interface. A caller passing it was getting a TypeError, which is the #365
+# silent-parameter-drop class one layer up.
+#
+# Round 3 added it to three of the four and this comment claimed all of them;
+# round 4 found the gap, on the primary multi-model path. The claim is now
+# enforced by `tests/test_issue694_cost_fallback.py`, which enumerates the entry
+# points from `__all__` rather than from a hand-written list — a comment cannot
+# be trusted to stay true, and this one was not.
+#
+# It is FORWARDED on the direct path (the default) and currently IGNORED on the
+# gateway branch, because `GatewayRequest` carries its own `reasoning_params`
+# shape and wiring that is gateway work, tracked in #702. Accepting-and-ignoring
+# is stated here rather than left to be discovered: the alternative was leaving
+# the TypeError in place, which is worse.
+
+def _error_detail(exc: BaseException) -> str:
+    """A never-empty diagnostic for an exception (#594).
+
+    #694 gate round 3: round 2 wrote `f"{type(e).__name__}: {e}".rstrip(": ")`,
+    and `rstrip` takes a CHARACTER SET, not a suffix — so a legitimate message
+    ending in a colon or a space was silently mangled. One helper, and the
+    formatting is not repeated in a divergent form on each path.
+    """
+    message = str(exc)
+    return f"{type(exc).__name__}: {message}" if message else type(exc).__name__
+
+
+
+def _usage_to_dict(usage) -> Dict[str, Any]:
+    """The council's usage dict from a gateway `UsageInfo`. The ONLY place.
+
+    #694 gate: there were THREE hand-built copies of this mapping, not two —
+    `_gateway_response_to_dict`, `query_model`, and the gateway branch of
+    `query_models_parallel`. The PR claiming to have fixed "both" sites left
+    the third one, which is the primary multi-model path: stages 1 and 2 both
+    go through `query_models_parallel`, so the most important route kept
+    dropping cost and cache counters.
+
+    Patching the third copy would have left a fourth waiting to be added. One
+    function is the fix; `tests/test_issue694_cost_fallback.py` pins that every
+    conversion site routes through it.
+    """
+    if usage is None:
+        return {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost": None,
+            "cost_source": None,
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+        }
+    return {
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "total_tokens": usage.total_tokens,
+        # Computed upstream by CostResolver and previously discarded here, so
+        # the one path WITH a registry fallback was the one reporting no cost.
+        "cost": usage.cost_usd,
+        "cost_source": usage.cost_source,
+        "cached_tokens": usage.cached_tokens,
+        "cache_write_tokens": getattr(usage, "cache_write_tokens", 0),
+    }
+
 
 def _gateway_response_to_dict(response) -> Dict[str, Any]:
     """Convert GatewayResponse to the dict format expected by council."""
@@ -76,12 +144,18 @@ def _gateway_response_to_dict(response) -> Dict[str, Any]:
 
     if response.status == STATUS_OK:
         result["content"] = response.content
-        if response.usage:
-            result["usage"] = {
-                "prompt_tokens": response.usage.prompt_tokens,
-                "completion_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens,
-            }
+        # #694: cost_usd/cost_source/cached/cache_write were computed by
+        # `CostResolver` upstream and then thrown away here, so the ONE path
+        # with a registry fallback was also the path that reported no cost.
+        # Turning `gateways.enabled` on would have silently zeroed cost
+        # coverage and cache telemetry together — invisible until someone
+        # reconciled a bill.
+        #
+        # Set unconditionally (gate round 3): `_usage_to_dict(None)` returns the
+        # zero-filled shape for exactly this case, and omitting the key on one
+        # path while returning a dict on another is a KeyError waiting for a
+        # consumer.
+        result["usage"] = _usage_to_dict(response.usage)
 
     if response.error:
         result["error"] = response.error
@@ -93,7 +167,8 @@ def _gateway_response_to_dict(response) -> Dict[str, Any]:
 
 
 async def query_model(
-    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False
+    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False,
+    reasoning_params: Optional[Any] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -132,22 +207,23 @@ async def query_model(
         response = await router.complete(request)
 
         if response.status == STATUS_OK:
+            usage = response.usage
             return {
                 "content": response.content,
                 "reasoning_details": None,  # Not available via gateway yet
-                "usage": {
-                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-                    "total_tokens": response.usage.total_tokens if response.usage else 0,
-                },
+                # #694: the second conversion site, with the same omission as
+                # `_gateway_response_to_dict`. Both had to be fixed; fixing one
+                # would have left the regression on the other entry point.
+                "usage": _usage_to_dict(usage),
             }
         return None
     else:
-        return await _direct_query_model(model, messages, timeout, disable_tools)
+        return await _direct_query_model(model, messages, timeout, disable_tools, reasoning_params)
 
 
 async def query_model_with_status(
-    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False
+    model: str, messages: List[Dict[str, str]], timeout: float = 120.0, disable_tools: bool = False,
+    reasoning_params: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Query a single model with structured status (ADR-012).
@@ -183,7 +259,7 @@ async def query_model_with_status(
         response = await router.complete(request)
         return _gateway_response_to_dict(response)
     else:
-        return await _direct_query_model_with_status(model, messages, timeout, disable_tools)
+        return await _direct_query_model_with_status(model, messages, timeout, disable_tools, reasoning_params)
 
 
 async def query_models_parallel(
@@ -191,6 +267,7 @@ async def query_models_parallel(
     messages: List[Dict[str, str]],
     disable_tools: bool = False,
     timeout: float = 120.0,
+    reasoning_params: Optional[Any] = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -234,20 +311,14 @@ async def query_models_parallel(
                 result[model] = {
                     "content": response.content,
                     "reasoning_details": None,
-                    "usage": {
-                        "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                        "completion_tokens": response.usage.completion_tokens
-                        if response.usage
-                        else 0,
-                        "total_tokens": response.usage.total_tokens if response.usage else 0,
-                    },
+                    "usage": _usage_to_dict(response.usage),
                 }
             else:
                 result[model] = None
 
         return result
     else:
-        return await _direct_query_models_parallel(models, messages, disable_tools, timeout)
+        return await _direct_query_models_parallel(models, messages, disable_tools, timeout, reasoning_params)
 
 
 # Progress callback type
@@ -319,6 +390,7 @@ async def query_models_with_progress(
     disable_tools: bool = False,
     shared_results: Optional[Dict[str, Dict[str, Any]]] = None,
     on_model_complete: Optional[Callable[[str, Dict[str, Any]], Awaitable[None]]] = None,
+    reasoning_params: Optional[Any] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Query multiple models with progress callbacks and structured status (ADR-012).
@@ -371,7 +443,11 @@ async def query_models_with_progress(
                     "status": STATUS_ERROR,
                     "content": None,
                     "latency_ms": 0,
-                    "error": str(e),
+                    # #594 / #694 gate round 2: `str(e)` is "" for an
+                    # exception built without a message, which is the
+                    # undiagnosable empty detail #594 fixed on the direct
+                    # path. Same commit, same file, opposite behaviour.
+                    "error": _error_detail(e),
                 }
 
             results[model] = result
@@ -406,4 +482,5 @@ async def query_models_with_progress(
             disable_tools,
             shared_results=shared_results,
             on_model_complete=on_model_complete,
+            reasoning_params=reasoning_params,
         )
