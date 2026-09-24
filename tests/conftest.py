@@ -18,6 +18,48 @@ def reset_env(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def isolate_performance_store(tmp_path, monkeypatch):
+    """#693: no test may append to the operator's real performance store.
+
+    `~/.llm-council/performance_metrics.jsonl` on a developer machine had
+    accumulated 1,868 `test/model-a` fixture records — about a quarter of the
+    file. They carry `cost_usd: null`, so a reader totalling cost saw a third
+    of rows missing one and concluded the capture pipeline was broken. It was
+    not. The fixtures made working code look faulty.
+
+    Autouse and unconditional, because the call sites that write are not the
+    ones that look like they write: seven `run_verification` tests reached the
+    real `persist_session_performance_data` through three layers without
+    mentioning it. Opting in per test is how this happened.
+
+    The singleton reset is load-bearing — `get_tracker()` memoises a tracker
+    built from the path resolved at its first call, so a tracker constructed
+    before this fixture would keep the old path for the rest of the session.
+
+    `tests/test_issue693_store_isolation.py` fails if this fixture stops
+    working, which is the difference between a convention and an invariant.
+    """
+    from llm_council.performance import integration
+
+    monkeypatch.setenv(
+        "LLM_COUNCIL_PERFORMANCE_STORE", str(tmp_path / "performance_metrics.jsonl")
+    )
+    # Pin the ENABLED inputs too, not just the path. A developer or CI shell
+    # carrying LLM_COUNCIL_PERFORMANCE_TRACKING=false would otherwise silently
+    # turn persistence off and fail the tests that assert a record was written
+    # — flaky-by-environment (cf. #641), and the failure would look like a
+    # capture bug rather than a harness one. Forced on, so tests that need it
+    # off opt out explicitly.
+    monkeypatch.setenv("LLM_COUNCIL_PERFORMANCE_TRACKING", "true")
+    # Clear any leaked overrides so the env vars above are what resolve.
+    monkeypatch.setattr(integration, "PERFORMANCE_STORE_PATH", None, raising=False)
+    monkeypatch.setattr(integration, "PERFORMANCE_TRACKING_ENABLED", None, raising=False)
+    integration._reset_tracker_singleton()
+    yield
+    integration._reset_tracker_singleton()
+
+
 # =============================================================================
 # VCR Configuration (ADR-033)
 # =============================================================================

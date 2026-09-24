@@ -79,6 +79,7 @@ nav:
     - Streaming: guides/streaming.md
     - Deliberation Depth: guides/deliberation-depth.md
     - Quality Benchmark: guides/bench.md
+    - Performance Store: guides/performance-store.md
     - Agent Skills: guides/skills.md
     - Creating Skills: guides/creating-skills.md
   - Integrations:

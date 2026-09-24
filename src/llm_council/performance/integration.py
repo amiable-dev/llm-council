@@ -16,17 +16,45 @@ from .types import ModelSessionMetric
 
 logger = logging.getLogger(__name__)
 
-# Configuration (can be overridden in config.py later)
-PERFORMANCE_TRACKING_ENABLED = os.getenv("LLM_COUNCIL_PERFORMANCE_TRACKING", "true").lower() in (
-    "true",
-    "1",
-    "yes",
-    "on",
-)
+_TRUTHY = ("true", "1", "yes", "on")
 
-PERFORMANCE_STORE_PATH = Path(
-    os.getenv("LLM_COUNCIL_PERFORMANCE_STORE", str(DEFAULT_STORE_PATH))
-).expanduser()
+# Explicit overrides. `None` means "resolve from the environment on every
+# call".
+#
+# #693: these used to BE the resolved values, computed at import time. That
+# made `LLM_COUNCIL_PERFORMANCE_STORE` unsettable from a test — collection
+# imports this module before any test body runs, so the env var was read
+# before anyone could set it — and the suite appended 1,868 fixture records
+# to the operator's real `~/.llm-council/performance_metrics.jsonl`. Those
+# rows carry `cost_usd: null`, so a third of the file looked like a cost
+# capture failure and the investigation went after the wrong defect.
+#
+# They survive as overrides rather than being deleted because patching them
+# directly is an established pattern in this suite and a legitimate embedding
+# hook. An override wins; absent one, the environment is read fresh.
+PERFORMANCE_TRACKING_ENABLED: Optional[bool] = None
+PERFORMANCE_STORE_PATH: Optional[Path] = None
+
+
+def tracking_enabled() -> bool:
+    """Whether to persist performance records, resolved per call."""
+    if PERFORMANCE_TRACKING_ENABLED is not None:
+        return bool(PERFORMANCE_TRACKING_ENABLED)
+    return os.getenv("LLM_COUNCIL_PERFORMANCE_TRACKING", "true").strip().lower() in _TRUTHY
+
+
+def resolve_store_path() -> Path:
+    """Where records are appended, resolved per call.
+
+    A blank or whitespace-only `LLM_COUNCIL_PERFORMANCE_STORE` falls back to
+    the default rather than to a relative path: an empty string is a
+    configuration mistake, and treating it as `./performance_metrics.jsonl`
+    would scatter records through whatever directory the process started in.
+    """
+    if PERFORMANCE_STORE_PATH is not None:
+        return Path(PERFORMANCE_STORE_PATH).expanduser()
+    raw = os.getenv("LLM_COUNCIL_PERFORMANCE_STORE", "").strip()
+    return Path(raw).expanduser() if raw else DEFAULT_STORE_PATH
 
 # Singleton tracker instance
 _tracker_instance: Optional[InternalPerformanceTracker] = None
@@ -48,11 +76,11 @@ def get_tracker() -> Optional[InternalPerformanceTracker]:
     """
     global _tracker_instance
 
-    if not PERFORMANCE_TRACKING_ENABLED:
+    if not tracking_enabled():
         return None
 
     if _tracker_instance is None:
-        _tracker_instance = InternalPerformanceTracker(store_path=PERFORMANCE_STORE_PATH)
+        _tracker_instance = InternalPerformanceTracker(store_path=resolve_store_path())
 
     return _tracker_instance
 
@@ -112,11 +140,15 @@ def persist_session_performance_data(
         model_statuses: Dict of model_id -> status info with latency_ms
         aggregate_rankings: Dict of model_id -> ranking info with borda_score
         stage2_results: Optional list of stage2 evaluation results
+        usage_by_model: Optional ADR-011 per-model usage (``metadata['usage']
+            ['by_model']``). Drives ``cost_usd``, which stays None unless
+            that model's entry reports ``cost_known`` — a null is the
+            absence of a measurement, never a $0 one.
 
     Returns:
         Number of records written (0 if tracking disabled)
     """
-    if not PERFORMANCE_TRACKING_ENABLED:
+    if not tracking_enabled():
         return 0
 
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -153,7 +185,7 @@ def persist_session_performance_data(
     if not records:
         return 0
 
-    count = append_performance_records(records, PERFORMANCE_STORE_PATH)
+    count = append_performance_records(records, resolve_store_path())
     logger.debug(f"Persisted {count} performance records for session {session_id}")
 
     return count
