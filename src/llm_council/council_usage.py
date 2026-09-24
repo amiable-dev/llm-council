@@ -127,6 +127,24 @@ MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
+def _merge_cost_source(bucket: Dict[str, Any], source: Optional[str]) -> None:
+    """Accumulate cost provenance across calls.
+
+    #694: a model's stage-1 call might be provider-reported and its stage-2
+    call registry-estimated. Claiming either label for the sum would be false,
+    so disagreeing sources collapse to ``"mixed"`` and the estimated portion
+    stays separately visible in ``cost_estimated_usd``. A call with no source
+    contributes nothing rather than overwriting a known one.
+    """
+    if not source:
+        return
+    existing = bucket.get("cost_source")
+    if existing is None:
+        bucket["cost_source"] = source
+    elif existing != source:
+        bucket["cost_source"] = "mixed"
+
+
 def _as_number(value: Any) -> float:
     """Coerce a provider-supplied count to a number, or 0.
 
@@ -157,11 +175,20 @@ def _add_cost_to_usage(
     ``total_usage["by_model"][model]`` (reviewer-primary attribution).
     """
     raw_cost = usage.get("cost")
-    cost = raw_cost or 0.0
+    cost = _as_number(raw_cost)
+    # #694: provenance rides with the figure. An estimate that cannot be told
+    # apart from a measurement is worse than no figure, because it WILL be
+    # summed with real ones.
+    source = usage.get("cost_source")
+    estimated = cost if source == "registry_estimate" else 0.0
     cached = usage.get("cached_tokens", 0) or 0
     # ADR-049 D4: cache-write tokens ride the same aggregation; absent => 0.
     cache_write = usage.get("cache_write_tokens", 0) or 0
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
+    total_usage["cost_estimated_usd"] = (
+        total_usage.get("cost_estimated_usd", 0.0) + estimated
+    )
+    _merge_cost_source(total_usage, source)
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
     total_usage["cache_write_tokens"] = (
         total_usage.get("cache_write_tokens", 0) + cache_write
@@ -194,6 +221,8 @@ def _add_cost_to_usage(
         bucket["completion_tokens"] += _as_number(usage.get("completion_tokens"))
         bucket["total_tokens"] += _as_number(usage.get("total_tokens"))
         bucket["cost_usd"] += cost
+        bucket["cost_estimated_usd"] = bucket.get("cost_estimated_usd", 0.0) + estimated
+        _merge_cost_source(bucket, source)
         bucket["cached_tokens"] += cached
         bucket["cache_write_tokens"] = bucket.get("cache_write_tokens", 0) + cache_write
         if raw_cost is not None:
@@ -245,8 +274,14 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             )
             for key in numeric_keys:  # never iterate the bool cost_known
                 agg[key] += _as_number(model_usage.get(key))
+            agg["cost_estimated_usd"] = agg.get("cost_estimated_usd", 0.0) + _as_number(
+                model_usage.get("cost_estimated_usd")
+            )
+            _merge_cost_source(agg, model_usage.get("cost_source"))
             if model_usage.get("cost_known"):
                 agg["cost_known"] = True
+            if model_usage.get("cost_incomplete"):
+                agg["cost_incomplete"] = True
     return {"by_stage": by_stage, "by_model": by_model, "total": grand_total}
 
 

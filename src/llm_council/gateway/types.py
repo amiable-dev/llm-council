@@ -51,6 +51,7 @@ class UsageInfo:
                       for a bill — one of "provider" | "registry_estimate" |
                       "local_zero", or None when unknown.
         cached_tokens: prompt tokens served from a provider cache, when reported.
+        cache_write_tokens: prompt tokens written INTO a provider cache (ADR-049 D4).
     """
 
     prompt_tokens: int
@@ -59,6 +60,11 @@ class UsageInfo:
     cost_usd: Optional[float] = None
     cost_source: Optional[str] = None
     cached_tokens: int = 0
+    # #694: the ADR-049 D4 write-side counter. Never dropped by the adapter,
+    # because it was never captured here in the first place — the gateway path
+    # simply had no cache-write accounting. Present so switching the gateway on
+    # is not a silent regression in cache cost.
+    cache_write_tokens: int = 0
 
 
 @dataclass

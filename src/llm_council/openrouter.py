@@ -6,6 +6,7 @@ ADR-026 Phase 2: Added reasoning_params support for reasoning models.
 import httpx
 import asyncio
 import logging
+import math
 import time
 from typing import TYPE_CHECKING, List, Dict, Any, Optional, Callable, Awaitable
 
@@ -30,16 +31,93 @@ def _get_openrouter_api_key() -> str:
 OPENROUTER_API_KEY = _get_openrouter_api_key()
 
 
+# Sanity bounds. A value beyond these is a malformed payload, not a very large
+# call: clamping a count and rejecting a cost is safer than letting an unbounded
+# integer reach float() and raise where the failure destroys a paid-for answer.
+_MAX_TOKENS = 1_000_000_000
+_MAX_COST = 1_000_000.0
+
+
+def _as_token_count(value: Any) -> int:
+    """A provider-supplied count as a non-negative int, or 0.
+
+    ONE coercion for every count that reaches arithmetic. Provider payloads are
+    untrusted, and a raise here is worse than a zero: it is swallowed by a
+    caller's soft-fail and silently disables cost resolution entirely.
+
+    #694 gate round 2: there were three near-identical validators with
+    different behaviour. Three validators is three chances to guard the wrong
+    branch — which is exactly what happened, see `_extract_cached_tokens`.
+    """
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, int):
+        # No isfinite() on an int: a gigantic JSON integer overflows on the
+        # int->float conversion, and that OverflowError would be caught by the
+        # caller's broad handler and destroy a successful completion.
+        return max(min(value, _MAX_TOKENS), 0)
+    if isinstance(value, float) and math.isfinite(value):
+        # Clamped like the int branch. The docstring calls `_MAX_TOKENS` a bound
+        # for every count, and then only one of the two numeric branches applied
+        # it — so 1e300 passed straight through into cost arithmetic.
+        return max(min(int(value), _MAX_TOKENS), 0)
+    # Deliberately NOT parsing numeric strings. `tests/test_cache_telemetry.py`
+    # pins `"800"` degrading to 0, and that contract is right: a string where a
+    # number was specified is a malformed payload, and silently coercing it
+    # makes "the provider sent a string" indistinguishable from "the provider
+    # sent a number". The round-2 finding was that FLOATS were being discarded;
+    # widening to strings was scope creep that broke a deliberate invariant.
+    return 0
+
+
+def _as_mapping(value: Any) -> Dict[str, Any]:
+    """A nested provider container as a dict, or empty.
+
+    #694 gate round 2: `(x or {})` rescues only FALSY values. A truthy non-dict
+    — a JSON string or list where an object was expected — reached `.get(...)`
+    and raised inside result construction, where the broad handler turned an
+    already-billed successful completion into STATUS_ERROR and threw the content
+    away. Losing a paid-for answer to a malformed telemetry field is the worst
+    trade in this file.
+    """
+    return value if isinstance(value, dict) else {}
+
+
+def _as_reported_cost(value: Any) -> Optional[float]:
+    """A provider-reported cost, or None if it is not a usable number.
+
+    #694 gate round 2: the provider figure was copied through unchecked and then
+    stamped `cost_source="provider"` — so a bool, a negative, a NaN or a string
+    became authoritative billing data, in the change whose entire purpose is
+    cost-accounting integrity. Ground truth still wins over an estimate, but it
+    has to be a number first. A rejected value falls through to the registry
+    estimate, which is labelled, rather than poisoning a total that reads as a
+    bill. Mirrors `CostResolver.resolve`'s own validation of the same field.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return float(value) if 0 <= value <= _MAX_COST else None
+    if isinstance(value, float) and math.isfinite(value) and 0 <= value <= _MAX_COST:
+        return float(value)
+    return None
+
+
 def _extract_cached_tokens(usage: Dict[str, Any]) -> int:
     """Cached prompt tokens from an OpenRouter usage object (0 if absent).
 
     Explicit None-check so a genuine reported 0 isn't discarded by a truthiness
     short-circuit (#365 review).
     """
+    # #694 gate: validate, do not trust — on BOTH branches. Round 1 of the gate
+    # validated only the `cached_tokens` top-level field and left the nested
+    # fallback returning the raw provider value, which is the branch OpenRouter
+    # actually populates. A guard over the path that was not the problem.
     direct = usage.get("cached_tokens")
     if direct is not None:
-        return direct
-    return (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0
+        return _as_token_count(direct)
+    nested = _as_mapping(usage.get("prompt_tokens_details")).get("cached_tokens")
+    return _as_token_count(nested)
 
 
 def _extract_cache_write_tokens(usage: Dict[str, Any]) -> int:
@@ -57,18 +135,16 @@ def _extract_cache_write_tokens(usage: Dict[str, Any]) -> int:
        drift guard re-probes quarterly).
     """
 
-    def _count(value: Any) -> int:
-        # Provider payloads are untrusted: a non-numeric value degrades to 0
-        # rather than crashing usage capture (same posture as missing).
-        return value if isinstance(value, int) and not isinstance(value, bool) else 0
+    # #694 gate round 2: one shared coercion, not a third local variant.
+    _count = _as_token_count
 
     top_level = usage.get("cache_creation_input_tokens")
     if top_level is not None:
         return _count(top_level)
-    sub = usage.get("cache_creation")
+    sub = _as_mapping(usage.get("cache_creation"))
     if isinstance(sub, dict) and sub:
         return sum(_count(v) for k, v in sub.items() if k.endswith("_input_tokens"))
-    return _count((usage.get("prompt_tokens_details") or {}).get("cache_write_tokens"))
+    return _count(_as_mapping(usage.get("prompt_tokens_details")).get("cache_write_tokens"))
 
 
 if TYPE_CHECKING:
@@ -118,6 +194,98 @@ async def query_model(
     return None
 
 
+
+def resolve_missing_cost(
+    usage: Dict[str, Any],
+    model: Optional[str],
+    gateway: str = "openrouter",
+) -> None:
+    """#694: fill an unreported cost from the registry, labelled as an estimate.
+
+    Cost capture worked only because OpenRouter volunteers `usage.cost`. It
+    always will — per OpenRouter's usage-accounting docs the old
+    `usage: {include: true}` request flag is "deprecated and has no effect…
+    usage details are now always included automatically" — so there is nothing
+    to ask for and no flag is sent. The exposure is the OTHER routes: Requesty,
+    the direct provider APIs, anything that does not volunteer a figure. There,
+    a missing cost meant `cost_known` was never set and every model in the
+    session landed null.
+
+    `CostResolver` already knows how to price a call from `registry.yaml`, but
+    it was only ever constructed on the gateway path, which is off by default.
+    This makes that fallback reachable from the default path.
+
+    `model` must be the CANONICAL id, not one already rewritten by
+    `resolve_model_name` for a gateway's dialect: `registry.yaml` is keyed by
+    the canonical id, so a rewritten one (Requesty stripping a `:free` suffix,
+    say) silently misses and the fallback does nothing.
+
+    Mutates `usage` in place, adding `cost` and `cost_source`. A
+    provider-reported figure always wins, including a reported 0.0 — that is
+    ground truth about a free or fully cached call, not a missing value. When
+    nothing can be resolved, `cost` stays None and no source is claimed:
+    inventing a number here would be the exact failure this guards against.
+
+    Never raises. It runs inside the per-model call path, and a pricing lookup
+    must not fail a call that has already been made and billed.
+    """
+    try:
+        # Set once, up front, so EVERY exit below leaves the key present. The
+        # gateway path always emits `cost_source`; this function had three
+        # exits that omitted it, which is the asymmetry a comment two functions
+        # away calls "a KeyError waiting for a consumer". Nothing in this
+        # codebase reads it without `.get`, so the practical risk is low — but
+        # a stated invariant that the neighbouring code breaks is how the last
+        # four review rounds went.
+        usage.setdefault("cost_source", None)
+
+        reported = _as_reported_cost(usage.get("cost"))
+        if reported is not None:
+            usage["cost"] = reported
+            usage["cost_source"] = "provider"
+            return
+        # A present-but-unusable figure is discarded rather than trusted, and
+        # falls through to the labelled registry estimate below.
+        if usage.get("cost") is not None:
+            usage["cost"] = None
+            # Reset rather than delete: an unresolved cost keeping a
+            # `provider` label is the confusion `cost_source` exists to
+            # prevent, but popping the key would re-open the presence gap
+            # closed above.
+            usage["cost_source"] = None
+        if not model:
+            return
+
+        from .gateway.cost_resolver import CostResolver
+
+        cost, source = CostResolver().resolve(
+            model_id=model,
+            # #694 gate: the ROUTE, not a hardcoded "openrouter". The whole
+            # point of this fallback is the non-OpenRouter routes, and
+            # `CostResolver` branches on gateway — `local_zero` for Ollama, and
+            # the registry estimate for the direct provider APIs. Hardcoding
+            # the one route that does not need the fallback mislabelled the
+            # provenance of exactly the routes that do.
+            gateway=gateway,
+            prompt_tokens=_as_token_count(usage.get("prompt_tokens")),
+            completion_tokens=_as_token_count(usage.get("completion_tokens")),
+            # Coerce here too, not only in the extractors: this reads the
+            # dict, which may carry a raw provider value that never went
+            # through them. `int("lots")` raised, the soft-fail below swallowed
+            # it, and the whole fallback silently stopped working.
+            cache_read_tokens=_as_token_count(usage.get("cached_tokens")),
+            provider_cost_usd=None,
+        )
+        # `local_zero` counts: an Ollama call really did cost nothing, and that
+        # is a measurement, not an estimate. Accepting only `registry_estimate`
+        # discarded it and left local runs reporting an unknown cost forever.
+        if cost is not None and source in ("registry_estimate", "local_zero"):
+            usage["cost"] = cost
+            usage["cost_source"] = source
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("cost fallback failed; leaving cost unknown", exc_info=True)
+
+
 async def query_model_with_status(
     model: str,
     messages: List[Dict[str, str]],
@@ -139,6 +307,9 @@ async def query_model_with_status(
         Response dict with 'status', 'content', 'latency_ms', 'usage', and optional 'error'
     """
     api_url, api_key, route = resolve_endpoint()
+    # #694 gate: keep the canonical id. `registry.yaml` is keyed by it, and the
+    # rewritten form is only for the wire.
+    canonical_model = model
     model = resolve_model_name(model, route)
 
     headers = {
@@ -200,9 +371,29 @@ async def query_model_with_status(
 
             response.raise_for_status()
 
-            data = response.json()
-            message = data["choices"][0]["message"]
-            usage = data.get("usage", {})
+            data = _as_mapping(response.json())
+            # Three assumptions in one subscript — that `choices` exists, that
+            # it is non-empty, and that its first entry is an object — in the
+            # one function whose thesis is that a malformed payload must never
+            # cost you an answer you have already paid for. The guards added
+            # for the `usage` containers left this line, its sibling, alone.
+            #
+            # A throw here lands in the broad handler below, which reports
+            # STATUS_ERROR and discards the content: the call is billed and the
+            # answer is gone. Degrading to an empty message keeps whatever else
+            # the response carried (usage, cost) and lets the caller see an
+            # empty completion rather than a failure it cannot diagnose.
+            choices = data.get("choices")
+            first = _as_mapping(choices[0] if isinstance(choices, list) and choices else None)
+            message = _as_mapping(first.get("message"))
+            # #694 gate round 3: `.get(k, {})` defaults only when the key is
+            # ABSENT. `"usage": null`, or a truthy non-object, yields a
+            # non-dict and every `.get` below raises — inside result
+            # construction, where the broad handler turns an already-billed
+            # success into STATUS_ERROR and throws the content away. Round 2
+            # added `_as_mapping` for the NESTED containers and left the
+            # outermost one, which is the one every field goes through.
+            usage = _as_mapping(data.get("usage"))
 
             # ADR-049 D4: route + session attribution per call, so hit-rate
             # is reconstructable from logs alone. Lazy import (house pattern
@@ -211,7 +402,7 @@ async def query_model_with_status(
 
             cache_ctx = get_cache_context()
 
-            return {
+            result: Dict[str, Any] = {
                 "status": STATUS_OK,
                 "content": message.get("content"),
                 "reasoning_details": message.get("reasoning_details"),
@@ -219,18 +410,30 @@ async def query_model_with_status(
                 "route": route,
                 "session_id": cache_ctx.session_id if cache_ctx else None,
                 "usage": {
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                    "total_tokens": usage.get("total_tokens", 0),
+                    # #694 gate round 3: through the coercion, like every
+                    # other count. `_as_token_count`'s own docstring says "ONE
+                    # coercion for every count that reaches arithmetic" and then
+                    # these three — the primary ones — were copied raw. An
+                    # invariant stated and not applied, in the same commit.
+                    "prompt_tokens": _as_token_count(usage.get("prompt_tokens")),
+                    "completion_tokens": _as_token_count(usage.get("completion_tokens")),
+                    "total_tokens": _as_token_count(usage.get("total_tokens")),
                     # ADR-011: OpenRouter returns the authoritative billed cost
                     # inline; capture it (previously discarded) so the council
                     # can account cost, not just tokens.
-                    "cost": usage.get("cost"),
+                    # #694 gate round 2: validated, not copied. An unchecked
+                    # bool/NaN/negative/string was being stamped as authoritative
+                    # billing data by `resolve_missing_cost`.
+                    "cost": _as_reported_cost(usage.get("cost")),
                     "cached_tokens": _extract_cached_tokens(usage),
                     # ADR-049 D4: cache writes (0 when the route reports none).
                     "cache_write_tokens": _extract_cache_write_tokens(usage),
                 },
             }
+            # #694: label the provenance, and fall back to a registry estimate
+            # when the provider reported nothing.
+            resolve_missing_cost(result["usage"], canonical_model, gateway=route)
+            return result
 
     except (httpx.TimeoutException, asyncio.TimeoutError):
         # #545: asyncio.TimeoutError is the wall-clock bound above; httpx's is a

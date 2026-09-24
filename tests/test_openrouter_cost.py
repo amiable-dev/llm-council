@@ -46,7 +46,7 @@ async def test_query_model_with_status_captures_cost_and_cached():
 
 
 @pytest.mark.asyncio
-async def test_cost_absent_is_none_not_error():
+async def test_cost_absent_falls_back_to_a_labelled_registry_estimate():
     from llm_council.openrouter import query_model
 
     usage = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
@@ -59,9 +59,14 @@ async def test_cost_absent_is_none_not_error():
         )
         result = await query_model("openai/gpt-4o", [{"role": "user", "content": "hi"}])
 
-    # query_model passes usage through; cost is None when the API omits it.
+    # #694 flipped this contract. It used to assert `cost is None` whenever the
+    # API omitted a figure, which left every model in such a session with no
+    # cost at all. The registry fallback now prices the call from
+    # `registry.yaml` — and labels it, so an estimate can never be mistaken for
+    # a bill when the two are summed.
     assert result is not None
-    assert result["usage"]["cost"] is None
+    assert result["usage"]["cost"] is not None
+    assert result["usage"]["cost_source"] == "registry_estimate"
     assert result["usage"]["cached_tokens"] == 0
 
 
