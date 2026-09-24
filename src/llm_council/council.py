@@ -253,6 +253,7 @@ from llm_council.council_usage import (  # noqa: E402
     ProgressCallback,
     _add_cost_to_usage,
     _build_usage_summary,
+    persist_council_performance,
     resolve_stage_timeout,
 )
 from llm_council.council_rankings import (  # noqa: E402
@@ -688,6 +689,18 @@ async def run_council_with_fallback(
         # ADR-011 Phase 2: emit OTel GenAI token/cost metrics (soft-fail).
         emit_usage_metrics(result["metadata"]["usage"])
 
+        # ADR-011 / #692: write the local cost trail. Placed here, after the
+        # usage summary exists, because that summary is the only place the
+        # per-model cost lives. Soft-fail inside the helper — telemetry never
+        # fails a deliberation that has already completed and already billed.
+        persist_council_performance(
+            session_id=session_id,
+            model_statuses=model_statuses,
+            aggregate_rankings=aggregate_rankings,
+            stage2_results=stage2_results,
+            usage_summary=result["metadata"]["usage"],
+        )
+
         # ADR-025b: Add verdict result for BINARY/TIE_BREAKER modes
         if verdict_result is not None:
             result["metadata"]["verdict"] = verdict_result.to_dict()
@@ -1106,6 +1119,29 @@ async def run_full_council(
     usage_summary = _build_usage_summary(total_usage)
     # ADR-011 Phase 2: emit OTel GenAI token/cost metrics (soft-fail).
     emit_usage_metrics(usage_summary)
+
+    # ADR-011 / #692: write the local cost trail for this entry point too.
+    # `run_full_council` is tier-agnostic and backs POST /v1/council/run, so
+    # leaving it out would have made HTTP spend invisible in exactly the way
+    # consult spend was. Its own session id is a fresh UUID: council ids are
+    # not the harness's and join to nothing outside this file (see #695).
+    # `run_full_council` does not measure per-model latency — its stage 1
+    # helper returns only {model, response} — so the statuses carry no
+    # `latency_ms` and the record stores None rather than a fabricated 0 ms.
+    # A zero would enter the p50/p95 percentiles that decide whether a model
+    # fits its tier's time budget, which is a measurement claim this entry
+    # point is not entitled to make.
+    persist_council_performance(
+        session_id=str(uuid.uuid4()),
+        model_statuses={
+            r["model"]: {"status": "ok"}
+            for r in stage1_results
+            if isinstance(r, dict) and isinstance(r.get("model"), str)
+        },
+        aggregate_rankings=aggregate_rankings,
+        stage2_results=stage2_results,
+        usage_summary=usage_summary,
+    )
 
     # Collect abstention info and score/rank mismatches from Stage 2
     abstentions = []

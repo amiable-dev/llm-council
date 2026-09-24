@@ -127,6 +127,25 @@ MODEL_STATUS_AUTH_ERROR = STATUS_AUTH_ERROR
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
 
 
+def _as_number(value: Any) -> float:
+    """Coerce a provider-supplied count to a number, or 0.
+
+    #692 gate: token aggregation runs on the deliberation path, OUTSIDE the
+    soft-fail wrapper around persistence. A provider returning `null` or a
+    string for a token count would raise a TypeError and fail a consult that
+    had already completed and already been billed.
+    """
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return value if math.isfinite(value) else 0
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if math.isfinite(parsed) else 0
+
+
 def _add_cost_to_usage(
     total_usage: Dict[str, Any], usage: Dict[str, Any], model: Optional[str] = None
 ) -> None:
@@ -152,6 +171,13 @@ def _add_cost_to_usage(
     # "known".
     if raw_cost is not None:
         total_usage["cost_known"] = True
+    else:
+        # #692 gate: `cost_known` means "at least one call reported a cost", so
+        # a session mixing reported and unreported calls records a PARTIAL sum
+        # that reads as a measurement. That is a lower bound presented as a
+        # total — the exact failure invoice reconciliation must not have.
+        # `cost_complete` is the flag a total can be trusted on.
+        total_usage["cost_incomplete"] = True
     if model is not None:
         bucket = total_usage.setdefault("by_model", {}).setdefault(
             model,
@@ -164,14 +190,16 @@ def _add_cost_to_usage(
                 "cache_write_tokens": 0,
             },
         )
-        bucket["prompt_tokens"] += usage.get("prompt_tokens", 0)
-        bucket["completion_tokens"] += usage.get("completion_tokens", 0)
-        bucket["total_tokens"] += usage.get("total_tokens", 0)
+        bucket["prompt_tokens"] += _as_number(usage.get("prompt_tokens"))
+        bucket["completion_tokens"] += _as_number(usage.get("completion_tokens"))
+        bucket["total_tokens"] += _as_number(usage.get("total_tokens"))
         bucket["cost_usd"] += cost
         bucket["cached_tokens"] += cached
         bucket["cache_write_tokens"] = bucket.get("cache_write_tokens", 0) + cache_write
         if raw_cost is not None:
             bucket["cost_known"] = True
+        else:
+            bucket["cost_incomplete"] = True
 
 
 def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
@@ -216,9 +244,58 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
                 },
             )
             for key in numeric_keys:  # never iterate the bool cost_known
-                agg[key] += model_usage.get(key, 0)
+                agg[key] += _as_number(model_usage.get(key))
             if model_usage.get("cost_known"):
                 agg["cost_known"] = True
     return {"by_stage": by_stage, "by_model": by_model, "total": grand_total}
 
 
+def persist_council_performance(
+    session_id: str,
+    model_statuses: Any,
+    aggregate_rankings: Any,
+    stage2_results: Any,
+    usage_summary: Any,
+) -> int:
+    """ADR-011 / #692: write one performance record per model for a consult.
+
+    Before this, `performance_metrics.jsonl` had exactly one writer — the
+    verify path. Every `consult`, the path an operator is actually billed for,
+    left no local trace at all, so a recorded total could not be compared with
+    a provider invoice and nobody could tell "cheap" from "unrecorded".
+
+    Both consult orchestrators route through here rather than calling
+    `persist_session_performance_data` directly, so the two cannot drift in
+    what they record, and so the council's list-shaped `aggregate_rankings` is
+    normalised in one place instead of at each call site.
+
+    Soft-fail by contract: telemetry must never fail a deliberation that has
+    already completed and already cost money. Returns the number of records
+    written, 0 on any failure.
+    """
+    try:
+        # The council carries rankings as a list of {"model": ..., ...};
+        # `persist_session_performance_data` wants them keyed by model.
+        if isinstance(aggregate_rankings, dict):
+            rankings = aggregate_rankings
+        elif isinstance(aggregate_rankings, list):
+            rankings = {
+                r["model"]: r
+                for r in aggregate_rankings
+                if isinstance(r, dict) and isinstance(r.get("model"), str)
+            }
+        else:
+            rankings = {}
+
+        from llm_council.performance.integration import persist_session_performance_data
+
+        return persist_session_performance_data(
+            session_id=session_id,
+            model_statuses=model_statuses or {},
+            aggregate_rankings=rankings,
+            stage2_results=stage2_results,
+            usage_by_model=(usage_summary or {}).get("by_model"),
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("performance persistence failed (ignored): %s", exc, exc_info=True)
+        return 0

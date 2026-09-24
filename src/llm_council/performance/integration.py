@@ -88,7 +88,7 @@ def get_tracker() -> Optional[InternalPerformanceTracker]:
 def _extract_parse_success(
     model_id: str,
     stage2_results: Optional[List[Dict[str, Any]]],
-) -> bool:
+) -> Optional[bool]:
     """Extract parse success indicator from stage2 results.
 
     A model is considered to have parsed successfully if:
@@ -100,10 +100,17 @@ def _extract_parse_success(
         stage2_results: List of stage2 evaluation results
 
     Returns:
-        True if parse was successful, False otherwise
+        True if the ranking parsed, False if it did not, or None when peer
+        review never reached this model (no stage-2 data for it at all).
     """
     if not stage2_results:
-        return True  # Default to success if no stage2 data
+        # #692 gate round 2: this was the SECOND `return True`, and the one on
+        # the default path — `stage2_results` is optional and defaults to None
+        # in `persist_session_performance_data`, so any caller omitting it
+        # fabricated a parse success for every model in the session. Round 1
+        # fixed only the tail branch; fixing one of two exits left the defect
+        # exactly where it did the most damage.
+        return None
 
     for result in stage2_results:
         if result.get("model") == model_id:
@@ -116,8 +123,11 @@ def _extract_parse_success(
                 return False
             return True
 
-    # Model not found in stage2 results - default to success
-    return True
+    # #692 gate: a model absent from stage 2 did not "succeed" — peer review
+    # never reached it. Returning True here systematically inflated the
+    # parse-success rate once #692 started recording unranked models, which is
+    # the same fabrication this change fixes for borda_score.
+    return None
 
 
 def persist_session_performance_data(
@@ -154,13 +164,23 @@ def persist_session_performance_data(
     timestamp = datetime.now(timezone.utc).isoformat()
     records: List[ModelSessionMetric] = []
 
-    # Only record models that have both status and rankings
-    for model_id, ranking_info in aggregate_rankings.items():
-        status_info = model_statuses.get(model_id, {})
+    # #692: every model we saw, not only the ranked ones. A model that answered
+    # and was billed but never reached peer review (a partial or timed-out run)
+    # still has a cost, and a cost that is not recorded cannot be reconciled
+    # against an invoice. Its Borda score is None rather than 0.0 — see below.
+    seen = list(aggregate_rankings) + [m for m in model_statuses if m not in aggregate_rankings]
+
+    for model_id in seen:
+        ranking_info = aggregate_rankings.get(model_id) or {}
+        # `or {}` not a get-default: a key present with a null value returns
+        # None, and `.get` on that raises. Same trap as #594/#677/#680.
+        status_info = model_statuses.get(model_id) or {}
 
         # Extract metrics
-        latency_ms = status_info.get("latency_ms", 0)
-        borda_score = ranking_info.get("borda_score", 0.0)
+        latency_ms = status_info.get("latency_ms")
+        # Unranked => None, never 0.0. A zero says "peer review placed this
+        # model last"; a null says "peer review never saw it".
+        borda_score = ranking_info.get("borda_score") if ranking_info else None
         parse_success = _extract_parse_success(model_id, stage2_results)
 
         # ADR-011 Phase 3: record cost only when it was actually reported

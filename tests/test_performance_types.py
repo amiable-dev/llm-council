@@ -49,12 +49,17 @@ class TestModelSessionMetricDataclass:
         assert metric.parse_success is True
 
     def test_has_schema_version(self):
-        """ModelSessionMetric should have schema_version field."""
+        """ModelSessionMetric should have schema_version field.
+
+        1.1.0 since #692: `latency_ms` and `borda_score` became nullable, which
+        is an additive, backward-compatible change for a reader (a 1.0.0 file
+        stays valid) but not for a writer, so the minor moves.
+        """
         from llm_council.performance.types import ModelSessionMetric
 
         metric = ModelSessionMetric()
         assert hasattr(metric, "schema_version")
-        assert metric.schema_version == "1.0.0"
+        assert metric.schema_version == "1.1.0"
 
     def test_optional_reasoning_tokens(self):
         """ModelSessionMetric should have optional reasoning_tokens_used."""
@@ -76,9 +81,15 @@ class TestModelSessionMetricDataclass:
         assert metric.session_id == ""
         assert metric.model_id == ""
         assert metric.timestamp == ""
-        assert metric.latency_ms == 0
-        assert metric.borda_score == 0.0
-        assert metric.parse_success is True
+        # #692: unmeasured is None, not zero. A 0 ms latency and a 0.0 Borda
+        # score are both measurements — "answered instantly" and "ranked last"
+        # — and defaulting to them fabricated data every time an entry point
+        # could not supply the real figure.
+        assert metric.latency_ms is None
+        assert metric.borda_score is None
+        # Tri-state too: a model peer review never reached neither parsed
+        # nor failed to parse.
+        assert metric.parse_success is None
 
     def test_borda_score_normalized_range(self):
         """Borda score should be normalized 0-1."""
@@ -170,7 +181,7 @@ class TestModelSessionMetricSerialization:
         parsed = json.loads(line)
 
         assert "schema_version" in parsed
-        assert parsed["schema_version"] == "1.0.0"
+        assert parsed["schema_version"] == "1.1.0"
 
     def test_handles_missing_fields_from_older_schema(self):
         """Should handle missing fields from older schema versions."""
