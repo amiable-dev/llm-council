@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-24
+
+**Council can now account for what it spends.** Before this release the expensive path left no local record at all, the test suite was polluting the record that did exist, the one cost fallback was unreachable, and nothing reported spend outward. Five issues, and a single thread running through them: **a value that was never measured must never be written as a zero, because a zero is a measurement.** That rule had to be stated at four separate layers before it held — the record, the reader, the aggregate, and the external span.
+
+The council gate earned its place here. It failed three of these PRs across ten review rounds and found a real defect in every one, including several claims in comments and commit messages that the code did not actually satisfy.
+
 ### Added
 
 - **Council spend is reportable as OpenTelemetry spans** ([#695](https://github.com/amiable-dev/llm-council/issues/695), [ADR-056](docs/adr/ADR-056-external-spend-telemetry.md)). One `std.artefact.activation` span per run, conforming to the `skills-telemetry` ADR-010 `external` artefact contract, so agent spend can be attributed to the work that caused it — the harness sees that a command ran, not what it cost, and only the spending process knows.
@@ -22,11 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The published attribute allowlist lives in one constant, compared **longhand and in both directions** against the contract in `tests/test_issue695_external_spend.py`. An attribute outside the published set is dropped *silently* downstream, so a rename on either side produces a column of nulls rather than an error — and a test comparing the constant against itself would pass straight through that. `stdtel-conform` is wired in as a second opinion, not as the gate: if it is missing, lagging or wrong, council's own test must still fail correctly.
 
 
-### Added
 
 - **The consult path now writes a performance record** ([#692](https://github.com/amiable-dev/llm-council/issues/692)). `performance_metrics.jsonl` had exactly one writer — the verify path. Every `consult`, the path an operator is actually billed for, left no local trace, so a recorded total could not be compared with a provider invoice and there was no way to tell "cheap" from "unrecorded". Both orchestrators now persist through a single helper, `council_usage.persist_council_performance`, so they cannot drift in what they record; the call sites are AST-pinned, because an absent call reads as correct code everywhere.
 
   **Partial and timed-out consults still record.** A run that was cut short still billed, and an unrecorded cost is a total that cannot be reconciled. This is a deliberate divergence from the verify path, which persists nothing on timeout.
+
+
+- `docs/guides/performance-store.md` — what the store records, how to total cost from it correctly (a null cost is not a zero, and the two must not be summed together), and a copy-pasteable recipe for operators to strip historical `test/*` rows from their own file. **Council never rewrites this file** — no migration on upgrade, by design: it is a measurement record and the only copy.
 
 ### Changed
 
@@ -48,9 +56,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Confidence is computed from records that carry a quality signal**, not from the raw row count. Once consult began recording models peer review never reached, `len(records)` could carry a model to MODERATE or HIGH confidence — and past the ADR-029 graduation gate — on rows containing no usable signal. The `get_all_model_scores` eligibility gate counts scored records for the same reason: nine unranked rows plus one ranked row used to clear it and route selection on a single observation.
 
+- **Tier defaults refreshed against the live catalogue** ([#696](https://github.com/amiable-dev/llm-council/issues/696)), checked 2026-09-24 against 458 live models. All 20 pool members still resolve. **Four had fallen behind price cuts, by up to 186%** — `deepseek-v4.1-flash` completion was registered at 0.0012 against a live 0.00042, `deepseek-v4-pro-0813` prompt at 0.00119 against 0.000462, `glm-5.3` 67% over, `deepseek-v4-flash` 21% under. That mattered more this week than last: #694 has just made the registry the cost *fallback*, and ADR-049 D3 prices cache classes from the same table, so a stale price is a **wrong** cost rather than a missing one — and wrong numbers get summed while missing ones get noticed. Two context windows corrected alongside.
+
+  Four flagship successors of models already on a council — `claude-opus-5.5`, `gpt-6-sol`, `gpt-6-sol-pro`, `grok-4.7` — are registered and added to `frontier` on ADVISORY voting (ADR-027/029). `:batch` variants excluded: different latency semantics.
+
+  **Nothing is promoted out of `frontier`**, and `default_pools.yaml` now says why: ADR-029 wants ≥30 days and ≥100 sessions, and the 2026-09-18 intake is six days old. The standing "swap the preview when a stable Gemini 3.x Pro lands" note is answered in writing — there still is not one; the only non-preview 3.x Pro in the catalogue is an image model.
+
 - `POST /v1/council/run` records `latency_ms: null`, because `run_full_council` does not measure per-model latency — its stage-1 helper returns only `{model, response}`. Writing a 0 there would have been a fabricated measurement in the field the tier budgets are built from.
 
 ### Fixed
+
+- **Cost capture had no fallback, and the gateway path discarded it** ([#694](https://github.com/amiable-dev/llm-council/issues/694)). Coverage read as 100% only because OpenRouter volunteers `usage.cost` and the default path copied it through.
+
+  `gateway/openrouter.py` and `gateway/requesty.py` already stamp `cost_usd` and `cost_source` via `CostResolver`, and **three** hand-written copies of the usage mapping in `gateway_adapter.py` then threw them away — including the one on `query_models_parallel`, the path stages 1 and 2 actually use. So the only path *with* a registry fallback was the only path reporting no cost: turning `gateways.enabled` on would have silently zeroed cost coverage and the ADR-049 cache-hit counter together. The three copies are now one `_usage_to_dict`, with an AST test that fails if a fourth appears.
+
+  On the default path, a provider omitting the cost left every model in the session null — the observed all-or-nothing shape: 2,698 sessions entirely null, 846 entirely known, **zero mixed**. `CostResolver`'s registry estimate already existed and was unreachable because it is only constructed on the gateway path; `resolve_missing_cost` reaches it, using the actual route and the canonical model id (`registry.yaml` is keyed by the canonical form, not the per-gateway rewrite).
+
+  **Every cost now carries a provenance.** `provider`, `registry_estimate` or `local_zero`; disagreeing sources across one model's calls collapse to `mixed` rather than claiming either; the estimated portion is tracked separately as `cost_estimated_usd`; and `format_cost_summary` discloses it — `~$0.05 (incl. ~$0.04 estimated)`. A figure that cannot be told apart from a measurement is worse than no figure, because it gets summed with real ones.
+
+  Provider figures are validated before being trusted: a bool, a negative, a NaN or a string is no longer stamped `cost_source: provider` but falls through to the *labelled* estimate. Provider ground truth still wins, including a reported `0.0` — that is a measurement of a free or fully cached call.
+
+  **Not implemented, deliberately:** the ticket's suggestion to send an accounting flag asking OpenRouter to include usage. Per their current docs `usage: {include: true}` is "deprecated and has no effect… usage details are now always included automatically", so it would be a parameter the API ignores inside a payload the ADR-049 caching tests byte-compare. A test pins its absence. The real exposure is the non-OpenRouter routes, which the registry fallback covers.
 
 - **The test suite no longer writes fixture records into the operator's real performance store** ([#693](https://github.com/amiable-dev/llm-council/issues/693)). `~/.llm-council/performance_metrics.jsonl` on a developer machine had accumulated **1,869 `test/model-a` rows out of 7,598** — about a quarter of the file — and it was ongoing, not historical: the newest was written minutes before this fix, by the red test run that proved the bug.
 
@@ -60,15 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Resolution is now lazy: `resolve_store_path()` and `tracking_enabled()` read the environment per call, and `PERFORMANCE_STORE_PATH` / `PERFORMANCE_TRACKING_ENABLED` survive as optional overrides (default `None`) so the existing monkeypatch-by-name tests keep working. A blank env var falls back to the default rather than to a relative path, which would have scattered records through whatever directory the process started in.
 
-### Added
-
-- `docs/guides/performance-store.md` — what the store records, how to total cost from it correctly (a null cost is not a zero, and the two must not be summed together), and a copy-pasteable recipe for operators to strip historical `test/*` rows from their own file. **Council never rewrites this file** — no migration on upgrade, by design: it is a measurement record and the only copy.
-
 ### Testing
 
 - `tests/conftest.py` gains an autouse `isolate_performance_store` fixture pointing every test at `tmp_path`, including the `get_tracker()` singleton reset — without which a tracker built before the fixture keeps the old path for the rest of the session.
 - `tests/test_issue693_store_isolation.py` fails if the resolved store path is ever under the real `HOME`. The fixture is a convention; the guard is the invariant. Verified end to end by checksumming the real store either side of a full 3,794-test run: byte-identical.
-
 
 ## [0.49.0] - 2026-09-18
 
