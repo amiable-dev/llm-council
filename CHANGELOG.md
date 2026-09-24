@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The consult path now writes a performance record** ([#692](https://github.com/amiable-dev/llm-council/issues/692)). `performance_metrics.jsonl` had exactly one writer — the verify path. Every `consult`, the path an operator is actually billed for, left no local trace, so a recorded total could not be compared with a provider invoice and there was no way to tell "cheap" from "unrecorded". Both orchestrators now persist through a single helper, `council_usage.persist_council_performance`, so they cannot drift in what they record; the call sites are AST-pinned, because an absent call reads as correct code everywhere.
+
+  **Partial and timed-out consults still record.** A run that was cut short still billed, and an unrecorded cost is a total that cannot be reconciled. This is a deliberate divergence from the verify path, which persists nothing on timeout.
+
+### Changed
+
+- **Performance-record schema 1.1.0: `borda_score`, `latency_ms` and `parse_success` are nullable**, joining `cost_usd`. One rule behind all three — a value that was never measured must not be written as a zero, because a zero is itself a measurement. `borda_score: 0.0` says "peer review ranked this model last"; `latency_ms: 0` says "it answered instantly". Recording a partial run as a pile of zero-scored models would have poisoned the performance index that decides which models get selected next, and a zero latency would have dragged the p50/p95 percentiles that decide whether a model fits its tier's time budget.
+
+  Both aggregation sites skip nulls rather than averaging them in — the same treatment `mean_cost_usd` already had. The second site was found by the mypy ratchet, not by the tests.
+
+  `parse_success` became tri-state for the same reason, and the council gate is what caught it: recording unranked models meant every model peer review never reached was being written as `parse_success: True`, inflating the reliability metric with models that never had the chance to parse anything. `parse_success_rate` now divides by the records that carry the signal, not by all of them.
+
+  `from_jsonl_line` no longer defaults these fields to `0`/`0.0`/`True` on read. Writing nullable fields and then resurrecting zeros on the way back in would have undone the change at the first read.
+
+  Readers of an existing 1.0.0 file are unaffected: those records simply never carry a null in these fields.
+
+- **`cost_incomplete` on usage buckets.** `cost_known` means "at least one call reported a cost", so a session mixing reported and unreported calls recorded a *partial sum* that read as a measurement — a lower bound presented as a total, which is precisely what invoice reconciliation must not do. The new flag marks any bucket where at least one call reported nothing.
+
+- Token aggregation coerces provider-supplied counts rather than trusting them. This runs on the deliberation path, outside the soft-fail wrapper around persistence, so a provider returning `null` or a string for a token count could have raised and failed a consult that had already completed and already been billed.
+
+- **The performance index now admits what it does not know.** `ModelPerformanceIndex.p50_latency_ms`, `p95_latency_ms` and `parse_success_rate` are `Optional`, joining `mean_cost_usd`. Making the *record* nullable was only half the job: the aggregation layer was quietly putting the fabrications back — an empty latency sample returned a p50 of `0` ("answered instantly") and a parse-success rate with no evidence behind it returned a confident `1.0`.
+
+- **Confidence is computed from records that carry a quality signal**, not from the raw row count. Once consult began recording models peer review never reached, `len(records)` could carry a model to MODERATE or HIGH confidence — and past the ADR-029 graduation gate — on rows containing no usable signal. The `get_all_model_scores` eligibility gate counts scored records for the same reason: nine unranked rows plus one ranked row used to clear it and route selection on a single observation.
+
+- `POST /v1/council/run` records `latency_ms: null`, because `run_full_council` does not measure per-model latency — its stage-1 helper returns only `{model, response}`. Writing a 0 there would have been a fabricated measurement in the field the tier budgets are built from.
+
 ### Fixed
 
 - **The test suite no longer writes fixture records into the operator's real performance store** ([#693](https://github.com/amiable-dev/llm-council/issues/693)). `~/.llm-council/performance_metrics.jsonl` on a developer machine had accumulated **1,869 `test/model-a` rows out of 7,598** — about a quarter of the file — and it was ongoing, not historical: the newest was written minutes before this fix, by the red test run that proved the bug.

@@ -4,6 +4,7 @@ Tests for metrics extraction, persistence helper, and singleton tracker.
 Written BEFORE implementation per TDD workflow.
 """
 
+import json
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,36 +101,41 @@ class TestPersistSessionPerformanceData:
             records = read_performance_records(store_path)
             assert records[0].borda_score == 0.85
 
-    def test_handles_missing_model_in_rankings(self):
-        """Should handle models that responded but weren't ranked."""
+    def test_records_a_model_that_answered_but_was_never_ranked(self):
+        """#692 flipped this contract.
+
+        It used to assert that a model present in `model_statuses` but absent
+        from `aggregate_rankings` was NOT recorded. That dropped the spend of
+        every model on a partial or timed-out run — and the cost of a run that
+        was cut short is exactly the cost an operator cannot otherwise account
+        for. The model is now recorded, with `borda_score=None` to say it was
+        never ranked rather than a 0.0 claiming it came last.
+        """
         from llm_council.performance import persist_session_performance_data
-        from llm_council.performance.store import read_performance_records
 
         with tempfile.TemporaryDirectory() as tmpdir:
             store_path = Path(tmpdir) / "metrics.jsonl"
 
-            # Model in statuses but not in rankings
-            model_statuses = {
-                "model-a": {"status": "ok", "latency_ms": 1000},
-                "model-b": {"status": "timeout", "latency_ms": 30000},  # Not ranked
-            }
-            aggregate_rankings = {
-                "model-a": {"borda_score": 0.75},
-                # model-b not in rankings
-            }
-
             with patch("llm_council.performance.integration.PERFORMANCE_STORE_PATH", store_path):
                 count = persist_session_performance_data(
                     session_id="s1",
-                    model_statuses=model_statuses,
-                    aggregate_rankings=aggregate_rankings,
+                    model_statuses={
+                        "model-a": {"latency_ms": 1000},
+                        "model-b": {"latency_ms": 2000},
+                    },
+                    aggregate_rankings={"model-a": {"borda_score": 0.9}},
                 )
 
-            # Should only record model-a (the one with rankings)
-            assert count == 1
-            records = read_performance_records(store_path)
-            assert len(records) == 1
-            assert records[0].model_id == "model-a"
+            assert count == 2
+            rows = [
+                json.loads(line)
+                for line in store_path.read_text().splitlines()
+                if line.strip()
+            ]
+            by_model = {r["model_id"]: r for r in rows}
+            assert by_model["model-a"]["borda_score"] == 0.9
+            assert by_model["model-b"]["borda_score"] is None
+            assert by_model["model-b"]["latency_ms"] == 2000
 
     def test_respects_enabled_flag(self):
         """Should no-op when PERFORMANCE_TRACKING_ENABLED=false."""
@@ -264,7 +270,7 @@ class TestExtractParseSuccess:
         success = _extract_parse_success("model-a", stage2_results)
         assert success is False
 
-    def test_missing_model_defaults_to_true(self):
+    def test_a_model_absent_from_stage2_is_unknown_not_a_success(self):
         """Should default to True for models not in stage2."""
         from llm_council.performance.integration import _extract_parse_success
 
@@ -273,7 +279,10 @@ class TestExtractParseSuccess:
         ]
 
         success = _extract_parse_success("missing-model", stage2_results)
-        assert success is True
+        # #692 gate flipped this. Peer review never reached the model, so it
+        # neither succeeded nor failed at parsing. Returning True inflated
+        # the parse-success rate with models that never got the chance.
+        assert success is None
 
 
 class TestModuleExports:

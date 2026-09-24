@@ -368,7 +368,14 @@ class TestConfidenceLevels:
                 tracker.record_session(
                     f"s{i}",
                     [
-                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                        ModelSessionMetric(
+                            session_id=f"s{i}",
+                            model_id="m1",
+                            timestamp=now,
+                            # #692: confidence counts records carrying a
+                            # quality signal, so these must have one.
+                            borda_score=0.5,
+                        ),
                     ],
                 )
 
@@ -389,7 +396,14 @@ class TestConfidenceLevels:
                 tracker.record_session(
                     f"s{i}",
                     [
-                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                        ModelSessionMetric(
+                            session_id=f"s{i}",
+                            model_id="m1",
+                            timestamp=now,
+                            # #692: confidence counts records carrying a
+                            # quality signal, so these must have one.
+                            borda_score=0.5,
+                        ),
                     ],
                 )
 
@@ -410,7 +424,14 @@ class TestConfidenceLevels:
                 tracker.record_session(
                     f"s{i}",
                     [
-                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                        ModelSessionMetric(
+                            session_id=f"s{i}",
+                            model_id="m1",
+                            timestamp=now,
+                            # #692: confidence counts records carrying a
+                            # quality signal, so these must have one.
+                            borda_score=0.5,
+                        ),
                     ],
                 )
 
@@ -431,7 +452,14 @@ class TestConfidenceLevels:
                 tracker.record_session(
                     f"s{i}",
                     [
-                        ModelSessionMetric(session_id=f"s{i}", model_id="m1", timestamp=now),
+                        ModelSessionMetric(
+                            session_id=f"s{i}",
+                            model_id="m1",
+                            timestamp=now,
+                            # #692: confidence counts records carrying a
+                            # quality signal, so these must have one.
+                            borda_score=0.5,
+                        ),
                     ],
                 )
 

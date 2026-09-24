@@ -31,7 +31,7 @@ def cost_aware_selection_enabled() -> bool:
 DEFAULT_STORE_PATH = Path.home() / ".llm-council" / "performance_metrics.jsonl"
 
 
-def _calculate_percentile(values: List[int], percentile: float) -> int:
+def _calculate_percentile(values: List[int], percentile: float) -> Optional[int]:
     """Calculate percentile of a list of values.
 
     Args:
@@ -42,7 +42,10 @@ def _calculate_percentile(values: List[int], percentile: float) -> int:
         Value at the given percentile
     """
     if not values:
-        return 0
+        # #692 gate round 2: None, not 0. An empty sample means the percentile
+        # is unknown; returning 0 asserts "answered instantly" to whatever
+        # reads it.
+        return None
 
     sorted_values = sorted(values)
     n = len(sorted_values)
@@ -194,17 +197,24 @@ class InternalPerformanceTracker:
             return ModelPerformanceIndex(
                 model_id=model_id,
                 sample_size=0,
-                mean_borda_score=0.5,  # Neutral
-                p50_latency_ms=0,
-                p95_latency_ms=0,
-                parse_success_rate=1.0,  # Assume success
+                mean_borda_score=0.5,  # Neutral: no signal either way
+                # #692 gate round 2: unknown, not zero / not perfect.
+                p50_latency_ms=None,
+                p95_latency_ms=None,
+                parse_success_rate=None,
                 confidence_level="INSUFFICIENT",
             )
 
         # Calculate weighted metrics with decay
         total_weight = 0.0
         weighted_borda_sum = 0.0
+        # #692: weight accumulated only over records that HAVE a Borda score,
+        # mirroring the cost handling below. A null score means the model was
+        # never ranked; averaging it in as a zero would drag the mean down for
+        # every run that was cut short.
+        borda_weight = 0.0
         parse_success_count = 0
+        parse_success_known = 0
         latencies: List[int] = []
         # ADR-011 Phase 3: weighted cost, averaged only over records that
         # actually recorded a cost (None costs are excluded, not treated as 0).
@@ -214,23 +224,46 @@ class InternalPerformanceTracker:
         for record in records:
             weight = _calculate_decay_weight(record.timestamp, self.decay_days)
             total_weight += weight
-            weighted_borda_sum += record.borda_score * weight
-            if record.parse_success:
-                parse_success_count += 1
-            latencies.append(record.latency_ms)
+            if record.borda_score is not None:
+                weighted_borda_sum += record.borda_score * weight
+                borda_weight += weight
+            # #692 gate: only records that carry the signal count, on both
+            # sides of the ratio. A model peer review never reached is not a
+            # parse success and not a parse failure.
+            if record.parse_success is not None:
+                parse_success_known += 1
+                if record.parse_success:
+                    parse_success_count += 1
+            # #692: an unmeasured latency is skipped, not counted as 0 ms.
+            # A zero here would drag p50/p95 down and make an over-budget
+            # model look like it fits its tier.
+            if record.latency_ms is not None:
+                latencies.append(record.latency_ms)
             if record.cost_usd is not None:
                 weighted_cost_sum += record.cost_usd * weight
                 cost_weight += weight
 
         sample_size = len(records)
+        # #692 gate round 2: confidence is a claim about the QUALITY signal
+        # that selection consumes, so it counts records carrying a Borda
+        # score. Since #692 began recording models peer review never reached,
+        # `len(records)` could carry a model to MODERATE/HIGH — and past the
+        # ADR-029 graduation gate — on rows with no usable signal in them.
+        quality_sample_size = sum(1 for r in records if r.borda_score is not None)
 
         # Weighted mean Borda score
-        mean_borda = weighted_borda_sum / total_weight if total_weight > 0 else 0.5
+        # Neutral 0.5 when nothing carried a score, matching the cold-start
+        # default above rather than inventing a zero.
+        mean_borda = weighted_borda_sum / borda_weight if borda_weight > 0 else 0.5
 
         # Parse success rate: intentionally UNWEIGHTED (unlike decay-weighted
         # Borda) — it is a reliability metric where every historical failure
         # should count in full, not be discounted by age.
-        parse_success_rate = parse_success_count / sample_size if sample_size > 0 else 1.0
+        # #692 gate round 2: None when nothing carried the signal. The old
+        # 1.0 fallback claimed a perfect reliability record on no evidence.
+        parse_success_rate = (
+            parse_success_count / parse_success_known if parse_success_known > 0 else None
+        )
 
         # Latency percentiles — intentionally UNWEIGHTED (percentiles are taken
         # over the raw sample set; recency-weighting order statistics is
@@ -239,7 +272,7 @@ class InternalPerformanceTracker:
         p95_latency = _calculate_percentile(latencies, 95)
 
         # Confidence level
-        confidence = _determine_confidence_level(sample_size)
+        confidence = _determine_confidence_level(quality_sample_size)
 
         # Weighted mean cost (None if no record carried a cost)
         mean_cost = (weighted_cost_sum / cost_weight) if cost_weight > 0 else None
@@ -364,13 +397,22 @@ class InternalPerformanceTracker:
         """Mean Borda (0-1) per model with >=10 samples, from a loaded snapshot."""
         scores: dict[str, float] = {}
         for model_id, records in grouped.items():
-            if len(records) < 10:  # Need PRELIMINARY confidence
+            # #692 gate round 2: count the records that carry a score, not
+            # the raw rows. Nine unranked rows plus one ranked row used to
+            # clear this gate and route selection on a single observation.
+            if sum(1 for r in records if r.borda_score is not None) < 10:
                 continue
 
-            # Weighted mean with decay
+            # Weighted mean with decay. #692: a record whose Borda score is
+            # None was never ranked by peer review, so it contributes neither
+            # to the sum nor to the weight — the second of two aggregation
+            # sites with this defect, and the one mypy caught rather than the
+            # test suite.
             total_weight = 0.0
             weighted_sum = 0.0
             for record in records:
+                if record.borda_score is None:
+                    continue
                 weight = _calculate_decay_weight(record.timestamp, self.decay_days)
                 total_weight += weight
                 weighted_sum += record.borda_score * weight
