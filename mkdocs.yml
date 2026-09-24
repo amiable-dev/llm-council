@@ -165,6 +165,7 @@ nav:
       - ADR-053 Implementation Spec: adr/ADR-053-implementation-spec.md
       - ADR-054 Verify Confidence Semantics: adr/ADR-054-verify-confidence-semantics.md
       - ADR-055 Chairman Resilience: adr/ADR-055-chairman-resilience.md
+      - ADR-056 External Spend Telemetry: adr/ADR-056-external-spend-telemetry.md
     - Roadmap 2026-H2: roadmap-2026-h2.md
     - Stateless Audit (ADR-045 P3): adr-045-p3-state-inventory.md
   - Contributing: contributing.md

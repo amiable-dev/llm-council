@@ -64,6 +64,7 @@ Four numbers appear twice (ADR-042, 051, 052, 053): those decisions have a compa
 | [ADR-053](../adr/ADR-053-verify-file-selection-trust-boundary.md) | Verify File Selection — Decodability, Reviewability, and the Trust Boundary | Implemented |
 | [ADR-054](../adr/ADR-054-verify-confidence-semantics.md) | What `confidence` Means in verify() — and How to Calibrate It | Accepted |
 | [ADR-055](../adr/ADR-055-chairman-resilience.md) | Chairman Resilience — Dynamic Fallback for Stage-3 Synthesis | Proposed |
+| [ADR-056](../adr/ADR-056-external-spend-telemetry.md) | External Spend Telemetry — OTLP Spans for Council Cost | Proposed |
 
 ## ADR Format
 
