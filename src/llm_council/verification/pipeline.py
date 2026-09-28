@@ -5,6 +5,9 @@ wraps this in the global deadline. Patches on names consumed HERE (the stage
 functions, aggregation, ``build_verification_result``) must target
 ``llm_council.verification.pipeline``: api.py no longer imports them, so a
 stale patch on api fails loudly instead of silently calling a real model.
+That guarantee covers only names api.py no longer imports: the helpers it
+re-exports (``_stage_budget``, ``_stage3_reserve``) still patch on api without
+effect, so patch them here.
 """
 
 from __future__ import annotations
@@ -13,9 +16,6 @@ import logging
 import time
 from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
-
-logger = logging.getLogger(__name__)
-
 
 from llm_council.council import (
     calculate_aggregate_rankings,
@@ -37,20 +37,7 @@ from llm_council.verification.verdict_extractor import (
 )
 from llm_council.verdict import parse_evidence_dispositions
 
-# Router for verification endpoints
 
-
-
-# (#380: GIT_SHA_PATTERN / SOURCE_PATTERN / EVIDENCE_ID_PATTERN moved to
-# .schemas alongside the validators that use them; re-exported below.)
-
-
-
-# ============================================================================
-# #380: split into submodules (schemas / constants / evidence_render /
-# file_ops). Re-exported here verbatim for backward compatibility — many
-# callers and tests import these names from verification.api.
-# ============================================================================
 from .constants import (
     MAX_EVIDENCE_CHARS_RATIO,
     TIER_MAX_CHARS,
@@ -72,6 +59,8 @@ from .evidence_render import (
 from .file_ops import (
     _get_git_root_async,
 )
+
+logger = logging.getLogger(__name__)
 
 
 ProgressCallback = Callable[[int, int, str], Awaitable[None]]
@@ -105,9 +94,6 @@ def _emit_posthog_generations(
         )
     except Exception:  # telemetry must never break a verify
         logger.debug("posthog $ai_generation emission failed (ignored)", exc_info=True)
-
-
-# Maximum characters per file to include in prompt.
 
 
 def _stage3_reserve(remaining: float) -> float:

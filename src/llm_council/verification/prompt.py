@@ -8,27 +8,9 @@ patches on names consumed HERE (e.g. the file fetch) target this module.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-logger = logging.getLogger(__name__)
 
-
-
-# Router for verification endpoints
-
-
-
-# (#380: GIT_SHA_PATTERN / SOURCE_PATTERN / EVIDENCE_ID_PATTERN moved to
-# .schemas alongside the validators that use them; re-exported below.)
-
-
-
-# ============================================================================
-# #380: split into submodules (schemas / constants / evidence_render /
-# file_ops). Re-exported here verbatim for backward compatibility — many
-# callers and tests import these names from verification.api.
-# ============================================================================
 from .constants import (
     TIER_MAX_CHARS,
 )
@@ -180,8 +162,6 @@ Commit under review: `{snapshot_id}`"""
         "expansion": expansion_metadata,
     }
     return prompt, render_info
-
-
 
 
 def _build_preflight_info(content_chars: int, tier_contract: Any, tier: str) -> str:
