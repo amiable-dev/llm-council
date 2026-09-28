@@ -15,9 +15,30 @@ Council Consensus: Option B - Extract from Stage 2 (minimal effort, data exists)
 """
 
 import logging
+import math
 from dataclasses import dataclass
 from statistics import median as calc_median, stdev
 from typing import Any, Dict, List, Optional, Tuple
+
+from .council_rankings import _coerce_score, parsed_ranking_of
+
+
+def _numeric_scores(scores: Any) -> Dict[str, float]:
+    """A reviewer's scores as finite floats, or {} (#680/#679, #712 gate).
+
+    Model output is untrusted: ``scores`` may be a string or a list, and a
+    value may be a numeric string, a bool, "N/A" or NaN. Every reader in this
+    module goes through here, so the statistics below only ever see numbers.
+    Coerced exactly as the aggregate coerces them.
+    """
+    if not isinstance(scores, dict):
+        return {}
+    out: Dict[str, float] = {}
+    for label, raw in scores.items():
+        value = _coerce_score(raw)
+        if math.isfinite(value):
+            out[label] = value
+    return out
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +91,8 @@ def identify_outlier_reviewers(
     if not reviewer_scores:
         return []
 
+    reviewer_scores = {r: _numeric_scores(s) for r, s in reviewer_scores.items()}
+
     # Collect all scores per response
     response_scores: Dict[str, List[float]] = {}
     for reviewer, scores in reviewer_scores.items():
@@ -80,8 +103,8 @@ def identify_outlier_reviewers(
 
     # Calculate statistics per response
     response_stats: Dict[str, Tuple[float, float]] = {}
-    for response, scores in response_scores.items():
-        response_stats[response] = calculate_score_statistics(scores)
+    for response, values in response_scores.items():
+        response_stats[response] = calculate_score_statistics(values)
 
     # Find outliers
     outliers = set()
@@ -131,12 +154,13 @@ def extract_outlier_info(
 
     for result in stage2_results:
         model = result.get("model", "unknown")
-        parsed = result.get("parsed_ranking", {})
-        scores = parsed.get("scores", {})
+        parsed = parsed_ranking_of(result)
+        scores = _numeric_scores(parsed.get("scores"))
 
         if scores:
             reviewer_scores[model] = scores
-            reviewer_evaluations[model] = parsed.get("evaluation", "")
+            evaluation = parsed.get("evaluation")
+            reviewer_evaluations[model] = evaluation if isinstance(evaluation, str) else ""
 
     if not reviewer_scores:
         return []
@@ -151,8 +175,8 @@ def extract_outlier_info(
 
     # Calculate statistics per response
     response_stats: Dict[str, Tuple[float, float]] = {}
-    for response, scores in response_scores.items():
-        response_stats[response] = calculate_score_statistics(scores)
+    for response, values in response_scores.items():
+        response_stats[response] = calculate_score_statistics(values)
 
     # Find outliers and extract info
     outliers: List[OutlierInfo] = []
@@ -238,7 +262,9 @@ def extract_dissent_from_stage2(
         return None
 
     # Check if any results have scores
-    has_scores = any(result.get("parsed_ranking", {}).get("scores") for result in stage2_results)
+    has_scores = any(
+        _numeric_scores(parsed_ranking_of(result).get("scores")) for result in stage2_results
+    )
     if not has_scores:
         return None
 
@@ -251,10 +277,9 @@ def extract_dissent_from_stage2(
     # Check Borda spread requirement if specified
     if min_borda_spread > 0:
         # Calculate rough spread from scores
-        all_scores = []
+        all_scores: List[Any] = []
         for result in stage2_results:
-            scores = result.get("parsed_ranking", {}).get("scores", {})
-            all_scores.extend(scores.values())
+            all_scores.extend(_numeric_scores(parsed_ranking_of(result).get("scores")).values())
 
         if all_scores:
             spread = max(all_scores) - min(all_scores)

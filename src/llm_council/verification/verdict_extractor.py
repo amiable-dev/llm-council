@@ -12,6 +12,8 @@ import re
 import statistics
 from typing import Any, Dict, List, Optional, Tuple
 
+from llm_council.council_rankings import parsed_ranking_of
+
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +132,7 @@ def extract_rubric_scores_from_rankings(
                         dimension_scores[dimension].append(float(score))
 
         # Format 2: Per-response scores in parsed_ranking
-        parsed = ranking.get("parsed_ranking", {})
+        parsed = parsed_ranking_of(ranking)
         if isinstance(parsed, dict):
             scores = parsed.get("scores", {})
             if isinstance(scores, dict):
