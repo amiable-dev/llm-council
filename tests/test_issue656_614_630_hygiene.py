@@ -374,3 +374,63 @@ class TestGateRound2:
         with pytest.raises(OSError):
             append_bias_records([BiasMetricRecord(session_id="s", reviewer_id="r")], path)
         assert target.read_text() == ""
+
+
+class TestGateRound3:
+    """Council gate on #715, round 3: the append path checked permission bits
+    but not what it had opened, and its refusals escaped optional telemetry."""
+
+    def test_a_fifo_store_is_refused_without_blocking(self, tmp_path):
+        from llm_council.bias_persistence import BiasMetricRecord, append_bias_records
+
+        path = tmp_path / "bias_metrics.jsonl"
+        os.mkfifo(path)  # no reader: a blocking O_WRONLY open would hang forever
+        with pytest.raises(OSError):
+            append_bias_records([BiasMetricRecord(session_id="s", reviewer_id="r")], path)
+
+    def test_a_store_owned_by_someone_else_is_refused(self, tmp_path, monkeypatch):
+        from llm_council import bias_persistence as bp
+
+        path = tmp_path / "bias_metrics.jsonl"
+        path.write_text("")
+        path.chmod(0o644)
+        real_uid = os.getuid()
+        monkeypatch.setattr(bp.os, "getuid", lambda: real_uid + 1)
+        with pytest.raises(OSError):
+            bp.append_bias_records([bp.BiasMetricRecord(session_id="s", reviewer_id="r")], path)
+        assert stat.S_IMODE(path.stat().st_mode) == 0o644  # not fchmod-ed either
+
+    def test_a_refused_store_does_not_escape_persistence(self, tmp_path, monkeypatch):
+        from llm_council import bias_persistence as bp
+
+        target = tmp_path / "elsewhere.jsonl"
+        target.write_text("")
+        path = tmp_path / "bias_metrics.jsonl"
+        path.symlink_to(target)
+        monkeypatch.setattr(bp, "_get_bias_store_path", lambda: path)
+        monkeypatch.setattr(bp, "_get_bias_persistence_enabled", lambda: True)
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: 1)
+        assert TestGateRound1ConsentFailsClosed._persist(bp) == 0
+        assert target.read_text() == ""
+
+    @pytest.mark.parametrize(
+        "ranking",
+        [
+            {"model": "b/two", "parsed_ranking": ["Response A"]},
+            {"model": "b/two", "parsed_ranking": {"scores": ["Response A"]}},
+        ],
+    )
+    def test_a_malformed_stage2_container_does_not_escape_persistence(
+        self, tmp_path, monkeypatch, ranking
+    ):
+        from llm_council import bias_persistence as bp
+
+        monkeypatch.setattr(bp, "_get_bias_store_path", lambda: tmp_path / "s.jsonl")
+        monkeypatch.setattr(bp, "_get_bias_persistence_enabled", lambda: True)
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: 1)
+        bp.persist_session_bias_data(
+            "s1",
+            [{"model": "a/one", "response": "x"}],
+            [ranking],
+            {"Response A": {"model": "a/one", "display_index": 0}},
+        )

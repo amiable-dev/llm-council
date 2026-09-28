@@ -378,11 +378,24 @@ def append_bias_records(
     # name), and a symlink is refused rather than written through. The
     # directory is not chmod-ed: the default store sits in ./data, which is
     # not ours to lock, and a 0600 file is private in any directory.
+    # Round 3: O_NONBLOCK so a planted FIFO fails the open (ENXIO) instead of
+    # hanging the run, and the descriptor must be a regular file we own; a
+    # foreign-owned file is refused, not fchmod-ed.
     store_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    flags = (
+        os.O_WRONLY
+        | os.O_APPEND
+        | os.O_CREAT
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     fd = os.open(store_path, flags, 0o600)
     try:
         info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or (
+            hasattr(os, "getuid") and info.st_uid != os.getuid()
+        ):
+            raise PermissionError(f"{store_path} is not a regular file owned by this user")
         if stat.S_IMODE(info.st_mode) & 0o077 and hasattr(os, "fchmod"):
             os.fchmod(fd, 0o600)
     except OSError:
@@ -785,15 +798,21 @@ def persist_session_bias_data(
     if consent == ConsentLevel.OFF:
         return 0
 
-    # Create records
-    records = create_bias_records_from_session(
-        session_id=session_id,
-        stage1_results=stage1_results,
-        stage2_results=stage2_results,
-        label_to_model=label_to_model,
-        query=query,
-        consent_level=consent,
-    )
-
-    # Persist (store_path comes from _get_bias_store_path() via append_bias_records)
-    return append_bias_records(records)
+    # Round 3: bias persistence is optional telemetry. A refused store (a
+    # symlink, a FIFO, someone else's file) or malformed stage-2 output must
+    # skip the write, never abort the run that produced the data. The type is
+    # logged, not the message, which can carry a path.
+    try:
+        records = create_bias_records_from_session(
+            session_id=session_id,
+            stage1_results=stage1_results,
+            stage2_results=stage2_results,
+            label_to_model=label_to_model,
+            query=query,
+            consent_level=consent,
+        )
+        # store_path comes from _get_bias_store_path() via append_bias_records
+        return append_bias_records(records)
+    except Exception as exc:
+        logger.warning("bias persistence skipped: %s", type(exc).__name__)
+        return 0
