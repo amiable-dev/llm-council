@@ -55,7 +55,14 @@ jobs:
         id: council
         uses: amiable-dev/llm-council-action@214ec367341a41e7449b7fc69f294dfa7082f9cf  # v1
         with:
+          # github.sha is the PR's merge commit, which is the right subject:
+          # since #704, discovery diffs a merge commit against its first parent,
+          # i.e. exactly the PR's changes. (Before, it found nothing at all.)
           snapshot: ${{ github.sha }}
+          # #704: follow council's own releases. The action's default pin had
+          # rotted at 0.45.0, so no gate fix ever reached this gate. The package
+          # is ours, published with provenance by publish.yml.
+          version: latest
           confidence-threshold: ${{ github.event.inputs.confidence-threshold || '0.75' }}
           rubric-focus: General
         env:

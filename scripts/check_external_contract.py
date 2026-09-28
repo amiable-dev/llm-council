@@ -84,6 +84,9 @@ def main() -> int:
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"could not read the contract from stdin: {exc}", file=sys.stderr)
         return 2
+    if not isinstance(contract, dict):
+        print("the contract on stdin is not a JSON object", file=sys.stderr)
+        return 2
     problems = contract_drift(contract)
     for problem in problems:
         print(f"DRIFT: {problem}", file=sys.stderr)
