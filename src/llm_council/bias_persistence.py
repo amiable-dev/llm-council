@@ -14,7 +14,10 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
+import secrets
+import stat
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
@@ -57,16 +60,126 @@ def _get_bias_store_path() -> Path:
 
 def _get_bias_consent_level() -> int:
     """Get bias consent level from unified config as integer."""
+    # #715 gate: a privacy control fails CLOSED. An unreadable config or an
+    # unrecognised value used to resolve to LOCAL_ONLY, i.e. to storing.
     try:
         consent_str = get_config().evaluation.bias.consent_level
         consent_map = {"OFF": 0, "LOCAL_ONLY": 1, "ANONYMOUS": 2, "ENHANCED": 3, "RESEARCH": 4}
-        return consent_map.get(consent_str, 1)
+        return consent_map.get(consent_str, 0)
     except Exception:
-        return 1  # LOCAL_ONLY default
+        return 0  # OFF
 
 
-# Hash secret from environment
-BIAS_HASH_SECRET = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
+def _hash_secret_path() -> Path:
+    """Where the per-install query-hash secret lives: beside the bias store,
+    unless ``LLM_COUNCIL_HASH_SECRET_FILE`` says otherwise (tests set it, so no
+    test writes into the operator's HOME, #693)."""
+    override = os.getenv("LLM_COUNCIL_HASH_SECRET_FILE", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return _get_bias_store_path().parent / "hash_secret"
+
+
+def _resolve_hash_secret() -> Optional[str]:
+    """The HMAC key for query hashing, or None to skip hashing.
+
+    #614: this used to fall back to a PUBLISHED default when
+    ``LLM_COUNCIL_HASH_SECRET`` was unset. With a known key, anyone holding the
+    store can confirm a guessed query is in it, which is the dictionary attack
+    the HMAC exists to prevent. The fallback is now a random per-install
+    secret, created once with mode 0600 and reused, so grouping still works
+    across sessions. If it cannot be read or created, hashing is skipped: a
+    missing hash loses a grouping key, a known key loses the privacy.
+    """
+    configured = os.getenv("LLM_COUNCIL_HASH_SECRET", "").strip()
+    if configured:
+        if len(configured) < _MIN_KEY_LENGTH:
+            # A short key is enumerable, which defeats the point of the HMAC.
+            logger.warning(
+                "query hashing skipped: LLM_COUNCIL_HASH_SECRET is shorter than %d characters",
+                _MIN_KEY_LENGTH,
+            )
+            return None
+        return configured
+    path = _hash_secret_path()
+    existing = _read_private_secret(path)
+    if existing is _UNSAFE:
+        return None
+    if existing:
+        return existing
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if path.is_file() and not path.is_symlink():
+            # An empty file (a half-written create, a truncation): replace it
+            # rather than disabling hashing for good.
+            path.unlink()
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        secret = secrets.token_hex(32)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(secret + "\n")
+        return secret
+    except FileExistsError:
+        # Another process created it between our read and our create.
+        again = _read_private_secret(path)
+        return again if isinstance(again, str) and again else None
+    except OSError as exc:
+        logger.warning("query hashing skipped: cannot create %s (%s)", path, type(exc).__name__)
+        return None
+
+
+#: The generated secret is 64 hex characters; a configured one must be at
+#: least this long.
+_MIN_KEY_LENGTH = 16
+
+_UNSAFE = object()
+
+
+def _read_private_secret(path: Path) -> Any:
+    """The secret in ``path``, "" if absent or empty, or ``_UNSAFE``.
+
+    #715 gate: the create path was careful (O_EXCL, 0600) but the read path
+    trusted whatever was there. A symlink, a non-regular file, a file owned by
+    someone else, or one others can write would let them choose the key, and
+    a chosen key re-enables exactly the dictionary attack #614 closed.
+
+    Round 2: one others can READ is as bad (they can confirm guesses), and a
+    persisted key is held to the same minimum length as a configured one. The
+    checks run on the descriptor actually read (``O_NOFOLLOW`` + ``fstat``),
+    not on a name that could be swapped between the check and the read. An
+    exposed key is refused, never silently replaced: the operator decides.
+    """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        return ""
+    except OSError:
+        return _UNSAFE  # includes ELOOP: the path is a symlink
+    try:
+        info = os.fstat(fd)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_mode & 0o077
+            or (hasattr(os, "getuid") and info.st_uid != os.getuid())
+        ):
+            logger.warning("query hashing skipped: %s is not a private (0600) regular file", path)
+            return _UNSAFE
+        with os.fdopen(fd, "r") as handle:
+            fd = -1
+            secret = handle.read().strip()
+    except OSError:
+        return _UNSAFE
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    if secret and len(secret) < _MIN_KEY_LENGTH:
+        logger.warning(
+            "query hashing skipped: %s holds a key shorter than %d characters",
+            path,
+            _MIN_KEY_LENGTH,
+        )
+        return _UNSAFE
+    return secret
 
 
 # =============================================================================
@@ -205,7 +318,8 @@ def hash_query_if_enabled(
     """Generate HMAC hash for query grouping (opt-in only).
 
     Only generates hash at RESEARCH consent level.
-    Uses LLM_COUNCIL_HASH_SECRET env var or default dev secret.
+    Keyed by LLM_COUNCIL_HASH_SECRET, else a random per-install secret
+    (#614). Returns None if no secret can be had.
 
     Args:
         query: The query text to hash
@@ -221,7 +335,9 @@ def hash_query_if_enabled(
     query_sample = query[:100]
 
     # HMAC with deployment-specific secret
-    secret = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
+    secret = _resolve_hash_secret()
+    if secret is None:
+        return None
     hash_bytes = hmac.new(secret.encode(), query_sample.encode(), hashlib.sha256).hexdigest()
 
     # Truncate to 16 chars
@@ -255,11 +371,37 @@ def append_bias_records(
     if store_path is None:
         store_path = _get_bias_store_path()
 
-    # Ensure directory exists
-    store_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Append records atomically (one line at a time)
-    with open(store_path, "a") as f:
+    # #715 gate: private, not umask-dependent. The store holds per-reviewer
+    # scores and query metadata; 0644 made it readable by every local user.
+    # Round 2: O_CREAT's mode applies only to a NEW file, so a store left 0644
+    # by an earlier version is tightened on the descriptor we opened (not by
+    # name), and a symlink is refused rather than written through. The
+    # directory is not chmod-ed: the default store sits in ./data, which is
+    # not ours to lock, and a 0600 file is private in any directory.
+    # Round 3: O_NONBLOCK so a planted FIFO fails the open (ENXIO) instead of
+    # hanging the run, and the descriptor must be a regular file we own; a
+    # foreign-owned file is refused, not fchmod-ed.
+    store_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    flags = (
+        os.O_WRONLY
+        | os.O_APPEND
+        | os.O_CREAT
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
+    fd = os.open(store_path, flags, 0o600)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or (
+            hasattr(os, "getuid") and info.st_uid != os.getuid()
+        ):
+            raise PermissionError(f"{store_path} is not a regular file owned by this user")
+        if stat.S_IMODE(info.st_mode) & 0o077 and hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+    except OSError:
+        os.close(fd)
+        raise
+    with os.fdopen(fd, "a") as f:
         for record in records:
             f.write(record.to_jsonl_line() + "\n")
 
@@ -303,8 +445,10 @@ def read_bias_records(
             try:
                 record = BiasMetricRecord.from_jsonl_line(line)
                 records.append(record)
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
-                logger.warning(f"Skipping malformed line {line_num}: {e}")
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError, ValueError) as e:
+                # AttributeError: a valid JSON line that is not an object
+                # (`3`, `[1]`, `null`) reached `.get` and crashed the reader.
+                logger.warning(f"Skipping malformed line {line_num}: {type(e).__name__}")
                 continue
 
     # Filter by max_days
@@ -463,6 +607,16 @@ def _extract_query_metadata(query: str) -> Dict[str, Any]:
     return {"category": category, "token_bucket": bucket, "language": "en"}
 
 
+def _coerce_record_score(value: Any) -> float:
+    if isinstance(value, bool) or value is None:
+        return 0.0
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    return result if math.isfinite(result) else 0.0
+
+
 def create_bias_records_from_session(
     session_id: str,
     stage1_results: List[Dict[str, Any]],
@@ -538,7 +692,10 @@ def create_bias_records_from_session(
                 continue
 
             # Get the score if available
-            score_value = float(scores.get(label, 0.0))
+            # #715 gate: model output is untrusted; "N/A", NaN or an int
+            # beyond float range used to abort persistence for the session.
+            # A missing score is still recorded as 0.0 (pre-existing, #716).
+            score_value = _coerce_record_score(scores.get(label) if isinstance(scores, dict) else None)
 
             # #611: DISPLAY position, not the reviewer's ranking index.
             #
@@ -630,20 +787,32 @@ def persist_session_bias_data(
         return 0
 
     # Convert consent level int to enum
+    # #715 gate: OFF means "no telemetry or storage", and it used to be
+    # ignored here: only the persistence flag was checked, and ConsentLevel(0)
+    # is a valid member, so the ValueError fallback never fired. An invalid
+    # level fails closed too; it used to fall back to LOCAL_ONLY.
     try:
         consent = ConsentLevel(_get_bias_consent_level())
     except ValueError:
-        consent = ConsentLevel.LOCAL_ONLY
+        return 0
+    if consent == ConsentLevel.OFF:
+        return 0
 
-    # Create records
-    records = create_bias_records_from_session(
-        session_id=session_id,
-        stage1_results=stage1_results,
-        stage2_results=stage2_results,
-        label_to_model=label_to_model,
-        query=query,
-        consent_level=consent,
-    )
-
-    # Persist (store_path comes from _get_bias_store_path() via append_bias_records)
-    return append_bias_records(records)
+    # Round 3: bias persistence is optional telemetry. A refused store (a
+    # symlink, a FIFO, someone else's file) or malformed stage-2 output must
+    # skip the write, never abort the run that produced the data. The type is
+    # logged, not the message, which can carry a path.
+    try:
+        records = create_bias_records_from_session(
+            session_id=session_id,
+            stage1_results=stage1_results,
+            stage2_results=stage2_results,
+            label_to_model=label_to_model,
+            query=query,
+            consent_level=consent,
+        )
+        # store_path comes from _get_bias_store_path() via append_bias_records
+        return append_bias_records(records)
+    except Exception as exc:
+        logger.warning("bias persistence skipped: %s", type(exc).__name__)
+        return 0

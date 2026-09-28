@@ -19,6 +19,7 @@ Or programmatically:
     uvicorn.run(app, host="0.0.0.0", port=8000)
 """
 
+import hmac
 import os
 from typing import Any, Dict, List, Optional
 
@@ -75,7 +76,12 @@ async def verify_token(
             detail="Invalid or missing API token. Provide Authorization: Bearer <token>",
         )
 
-    if credentials.credentials != api_token:
+    # #656: constant-time, like webhooks/hmac_auth.py. `!=` stops at the first
+    # differing byte, which is the textbook timing side channel. Compared as
+    # UTF-8 bytes, because compare_digest raises TypeError on a non-ASCII str.
+    if not hmac.compare_digest(
+        credentials.credentials.encode("utf-8"), api_token.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid or missing API token. Provide Authorization: Bearer <token>",
