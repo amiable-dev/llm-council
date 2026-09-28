@@ -36,7 +36,7 @@ REPO = Path(__file__).resolve().parents[1]
 # Measured on master 2026-08-27 (92) after the #642 mechanical pass:
 # implicit-Optional codemod, yaml stubs, six missing annotations, two dead
 # constructs. LOWER THIS when you fix more; never raise it.
-MAX_MYPY_ERRORS = 71
+MAX_MYPY_ERRORS = 69  # #712: dissent loop-variable reuse (2 sites, 4 errors) fixed
 
 _SUMMARY = re.compile(r"Found (\d+) errors? in \d+ files?")
 

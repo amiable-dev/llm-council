@@ -185,6 +185,7 @@ The flow is async/parallel wherever possible to minimize latency.
 2. Ranking parse failures fall back to permissive `Response X` regex extraction.
 3. Metadata (`label_to_model`, `aggregate_rankings`) is ephemeral — API response only, never written to storage.
 4. Per-session bias metrics are extreme-anomaly indicators, not significance tests (see bias note above).
+5. **Reviewer output is untrusted all the way down (#709/#680/#679).** A provider can send `content: null`, so read it as `.get("content") or ""`, never `.get("content", "")`; the default does not fire for a stored None, and that crashed a live verify after stage 1 had completed. Read a stage-2 entry's parsed ranking with `council_rankings.parsed_ranking_of(entry)`, never `.get("parsed_ranking", {})`; an AST test fails if the dict-default form comes back. Raw scores go through `_normalize_raw_score` (coerced like every other score, non-finite dropped, clamped to [0, 1]) because they feed the aggregate's final sort key.
 
 ## Release Workflow
 

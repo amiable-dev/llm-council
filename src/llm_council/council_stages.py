@@ -132,7 +132,7 @@ async def stage1_collect_responses(user_query: str) -> Tuple[List[Dict[str, Any]
 
     for model, response in responses.items():
         if response is not None:  # Only include successful responses
-            stage1_results.append({"model": model, "response": response.get("content", "")})
+            stage1_results.append({"model": model, "response": (response.get("content") or "")})
             # Aggregate usage
             usage = response.get("usage", {})
             total_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
@@ -208,8 +208,8 @@ async def stage1_collect_responses_with_status(
 
         # Only include successful responses in results
         if response.get("status") == STATUS_OK:
-            stage1_results.append({"model": model, "response": response.get("content", "")})
-            model_statuses[model]["response"] = response.get("content", "")
+            stage1_results.append({"model": model, "response": (response.get("content") or "")})
+            model_statuses[model]["response"] = (response.get("content") or "")
 
             # Aggregate usage
             usage = response.get("usage", {})
@@ -353,7 +353,7 @@ and highlight any important insights. Be clear that this is based on partial dat
 
     _record(chairman="ok", source_model=None)
     usage = response.get("usage", {})
-    return response.get("content", ""), usage
+    return (response.get("content") or ""), usage
 
 
 def should_normalize_styles(responses: List[str]) -> bool:
@@ -477,7 +477,7 @@ Rewritten text:"""
             normalized_results.append(
                 {
                     "model": result["model"],
-                    "response": response.get("content", result["response"]),
+                    "response": response.get("content") or result["response"],
                     "original_response": result["response"],
                 }
             )
@@ -792,7 +792,7 @@ Now provide your evaluation and ranking:"""
                             # ADR-046 P1: per-reviewer stream event (soft-fail)
                             if on_review_event is not None and result is not None:
                                 try:
-                                    _rev_parsed = parse_ranking_from_text(result.get("content", ""))
+                                    _rev_parsed = parse_ranking_from_text((result.get("content") or ""))
                                     await on_review_event(
                                         "review",
                                         {
@@ -822,7 +822,7 @@ Now provide your evaluation and ranking:"""
             if ec_terminated or ec_shadow_logged or result is None:
                 continue
             try:
-                parsed = parse_ranking_from_text(result.get("content", ""))
+                parsed = parse_ranking_from_text((result.get("content") or ""))
                 borda_update(ec_points, parsed.get("ranking", []), ec_num_candidates)
                 remaining = [m for t, m in tasks.items() if not t.done()]
                 leader = unassailable_leader(ec_points, len(remaining), ec_num_candidates)
@@ -887,7 +887,7 @@ Now provide your evaluation and ranking:"""
 
     for model, response in responses.items():
         if response is not None:
-            full_text = response.get("content", "")
+            full_text = (response.get("content") or "")
 
             # ADR-016: Parse rubric evaluation if enabled, fall back to holistic
             if eval_config.rubric.enabled:
@@ -1191,7 +1191,7 @@ STAGE 2 - Peer Rankings:
     total_usage["total_tokens"] = usage.get("total_tokens", 0)
     _add_cost_to_usage(total_usage, usage, model=_get_chairman_model())
 
-    response_content = response.get("content", "")
+    response_content = (response.get("content") or "")
 
     # ADR-025b: Parse verdict for BINARY/TIE_BREAKER modes
     verdict_result: Optional[VerdictResult] = None

@@ -59,14 +59,41 @@ def _coerce_score(value: Any) -> float:
     if isinstance(value, bool):
         # bool is a subclass of int; treat as non-numeric for scoring.
         return float("-inf")
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except (ValueError, AttributeError):
+    try:
+        if isinstance(value, (int, float)):
+            result = float(value)
+        elif isinstance(value, str):
+            result = float(value.strip())
+        else:
             return float("-inf")
-    return float("-inf")
+    except (ValueError, AttributeError, OverflowError):
+        return float("-inf")
+    # #712 gate: "nan"/"inf" parse as floats. NaN in a sort key makes the order
+    # depend on comparison order, so every non-finite value sorts last.
+    return result if math.isfinite(result) else float("-inf")
+
+
+def parsed_ranking_of(entry: Any) -> Dict[str, Any]:
+    """A stage-2 entry's parsed ranking, or ``{}``.
+
+    #680: ``entry.get("parsed_ranking", {})`` returns a STORED ``None``, whose
+    next ``.get`` raises, the #594/#677 trap. Every reader goes through here.
+    """
+    value = entry.get("parsed_ranking") if isinstance(entry, dict) else None
+    return value if isinstance(value, dict) else {}
+
+
+def _normalize_raw_score(score: Any) -> Optional[float]:
+    """A raw 1-10 score as a value in [0, 1], or None to drop it.
+
+    #679: the aggregate used ``score / 10.0`` for any int or float, which let
+    a bool score 0.1, let NaN poison the final sort key, and never clamped.
+    Coerced like every other score (numeric strings accepted, bools not).
+    """
+    value = _coerce_score(score)
+    if not math.isfinite(value):
+        return None
+    return min(1.0, max(0.0, value / 10.0))
 
 
 def detect_score_rank_mismatch(ranking: List[str], scores: Dict[str, Any]) -> bool:
@@ -132,6 +159,13 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
     import json
 
     result: Dict[str, Any] = {"ranking": [], "scores": {}}
+
+    # #709: a provider can send `content: null`, and stage 2 used to hand that
+    # straight here. A reviewer that returned nothing ranked nothing.
+    if not isinstance(ranking_text, str) or not ranking_text.strip():
+        result["abstained"] = True
+        result["abstention_reason"] = "Empty response"
+        return result
 
     # Check for safety refusals or inability to evaluate
     # Note: patterns are lowercase since we search in lowercased text
@@ -295,9 +329,11 @@ def calculate_aggregate_rankings(
 
     for ranking in stage2_results:
         reviewer_model = ranking.get("model", "")
-        parsed = ranking.get("parsed_ranking", {})
-        ranking_list = parsed.get("ranking", [])
-        scores = parsed.get("scores", {})
+        parsed = parsed_ranking_of(ranking)
+        ranking_list = parsed.get("ranking") or []
+        scores = parsed.get("scores")
+        if not isinstance(scores, dict):
+            scores = {}
 
         # Skip if this ranking was marked as abstained
         if parsed.get("abstained"):
@@ -375,7 +411,7 @@ def calculate_aggregate_rankings(
                         continue
 
                     # Normalize raw score to [0,1] (assuming 1-10 scale)
-                    normalized_raw = score / 10.0 if isinstance(score, (int, float)) else None
+                    normalized_raw = _normalize_raw_score(score)
                     if normalized_raw is not None:
                         model_raw_scores[author_model].append(normalized_raw)
 
