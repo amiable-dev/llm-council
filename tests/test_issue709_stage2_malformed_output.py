@@ -205,6 +205,15 @@ class TestTheDissentSpreadGateStillCounts:
         assert extract_dissent_from_stage2(self._stage2(), min_borda_spread=3.5) is None
 
 
+def test_the_parser_fuzzer_bundles_the_package_data():
+    """The ClusterFuzzLite binary is built with PyInstaller, which bundles
+    code but not package data. Since #690, importing llm_council reads
+    models/default_pools.yaml, so a fuzzer without the data dies at startup
+    and fails every parser PR as "BAD BUILD" (seen on #712)."""
+    build = (SRC.parent.parent / ".clusterfuzzlite" / "build.sh").read_text()
+    assert "--collect-data llm_council" in build
+
+
 class TestGateRound1:
     """Council gate on #712, round 1: dissent was routed through
     parsed_ranking_of but its per-score values were still trusted."""
