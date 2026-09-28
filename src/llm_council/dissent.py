@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from statistics import median as calc_median, stdev
 from typing import Any, Dict, List, Optional, Tuple
 
+from .council_rankings import parsed_ranking_of
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,7 +133,7 @@ def extract_outlier_info(
 
     for result in stage2_results:
         model = result.get("model", "unknown")
-        parsed = result.get("parsed_ranking", {})
+        parsed = parsed_ranking_of(result)
         scores = parsed.get("scores", {})
 
         if scores:
@@ -238,7 +240,7 @@ def extract_dissent_from_stage2(
         return None
 
     # Check if any results have scores
-    has_scores = any(result.get("parsed_ranking", {}).get("scores") for result in stage2_results)
+    has_scores = any(parsed_ranking_of(result).get("scores") for result in stage2_results)
     if not has_scores:
         return None
 
@@ -251,9 +253,11 @@ def extract_dissent_from_stage2(
     # Check Borda spread requirement if specified
     if min_borda_spread > 0:
         # Calculate rough spread from scores
-        all_scores = []
+        all_scores: List[Any] = []
         for result in stage2_results:
-            scores = result.get("parsed_ranking", {}).get("scores", {})
+            scores = parsed_ranking_of(result).get("scores")
+            if not isinstance(scores, dict):
+                scores = {}
             all_scores.extend(scores.values())
 
         if all_scores:

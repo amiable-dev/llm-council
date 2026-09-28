@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, List, Dict, Any, Tuple, Optional, Callable, Awaitable
 
+from .council_rankings import parsed_ranking_of
+
 # Core imports that don't cause circular dependencies
 from llm_council.gateway_adapter import (
     query_models_parallel,
@@ -1165,7 +1167,7 @@ async def run_full_council(
     abstentions = []
     score_rank_mismatches = []
     for r in stage2_results:
-        parsed = r.get("parsed_ranking", {})
+        parsed = parsed_ranking_of(r)
         if parsed.get("abstained"):
             abstentions.append(
                 {"model": r["model"], "reason": parsed.get("abstention_reason", "Unknown")}

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from statistics import mean, stdev, median, variance
 from typing import Dict, List, Optional, Tuple, Any
 
+from .council_rankings import parsed_ranking_of
+
 from .unified_config import get_config
 
 
@@ -355,7 +357,7 @@ def extract_scores_from_stage2(
 
     for result in stage2_results:
         reviewer = result.get("model")
-        parsed = result.get("parsed_ranking", {})
+        parsed = parsed_ranking_of(result)
 
         # Skip if abstained
         if parsed.get("abstained"):
