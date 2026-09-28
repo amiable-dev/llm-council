@@ -218,12 +218,6 @@ class TestUnobservedStaysOmitted:
         assert COST not in attrs
         assert SOURCE not in attrs
 
-    def test_an_incomplete_run_still_reports_its_estimate(self):
-        attrs = _span(
-            _run([("a/one", _call(0.02, "registry_estimate")), ("b/two", _call(None, None))])
-        )
-        assert attrs[ESTIMATE] == pytest.approx(0.02)
-
 
 class TestTheVerifyPathUsesTheSameAggregate:
     def test_verify_builds_its_summary_with_build_usage_summary(self):
@@ -366,3 +360,118 @@ class TestGateRound1:
         assert ext.claude_session_id() == sid
         monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", sid + "\nx")
         assert ext.claude_session_id() is None
+
+
+class TestGateRound2:
+    """Council gate on #708, round 2 (1 critical, 6 major)."""
+
+    def test_an_integer_too_large_for_a_float_does_not_crash_a_billed_run(self):
+        """`math.isfinite(10**400)` raises OverflowError. JSON parses integers
+        exactly, so a provider can send one."""
+        call = _call(10**400, "provider")
+        call["prompt_tokens"] = 10**400
+        call["cached_tokens"] = 10**400
+        summary = _run([("a/one", call)])
+        assert summary["total"]["cost_incomplete"] is True
+        assert COST not in _span(summary)
+
+    def test_string_token_counts_still_reach_the_span(self):
+        """A numeric string is coerced to 200.0 by the aggregate; the span
+        used to accept only int and so dropped the attribute."""
+        call = _call(0.01, "provider")
+        call["cached_tokens"] = "200"
+        summary = _run([("a/one", call)])
+        assert _span(summary)["gen_ai.usage.cache_read_input_tokens"] == 200
+
+    def test_negative_counts_are_not_emitted(self):
+        summary = _run([("a/one", _call(0.01, "provider"))])
+        summary["total"]["prompt_tokens"] = -5
+        assert "gen_ai.usage.input_tokens" not in _span(summary)
+
+    def test_grand_total_sums_survive_a_malformed_stage_bucket(self):
+        summary = _build_usage_summary(
+            {"stage1": {"prompt_tokens": "12", "completion_tokens": None, "cost_usd": "x"}}
+        )
+        assert summary["total"]["prompt_tokens"] == 12
+
+    @pytest.mark.parametrize(
+        "total",
+        [
+            {"cost_known": True, "cost_usd": 0.01, "cost_sources": 7},
+            {"cost_known": True, "cost_usd": 0.01, "cost_source": ["provider"]},
+            {"cost_known": True, "cost_usd": 0.01, "cost_source": {"a": 1}},
+        ],
+    )
+    def test_a_malformed_total_never_raises(self, total):
+        assert COST not in ext.cost_attributes({"total": total})
+
+    def test_an_incomplete_run_sends_no_cost_attributes_at_all(self):
+        """Both amounts of an incomplete run are lower bounds, and v2 cannot
+        say so. The estimate is withheld for the same reason as the cost."""
+        attrs = _span(
+            _run([("a/one", _call(0.02, "registry_estimate")), ("b/two", _call(None, None))])
+        )
+        assert ESTIMATE not in attrs
+        assert COST not in attrs
+
+    def test_an_unknown_source_label_is_logged(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger=ext.logger.name):
+            attrs = _span(_run([("a/one", _call(0.02, "cache_hit"))]))
+        assert COST not in attrs
+        assert "provenance" in caplog.text
+
+    def test_requests_are_omitted_rather_than_undercounted(self):
+        """A total without the call counter is a hand-built shape; the
+        distinct-model count it used to fall back to is knowingly wrong."""
+        attrs = ext.build_span_attributes(
+            operation="consult",
+            usage_summary={"total": {}, "by_model": {"a": {}, "b": {}}},
+        )
+        assert "std.external.requests" not in attrs
+
+    @pytest.mark.parametrize("bad", [True, -1, "12", float("nan")])
+    def test_a_bad_duration_is_omitted_and_the_span_survives(self, bad):
+        attrs = ext.build_span_attributes(
+            operation="consult",
+            usage_summary=_run([("a/one", _call(0.01, "provider"))]),
+            duration_ms=bad,
+        )
+        assert "std.external.duration_ms" not in attrs
+        assert attrs[COST] == pytest.approx(0.01)
+
+    def test_health_check_needs_the_exporter_not_just_the_sdk(self, monkeypatch):
+        """The SDK and the OTLP/HTTP exporter ship as separate distributions.
+        With only the SDK every span is dropped, so the check must not say
+        enabled."""
+        import importlib.util
+
+        real = importlib.util.find_spec
+
+        def fake(name, *a, **k):
+            if name.startswith("opentelemetry.exporter"):
+                return None
+            return real(name, *a, **k)
+
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+        monkeypatch.setattr(importlib.util, "find_spec", fake)
+        status = ext.telemetry_status()
+        assert status["enabled"] is False
+        assert status["reason"] == "sdk_missing"
+
+    def test_health_check_does_not_echo_credentials_in_the_endpoint(self, monkeypatch):
+        monkeypatch.setenv(
+            "OTEL_EXPORTER_OTLP_ENDPOINT", "https://user:secret@collector.example:4318/x?token=t"
+        )
+        monkeypatch.setattr(ext, "_sdk_available", lambda: True)
+        endpoint = ext.telemetry_status()["endpoint"]
+        assert "secret" not in endpoint and "token" not in endpoint
+        assert endpoint == "https://collector.example:4318"
+
+    def test_the_contract_vocabulary_constant_is_what_the_mapping_emits(self):
+        for calls in (
+            [("a/one", _call(0.04, "provider"))],
+            [("ollama/x", _call(0.0, "local_zero"))],
+        ):
+            assert _span(_run(calls))[SOURCE] in ext.CONTRACT_COST_SOURCES

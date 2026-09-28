@@ -136,7 +136,7 @@ def _merge_cost_source(bucket: Dict[str, Any], source: Optional[str]) -> None:
     stays separately visible in ``cost_estimated_usd``. A call with no source
     contributes nothing rather than overwriting a known one.
     """
-    if not source:
+    if not source or not isinstance(source, str):
         return
     existing = bucket.get("cost_source")
     if existing is None:
@@ -168,23 +168,24 @@ def _as_number(value: Any) -> float:
     """
     if isinstance(value, bool) or value is None:
         return 0
-    if isinstance(value, (int, float)):
-        return value if math.isfinite(value) else 0
+    # #707 gate: `math.isfinite` raises OverflowError on an int too large for a
+    # float, and JSON parses integers exactly, so a provider can send one. The
+    # conversion and the check both sit inside the guard.
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+        return (value if isinstance(value, (int, float)) else parsed) if math.isfinite(parsed) else 0
+    except (TypeError, ValueError, OverflowError):
         return 0
-    return parsed if math.isfinite(parsed) else 0
 
 
 def _is_usable_cost(value: Any) -> bool:
     """A finite, non-negative number that is not a bool."""
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and value >= 0
-    )
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value >= 0
+    except OverflowError:  # an int beyond float range
+        return False
 
 
 def _add_cost_to_usage(
@@ -271,12 +272,12 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     by both council entry points so the HTTP and MCP paths report identically.
     """
     grand_total = {
-        "prompt_tokens": sum(s.get("prompt_tokens", 0) for s in by_stage.values()),
-        "completion_tokens": sum(s.get("completion_tokens", 0) for s in by_stage.values()),
-        "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
-        "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
-        "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
-        "cache_write_tokens": sum(s.get("cache_write_tokens", 0) for s in by_stage.values()),
+        "prompt_tokens": sum(_as_number(s.get("prompt_tokens")) for s in by_stage.values()),
+        "completion_tokens": sum(_as_number(s.get("completion_tokens")) for s in by_stage.values()),
+        "total_tokens": sum(_as_number(s.get("total_tokens")) for s in by_stage.values()),
+        "cost_usd": sum(_as_number(s.get("cost_usd")) for s in by_stage.values()),
+        "cached_tokens": sum(_as_number(s.get("cached_tokens")) for s in by_stage.values()),
+        "cache_write_tokens": sum(_as_number(s.get("cache_write_tokens")) for s in by_stage.values()),
         "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
         # #707: provenance has to reach the total, because the total is what
         # every consumer reads. Before this, `cost_source` and

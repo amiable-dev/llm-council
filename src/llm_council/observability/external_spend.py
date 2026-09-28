@@ -36,7 +36,9 @@ import logging
 import math
 import os
 import re
-from typing import Any, Dict, Optional, Tuple
+import threading
+from urllib.parse import urlsplit
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -134,12 +136,25 @@ def telemetry_status() -> Dict[str, Any]:
             "enabled": False,
             "reason": "sdk_missing",
             "detail": (
-                f"{_ENDPOINT_VAR} is set but the OpenTelemetry SDK is not "
-                f"installed. Reinstall with the [otel] extra, or unset the "
-                f"endpoint. Nothing is being reported externally."
+                f"{_ENDPOINT_VAR} is set but the OpenTelemetry SDK or its OTLP/HTTP "
+                f"exporter is not installed. Reinstall with the [otel] extra, or "
+                f"unset the endpoint. Nothing is being reported externally."
             ),
         }
-    return {"enabled": True, "reason": None, "endpoint": endpoint}
+    return {"enabled": True, "reason": None, "endpoint": _redact_endpoint(endpoint)}
+
+
+def _redact_endpoint(endpoint: str) -> str:
+    """Scheme, host and port only. An OTLP endpoint can carry credentials in
+    its userinfo or query string, and this value is shown in a health check."""
+    try:
+        parts = urlsplit(endpoint)
+        if not parts.scheme or not parts.hostname:
+            return "<configured>"
+        port = f":{parts.port}" if parts.port else ""
+        return f"{parts.scheme}://{parts.hostname}{port}"
+    except ValueError:
+        return "<configured>"
 
 
 def _sdk_available() -> bool:
@@ -151,7 +166,15 @@ def _sdk_available() -> bool:
     try:
         from importlib.util import find_spec
 
-        return find_spec("opentelemetry.sdk") is not None
+        # Both, because they ship as separate distributions: with the SDK but
+        # not the exporter, `_get_tracer` fails and every span is dropped.
+        return all(
+            find_spec(name) is not None
+            for name in (
+                "opentelemetry.sdk",
+                "opentelemetry.exporter.otlp.proto.http.trace_exporter",
+            )
+        )
     except Exception:  # pragma: no cover - defensive
         return False
 
@@ -201,14 +224,27 @@ def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
     and the registry had no price, sends no ``cost_usd``: the observed sum is
     then a lower bound, and v2 has no attribute that says so.
     """
-    total = usage_summary.get("total") or {}
-    attrs: Dict[str, Any] = {}
+    try:
+        return _cost_attributes(usage_summary.get("total") or {})
+    except Exception as exc:  # a malformed summary must never raise
+        logger.debug("omitting cost attributes from a malformed total: %s", type(exc).__name__)
+        return {}
 
-    sources = set(total.get("cost_sources") or ())
+
+def _cost_attributes(total: Dict[str, Any]) -> Dict[str, Any]:
+    attrs: Dict[str, Any] = {}
+    # An incomplete total is a lower bound for BOTH amounts, and v2 has no
+    # attribute that says so. So nothing is sent, not even the estimate.
+    if total.get("cost_incomplete"):
+        return attrs
+
+    raw_sources = total.get("cost_sources")
+    sources = {x for x in raw_sources if isinstance(x, str)} if isinstance(raw_sources, (list, tuple, set, frozenset)) else set()
     # A hand-built total (an older caller, or a test fixture) may carry only
     # the collapsed label. The real aggregate always carries the set.
-    if not sources and total.get("cost_source") not in (None, "mixed"):
-        sources = {total["cost_source"]}
+    label = total.get("cost_source")
+    if not sources and isinstance(label, str) and label != "mixed":
+        sources = {label}
 
     estimated = _finite_amount(total.get("cost_estimated_usd"))
     # Keyed on the SOURCE as well as the amount: a model the registry prices at
@@ -217,19 +253,23 @@ def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
     if estimated is not None and (estimated > 0 or "registry_estimate" in sources):
         attrs["std.external.cost_estimated_usd"] = estimated
 
-    if not total.get("cost_known") or total.get("cost_incomplete"):
+    if not total.get("cost_known"):
         return attrs
     if "provider" in sources:
         contract_source = "provider"
     elif "local_zero" in sources:
         contract_source = "local"
     else:
-        if not sources:
-            # A cost with no provenance at all. v2 requires a source beside a
-            # cost_usd, and inventing one would claim an observation, so it is
-            # omitted, but not silently.
-            logger.debug("omitting a cost with no provenance label from the external span")
+        if sources - {"registry_estimate"} or not sources:
+            # No provenance, or a label council does not know how to map. v2
+            # requires a source beside a cost_usd, and inventing one would
+            # claim an observation, so the cost is omitted, but not silently.
+            logger.debug(
+                "omitting a cost with no mappable provenance from the external span: %s",
+                sorted(sources) or "none",
+            )
         return attrs
+    assert contract_source in CONTRACT_COST_SOURCES
 
     reported = _finite_amount(total.get("cost_usd"))
     if reported is None:
@@ -249,6 +289,18 @@ def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
     attrs["std.external.cost_usd"] = max(0.0, round(observed, 12))
     attrs["std.external.cost_source"] = contract_source
     return attrs
+
+
+def _count(value: Any) -> Optional[int]:
+    """A non-negative whole count, or None. The aggregate coerces a numeric
+    string to a float, so an integral float is accepted and made an int."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float) and math.isfinite(value) and value >= 0 and value.is_integer():
+        return int(value)
+    return None
 
 
 def build_span_attributes(
@@ -284,21 +336,23 @@ def build_span_attributes(
     attrs.update(cost_attributes(usage_summary))
 
     # Calls, not distinct models: a model reviewed in all three stages is three
-    # requests. `len(by_model)` survives only for a total built without the
-    # counter (a hand-built fixture).
-    requests = total.get("requests")
-    if isinstance(requests, int) and not isinstance(requests, bool) and requests > 0:
+    # requests. A total without the counter omits the attribute; the distinct-
+    # model count it used to fall back to is knowingly wrong.
+    requests = _count(total.get("requests"))
+    if requests:
         attrs["std.external.requests"] = requests
-    elif by_model:
-        attrs["std.external.requests"] = len(by_model)
-    if duration_ms is not None:
-        attrs["std.external.duration_ms"] = int(duration_ms)
+    # A duration may be fractional milliseconds; truncate, but reject the rest.
+    if isinstance(duration_ms, float) and math.isfinite(duration_ms):
+        duration_ms = int(duration_ms)
+    duration = _count(duration_ms)
+    if duration is not None:
+        attrs["std.external.duration_ms"] = duration
 
     # A council has many models; the contract has one `gen_ai.request.model`.
     # The caller names the one that characterises the run (the chairman for a
     # synthesis), and it is omitted rather than guessed.
-    if model:
-        attrs["gen_ai.request.model"] = model
+    if isinstance(model, str) and model:
+        attrs["gen_ai.request.model"] = model[:256]
 
     for attr_key, usage_key in (
         ("gen_ai.usage.input_tokens", "prompt_tokens"),
@@ -306,9 +360,9 @@ def build_span_attributes(
         ("gen_ai.usage.cache_read_input_tokens", "cached_tokens"),
         ("gen_ai.usage.cache_creation_input_tokens", "cache_write_tokens"),
     ):
-        value = total.get(usage_key)
-        if isinstance(value, int) and not isinstance(value, bool):
-            attrs[attr_key] = value
+        count = _count(total.get(usage_key))
+        if count is not None:
+            attrs[attr_key] = count
 
     session = claude_session_id()
     if session:
@@ -329,7 +383,8 @@ def emit_external_spend(
     duration_ms: Optional[int] = None,
     model: Optional[str] = None,
 ) -> bool:
-    """Emit one `external` activation span. Returns whether a span was sent.
+    """Emit one `external` activation span. Returns whether a span was handed to
+    the exporter (queued for export, not confirmed delivered).
 
     Soft-fail and non-blocking by contract. With no endpoint this returns False
     before importing anything, so an install without the `[otel]` extra behaves
@@ -357,6 +412,7 @@ def emit_external_spend(
 
 _tracer: Optional[Any] = None
 _tracer_attempted = False
+_tracer_lock = threading.Lock()
 
 
 def _get_tracer() -> Optional[Any]:
@@ -364,7 +420,17 @@ def _get_tracer() -> Optional[Any]:
     global _tracer, _tracer_attempted
     if _tracer_attempted:
         return _tracer
-    _tracer_attempted = True
+    # The HTTP server and the MCP path can both reach here first; without the
+    # lock each builds a provider and leaks an exporter thread.
+    with _tracer_lock:
+        if _tracer_attempted:
+            return _tracer
+        _tracer = _build_tracer()
+        _tracer_attempted = True
+    return _tracer
+
+
+def _build_tracer() -> Optional[Any]:
     try:
         from opentelemetry import trace
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
@@ -381,11 +447,10 @@ def _get_tracer() -> Optional[Any]:
         provider.add_span_processor(
             BatchSpanProcessor(OTLPSpanExporter(timeout=3), export_timeout_millis=3000)
         )
-        _tracer = trace.get_tracer(__name__, tracer_provider=provider)
+        return trace.get_tracer(__name__, tracer_provider=provider)
     except Exception as exc:
         logger.debug("OpenTelemetry SDK unavailable: %s", type(exc).__name__)
-        _tracer = None
-    return _tracer
+        return None
 
 
 def _reset_for_tests() -> None:
