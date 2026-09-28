@@ -824,12 +824,11 @@ async def verify(
     the verification stages (evidence expansion, council collection, ranking,
     verdict) — best-effort, never affects the verdict.
 
-    UNCLEAR disambiguation (ADR-047 P1): an unclear verdict carries
-    `unclear_reason` — infra_failure (chairman call errored: check
-    billing/auth then RETRY, do not treat as a review), low_confidence
-    (deliberation completed below threshold: accept-and-audit per policy
-    when blocking issues are empty), or timeout (re-tier or reduce scope).
-    Exit code stays 2 for all three; the reason is the routing signal.
+    UNCLEAR (ADR-047 P1): `unclear_reason` is infra_failure (chairman call
+    errored: check billing/auth, then RETRY; not a review), low_confidence
+    (below threshold: accept-and-audit if no blocking issues), or timeout.
+    Exit code stays 2. If time ran out, `retry_hint` names a HIGHER tier
+    (#597): never retry a starved run at the same or a lower tier.
 
     Args:
         snapshot_id: Git commit SHA to verify (7-40 hex characters).

@@ -136,6 +136,7 @@ def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any
 # #720: split below the review cap. Re-exported for callers that import
 # these from verification.api; patch them where they are CONSUMED.
 from .prompt import _build_preflight_info, _build_verification_prompt  # noqa: F401,E402
+from .escalation import retry_hint  # noqa: E402
 from .pipeline import (  # noqa: F401,E402
     ProgressCallback,
     _emit_posthog_generations,
@@ -490,6 +491,12 @@ async def run_verification(
                 "confidence": salvaged_confidence,
                 "exit_code": 2,
                 "unclear_reason": "timeout",  # ADR-047 P1 (#413)
+                # #597: retry UP a tier; a lower one has less time, not more.
+                "retry_hint": retry_hint(
+                    request.tier,
+                    unclear_reason="timeout",
+                    completed_stages=partial_state.get("completed_stages", []),
+                ),
                 "rubric_scores": salvaged_rubric,
                 "blocking_issues": [],
                 "rationale": (
@@ -497,7 +504,8 @@ async def run_verification(
                     f"(tier={request.tier}, deadline={tier_contract.deadline_ms}ms "
                     f"x {VERIFICATION_TIMEOUT_MULTIPLIER} multiplier). "
                     f"Completed stages: {completed}.{advisory_note} "
-                    f"Consider using a faster tier or reducing input scope."
+                    f"Retry at a higher tier (a longer deadline) or reduce the "
+                    f"input scope; the same or a lower tier has no more time (#597)."
                 ),
                 "transcript_location": str(transcript_dir),
                 "partial": True,

@@ -173,12 +173,17 @@ def format_verification_result(result: Dict[str, Any]) -> str:
         hints = {
             "infra_failure": "chairman call errored — check billing/auth, then retry",
             "low_confidence": "deliberation completed below threshold — accept-and-audit per policy",
-            "timeout": "global deadline fired — re-tier or reduce scope",
+            "timeout": "global deadline fired — retry at a HIGHER tier or reduce scope",
             "chairman_disabled": "chairman synthesis was skipped by config — no verdict was computed",
         }
         hint = hints.get(unclear_reason, "")
         suffix = f" ({hint})" if hint else ""
         lines.append(f"| Unclear reason | {unclear_reason}{suffix} |")
+
+    # #597: retry guidance after a starved run
+    retry = result.get("retry_hint")
+    if isinstance(retry, dict) and retry.get("message"):
+        lines.append(f"| Next step | {retry['message']} |")
 
     # Rubric scores
     rubric_scores = result.get("rubric_scores") or {}
