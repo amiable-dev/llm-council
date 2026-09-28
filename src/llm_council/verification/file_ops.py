@@ -1139,6 +1139,19 @@ async def _fetch_files_for_verification_async(
     return content
 
 
+async def _is_shallow_repository(git_root: Optional[str]) -> bool:
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "rev-parse",
+        "--is-shallow-repository",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=git_root,
+    )
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+    return stdout.decode("utf-8").strip() == "true"
+
+
 async def _diff_tree_names(git_root: Optional[str], *revs: str) -> Tuple[int, List[str]]:
     """`git diff-tree --no-commit-id --name-only -r <revs>`: (returncode, paths)."""
     proc = await asyncio.create_subprocess_exec(
@@ -1238,11 +1251,21 @@ async def _fetch_files_for_verification_async_with_metadata(
                 rc, changed = await _diff_tree_names(
                     git_root, f"{snapshot_id}^1", snapshot_id
                 )
-                if rc != 0:
+                if rc != 0 and await _is_shallow_repository(git_root):
+                    # In a shallow clone the boundary commit LOOKS parentless,
+                    # so `--root` would report its entire tree as added: review
+                    # everything, hit the input cap, and pass as UNCLEAR. That
+                    # reopens the silent pass this exists to close. Refuse.
                     expansion_metadata["expansion_warnings"].append(
-                        f"could not diff {snapshot_id} against its first parent "
-                        f"(a root commit, or a shallow clone missing the parent); "
-                        f"used the commit's own diff instead"
+                        f"could not diff {snapshot_id} against its first parent: "
+                        f"this is a shallow clone and the parent was not fetched. "
+                        f"Fetch more history (actions/checkout fetch-depth: 0)"
+                    )
+                    changed = []
+                elif rc != 0:
+                    expansion_metadata["expansion_warnings"].append(
+                        f"{snapshot_id} has no first parent (a root commit); "
+                        f"reviewing the files it added"
                     )
                     rc, changed = await _diff_tree_names(git_root, "--root", snapshot_id)
 

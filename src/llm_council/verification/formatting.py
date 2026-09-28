@@ -110,6 +110,13 @@ def format_verification_result(result: Dict[str, Any]) -> str:
         if rationale:
             lines.append(f"**Detail**: {rationale}")
             lines.append("")
+        # The discovery warnings are what tell "nothing reviewable" apart from
+        # "discovery failed" (a shallow clone, a root commit).
+        warnings = [w for w in (result.get("expansion_warnings") or []) if isinstance(w, str)]
+        if warnings:
+            lines.append("**Discovery**:")
+            lines.extend(f"- {w}" for w in warnings[:10])
+            lines.append("")
         lines.extend(_coverage_lines(result.get("coverage") or {}))
         transcript = result.get("transcript_location", "")
         if transcript:
@@ -131,7 +138,7 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     lines.append(f"| Verdict | {verdict.upper()} (exit code {exit_code}) |")
 
     # Confidence row
-    confidence = result.get("confidence", 0.0)
+    confidence = result.get("confidence") or 0.0
     lines.append(f"| Confidence | {confidence:.2f} |")
 
     # ADR-047 P2 (#414): show calibrated confidence when it diverges from raw
@@ -152,7 +159,7 @@ def format_verification_result(result: Dict[str, Any]) -> str:
         lines.append(f"| Unclear reason | {unclear_reason} ({hint}) |")
 
     # Rubric scores
-    rubric_scores = result.get("rubric_scores", {})
+    rubric_scores = result.get("rubric_scores") or {}
     for key, display_name in RUBRIC_DIMENSIONS:
         score = rubric_scores.get(key)
         if score is not None:
@@ -202,7 +209,7 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     lines.append("")
 
     # Rationale (summarized)
-    rationale = result.get("rationale", "No rationale provided.")
+    rationale = result.get("rationale") or "No rationale provided."
     lines.append("### Rationale")
     # Take first 3 sentences or 500 chars, whichever is shorter
     sentences = rationale.split(". ")

@@ -259,20 +259,45 @@ class TestGateRound1:
         _repo, sha = root_commit_repo
         assert _discover(sha)["expanded_paths"] == ["main.py"]
 
-    def test_a_missing_parent_is_reported_as_such(self, pr_repo, monkeypatch):
-        """A shallow clone lacks the parent. That is a discovery failure, and
-        the result must say so rather than read as 'nothing reviewable'."""
-        _repo, merge, _head = pr_repo
-        real = asyncio.create_subprocess_exec
+    def test_a_shallow_clone_reviews_nothing_and_says_why(self, pr_repo, tmp_path, monkeypatch):
+        """A real `--depth 1` clone, as `actions/checkout` makes by default.
+        The merge commit is the shallow boundary and LOOKS parentless. A
+        `--root` fallback would report its whole tree: review everything, hit
+        the input cap, exit 2, pass. It must review nothing and say why."""
+        repo, merge, _head = pr_repo
+        shallow = tmp_path / "shallow"
+        subprocess.run(
+            ["git", "clone", "-q", "--depth", "1", f"file://{repo}", str(shallow)],
+            check=True,
+            capture_output=True,
+        )
+        assert _git(shallow, "rev-parse", "HEAD") == merge
+        monkeypatch.setattr(file_ops, "_cached_git_root", str(shallow))
+        monkeypatch.chdir(shallow)
 
-        async def no_parent(*args, **kwargs):
-            if "diff-tree" in args and any(str(a).endswith("^1") for a in args):
-                args = tuple("0" * 40 + "^1" if str(a).endswith("^1") else a for a in args)
-            return await real(*args, **kwargs)
+        meta = _discover(merge)
+        assert meta["expanded_paths"] == []
+        assert "shallow clone" in " ".join(meta["expansion_warnings"])
 
-        monkeypatch.setattr(file_ops.asyncio, "create_subprocess_exec", no_parent)
-        warnings = " ".join(_discover(merge)["expansion_warnings"])
-        assert "parent" in warnings
+    def test_the_nothing_reviewed_banner_shows_the_discovery_warning(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {
+                "error": "no_reviewable_content",
+                "rationale": "nothing",
+                "expansion_warnings": ["could not diff abc against its first parent: shallow clone"],
+            }
+        )
+        assert "shallow clone" in text
+
+    def test_the_full_formatter_survives_null_fields(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {"verdict": None, "confidence": None, "rationale": None, "rubric_scores": None}
+        )
+        assert "UNCLEAR" in text
 
     def test_the_nothing_reviewed_output_names_transcript_and_omissions(self):
         from llm_council.verification.formatting import format_verification_result

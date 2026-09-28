@@ -939,6 +939,9 @@ async def run_verification(
                 "timeout_fired": False,
                 "completed_stages": [],
                 "coverage": _receipt,
+                "expansion_warnings": list(
+                    (evidence_render_info.get("expansion") or {}).get("expansion_warnings") or []
+                ),
             }
             _persist_result_safe(store, verification_id, empty_result)
             return empty_result
