@@ -298,3 +298,71 @@ class TestTheDriftCheckDetectsDrift:
         drift, contract = check
         assert any(a.startswith("std.scope.") for a in contract["attributes"])
         assert not any("std.scope" in p for p in drift(contract))
+
+
+class TestGateRound1:
+    """Council gate on #708, round 1 (2 critical, 4 major)."""
+
+    @pytest.mark.parametrize("garbage", ["0.05", float("nan"), float("inf"), True, -0.01])
+    def test_a_malformed_cost_is_not_a_measured_zero(self, garbage):
+        """`_as_number` turns garbage into 0, and `cost_known` used to be set
+        for anything that was not None, so a malformed figure went out as a
+        provider-measured $0.00. Unusable is unobserved: the total is
+        incomplete."""
+        summary = _run([("a/one", _call(garbage, "provider"))])
+        attrs = _span(summary)
+        assert COST not in attrs
+        assert summary["total"]["cost_incomplete"] is True
+
+    @pytest.mark.parametrize("field", ["cached_tokens", "cache_write_tokens"])
+    def test_a_string_cache_count_does_not_crash_a_billed_run(self, field):
+        call = _call(0.01, "provider")
+        call[field] = "10"
+        summary = _run([("a/one", call)])
+        assert summary["total"]["cost_usd"] == pytest.approx(0.01)
+
+    def test_requests_counts_calls_not_distinct_models(self):
+        """The same model in stages 1, 2 and 3 is three requests."""
+        summary = _run(
+            [("a/one", _call(0.01, "provider")), ("b/two", _call(0.01, "provider"))],
+            [("a/one", _call(0.01, "provider")), ("b/two", _call(0.01, "provider"))],
+            [("a/one", _call(0.01, "provider"))],
+        )
+        assert _span(summary)["std.external.requests"] == 5
+
+    def test_an_estimate_larger_than_the_total_sends_no_cost(self, caplog):
+        """Not float residue: aggregation corruption. Publishing it as a
+        measured 0.0 would hide it."""
+        summary = _run([("a/one", _call(0.03, "provider"))])
+        summary["total"]["cost_estimated_usd"] = 0.05
+        attrs = _span(summary)
+        assert COST not in attrs
+
+    def test_float_residue_is_still_a_clean_zero(self):
+        summary = _run([("ollama/x", _call(0.0, "local_zero"))])
+        summary["total"]["cost_estimated_usd"] = 1e-18
+        assert _span(summary)[COST] == 0.0
+
+    def test_a_cost_with_no_provenance_is_omitted_and_logged(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger=ext.logger.name):
+            attrs = _span(_run([("a/one", _call(0.02, None))]))
+        assert COST not in attrs
+        assert "provenance" in caplog.text
+
+    def test_a_zero_registry_estimate_is_still_reported(self):
+        """A model the registry prices at zero was estimated, at zero. Omitting
+        it would make it indistinguishable from no estimate at all."""
+        attrs = _span(_run([("free/model", _call(0.0, "registry_estimate"))]))
+        assert attrs[ESTIMATE] == 0.0
+        assert COST not in attrs
+
+    def test_a_session_id_must_be_exactly_a_uuid(self, monkeypatch):
+        """Surrounding whitespace is stripped before matching, so a trailing
+        newline yields the clean id; anything else around it is rejected."""
+        sid = "3f2504e0-4f89-11d3-9a0c-0305e82c3301"
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", sid + "\n")
+        assert ext.claude_session_id() == sid
+        monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", sid + "\nx")
+        assert ext.claude_session_id() is None

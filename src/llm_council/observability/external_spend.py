@@ -165,7 +165,12 @@ def claude_session_id() -> Optional[str]:
     Absent is honest; a made-up id is not.
     """
     raw = os.getenv(_SESSION_VAR, "").strip()
-    return raw if raw and _CLAUDE_SESSION_RE.match(raw) else None
+    # fullmatch: `$` under `re.match` accepts a trailing newline.
+    return raw if raw and _CLAUDE_SESSION_RE.fullmatch(raw) else None
+
+
+#: Below this, a negative difference is float residue, not an inconsistency.
+_RESIDUE = 1e-9
 
 
 def _finite_amount(value: Any) -> Optional[float]:
@@ -199,28 +204,47 @@ def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
     total = usage_summary.get("total") or {}
     attrs: Dict[str, Any] = {}
 
+    sources = set(total.get("cost_sources") or ())
+    # A hand-built total (an older caller, or a test fixture) may carry only
+    # the collapsed label. The real aggregate always carries the set.
+    if not sources and total.get("cost_source") not in (None, "mixed"):
+        sources = {total["cost_source"]}
+
     estimated = _finite_amount(total.get("cost_estimated_usd"))
-    if estimated:
+    # Keyed on the SOURCE as well as the amount: a model the registry prices at
+    # zero was estimated, at zero, and omitting that would make it read as no
+    # estimate at all.
+    if estimated is not None and (estimated > 0 or "registry_estimate" in sources):
         attrs["std.external.cost_estimated_usd"] = estimated
 
     if not total.get("cost_known") or total.get("cost_incomplete"):
         return attrs
-    sources = set(total.get("cost_sources") or ())
-    if not sources and total.get("cost_source") not in (None, "mixed"):
-        sources = {total["cost_source"]}
     if "provider" in sources:
         contract_source = "provider"
     elif "local_zero" in sources:
         contract_source = "local"
     else:
-        # Nothing observed: an estimate-only run, or a source we do not know
-        # how to map. Either way, no cost_usd.
+        if not sources:
+            # A cost with no provenance at all. v2 requires a source beside a
+            # cost_usd, and inventing one would claim an observation, so it is
+            # omitted, but not silently.
+            logger.debug("omitting a cost with no provenance label from the external span")
         return attrs
 
     reported = _finite_amount(total.get("cost_usd"))
     if reported is None:
         return attrs
     observed = reported - (estimated or 0.0)
+    if observed < -_RESIDUE:
+        # An estimate larger than the total it is part of is not float residue;
+        # the aggregate is inconsistent. Publishing it as a measured 0.0 would
+        # hide that, so the observed amount is withheld.
+        logger.debug(
+            "omitting cost_usd: estimated portion exceeds the total (%s > %s)",
+            estimated,
+            reported,
+        )
+        return attrs
     # Float subtraction can leave -1e-18 where the answer is zero.
     attrs["std.external.cost_usd"] = max(0.0, round(observed, 12))
     attrs["std.external.cost_source"] = contract_source
@@ -259,7 +283,13 @@ def build_span_attributes(
 
     attrs.update(cost_attributes(usage_summary))
 
-    if by_model:
+    # Calls, not distinct models: a model reviewed in all three stages is three
+    # requests. `len(by_model)` survives only for a total built without the
+    # counter (a hand-built fixture).
+    requests = total.get("requests")
+    if isinstance(requests, int) and not isinstance(requests, bool) and requests > 0:
+        attrs["std.external.requests"] = requests
+    elif by_model:
         attrs["std.external.requests"] = len(by_model)
     if duration_ms is not None:
         attrs["std.external.duration_ms"] = int(duration_ms)
@@ -345,7 +375,12 @@ def _get_tracer() -> Optional[Any]:
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
         provider = TracerProvider(resource=Resource.create({"service.name": ARTEFACT_NAME}))
-        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+        # Bounded: the batch processor flushes at interpreter exit, and an
+        # unreachable collector must not hold an MCP server's shutdown for the
+        # exporter's default 10s.
+        provider.add_span_processor(
+            BatchSpanProcessor(OTLPSpanExporter(timeout=3), export_timeout_millis=3000)
+        )
         _tracer = trace.get_tracer(__name__, tracer_provider=provider)
     except Exception as exc:
         logger.debug("OpenTelemetry SDK unavailable: %s", type(exc).__name__)

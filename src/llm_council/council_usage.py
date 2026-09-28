@@ -177,6 +177,16 @@ def _as_number(value: Any) -> float:
     return parsed if math.isfinite(parsed) else 0
 
 
+def _is_usable_cost(value: Any) -> bool:
+    """A finite, non-negative number that is not a bool."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
 def _add_cost_to_usage(
     total_usage: Dict[str, Any], usage: Dict[str, Any], model: Optional[str] = None
 ) -> None:
@@ -188,15 +198,27 @@ def _add_cost_to_usage(
     ``total_usage["by_model"][model]`` (reviewer-primary attribution).
     """
     raw_cost = usage.get("cost")
-    cost = _as_number(raw_cost)
+    # #707 gate: a cost is KNOWN only if it is a usable measurement. `_as_number`
+    # turns garbage (a string, NaN, a bool, a negative) into 0, and `cost_known`
+    # used to be set for anything that was not None, so a malformed figure went
+    # out as a provider-measured $0.00. Unusable is unobserved.
+    usable = _is_usable_cost(raw_cost)
+    cost = float(raw_cost) if usable and raw_cost is not None else 0.0
     # #694: provenance rides with the figure. An estimate that cannot be told
     # apart from a measurement is worse than no figure, because it WILL be
-    # summed with real ones.
-    source = usage.get("cost_source")
+    # summed with real ones. A source is recorded only for a usable figure:
+    # a label on nothing observed would claim an observation.
+    source = usage.get("cost_source") if usable else None
     estimated = cost if source == "registry_estimate" else 0.0
-    cached = usage.get("cached_tokens", 0) or 0
+    # #707 gate: through `_as_number` like the primary counts. A raw `+` on a
+    # provider's string count raised TypeError here, on the deliberation path,
+    # failing a run that had already completed and been billed.
+    cached = _as_number(usage.get("cached_tokens"))
     # ADR-049 D4: cache-write tokens ride the same aggregation; absent => 0.
-    cache_write = usage.get("cache_write_tokens", 0) or 0
+    cache_write = _as_number(usage.get("cache_write_tokens"))
+    # #707 gate: `std.external.requests` is a count of calls. It was
+    # `len(by_model)`, which counts a model reviewed in all three stages once.
+    total_usage["requests"] = total_usage.get("requests", 0) + 1
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
     total_usage["cost_estimated_usd"] = total_usage.get("cost_estimated_usd", 0.0) + estimated
     _merge_cost_source(total_usage, source)
@@ -205,7 +227,7 @@ def _add_cost_to_usage(
     # Track whether ANY cost was reported so the summary can tell a genuine
     # $0 (free/local) from unknown cost (None) — a present cost, even 0.0, is
     # "known".
-    if raw_cost is not None:
+    if usable:
         total_usage["cost_known"] = True
     else:
         # #692 gate: `cost_known` means "at least one call reported a cost", so
@@ -234,7 +256,8 @@ def _add_cost_to_usage(
         _merge_cost_source(bucket, source)
         bucket["cached_tokens"] += cached
         bucket["cache_write_tokens"] = bucket.get("cache_write_tokens", 0) + cache_write
-        if raw_cost is not None:
+        bucket["requests"] = bucket.get("requests", 0) + 1
+        if usable:
             bucket["cost_known"] = True
         else:
             bucket["cost_incomplete"] = True
@@ -264,6 +287,7 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "cost_estimated_usd": sum(
             _as_number(s.get("cost_estimated_usd")) for s in by_stage.values()
         ),
+        "requests": sum(int(_as_number(s.get("requests"))) for s in by_stage.values()),
     }
     for stage_usage in by_stage.values():
         _merge_cost_source(grand_total, stage_usage.get("cost_source"))
@@ -295,6 +319,7 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             )
             for key in numeric_keys:  # never iterate the bool cost_known
                 agg[key] += _as_number(model_usage.get(key))
+            agg["requests"] = agg.get("requests", 0) + int(_as_number(model_usage.get("requests")))
             agg["cost_estimated_usd"] = agg.get("cost_estimated_usd", 0.0) + _as_number(
                 model_usage.get("cost_estimated_usd")
             )
