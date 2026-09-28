@@ -76,7 +76,6 @@ router = APIRouter(tags=["verification"])
 # .schemas alongside the validators that use them; re-exported below.)
 
 
-
 # ============================================================================
 # #380: split into submodules (schemas / constants / evidence_render /
 # file_ops). Re-exported here verbatim for backward compatibility — many
@@ -135,6 +134,7 @@ from .file_ops import (  # noqa: F401
     _validate_file_path,
 )
 
+
 def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any]) -> None:
     """Best-effort persist of a final ``result.json`` for early-return paths.
 
@@ -181,6 +181,7 @@ def _emit_posthog_generations(
 
 
 # Maximum characters per file to include in prompt.
+
 
 async def _build_verification_prompt(
     snapshot_id: str,
@@ -297,8 +298,7 @@ Commit under review: `{snapshot_id}`"""
     ):
         end = cursor + len(text)
         segments.append(
-            {"name": name, "start": cursor, "end": end,
-             "est_tokens": (end - cursor) // 4}
+            {"name": name, "start": cursor, "end": end, "est_tokens": (end - cursor) // 4}
         )
         cursor = end
 
@@ -900,6 +900,52 @@ async def run_verification(
             evidence=request.evidence,
             tier=request.tier,
         )
+
+        # #704: nothing to review is an error, not a verdict. When the caller
+        # named no paths and discovery resolved none, the prompt's subject is
+        # empty, and a council asked to judge nothing produces an arbitrary
+        # verdict: the required CI gate passed three PRs and failed a fourth
+        # over the same empty subject. Stop before any model is called. An
+        # explicit `target_paths=[]` is the caller asking for zero files
+        # (#584, evidence-only review), so it is not this case.
+        # Keyed on the receipt SAYING zero files, not on its absence: the real
+        # fetch path always writes one, and "no receipt" is a different failure
+        # (the #555 conservation marker's job), not evidence of an empty subject.
+        _receipt = (evidence_render_info.get("expansion") or {}).get("coverage")
+        _empty_coverage = _receipt or {}
+        if (
+            request.target_paths is None
+            and _receipt is not None
+            and not _empty_coverage.get("reviewed")
+        ):
+            omitted = _empty_coverage.get("omitted") or []
+            omitted_text = (
+                ", ".join(f"{o['path']} ({o['reason']})" for o in omitted[:20])
+                if omitted
+                else "no changed files were found"
+            )
+            empty_result: Dict[str, Any] = {
+                "verification_id": verification_id,
+                "verdict": "unclear",
+                "confidence": 0.0,
+                "exit_code": 2,
+                "error": "no_reviewable_content",
+                "rubric_scores": {},
+                "blocking_issues": [],
+                "rationale": (
+                    f"No reviewable content resolved from snapshot "
+                    f"{request.snapshot_id}. The council did not run. "
+                    f"Omitted: {omitted_text}. Pass target_paths, or check that "
+                    f"the snapshot is a commit whose changes include text files."
+                ),
+                "transcript_location": str(transcript_dir),
+                "partial": True,
+                "timeout_fired": False,
+                "completed_stages": [],
+                "coverage": _empty_coverage or None,
+            }
+            _persist_result_safe(store, verification_id, empty_result)
+            return empty_result
 
         # Get tier-appropriate models and timeouts (Issue #325)
         tier_contract = create_tier_contract(request.tier)

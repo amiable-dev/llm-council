@@ -70,8 +70,24 @@ def format_verification_result(result: Dict[str, Any]) -> str:
             lines.append(f"**Transcript**: {transcript}")
         return "\n".join(lines)
 
+    # #704: same shape as input_too_large. The council never ran, so this is
+    # not a verdict and must not be formatted like one.
+    if result.get("error") == "no_reviewable_content":
+        lines.append("Council Verification Result: NOTHING REVIEWED 🚫")
+        lines.append("")
+        lines.append(
+            "> The council **did not run**: no reviewable file resolved from the "
+            "snapshot, so this is NOT a pass/fail/unclear verdict and must not be "
+            "treated as a passed gate."
+        )
+        lines.append("")
+        rationale = result.get("rationale", "")
+        if rationale:
+            lines.append(f"**Detail**: {rationale}")
+        return "\n".join(lines)
+
     # Header with verdict and emoji
-    verdict = result.get("verdict", "unclear").lower()
+    verdict = (result.get("verdict") or "unclear").lower()
     emoji = VERDICT_EMOJIS.get(verdict, "❓")
     lines.append(f"Council Verification Result: {verdict.upper()} {emoji}")
     lines.append("")
@@ -142,6 +158,25 @@ def format_verification_result(result: Dict[str, Any]) -> str:
         stages_str = ", ".join(completed_stages) if completed_stages else "none"
         lines.append(f"**Completed Stages**: {stages_str}")
     if timeout_fired or partial:
+        lines.append("")
+
+    # #704: name what was reviewed. A verdict line alone cannot show that the
+    # council reviewed nothing, which is how an empty-subject gate passed three
+    # PRs unnoticed. With the files listed, a reader of the CI step summary
+    # can see the subject the verdict is about.
+    coverage = result.get("coverage") or {}
+    if coverage:
+        reviewed = coverage.get("reviewed") or []
+        omitted = coverage.get("omitted") or []
+        lines.append(f"### Files reviewed ({len(reviewed)})")
+        lines.extend(f"- {path}" for path in reviewed[:50])
+        if len(reviewed) > 50:
+            lines.append(f"- … and {len(reviewed) - 50} more")
+        if omitted:
+            lines.append(
+                f"**Omitted ({len(omitted)})**: "
+                + ", ".join(f"{o.get('path')} ({o.get('reason')})" for o in omitted[:20])
+            )
         lines.append("")
 
     # Transcript location
