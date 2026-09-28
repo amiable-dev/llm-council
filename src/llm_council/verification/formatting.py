@@ -173,10 +173,8 @@ def format_verification_result(result: Dict[str, Any]) -> str:
         if len(reviewed) > 50:
             lines.append(f"- … and {len(reviewed) - 50} more")
         if omitted:
-            lines.append(
-                f"**Omitted ({len(omitted)})**: "
-                + ", ".join(f"{o.get('path')} ({o.get('reason')})" for o in omitted[:20])
-            )
+            listed = ", ".join(f"{o.get('path')} ({o.get('reason')})" for o in omitted[:20])
+            lines.append(f"**Omitted ({len(omitted)})**: {listed}")
         lines.append("")
 
     # Transcript location

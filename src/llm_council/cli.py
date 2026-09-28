@@ -75,7 +75,9 @@ def bench_command(
                 from .council import _get_council_models
 
                 for model in _get_council_models():
-                    matrix_configs.append(MatrixConfig(name=f"solo:{model}", kind="solo"))
+                    matrix_configs.append(
+                        MatrixConfig(name=f"solo:{model}", kind="solo")
+                    )
             elif name.startswith("solo:"):
                 matrix_configs.append(MatrixConfig(name=name, kind="solo"))
             elif name in ("council", "graduated"):
@@ -92,7 +94,8 @@ def bench_command(
 
         effective_budget = max_usd if max_usd is not None else bench_max_usd()
         sys.stdout.write(
-            f"Matrix budget: ${effective_budget:.2f} total across {len(matrix_configs)} config(s)\n"
+            f"Matrix budget: ${effective_budget:.2f} total across "
+            f"{len(matrix_configs)} config(s)\n"
         )
         rows = asyncio.run(
             run_matrix(
@@ -326,46 +329,21 @@ def main():
         help="Golden-dataset quality benchmark (ADR-048) — costs real API spend",
     )
     bench_parser.add_argument(
-        "action",
-        choices=["run", "baseline", "report", "matrix"],
+        "action", choices=["run", "baseline", "report", "matrix"],
         help="run: execute the dataset; baseline: snapshot last run as baseline; report: render last run",
     )
+    bench_parser.add_argument("--dataset", type=str, default="bench/dataset/v1", help="Dataset directory (default: bench/dataset/v1)")
+    bench_parser.add_argument("--items", type=str, default=None, help="Comma-separated item ids to run (default: all)")
+    bench_parser.add_argument("--max-usd", type=float, default=None, dest="max_usd", help="Spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30). For `run`: per-run cap. For `matrix` (#511): TOTAL shared across every config, not per-config — a config starting with zero budget remaining is skipped.")
+    bench_parser.add_argument("--set", action="store_true", dest="set_baseline_flag",
+                              help="(baseline) write the snapshot")
+    bench_parser.add_argument("--format", choices=["md", "json"], default="md", dest="bench_format", help="Report format (default: md)")
     bench_parser.add_argument(
-        "--dataset",
-        type=str,
-        default="bench/dataset/v1",
-        help="Dataset directory (default: bench/dataset/v1)",
-    )
-    bench_parser.add_argument(
-        "--items", type=str, default=None, help="Comma-separated item ids to run (default: all)"
-    )
-    bench_parser.add_argument(
-        "--max-usd",
-        type=float,
-        default=None,
-        dest="max_usd",
-        help="Spend cap in USD (default: LLM_COUNCIL_BENCH_MAX_USD, $2.00; monthly guard LLM_COUNCIL_BENCH_MONTHLY_USD, $30). For `run`: per-run cap. For `matrix` (#511): TOTAL shared across every config, not per-config — a config starting with zero budget remaining is skipped.",
-    )
-    bench_parser.add_argument(
-        "--set", action="store_true", dest="set_baseline_flag", help="(baseline) write the snapshot"
-    )
-    bench_parser.add_argument(
-        "--format",
-        choices=["md", "json"],
-        default="md",
-        dest="bench_format",
-        help="Report format (default: md)",
-    )
-    bench_parser.add_argument(
-        "--publish",
-        type=str,
-        default=None,
+        "--publish", type=str, default=None,
         help="(report) also regenerate the docs results page at this path",
     )
     bench_parser.add_argument(
-        "--configs",
-        type=str,
-        default="council",
+        "--configs", type=str, default="council",
         help="(matrix) comma list: council, graduated, solo:<model>, solo-members",
     )
 
@@ -395,10 +373,7 @@ def main():
         help="Where --fit writes the mapping",
     )
     cal_parser.add_argument(
-        "--format",
-        choices=["text", "json"],
-        default="text",
-        dest="cal_format",
+        "--format", choices=["text", "json"], default="text", dest="cal_format",
         help="Output format (default: text)",
     )
 
@@ -579,15 +554,11 @@ def cmd_ignore(args) -> int:
         elif file_ops._is_garbage_file(path):
             print(f"{path}: OMITTED (garbage) — deny-listed generated/noise path.")
         elif file_ops._is_text_file(path):
-            print(
-                f"{path}: REVIEWED in allowlist mode (on TEXT_EXTENSIONS); "
-                "in content mode, decided by NUL sniff + .gitattributes + ignore files."
-            )
+            print(f"{path}: REVIEWED in allowlist mode (on TEXT_EXTENSIONS); "
+                  "in content mode, decided by NUL sniff + .gitattributes + ignore files.")
         else:
-            print(
-                f"{path}: OMITTED (non-text) in allowlist mode; "
-                "in content mode, decided by content sniffing."
-            )
+            print(f"{path}: OMITTED (non-text) in allowlist mode; "
+                  "in content mode, decided by content sniffing.")
         return 0
 
     if getattr(args, "init", False):
@@ -754,7 +725,9 @@ def bias_report(
         )
         report = amplification_report(records)
         if output_format == "json":
-            output = output.rstrip() + "\n" + _json.dumps({"amplification": report}, indent=2)
+            output = output.rstrip() + "\n" + _json.dumps(
+                {"amplification": report}, indent=2
+            )
         else:
             output = output.rstrip() + "\n\n" + format_amplification_report(report)
 

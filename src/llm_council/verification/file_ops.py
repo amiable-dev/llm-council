@@ -370,7 +370,9 @@ _SECRET_DIRS = frozenset({".ssh", ".gnupg", ".aws", ".azure", ".kube", ".cargo",
 
 # `<dir>/**` secret trees keyed by a leading component (broader than a basename
 # match — everything under `.config/gcloud/` is a credential).
-_SECRET_DIR_PREFIXES = ((".config", "gcloud"),)
+_SECRET_DIR_PREFIXES = (
+    (".config", "gcloud"),
+)
 
 # Template suffixes that are conventionally secret-free and are explicitly kept.
 _TEMPLATE_SUFFIXES = (".example", ".sample", ".template")
@@ -461,9 +463,7 @@ async def _blob_sizes_chunk(snapshot_id: str, paths: List[str]) -> Dict[str, int
         async with semaphore:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    *args,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                    *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                     cwd=git_root,
                 )
                 stdout, _ = await asyncio.wait_for(
@@ -521,21 +521,13 @@ async def _text_paths_chunk(snapshot_id: str, paths: List[str]) -> set:
     async with semaphore:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "git",
-                f"--attr-source={snapshot_id}",
-                "grep",
-                "-Iz",
-                "--name-only",
-                "-e",
-                "",
-                snapshot_id,
-                "--",
-                *paths,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=git_root,
+                "git", f"--attr-source={snapshot_id}", "grep", "-Iz", "--name-only",
+                "-e", "", snapshot_id, "--", *paths,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=git_root,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
         except Exception as e:
             logger.warning("git grep (text sniff) raised: %s", e)
             return set()
@@ -597,12 +589,8 @@ async def _load_ignore_spec(snapshot_id: str):
         async with semaphore:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    "git",
-                    "show",
-                    f"{snapshot_id}:{fname}",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=git_root,
+                    "git", "show", f"{snapshot_id}:{fname}",
+                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=git_root,
                 )
                 stdout, _ = await asyncio.wait_for(
                     proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
@@ -656,19 +644,13 @@ async def _reviewability_attrs_chunk(snapshot_id: str, paths: List[str]) -> Dict
     async with semaphore:
         try:
             proc = await asyncio.create_subprocess_exec(
-                "git",
-                f"--attr-source={snapshot_id}",
-                "check-attr",
-                "-z",
-                "linguist-generated",
-                "linguist-vendored",
-                "--",
-                *paths,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=git_root,
+                "git", f"--attr-source={snapshot_id}", "check-attr", "-z",
+                "linguist-generated", "linguist-vendored", "--", *paths,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=git_root,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
+            )
         except Exception as e:
             logger.warning("git check-attr raised: %s", e)
             return {}
@@ -805,10 +787,11 @@ async def select_blobs(
             if would_add or would_drop:
                 logger.info(
                     "LLM_COUNCIL_FILE_SELECTION=shadow: content would add %s, drop %s",
-                    would_add,
-                    would_drop,
+                    would_add, would_drop,
                 )
-            _log_shadow_decision(snapshot_id, len(survivors), len(selected), would_add, would_drop)
+            _log_shadow_decision(
+                snapshot_id, len(survivors), len(selected), would_add, would_drop
+            )
         except Exception:  # shadow telemetry must never break selection
             logger.debug("shadow content classification failed", exc_info=True)
 
@@ -1098,10 +1081,7 @@ async def _fetch_file_at_commit_async(
                 )
                 proc.kill()
                 await _wait_killed_process(proc)
-                return (
-                    f"[Error: git show for {file_path} hung after producing output — killed]",
-                    False,
-                )
+                return f"[Error: git show for {file_path} hung after producing output — killed]", False
 
             if proc.returncode != 0 and not truncated:
                 # Only check return code if we didn't kill it for truncation
@@ -1263,7 +1243,9 @@ async def _fetch_files_for_verification_async_with_metadata(
                     files_to_fetch = [b.path for b in selected]
                     all_omissions = omitted
                     expansion_metadata["expanded_paths"] = files_to_fetch
-                    expansion_metadata["expansion_warnings"] = [o.as_warning() for o in omitted]
+                    expansion_metadata["expansion_warnings"] = [
+                        o.as_warning() for o in omitted
+                    ]
         except Exception as e:
             # #584: this used to be a bare `except Exception: pass` — a real
             # failure (missing git binary, corrupt repo, timeout) left
@@ -1367,3 +1349,5 @@ async def _fetch_files_for_verification_async_with_metadata(
                 )
 
     return "\n\n".join(sections), expansion_metadata
+
+
