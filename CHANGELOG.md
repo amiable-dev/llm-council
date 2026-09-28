@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The required quality gate reviewed no code, on every PR** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). With no file paths, verify discovers its subject with `git diff-tree -r <sha>`, and **`diff-tree` prints nothing for a merge commit**, which is what `github.sha` is on a `pull_request` event. So the gate sent the council an empty prompt. The council declined to invent findings every time, and the gate turned that refusal into a coin flip: three passes and a fail over the same nothing. Discovery now diffs against the first parent (`<sha>^1 <sha>`), which for a PR merge commit is exactly the PR's changes. The ticket proposed passing the PR head instead; that would have reviewed only the PR's last commit.
+- **A verify that resolves nothing to review stops before any model is called** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). It returns `error: no_reviewable_content` with the coverage receipt and what was omitted, and `llm-council gate` exits **3**, which `llm-council-action` maps to an error. Exit 2 would not do: the action turns UNCLEAR into a passing check. An explicit `target_paths=[]` (evidence-only review) is unaffected.
+- The gate's text output now lists **Files reviewed** and what was omitted, so a CI step summary shows the subject of the verdict.
+- `council-gate.yml` installs `version: latest`. The action's default pin had rotted at 0.45.0, so no gate fix could reach the gate.
+
 ## [0.50.0] - 2026-09-24
 
 **Council can now account for what it spends.** Before this release the expensive path left no local record at all, the test suite was polluting the record that did exist, the one cost fallback was unreachable, and nothing reported spend outward. Five issues, and a single thread running through them: **a value that was never measured must never be written as a zero, because a zero is a measurement.** That rule had to be stated at four separate layers before it held — the record, the reader, the aggregate, and the external span.
