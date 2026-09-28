@@ -10,7 +10,7 @@ Four models deliberate over your change; a chairman renders `pass` / `fail` /
 | Surface | Invocation | Use for |
 |---|---|---|
 | MCP tool | `verify(snapshot_id, target_paths, tier, ...)` | agent sessions (Claude Code, Cursor) |
-| CLI | `llm-council gate --snapshot <sha> [--tier ...]` | CI/CD pipelines (exit code 0/1/2) |
+| CLI | `llm-council gate --snapshot <sha> [--tier ...]` | CI/CD pipelines (exit code 0/1/2, or 3 when nothing was reviewed) |
 | HTTP | `POST /v1/council/verify` | services |
 
 ```bash
@@ -18,7 +18,18 @@ llm-council gate --snapshot $(git rev-parse HEAD) \
   --file-paths src/module.py --tier balanced --rubric-focus Security
 ```
 
-Exit codes: `0` PASS · `1` FAIL · `2` UNCLEAR.
+Exit codes: `0` PASS · `1` FAIL · `2` UNCLEAR · `3` nothing reviewed.
+
+`3` means the council **did not run**: no `--file-paths` were given and no
+reviewable file resolved from the snapshot (#704). It is deliberately outside
+0–2, because `llm-council-action` turns `2` into a passing check with a warning,
+and a gate that reviewed nothing must not pass.
+
+Without `--file-paths`, the subject is the files the snapshot changed. For a
+merge commit, which is what `github.sha` is on a `pull_request` event, that
+means the diff against its **first parent**: exactly the PR's changes. The
+output lists the files reviewed, so a CI step summary shows what the verdict
+is about.
 
 ## Tiers
 
@@ -253,7 +264,7 @@ that ignore unknown fields keep working.
 | `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` \| `chairman_disabled` \| `incomplete_coverage` (#556, see above); `None` for pass/fail. |
 | `rationale` | string | Chairman synthesis explanation. |
 | `transcript_location` | string | Path to the full `.council/logs/<id>/` transcript. |
-| `error` | string? | Non-verdict error marker (e.g. `input_too_large`); `None` for a real verdict (#357). |
+| `error` | string? | Non-verdict error marker: `input_too_large` (#357) or `no_reviewable_content` (#704, nothing resolved to review); `None` for a real verdict. |
 
 ### Scores & findings
 

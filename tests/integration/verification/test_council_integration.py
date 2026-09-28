@@ -21,6 +21,39 @@ from llm_council.verification.api import VerifyRequest, run_verification
 from llm_council.verification.transcript import TranscriptStore
 
 
+@pytest.fixture(autouse=True)
+def _one_reviewable_file():
+    """Give the council something to review.
+
+    These tests use a snapshot that does not exist, and used to rely on the
+    council running over the resulting empty subject. Since #704 an empty
+    subject stops before any stage runs, which is the point of #704, so the
+    fetch is stubbed with one reviewed file. They assert stage wiring, not
+    snapshot resolution.
+    """
+
+    async def fetch(snapshot_id, target_paths=None, tier="balanced"):
+        return "### app.py\n```\nx = 1\n```", {
+            "expanded_paths": ["app.py"],
+            "paths_truncated": False,
+            "expansion_warnings": [],
+            "coverage": {
+                "requested": None,
+                "reviewed": ["app.py"],
+                "omitted": [],
+                "explicit_omitted": False,
+                "truncated": False,
+                "conservation_ok": True,
+            },
+        }
+
+    with patch(
+        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+        fetch,
+    ):
+        yield
+
+
 class TestCouncilDeliberationIntegration:
     """Tests that verify run_verification() calls council stages."""
 

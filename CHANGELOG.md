@@ -7,14 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Security
+### Changed
 
-- **The HTTP API token is compared in constant time** ([#656](https://github.com/amiable-dev/llm-council/issues/656)). `verify_token` used `!=`, which stops at the first differing byte: the textbook timing side channel. It now uses `hmac.compare_digest` on UTF-8 bytes, like the webhook signature check already did, so a non-ASCII token is a 401 rather than a 500.
-- **Query hashing no longer falls back to a published secret** ([#614](https://github.com/amiable-dev/llm-council/issues/614)). With `LLM_COUNCIL_HASH_SECRET` unset, RESEARCH-consent query hashes were keyed by a default string printed in the docs, so anyone holding the bias store could confirm whether a guessed query was in it. The fallback is now a random per-install secret, created once with mode 0600 beside the bias store (`LLM_COUNCIL_HASH_SECRET_FILE` to relocate it). If it cannot be created, hashing is skipped rather than done with a known key. The dead module-level `BIAS_HASH_SECRET` is removed. Hashes made under the old default will not match new ones; they were never private.
+- **skills-telemetry is decoupled from council's CI.** The v0.51.0 contract drift check ran `uvx stdtel-conform` as a job in the required `ci.yml`, so every PR depended on another project's package being published and reachable. It now lives in an advisory `external-contract.yml` (manual, weekly, and on PRs that touch the emitter; every job `continue-on-error`). Council's own self-contained allowlist test remains the gate, and a new test fails if any workflow can fail a build on `stdtel` or if council declares or imports it. skills-telemetry is an optional consumer of council's spans, never a dependency.
 
 ### Fixed
 
 - **A negated approval read as PASS on the legacy verdict path** ([#630](https://github.com/amiable-dev/llm-council/issues/630)). "NOT RECOMMENDED" counted as both approve and reject, which the ticket reported. Worse: "NOT APPROVED", "NOT ACCEPTED" and "NOT PASS" matched only the approve patterns, so a rejection came out as **PASS at 0.80 confidence**. Approval words preceded by NOT are now rejections, and whitespace is collapsed before matching. The structured-findings path was never affected.
+- **The required quality gate reviewed no code, on every PR** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). With no file paths, verify discovers its subject with `git diff-tree -r <sha>`, and **`diff-tree` prints nothing for a merge commit**, which is what `github.sha` is on a `pull_request` event. So the gate sent the council an empty prompt. The council declined to invent findings every time, and the gate turned that refusal into a coin flip: three passes and a fail over the same nothing. Discovery now diffs against the first parent (`<sha>^1 <sha>`), which for a PR merge commit is exactly the PR's changes. The ticket proposed passing the PR head instead; that would have reviewed only the PR's last commit.
+- **A verify that resolves nothing to review stops before any model is called** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). It returns `error: no_reviewable_content` with the coverage receipt and what was omitted, and `llm-council gate` exits **3**, which `llm-council-action` maps to an error. Exit 2 would not do: the action turns UNCLEAR into a passing check. An explicit `target_paths=[]` (evidence-only review) is unaffected.
+- The gate's text output now lists **Files reviewed** and what was omitted, so a CI step summary shows the subject of the verdict.
+- `council-gate.yml` installs `version: latest`. The action's default pin had rotted at 0.45.0, so no gate fix could reach the gate.
+
+### Security
+
+- **The HTTP API token is compared in constant time** ([#656](https://github.com/amiable-dev/llm-council/issues/656)). `verify_token` used `!=`, which stops at the first differing byte: the textbook timing side channel. It now uses `hmac.compare_digest` on UTF-8 bytes, like the webhook signature check already did, so a non-ASCII token is a 401 rather than a 500.
+- **Query hashing no longer falls back to a published secret** ([#614](https://github.com/amiable-dev/llm-council/issues/614)). With `LLM_COUNCIL_HASH_SECRET` unset, RESEARCH-consent query hashes were keyed by a default string printed in the docs, so anyone holding the bias store could confirm whether a guessed query was in it. The fallback is now a random per-install secret, created once with mode 0600 beside the bias store (`LLM_COUNCIL_HASH_SECRET_FILE` to relocate it). If it cannot be created, hashing is skipped rather than done with a known key. The dead module-level `BIAS_HASH_SECRET` is removed. Hashes made under the old default will not match new ones; they were never private.
 
 ## [0.51.0] - 2026-09-28
 
