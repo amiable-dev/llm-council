@@ -43,6 +43,8 @@ from .constants import (
     TIER_MAX_CHARS,
     STAGE3_MAX_RESERVE_FRACTION,
     STAGE3_MIN_BUDGET_SECONDS,
+    STAGE3_TAIL_RESERVE_FRACTION,
+    STAGE3_TAIL_RESERVE_SECONDS,
     VERIFICATION_TIMEOUT_MULTIPLIER,
 )
 from .schemas import (
@@ -99,6 +101,11 @@ def _emit_posthog_generations(
 def _stage3_reserve(remaining: float) -> float:
     """Seconds held back for stage 3 (#545). Proportional, so `quick` isn't starved."""
     return min(STAGE3_MIN_BUDGET_SECONDS, max(remaining, 0.0) * STAGE3_MAX_RESERVE_FRACTION)
+
+
+def _stage3_tail_reserve(remaining: float) -> float:
+    """Seconds kept back AFTER stage 3 so its own timeout fires first (#686)."""
+    return min(STAGE3_TAIL_RESERVE_SECONDS, max(remaining, 0.0) * STAGE3_TAIL_RESERVE_FRACTION)
 
 
 def _stage_budget(remaining: float, fraction: float) -> float:
@@ -283,9 +290,15 @@ async def _run_verification_pipeline(
     partial_state["aggregate_rankings"] = aggregate_rankings
 
     # Stage 3: Chairman synthesis with verdict
-    # ADR-040: Waterfall - Stage 3 gets all remaining time
+    # ADR-040: Waterfall - Stage 3 gets all remaining time, less a short tail.
+    # #686: it used to be capped at the tier's per-model budget (45s balanced,
+    # 90s high) while the chairman averages ~204s, so completed deliberations
+    # came back unclear(infra_failure). That cap bounds the slowest of N
+    # parallel members in stages 1-2; stage 3 is one call, and the global
+    # deadline bounds it. The tail lets stage 3's own timeout fire before the
+    # outer wait_for, so the graceful path and the local finish still run.
     remaining = max(deadline_at - time.monotonic(), 1.0)
-    stage3_budget = min(remaining, tier_timeout["per_model"])
+    stage3_budget = max(remaining - _stage3_tail_reserve(remaining), 1.0)
 
     # ADR-042: build dispositions instruction from kept evidence (None if no evidence).
     evidence_render_info = partial_state.get("evidence_render_info") or {}

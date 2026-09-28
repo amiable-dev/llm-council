@@ -253,6 +253,14 @@ VERIFICATION_TIMEOUT_MULTIPLIER = 2.0
 STAGE3_MIN_BUDGET_SECONDS = 30.0
 STAGE3_MAX_RESERVE_FRACTION = 0.15
 
+# #686: stage 3 gets the rest of the global deadline, less this TAIL. Without
+# it the chairman's own timeout and the outer asyncio.wait_for expire at the
+# same instant, so the outer cancellation wins, the graceful stage-3 timeout
+# path never runs, and the local finish (verdict build, transcript, telemetry)
+# has no time. min(seconds, fraction) for the same reason as the reserve above.
+STAGE3_TAIL_RESERVE_SECONDS = 5.0
+STAGE3_TAIL_RESERVE_FRACTION = 0.05
+
 # Per-tier maximum input characters (prompt size guardrails)
 TIER_MAX_CHARS: Dict[str, int] = {
     "quick": 15000,

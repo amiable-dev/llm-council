@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Verify's chairman gets the rest of the deadline, not the per-model budget** ([#686](https://github.com/amiable-dev/llm-council/issues/686)). Stage 3 was capped at the tier's per-model timeout, 45s on balanced and 90s on high, while the configured chairman averages about 204s. So a deliberation whose stages 1 and 2 had completed came back `unclear(infra_failure)`, and only a re-run at `reasoning` could rescue it. That cap bounds the slowest of several parallel members in stages 1 and 2. Stage 3 is one call, and it now gets all the time left before the global deadline, as ADR-040 specified, less a short tail (the smaller of 5s and 5%) so its own timeout fires before the global one. The global deadlines (balanced 180s, high 360s) and the `MCP_TIMEOUT` guidance are unchanged. **Balanced remains marginal for this chairman:** after stages 1 and 2 it typically leaves about 90s, well short of a 204s mean, so use `high` or `reasoning` for gate runs until the chairman question (#598) is settled.
+
 ### Changed
 
 - **Source files stay small enough for the council to review** ([#720](https://github.com/amiable-dev/llm-council/issues/720)). Verify caps input at 50K characters, so a larger file cannot be reviewed; a diff passed as evidence is not accepted in its place. A new test holds every source file to 40K, with the five files already over it grandfathered at their current size as a ceiling that can only fall. `verification/api.py` (55K) is split into `api.py`, `pipeline.py` and `prompt.py` with no behaviour change; imports from `verification.api` keep working, and test patches now target the module that consumes the name.
