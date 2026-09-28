@@ -156,7 +156,14 @@ def _note_cost_sources(bucket: Dict[str, Any], sources: Any) -> None:
         sources = [sources]
     if not isinstance(sources, (list, tuple, set, frozenset)):
         return
-    seen = set(bucket.get("cost_sources") or ())
+    stored = bucket.get("cost_sources")
+    seen = (
+        {stored}
+        if isinstance(stored, str)
+        else set(stored)
+        if isinstance(stored, (list, tuple, set, frozenset))
+        else set()
+    )
     seen.update(s for s in sources if isinstance(s, str) and s != "mixed")
     if seen:
         bucket["cost_sources"] = sorted(seen)

@@ -81,6 +81,9 @@ def _usage(cost=0.05, cost_known=True, **total_extra):
     behaviour is tested through the real aggregators in
     test_issue707_contract_v2.py, because a hand-built total is what hid #707."""
     total_extra.setdefault("cost_source", "provider" if cost_known else None)
+    # The emitter reads observed spend only from `cost_observed_usd` (#707).
+    if cost_known and total_extra["cost_source"] == "provider":
+        total_extra.setdefault("cost_observed_usd", cost)
     total = {
         "prompt_tokens": 1000,
         "completion_tokens": 500,

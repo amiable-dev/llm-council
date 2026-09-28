@@ -244,6 +244,7 @@ def _cost_attributes(total: Dict[str, Any]) -> Dict[str, Any]:
     # An incomplete total is a lower bound for BOTH amounts, and v2 has no
     # attribute that says so. So nothing is sent, not even the estimate.
     if total.get("cost_incomplete"):
+        logger.debug("omitting cost attributes: some call reported no usable cost")
         return attrs
     # A usable amount council could not attribute (no label, an unknown one, or
     # a non-zero `local_zero`) is inside the total with no provenance. Sending
@@ -288,12 +289,12 @@ def _cost_attributes(total: Dict[str, Any]) -> Dict[str, Any]:
         return attrs  # estimate only: nothing was observed
 
     # The observed amount is tracked on its own by the aggregate, so it is
-    # never derived by subtracting an estimate from a total. A hand-built total
-    # without it may use `cost_usd` only when nothing in it was estimated.
+    # never derived from `cost_usd`, which also holds estimates. There is no
+    # fallback for a total without it: every fallback the gate examined could
+    # be made to report an estimate, or a non-zero `local_zero`, as spend.
     observed = _finite_amount(total.get("cost_observed_usd"))
-    if observed is None and "registry_estimate" not in sources:
-        observed = _finite_amount(total.get("cost_usd"))
     if observed is None:
+        logger.debug("omitting cost_usd: the total carries no cost_observed_usd")
         return attrs
     attrs["std.external.cost_usd"] = observed
     attrs["std.external.cost_source"] = contract_source

@@ -538,3 +538,34 @@ class TestGateRound3:
         bucket = {}
         _note_cost_sources(bucket, "provider")
         assert bucket["cost_sources"] == ["provider"]
+
+
+class TestGateRound4:
+    """Council gate on #708, round 4 (PASS); its remaining majors were all on
+    the hand-built-total fallback, which is removed rather than patched."""
+
+    @pytest.mark.parametrize(
+        "total",
+        [
+            # a provider-labelled total that also carries an estimate
+            {"cost_known": True, "cost_source": "provider", "cost_usd": 5, "cost_estimated_usd": 2},
+            # a non-zero local_zero
+            {"cost_known": True, "cost_source": "local_zero", "cost_usd": 0.5},
+        ],
+    )
+    def test_a_total_without_an_observed_amount_sends_no_cost(self, total):
+        assert COST not in ext.cost_attributes({"total": total})
+
+    def test_a_stored_bare_string_of_sources_is_not_split(self):
+        from llm_council.council_usage import _note_cost_sources
+
+        bucket = {"cost_sources": "provider"}
+        _note_cost_sources(bucket, ["local_zero"])
+        assert bucket["cost_sources"] == ["local_zero", "provider"]
+
+    def test_an_incomplete_total_is_logged(self, caplog):
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger=ext.logger.name):
+            _span(_run([("a/one", _call(0.03, "provider")), ("b/two", _call(None, None))]))
+        assert "no usable cost" in caplog.text
