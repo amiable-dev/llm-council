@@ -141,26 +141,45 @@ def _read_private_secret(path: Path) -> Any:
     trusted whatever was there. A symlink, a non-regular file, a file owned by
     someone else, or one others can write would let them choose the key, and
     a chosen key re-enables exactly the dictionary attack #614 closed.
+
+    Round 2: one others can READ is as bad (they can confirm guesses), and a
+    persisted key is held to the same minimum length as a configured one. The
+    checks run on the descriptor actually read (``O_NOFOLLOW`` + ``fstat``),
+    not on a name that could be swapped between the check and the read. An
+    exposed key is refused, never silently replaced: the operator decides.
     """
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        info = os.lstat(path)
+        fd = os.open(path, flags)
     except FileNotFoundError:
         return ""
     except OSError:
-        return _UNSAFE
-    if (
-        not stat.S_ISREG(info.st_mode)
-        or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
-        or (hasattr(os, "getuid") and info.st_uid != os.getuid())
-    ):
-        logger.warning("query hashing skipped: %s is not a private regular file", path)
-        return _UNSAFE
+        return _UNSAFE  # includes ELOOP: the path is a symlink
     try:
-        return path.read_text().strip()
+        info = os.fstat(fd)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_mode & 0o077
+            or (hasattr(os, "getuid") and info.st_uid != os.getuid())
+        ):
+            logger.warning("query hashing skipped: %s is not a private (0600) regular file", path)
+            return _UNSAFE
+        with os.fdopen(fd, "r") as handle:
+            fd = -1
+            secret = handle.read().strip()
     except OSError:
         return _UNSAFE
-
-
+    finally:
+        if fd >= 0:
+            os.close(fd)
+    if secret and len(secret) < _MIN_KEY_LENGTH:
+        logger.warning(
+            "query hashing skipped: %s holds a key shorter than %d characters",
+            path,
+            _MIN_KEY_LENGTH,
+        )
+        return _UNSAFE
+    return secret
 
 
 # =============================================================================
@@ -354,8 +373,21 @@ def append_bias_records(
 
     # #715 gate: private, not umask-dependent. The store holds per-reviewer
     # scores and query metadata; 0644 made it readable by every local user.
+    # Round 2: O_CREAT's mode applies only to a NEW file, so a store left 0644
+    # by an earlier version is tightened on the descriptor we opened (not by
+    # name), and a symlink is refused rather than written through. The
+    # directory is not chmod-ed: the default store sits in ./data, which is
+    # not ours to lock, and a 0600 file is private in any directory.
     store_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    fd = os.open(store_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(store_path, flags, 0o600)
+    try:
+        info = os.fstat(fd)
+        if stat.S_IMODE(info.st_mode) & 0o077 and hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+    except OSError:
+        os.close(fd)
+        raise
     with os.fdopen(fd, "a") as f:
         for record in records:
             f.write(record.to_jsonl_line() + "\n")

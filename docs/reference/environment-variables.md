@@ -116,7 +116,7 @@
 | `ACCURACY_CEILING_ENABLED` | Accuracy caps the weighted score (ADR-016) | true |
 | `BIAS_AUDIT_ENABLED` | Per-session bias audit (ADR-015/031) | false |
 | `BIAS_PERSISTENCE_ENABLED` | Cross-session bias storage (ADR-018/031) | false |
-| `LLM_COUNCIL_HASH_SECRET` | HMAC secret for query hashing (RESEARCH consent) | a random per-install secret, created once (mode 0600) beside the bias store; hashing is skipped if it cannot be created, or if the file is a symlink, not yours, or writable by others. A configured value must be at least 16 characters (#614) |
+| `LLM_COUNCIL_HASH_SECRET` | HMAC secret for query hashing (RESEARCH consent) | a random per-install secret, created once (mode 0600) beside the bias store; hashing is skipped if it cannot be created, or if the file is a symlink, not yours, or readable or writable by anyone else (not 0600). A configured or persisted value must be at least 16 characters (#614) |
 | `LLM_COUNCIL_HASH_SECRET_FILE` | Where that per-install secret lives | `hash_secret` beside the bias store |
 | `LLM_COUNCIL_QUALITY_METRICS` | Output quality metrics (ADR-036): CSS / DDI / SAS annotation on the response. Annotation only — no verdict or control flow consumes it (#677), and a failure inside it can never fail a deliberation | true |
 | `LLM_COUNCIL_QUALITY_TIER` | Tier gating for quality metrics | code |

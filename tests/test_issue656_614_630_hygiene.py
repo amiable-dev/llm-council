@@ -318,3 +318,59 @@ class TestGateRound1SecretFile:
 
         monkeypatch.setenv("LLM_COUNCIL_HASH_SECRET", "x")
         assert _resolve_hash_secret() is None
+
+
+class TestGateRound2:
+    """Council gate on #715, round 2: the round-1 fixes were right on the
+    create path and wrong on the paths an upgraded install actually takes."""
+
+    @pytest.fixture
+    def env(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("LLM_COUNCIL_HASH_SECRET", raising=False)
+        path = tmp_path / "hash_secret"
+        monkeypatch.setenv("LLM_COUNCIL_HASH_SECRET_FILE", str(path))
+        return path
+
+    @pytest.mark.parametrize("mode", [0o644, 0o640, 0o604])
+    def test_a_group_or_world_readable_secret_is_refused(self, env, mode):
+        # Readable is as bad as writable: a reader can confirm guessed queries.
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        env.write_text("c" * 64)
+        env.chmod(mode)
+        assert _resolve_hash_secret() is None
+        assert env.read_text() == "c" * 64  # never silently replaced
+
+    def test_a_too_short_persisted_secret_is_refused(self, env):
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        env.write_text("x\n")
+        env.chmod(0o600)
+        assert _resolve_hash_secret() is None
+
+    def test_a_private_persisted_secret_is_used(self, env):
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        env.write_text("d" * 64 + "\n")
+        env.chmod(0o600)
+        assert _resolve_hash_secret() == "d" * 64
+
+    def test_a_pre_existing_permissive_store_is_tightened(self, tmp_path):
+        from llm_council.bias_persistence import BiasMetricRecord, append_bias_records
+
+        path = tmp_path / "bias_metrics.jsonl"
+        path.write_text("")
+        path.chmod(0o644)  # what every pre-#715 install left behind
+        append_bias_records([BiasMetricRecord(session_id="s", reviewer_id="r")], path)
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+    def test_a_symlinked_store_is_not_written_through(self, tmp_path):
+        from llm_council.bias_persistence import BiasMetricRecord, append_bias_records
+
+        target = tmp_path / "elsewhere.jsonl"
+        target.write_text("")
+        path = tmp_path / "bias_metrics.jsonl"
+        path.symlink_to(target)
+        with pytest.raises(OSError):
+            append_bias_records([BiasMetricRecord(session_id="s", reviewer_id="r")], path)
+        assert target.read_text() == ""
