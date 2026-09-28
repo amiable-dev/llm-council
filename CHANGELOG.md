@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-09-28
+
+**External spend telemetry, turned on properly.** skills-telemetry published contract v2 with cost provenance, and adopting it found that v0.50.0's central promise, that an estimate never leaves the process as a bill, held only in tests. This release makes it hold on real runs, adopts v2, and adds the CI check that keeps council and the contract in step. It is the prerequisite for setting `OTEL_EXPORTER_OTLP_ENDPOINT` anywhere.
+
 ### Fixed
 
 - **The rule that an estimate never leaves as a bill held only in tests** ([#707](https://github.com/amiable-dev/llm-council/issues/707)). ADR-056's emitter decided whether a cost was provider-reported by reading `cost_source` and `cost_estimated_usd` off the usage `total`. `_build_usage_summary` only ever put those keys on the per-model buckets, so on every real consult and verify the guard read keys that were not there, and a registry estimate would have gone out as `std.external.cost_usd`. It never leaked, because no endpoint was configured anywhere. The same gap meant #694's "(incl. ~$X estimated)" disclosure appeared in its unit test and on no actual run. The total now carries `cost_source`, `cost_sources`, `cost_estimated_usd` and `cost_incomplete`, and the new tests build every usage summary through the real aggregators rather than by hand.
