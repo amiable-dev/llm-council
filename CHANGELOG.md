@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **skills-telemetry is decoupled from council's CI.** The v0.51.0 contract drift check ran `uvx stdtel-conform` as a job in the required `ci.yml`, so every PR depended on another project's package being published and reachable. It now lives in an advisory `external-contract.yml` (manual, weekly, and on PRs that touch the emitter; every job `continue-on-error`). Council's own self-contained allowlist test remains the gate, and a new test fails if any workflow can fail a build on `stdtel` or if council declares or imports it. skills-telemetry is an optional consumer of council's spans, never a dependency.
+
 ## [0.51.0] - 2026-09-28
 
 **External spend telemetry, turned on properly.** skills-telemetry published contract v2 with cost provenance, and adopting it found that v0.50.0's central promise, that an estimate never leaves the process as a bill, held only in tests. This release makes it hold on real runs, adopts v2, and adds the CI check that keeps council and the contract in step. It is the prerequisite for setting `OTEL_EXPORTER_OTLP_ENDPOINT` anywhere.

@@ -108,6 +108,8 @@ alone they agree: `LLM_COUNCIL_MODELS` defaults to the `high` pool.
 
 ### External Spend Telemetry (ADR-056)
 
+Optional. With the endpoint unset, council emits nothing and needs nothing. Any OTLP/HTTP collector works. The span attributes follow the `external` contract that skills-telemetry reads, but council does not depend on skills-telemetry in any way.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | Where to send one OTLP span per council run, reporting what it cost. **Unset means no exporter, no network call and no added latency** — an install without it behaves exactly as before. |

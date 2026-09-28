@@ -1,0 +1,62 @@
+# Advisory drift check against the skills-telemetry `external` span contract.
+#
+# skills-telemetry is an OPTIONAL consumer of council's OTLP spend spans
+# (ADR-056). Council must build, test and release identically without it, so
+# this workflow is deliberately decoupled from the required CI:
+#
+#   * it is not in ci.yml and not a required check;
+#   * every job is `continue-on-error`, so a missing, lagging or unreachable
+#     `stdtel` package can never fail a council build;
+#   * it runs on demand, weekly, and on PRs that touch the emitter.
+#
+# The GATE is council's own self-contained test
+# (tests/test_issue695_external_spend.py: a longhand allowlist with no
+# dependency on stdtel). This is a second opinion from the published source.
+# Bump the pin when a new contract_version is announced.
+
+name: External Contract (advisory)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
+  pull_request:
+    paths:
+      - "src/llm_council/observability/external_spend.py"
+      - "src/llm_council/council_usage.py"
+      - "scripts/dump_external_spans.py"
+      - "scripts/check_external_contract.py"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  STDTEL: "stdtel==0.5.0"
+
+jobs:
+  external-contract:
+    name: External Contract (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+
+      - name: Install council with the otel extra
+        run: uv pip install --system -e ".[otel]"
+
+      - name: Diff the allowlist against the published contract
+        run: uvx --from "$STDTEL" stdtel-conform --print-contract | python scripts/check_external_contract.py
+
+      - name: Run stdtel-conform on spans council actually builds
+        run: |
+          python scripts/dump_external_spans.py > spans.json
+          uvx --from "$STDTEL" stdtel-conform spans.json
