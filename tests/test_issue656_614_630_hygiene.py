@@ -179,3 +179,142 @@ class TestNegatedVerdictsAreRejections:
         from llm_council.verification.verdict_extractor import extract_verdict_from_synthesis
 
         assert extract_verdict_from_synthesis({"response": text})[0] == "pass"
+
+
+class TestGateRound1ConsentFailsClosed:
+    """Council gate on #715, round 1: two pre-existing privacy defects in the
+    module this PR hardens. ConsentLevel.OFF ("no telemetry or storage")
+    still wrote records, and an unreadable or unknown consent setting fell
+    back to LOCAL_ONLY, i.e. to storing."""
+
+    @pytest.fixture
+    def store(self, tmp_path, monkeypatch):
+        from llm_council import bias_persistence as bp
+
+        path = tmp_path / "bias_metrics.jsonl"
+        monkeypatch.setattr(bp, "_get_bias_store_path", lambda: path)
+        monkeypatch.setattr(bp, "_get_bias_persistence_enabled", lambda: True)
+        return bp, path
+
+    @staticmethod
+    def _persist(bp):
+        return bp.persist_session_bias_data(
+            "s1",
+            [{"model": "a/one", "response": "x"}],
+            [
+                {
+                    "model": "b/two",
+                    "parsed_ranking": {"ranking": ["Response A"], "scores": {"Response A": 7}},
+                }
+            ],
+            {"Response A": {"model": "a/one", "display_index": 0}},
+        )
+
+    def test_consent_off_writes_nothing(self, store, monkeypatch):
+        bp, path = store
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: 0)
+        assert self._persist(bp) == 0
+        assert not path.exists()
+
+    @pytest.mark.parametrize("level", [99, -1])
+    def test_an_invalid_consent_level_fails_closed(self, store, monkeypatch, level):
+        bp, path = store
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: level)
+        assert self._persist(bp) == 0
+        assert not path.exists()
+
+    def test_an_unreadable_config_resolves_to_off(self, monkeypatch):
+        from llm_council import bias_persistence as bp
+
+        def boom():
+            raise RuntimeError("config unreadable")
+
+        monkeypatch.setattr(bp, "get_config", boom)
+        assert bp._get_bias_consent_level() == 0
+
+    def test_an_unknown_consent_string_resolves_to_off(self, monkeypatch):
+        from types import SimpleNamespace
+
+        from llm_council import bias_persistence as bp
+
+        cfg = SimpleNamespace(
+            evaluation=SimpleNamespace(bias=SimpleNamespace(consent_level="LOCAL_ONYL"))
+        )
+        monkeypatch.setattr(bp, "get_config", lambda: cfg)
+        assert bp._get_bias_consent_level() == 0
+
+    def test_local_only_still_writes(self, store, monkeypatch):
+        bp, path = store
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: 1)
+        assert self._persist(bp) == 1
+
+    def test_the_store_is_private(self, store, monkeypatch):
+        bp, path = store
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: 1)
+        self._persist(bp)
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+    @pytest.mark.parametrize("line", ["3", "[1, 2]", '"text"', "null"])
+    def test_a_non_object_line_does_not_crash_the_reader(self, store, monkeypatch, line):
+        bp, path = store
+        monkeypatch.setattr(bp, "_get_bias_consent_level", lambda: 1)
+        self._persist(bp)
+        with path.open("a") as handle:
+            handle.write(line + "\n")
+        assert len(bp.read_bias_records(path)) == 1
+
+    @pytest.mark.parametrize("bad", ["N/A", float("nan"), 10**400, True])
+    def test_a_malformed_score_does_not_abort_persistence(self, bad):
+        from llm_council.bias_persistence import create_bias_records_from_session
+
+        records = create_bias_records_from_session(
+            "s1",
+            [{"model": "a/one", "response": "x"}],
+            [
+                {
+                    "model": "b/two",
+                    "parsed_ranking": {"ranking": ["Response A"], "scores": {"Response A": bad}},
+                }
+            ],
+            {"Response A": {"model": "a/one", "display_index": 0}},
+        )
+        assert len(records) == 1
+
+
+class TestGateRound1SecretFile:
+    @pytest.fixture
+    def env(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("LLM_COUNCIL_HASH_SECRET", raising=False)
+        path = tmp_path / "hash_secret"
+        monkeypatch.setenv("LLM_COUNCIL_HASH_SECRET_FILE", str(path))
+        return path
+
+    def test_a_symlinked_secret_is_refused(self, env, tmp_path):
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        target = tmp_path / "attacker_chosen"
+        target.write_text("a" * 64)
+        env.symlink_to(target)
+        assert _resolve_hash_secret() is None
+
+    def test_a_group_or_world_writable_secret_is_refused(self, env):
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        env.write_text("b" * 64)
+        env.chmod(0o666)
+        assert _resolve_hash_secret() is None
+
+    def test_an_empty_secret_file_is_regenerated(self, env):
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        env.write_text("")
+        env.chmod(0o600)
+        secret = _resolve_hash_secret()
+        assert secret and len(secret) >= 64
+        assert env.read_text().strip() == secret
+
+    def test_a_too_short_configured_secret_is_refused(self, env, monkeypatch):
+        from llm_council.bias_persistence import _resolve_hash_secret
+
+        monkeypatch.setenv("LLM_COUNCIL_HASH_SECRET", "x")
+        assert _resolve_hash_secret() is None
