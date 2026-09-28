@@ -83,6 +83,14 @@ class TestAReviewerThatReturnedNothing:
         by_model = {r["model"]: r for r in results}
         assert by_model["b/two"]["parsed_ranking"]["ranking"]
         assert by_model["a/one"]["parsed_ranking"]["ranking"] == []
+        # The null reply is an explicit abstention, not a silent empty ballot.
+        assert by_model["a/one"]["parsed_ranking"].get("abstained") is True
+        if incremental:
+            # The review-event path parsed both replies, the null one included.
+            reviewers = {e["reviewer"]: e for e in events}
+            assert set(reviewers) == {"a/one", "b/two"}
+            assert reviewers["a/one"]["parse_ok"] is False
+            assert reviewers["b/two"]["parse_ok"] is True
 
 
 class TestAStoredNoneParsedRanking:
@@ -195,3 +203,53 @@ class TestTheDissentSpreadGateStillCounts:
         from llm_council.dissent import extract_dissent_from_stage2
 
         assert extract_dissent_from_stage2(self._stage2(), min_borda_spread=3.5) is None
+
+
+class TestGateRound1:
+    """Council gate on #712, round 1: dissent was routed through
+    parsed_ranking_of but its per-score values were still trusted."""
+
+    @pytest.mark.parametrize(
+        "bad_scores",
+        [
+            "9",
+            ["Response A"],
+            {"Response A": "N/A"},
+            {"Response A": float("nan")},
+            {"Response A": True},
+            {"Response A": "7"},
+        ],
+    )
+    def test_dissent_survives_any_score_shape(self, bad_scores):
+        from llm_council.dissent import (
+            extract_dissent_from_stage2,
+            extract_outlier_info,
+            identify_outlier_reviewers,
+        )
+
+        stage2 = [
+            {"model": f"r{i}", "parsed_ranking": {"scores": {"Response A": s}}}
+            for i, s in enumerate([7, 7, 7, 4])
+        ]
+        stage2.append({"model": "odd", "parsed_ranking": {"scores": bad_scores}})
+        extract_outlier_info(stage2)
+        extract_dissent_from_stage2(stage2, min_borda_spread=1.0)
+        identify_outlier_reviewers({"odd": bad_scores, "r0": {"Response A": 7}})
+
+    def test_a_numeric_string_score_counts_like_elsewhere(self):
+        from llm_council.dissent import _numeric_scores
+
+        assert _numeric_scores({"A": "7", "B": True, "C": float("inf"), "D": 5}) == {
+            "A": 7.0,
+            "D": 5.0,
+        }
+
+    @pytest.mark.parametrize("raw", ["nan", "inf", "-inf", float("nan"), 10**400])
+    def test_coerce_score_sorts_every_non_finite_value_last(self, raw):
+        from llm_council.council_rankings import _coerce_score
+
+        assert _coerce_score(raw) == float("-inf")
+
+    @pytest.mark.parametrize("text", ["", "   \n"])
+    def test_an_empty_reply_is_an_abstention(self, text):
+        assert parse_ranking_from_text(text).get("abstained") is True

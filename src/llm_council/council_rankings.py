@@ -59,14 +59,18 @@ def _coerce_score(value: Any) -> float:
     if isinstance(value, bool):
         # bool is a subclass of int; treat as non-numeric for scoring.
         return float("-inf")
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except (ValueError, AttributeError):
+    try:
+        if isinstance(value, (int, float)):
+            result = float(value)
+        elif isinstance(value, str):
+            result = float(value.strip())
+        else:
             return float("-inf")
-    return float("-inf")
+    except (ValueError, AttributeError, OverflowError):
+        return float("-inf")
+    # #712 gate: "nan"/"inf" parse as floats. NaN in a sort key makes the order
+    # depend on comparison order, so every non-finite value sorts last.
+    return result if math.isfinite(result) else float("-inf")
 
 
 def parsed_ranking_of(entry: Any) -> Dict[str, Any]:
@@ -158,7 +162,7 @@ def parse_ranking_from_text(ranking_text: str) -> Dict[str, Any]:
 
     # #709: a provider can send `content: null`, and stage 2 used to hand that
     # straight here. A reviewer that returned nothing ranked nothing.
-    if not isinstance(ranking_text, str):
+    if not isinstance(ranking_text, str) or not ranking_text.strip():
         result["abstained"] = True
         result["abstention_reason"] = "Empty response"
         return result
