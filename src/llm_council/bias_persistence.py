@@ -93,11 +93,11 @@ def _resolve_hash_secret() -> Optional[str]:
     """
     configured = os.getenv("LLM_COUNCIL_HASH_SECRET", "").strip()
     if configured:
-        if len(configured) < _MIN_SECRET_CHARS:
+        if len(configured) < _MIN_KEY_LENGTH:
             # A short key is enumerable, which defeats the point of the HMAC.
             logger.warning(
                 "query hashing skipped: LLM_COUNCIL_HASH_SECRET is shorter than %d characters",
-                _MIN_SECRET_CHARS,
+                _MIN_KEY_LENGTH,
             )
             return None
         return configured
@@ -129,7 +129,7 @@ def _resolve_hash_secret() -> Optional[str]:
 
 #: The generated secret is 64 hex characters; a configured one must be at
 #: least this long.
-_MIN_SECRET_CHARS = 16
+_MIN_KEY_LENGTH = 16
 
 _UNSAFE = object()
 
