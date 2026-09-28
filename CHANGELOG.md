@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **skills-telemetry is decoupled from council's CI.** The v0.51.0 contract drift check ran `uvx stdtel-conform` as a job in the required `ci.yml`, so every PR depended on another project's package being published and reachable. It now lives in an advisory `external-contract.yml` (manual, weekly, and on PRs that touch the emitter; every job `continue-on-error`). Council's own self-contained allowlist test remains the gate, and a new test fails if any workflow can fail a build on `stdtel` or if council declares or imports it. skills-telemetry is an optional consumer of council's spans, never a dependency.
+
 ### Fixed
 
 - **The required quality gate reviewed no code, on every PR** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). With no file paths, verify discovers its subject with `git diff-tree -r <sha>`, and **`diff-tree` prints nothing for a merge commit**, which is what `github.sha` is on a `pull_request` event. So the gate sent the council an empty prompt. The council declined to invent findings every time, and the gate turned that refusal into a coin flip: three passes and a fail over the same nothing. Discovery now diffs against the first parent (`<sha>^1 <sha>`), which for a PR merge commit is exactly the PR's changes. The ticket proposed passing the PR head instead; that would have reviewed only the PR's last commit.
