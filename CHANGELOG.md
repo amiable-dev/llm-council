@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-09-28
+
+**The gate reviews code again, and the privacy controls hold.** The required quality gate had been reviewing an empty prompt on every PR, because the subject of a merge commit resolved to nothing; it now reviews the change, and a verify with nothing to review stops before any model call (`gate` exits 3). Stage 2 survives malformed reviewer output instead of crashing a completed run. On security: the API token is compared in constant time, query hashing never falls back to a published key, a negated approval ("NOT APPROVED") no longer reads as PASS, and bias persistence honours consent `OFF`, fails closed, and keeps its store and key private. Hashes made under the old default key will not match new ones.
+
 ### Changed
 
 - **skills-telemetry is decoupled from council's CI.** The v0.51.0 contract drift check ran `uvx stdtel-conform` as a job in the required `ci.yml`, so every PR depended on another project's package being published and reachable. It now lives in an advisory `external-contract.yml` (manual, weekly, and on PRs that touch the emitter; every job `continue-on-error`). Council's own self-contained allowlist test remains the gate, and a new test fails if any workflow can fail a build on `stdtel` or if council declares or imports it. skills-telemetry is an optional consumer of council's spans, never a dependency.
