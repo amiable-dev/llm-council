@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **skills-telemetry is decoupled from council's CI.** The v0.51.0 contract drift check ran `uvx stdtel-conform` as a job in the required `ci.yml`, so every PR depended on another project's package being published and reachable. It now lives in an advisory `external-contract.yml` (manual, weekly, and on PRs that touch the emitter; every job `continue-on-error`). Council's own self-contained allowlist test remains the gate, and a new test fails if any workflow can fail a build on `stdtel` or if council declares or imports it. skills-telemetry is an optional consumer of council's spans, never a dependency.
 
+### Fixed
+
+- **The required quality gate reviewed no code, on every PR** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). With no file paths, verify discovers its subject with `git diff-tree -r <sha>`, and **`diff-tree` prints nothing for a merge commit**, which is what `github.sha` is on a `pull_request` event. So the gate sent the council an empty prompt. The council declined to invent findings every time, and the gate turned that refusal into a coin flip: three passes and a fail over the same nothing. Discovery now diffs against the first parent (`<sha>^1 <sha>`), which for a PR merge commit is exactly the PR's changes. The ticket proposed passing the PR head instead; that would have reviewed only the PR's last commit.
+- **A verify that resolves nothing to review stops before any model is called** ([#704](https://github.com/amiable-dev/llm-council/issues/704)). It returns `error: no_reviewable_content` with the coverage receipt and what was omitted, and `llm-council gate` exits **3**, which `llm-council-action` maps to an error. Exit 2 would not do: the action turns UNCLEAR into a passing check. An explicit `target_paths=[]` (evidence-only review) is unaffected.
+- The gate's text output now lists **Files reviewed** and what was omitted, so a CI step summary shows the subject of the verdict.
+- `council-gate.yml` installs `version: latest`. The action's default pin had rotted at 0.45.0, so no gate fix could reach the gate.
+
 ## [0.51.0] - 2026-09-28
 
 **External spend telemetry, turned on properly.** skills-telemetry published contract v2 with cost provenance, and adopting it found that v0.50.0's central promise, that an estimate never leaves the process as a bill, held only in tests. This release makes it hold on real runs, adopts v2, and adds the CI check that keeps council and the contract in step. It is the prerequisite for setting `OTEL_EXPORTER_OTLP_ENDPOINT` anywhere.
