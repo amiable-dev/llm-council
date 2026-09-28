@@ -52,6 +52,62 @@ def _coverage_lines(coverage: Dict[str, Any]) -> List[str]:
     return lines
 
 
+#: Banner and explanation per `error` marker. Unknown markers get a generic
+#: "did not run" banner rather than falling through to the verdict table.
+_NOT_RUN_BANNERS = {
+    "input_too_large": (
+        "INPUT TOO LARGE",
+        "the input exceeded the tier's size limit, so this is NOT a "
+        "pass/fail/unclear verdict and must not be treated as a passed gate. "
+        "Reduce scope, split the input, or use a higher tier.",
+    ),
+    "no_reviewable_content": (
+        "NOTHING REVIEWED",
+        "no reviewable file resolved from the snapshot, so this is NOT a "
+        "pass/fail/unclear verdict and must not be treated as a passed gate.",
+    ),
+}
+
+
+def _discovery_lines(result: Dict[str, Any]) -> List[str]:
+    """The discovery warnings: what tells "nothing reviewable" apart from
+    "discovery failed" (a shallow clone, a root commit), and a degraded
+    discovery apart from a clean one on an ordinary verdict."""
+    raw = result.get("expansion_warnings")
+    warnings = [w for w in raw if isinstance(w, str)] if isinstance(raw, list) else []
+    if not warnings:
+        return []
+    lines = ["**Discovery**:"]
+    lines.extend(f"- {w}" for w in warnings[:10])
+    if len(warnings) > 10:
+        lines.append(f"- … and {len(warnings) - 10} more")
+    lines.append("")
+    return lines
+
+
+def _format_not_run(result: Dict[str, Any]) -> str:
+    error = result.get("error")
+    banner, explanation = _NOT_RUN_BANNERS.get(
+        error if isinstance(error, str) else "",
+        (
+            "DID NOT RUN",
+            f"the run stopped before a verdict ({error}), so this is NOT a "
+            "pass/fail/unclear verdict and must not be treated as a passed gate.",
+        ),
+    )
+    lines = [f"Council Verification Result: {banner} 🚫", "", f"> The council **did not run**: {explanation}", ""]
+    rationale = result.get("rationale")
+    if rationale:
+        lines.extend([f"**Detail**: {rationale}", ""])
+    lines.extend(_discovery_lines(result))
+    coverage = result.get("coverage")
+    lines.extend(_coverage_lines(coverage if isinstance(coverage, dict) else {}))
+    transcript = result.get("transcript_location")
+    if transcript:
+        lines.append(f"**Transcript**: {transcript}")
+    return "\n".join(lines).rstrip("\n")
+
+
 def format_verification_result(result: Dict[str, Any]) -> str:
     """
     Format verification result for human-readable display.
@@ -73,55 +129,12 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     """
     lines: List[str] = []
 
-    # #357: an input-cap rejection is NOT a deliberated verdict — surface it as
-    # a distinct banner so a caller (or an agent) never mistakes the resulting
-    # "unclear" for a gate the council actually evaluated.
-    if result.get("error") == "input_too_large":
-        lines.append("Council Verification Result: INPUT TOO LARGE 🚫")
-        lines.append("")
-        lines.append(
-            "> The council **did not run** — the input exceeded the tier's size "
-            "limit, so this is NOT a pass/fail/unclear verdict and must not be "
-            "treated as a passed gate. Reduce scope, split the input, or use a "
-            "higher tier."
-        )
-        lines.append("")
-        rationale = result.get("rationale", "")
-        if rationale:
-            lines.append(f"**Detail**: {rationale}")
-            lines.append("")
-        transcript = result.get("transcript_location", "")
-        if transcript:
-            lines.append(f"**Transcript**: {transcript}")
-        return "\n".join(lines)
-
-    # #704: same shape as input_too_large. The council never ran, so this is
-    # not a verdict and must not be formatted like one.
-    if result.get("error") == "no_reviewable_content":
-        lines.append("Council Verification Result: NOTHING REVIEWED 🚫")
-        lines.append("")
-        lines.append(
-            "> The council **did not run**: no reviewable file resolved from the "
-            "snapshot, so this is NOT a pass/fail/unclear verdict and must not be "
-            "treated as a passed gate."
-        )
-        lines.append("")
-        rationale = result.get("rationale", "")
-        if rationale:
-            lines.append(f"**Detail**: {rationale}")
-            lines.append("")
-        # The discovery warnings are what tell "nothing reviewable" apart from
-        # "discovery failed" (a shallow clone, a root commit).
-        warnings = [w for w in (result.get("expansion_warnings") or []) if isinstance(w, str)]
-        if warnings:
-            lines.append("**Discovery**:")
-            lines.extend(f"- {w}" for w in warnings[:10])
-            lines.append("")
-        lines.extend(_coverage_lines(result.get("coverage") or {}))
-        transcript = result.get("transcript_location", "")
-        if transcript:
-            lines.append(f"**Transcript**: {transcript}")
-        return "\n".join(lines)
+    # #357 / #704: a run the council never made is NOT a verdict, and must
+    # not be formatted like one. Any `error` marker takes this path, including
+    # one this formatter does not know yet: falling through to the verdict
+    # table is exactly how a run that reviewed nothing came to read as UNCLEAR.
+    if result.get("error"):
+        return _format_not_run(result)
 
     # Header with verdict and emoji
     verdict = (result.get("verdict") or "unclear").lower()
@@ -134,7 +147,9 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     lines.append("|--------|-------|")
 
     # Verdict row
-    exit_code = result.get("exit_code", 2)
+    exit_code = result.get("exit_code")
+    if exit_code is None:
+        exit_code = 2
     lines.append(f"| Verdict | {verdict.upper()} (exit code {exit_code}) |")
 
     # Confidence row
@@ -156,7 +171,8 @@ def format_verification_result(result: Dict[str, Any]) -> str:
             "chairman_disabled": "chairman synthesis was skipped by config — no verdict was computed",
         }
         hint = hints.get(unclear_reason, "")
-        lines.append(f"| Unclear reason | {unclear_reason} ({hint}) |")
+        suffix = f" ({hint})" if hint else ""
+        lines.append(f"| Unclear reason | {unclear_reason}{suffix} |")
 
     # Rubric scores
     rubric_scores = result.get("rubric_scores") or {}
@@ -170,12 +186,16 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     lines.append("")
 
     # Blocking issues section
-    blocking_issues = result.get("blocking_issues", [])
+    raw_issues = result.get("blocking_issues")
+    blocking_issues = raw_issues if isinstance(raw_issues, list) else []
     lines.append("### Blocking Issues")
     if blocking_issues:
         for issue in blocking_issues:
-            severity = issue.get("severity", "unknown")
-            description = issue.get("description", "No description")
+            if not isinstance(issue, dict):
+                lines.append(f"- **UNKNOWN**: {issue}")
+                continue
+            severity = str(issue.get("severity") or "unknown")
+            description = issue.get("description") or "No description"
             location = issue.get("location")
             loc_str = f" ({location})" if location else ""
             lines.append(f"- **{severity.upper()}**: {description}{loc_str}")
@@ -201,11 +221,14 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     # council reviewed nothing, which is how an empty-subject gate passed three
     # PRs unnoticed. With the files listed, a reader of the CI step summary
     # can see the subject the verdict is about.
-    lines.extend(_coverage_lines(result.get("coverage") or {}))
+    coverage = result.get("coverage")
+    lines.extend(_coverage_lines(coverage if isinstance(coverage, dict) else {}))
+    lines.extend(_discovery_lines(result))
 
     # Transcript location
-    transcript = result.get("transcript_location", "")
-    lines.append(f"**Transcript**: {transcript}")
+    transcript = result.get("transcript_location")
+    if transcript:
+        lines.append(f"**Transcript**: {transcript}")
     lines.append("")
 
     # Rationale (summarized)
@@ -237,10 +260,10 @@ def format_verification_result_compact(result: Dict[str, Any]) -> str:
     """
     verification_id = result.get("verification_id", "unknown")
     # #704: a run the council never made is not a verdict, in one line either.
-    if result.get("error") == "no_reviewable_content":
-        return f"🚫 NOTHING REVIEWED (council did not run) [{verification_id}]"
-    if result.get("error") == "input_too_large":
-        return f"🚫 INPUT TOO LARGE (council did not run) [{verification_id}]"
+    error = result.get("error")
+    if error:
+        banner = _NOT_RUN_BANNERS.get(error if isinstance(error, str) else "", ("DID NOT RUN", ""))[0]
+        return f"🚫 {banner} (council did not run) [{verification_id}]"
 
     raw_verdict = (result.get("verdict") or "unclear").lower()
     verdict = raw_verdict.upper()

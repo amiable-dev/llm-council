@@ -339,3 +339,70 @@ class TestGateRound1:
             {"verdict": "pass", "confidence": 0.9, "coverage": {"reviewed": ["a.py"], "omitted": omitted}}
         )
         assert "and 5 more" in text
+
+
+class TestGateRound3:
+    """Council gate on #710, round 3: the formatter must survive every
+    present-but-null field, and nothing without a verdict may read as one."""
+
+    def test_every_nullable_field_explicitly_null(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {
+                "verdict": None,
+                "confidence": None,
+                "exit_code": None,
+                "rationale": None,
+                "rubric_scores": None,
+                "blocking_issues": None,
+                "transcript_location": None,
+                "coverage": None,
+                "expansion_warnings": None,
+            }
+        )
+        assert "UNCLEAR" in text
+        assert "Transcript**: None" not in text
+
+    def test_malformed_blocking_issues_do_not_crash(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {"verdict": "fail", "blocking_issues": ["plain string", {"severity": None, "description": "d"}]}
+        )
+        assert "plain string" in text
+        assert "UNKNOWN" in text
+
+    @pytest.mark.parametrize("error", ["discovery_failed", "some_future_marker"])
+    def test_an_unknown_error_marker_is_not_formatted_as_a_verdict(self, error):
+        from llm_council.verification.formatting import (
+            format_verification_result,
+            format_verification_result_compact,
+        )
+
+        result = {"error": error, "verdict": "unclear", "exit_code": 2}
+        text = format_verification_result(result)
+        assert "DID NOT RUN" in text and "| Verdict |" not in text
+        assert "DID NOT RUN" in format_verification_result_compact(result)
+
+    def test_discovery_warnings_show_on_an_ordinary_verdict_too(self):
+        """A root-commit fallback still resolves files; the reader must see
+        discovery was degraded."""
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {
+                "verdict": "pass",
+                "confidence": 0.9,
+                "expansion_warnings": ["abc has no first parent (a root commit); reviewing the files it added"],
+            }
+        )
+        assert "root commit" in text
+
+    def test_a_long_warning_list_says_how_many_more(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {"error": "no_reviewable_content", "expansion_warnings": [f"w{i}" for i in range(13)]}
+        )
+        assert "and 3 more" in text
