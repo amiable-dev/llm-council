@@ -46,7 +46,7 @@ async def test_evidence_none_prompt_byte_identical():
     the ADR §11 invariant before regenerating the hash.
     """
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+        "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
         return_value=(
             "FILE_BODY_PLACEHOLDER",
@@ -79,7 +79,7 @@ async def test_evidence_none_prompt_byte_identical():
 async def test_empty_evidence_list_equals_none():
     """ADR-042 §11: evidence=[] produces the same rendered prompt as evidence=None."""
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+        "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
         return_value=(
             "FILE_BODY_PLACEHOLDER",
@@ -109,7 +109,7 @@ async def test_evidence_section_inserted_at_correct_position():
     from llm_council.verification.api import EvidenceItem
 
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+        "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
         return_value=(
             "FILE_BODY_PLACEHOLDER",
@@ -153,7 +153,7 @@ async def test_evidence_json_artefact_written(tmp_path):
     # Mock heavy machinery so we can run the pipeline cheaply.
     with (
         patch(
-            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+            "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
             return_value=(
                 "FILE_BODY",
@@ -165,17 +165,17 @@ async def test_evidence_json_artefact_written(tmp_path):
             ),
         ),
         patch(
-            "llm_council.verification.api.stage1_collect_responses_with_status",
+            "llm_council.verification.pipeline.stage1_collect_responses_with_status",
             new_callable=AsyncMock,
             return_value=([{"model": "m1", "response": "r1"}], {}, {"m1": {"latency_ms": 10}}),
         ),
         patch(
-            "llm_council.verification.api.stage2_collect_rankings",
+            "llm_council.verification.pipeline.stage2_collect_rankings",
             new_callable=AsyncMock,
             return_value=([{"model": "m1", "ranking": "ok", "parsed_ranking": []}], {}, {}),
         ),
         patch(
-            "llm_council.verification.api.stage3_synthesize_final",
+            "llm_council.verification.pipeline.stage3_synthesize_final",
             new_callable=AsyncMock,
             return_value=(
                 {"synthesis": '{"verdict":"approved","confidence":0.9,"rationale":"ok"}\n'},
@@ -183,9 +183,9 @@ async def test_evidence_json_artefact_written(tmp_path):
                 None,
             ),
         ),
-        patch("llm_council.verification.api.calculate_aggregate_rankings", return_value=[]),
+        patch("llm_council.verification.pipeline.calculate_aggregate_rankings", return_value=[]),
         patch(
-            "llm_council.verification.api.build_verification_result",
+            "llm_council.verification.pipeline.build_verification_result",
             return_value={
                 "verdict": "pass",
                 "confidence": 0.9,
@@ -245,7 +245,7 @@ async def test_request_json_carries_evidence_present_flag(tmp_path):
 
     with (
         patch(
-            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+            "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
             return_value=(
                 "FILE_BODY",
@@ -257,23 +257,23 @@ async def test_request_json_carries_evidence_present_flag(tmp_path):
             ),
         ),
         patch(
-            "llm_council.verification.api.stage1_collect_responses_with_status",
+            "llm_council.verification.pipeline.stage1_collect_responses_with_status",
             new_callable=AsyncMock,
             return_value=([{"model": "m1", "response": "r1"}], {}, {}),
         ),
         patch(
-            "llm_council.verification.api.stage2_collect_rankings",
+            "llm_council.verification.pipeline.stage2_collect_rankings",
             new_callable=AsyncMock,
             return_value=([{"model": "m1", "ranking": "ok", "parsed_ranking": []}], {}, {}),
         ),
         patch(
-            "llm_council.verification.api.stage3_synthesize_final",
+            "llm_council.verification.pipeline.stage3_synthesize_final",
             new_callable=AsyncMock,
             return_value=({"synthesis": "ok"}, {}, None),
         ),
-        patch("llm_council.verification.api.calculate_aggregate_rankings", return_value=[]),
+        patch("llm_council.verification.pipeline.calculate_aggregate_rankings", return_value=[]),
         patch(
-            "llm_council.verification.api.build_verification_result",
+            "llm_council.verification.pipeline.build_verification_result",
             return_value={
                 "verdict": "pass",
                 "confidence": 0.9,
@@ -417,7 +417,7 @@ async def test_evidence_instructions_added_only_when_evidence_present():
     from llm_council.verification.api import EvidenceItem
 
     with patch(
-        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+        "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
         return_value=(
             "FILE_BODY_PLACEHOLDER",

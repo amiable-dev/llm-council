@@ -25,11 +25,11 @@ from typing import Dict, Any
 def _standard_verification_mocks():
     """Return a dict of standard patches for run_verification tests."""
     return {
-        "stage1": patch("llm_council.verification.api.stage1_collect_responses_with_status"),
-        "stage2": patch("llm_council.verification.api.stage2_collect_rankings"),
-        "stage3": patch("llm_council.verification.api.stage3_synthesize_final"),
-        "agg": patch("llm_council.verification.api.calculate_aggregate_rankings"),
-        "build": patch("llm_council.verification.api.build_verification_result"),
+        "stage1": patch("llm_council.verification.pipeline.stage1_collect_responses_with_status"),
+        "stage2": patch("llm_council.verification.pipeline.stage2_collect_rankings"),
+        "stage3": patch("llm_council.verification.pipeline.stage3_synthesize_final"),
+        "agg": patch("llm_council.verification.pipeline.calculate_aggregate_rankings"),
+        "build": patch("llm_council.verification.pipeline.build_verification_result"),
         "ctx_mgr": patch("llm_council.verification.api.VerificationContextManager"),
         "prompt": patch(
             "llm_council.verification.api._build_verification_prompt",
@@ -452,7 +452,7 @@ class TestModelStatusesPreserved:
 
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses_with_status",
+                "llm_council.verification.pipeline.stage1_collect_responses_with_status",
                 new_callable=AsyncMock,
                 return_value=(
                     [{"model": "test/model-a", "response": "ok"}],
@@ -461,21 +461,21 @@ class TestModelStatusesPreserved:
                 ),
             ),
             patch(
-                "llm_council.verification.api.stage2_collect_rankings",
+                "llm_council.verification.pipeline.stage2_collect_rankings",
                 new_callable=AsyncMock,
                 return_value=([], {}, {}),
             ),
             patch(
-                "llm_council.verification.api.stage3_synthesize_final",
+                "llm_council.verification.pipeline.stage3_synthesize_final",
                 new_callable=AsyncMock,
                 return_value=({"model": "m", "response": "s"}, {}, None),
             ),
             patch(
-                "llm_council.verification.api.calculate_aggregate_rankings",
+                "llm_council.verification.pipeline.calculate_aggregate_rankings",
                 return_value=[],
             ),
             patch(
-                "llm_council.verification.api.build_verification_result",
+                "llm_council.verification.pipeline.build_verification_result",
                 return_value={
                     "verdict": "pass",
                     "confidence": 0.9,
@@ -525,7 +525,7 @@ class TestModelStatusesPreserved:
 
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses_with_status",
+                "llm_council.verification.pipeline.stage1_collect_responses_with_status",
                 new_callable=AsyncMock,
                 return_value=(
                     [{"model": "test/model-a", "response": "ok"}],
@@ -534,21 +534,21 @@ class TestModelStatusesPreserved:
                 ),
             ),
             patch(
-                "llm_council.verification.api.stage2_collect_rankings",
+                "llm_council.verification.pipeline.stage2_collect_rankings",
                 new_callable=AsyncMock,
                 return_value=([], {}, {}),
             ),
             patch(
-                "llm_council.verification.api.stage3_synthesize_final",
+                "llm_council.verification.pipeline.stage3_synthesize_final",
                 new_callable=AsyncMock,
                 return_value=({"model": "m", "response": "s"}, {}, None),
             ),
             patch(
-                "llm_council.verification.api.calculate_aggregate_rankings",
+                "llm_council.verification.pipeline.calculate_aggregate_rankings",
                 return_value=agg_rankings,
             ),
             patch(
-                "llm_council.verification.api.build_verification_result",
+                "llm_council.verification.pipeline.build_verification_result",
                 return_value={
                     "verdict": "pass",
                     "confidence": 0.9,

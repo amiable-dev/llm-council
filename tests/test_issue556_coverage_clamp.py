@@ -222,7 +222,7 @@ class TestPipelineAppliesClamp:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from llm_council.verification import api
+        from llm_council.verification import api, pipeline
         from llm_council.verification.schemas import VerifyRequest
 
         # NB: the caller controls LLM_COUNCIL_COVERAGE_POLICY via its own
@@ -245,23 +245,23 @@ class TestPipelineAppliesClamp:
                 return_value=("prompt", render_info),
             ),
             patch.object(
-                api,
+                pipeline,
                 "stage1_collect_responses_with_status",
                 new_callable=AsyncMock,
                 return_value=([{"model": "m", "response": "ok"}], {}, {}),
             ),
             patch.object(
-                api, "stage2_collect_rankings", new_callable=AsyncMock, return_value=([], {}, {})
+                pipeline, "stage2_collect_rankings", new_callable=AsyncMock, return_value=([], {}, {})
             ),
             patch.object(
-                api,
+                pipeline,
                 "stage3_synthesize_final",
                 new_callable=AsyncMock,
                 return_value=({"response": "ok"}, {}, None),
             ),
-            patch.object(api, "calculate_aggregate_rankings", return_value=[]),
+            patch.object(pipeline, "calculate_aggregate_rankings", return_value=[]),
             patch.object(
-                api,
+                pipeline,
                 "build_verification_result",
                 return_value={
                     "verdict": base_verdict,

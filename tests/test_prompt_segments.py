@@ -21,7 +21,7 @@ def _patch_files(content_by_call):
         for content in content_by_call
     ]
     return patch(
-        "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+        "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
         new_callable=AsyncMock,
         side_effect=side,
     )

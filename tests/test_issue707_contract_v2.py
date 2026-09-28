@@ -225,9 +225,10 @@ class TestTheVerifyPathUsesTheSameAggregate:
         covering it. Pin the dependency rather than assume it."""
         import inspect
 
-        from llm_council.verification import api
+        from llm_council.verification import api, pipeline
 
-        source = inspect.getsource(api)
+        # #720: the pipeline half of the split builds the summary.
+        source = inspect.getsource(api) + inspect.getsource(pipeline)
         assert "_build_usage_summary(" in source
 
 

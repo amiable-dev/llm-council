@@ -159,11 +159,11 @@ class TestStage3TimeoutFix:
 def _standard_verification_mocks():
     """Return a dict of standard patches for run_verification tests."""
     return {
-        "stage1": patch("llm_council.verification.api.stage1_collect_responses_with_status"),
-        "stage2": patch("llm_council.verification.api.stage2_collect_rankings"),
-        "stage3": patch("llm_council.verification.api.stage3_synthesize_final"),
-        "agg": patch("llm_council.verification.api.calculate_aggregate_rankings"),
-        "build": patch("llm_council.verification.api.build_verification_result"),
+        "stage1": patch("llm_council.verification.pipeline.stage1_collect_responses_with_status"),
+        "stage2": patch("llm_council.verification.pipeline.stage2_collect_rankings"),
+        "stage3": patch("llm_council.verification.pipeline.stage3_synthesize_final"),
+        "agg": patch("llm_council.verification.pipeline.calculate_aggregate_rankings"),
+        "build": patch("llm_council.verification.pipeline.build_verification_result"),
         "ctx_mgr": patch("llm_council.verification.api.VerificationContextManager"),
         "prompt": patch(
             "llm_council.verification.api._build_verification_prompt",

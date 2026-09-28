@@ -17,6 +17,7 @@ from unittest.mock import patch
 import pytest
 
 from llm_council.verification import api
+from llm_council.verification import prompt as verify_prompt
 from llm_council.verification.evidence_render import (
     _neutralize_evidence_body,
     _neutralize_evidence_items,
@@ -84,7 +85,7 @@ class TestVerifyPromptBreakoutDefanged:
             return ("<file>code</file>", {"expanded_paths": ["x.py"]})
 
         with patch.object(
-            api,
+            verify_prompt,
             "_fetch_files_for_verification_async_with_metadata",
             side_effect=fake_fetch,
         ):
