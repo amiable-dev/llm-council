@@ -143,6 +143,19 @@ def _merge_cost_source(bucket: Dict[str, Any], source: Optional[str]) -> None:
         bucket["cost_source"] = source
     elif existing != source:
         bucket["cost_source"] = "mixed"
+    # #707: `mixed` says the sources disagreed but not WHICH were present, and
+    # the external contract has to know whether any observed part came from a
+    # provider. The set of sources seen rides alongside the collapsed label.
+    # A sorted list rather than a set, because this dict is serialised.
+    _note_cost_sources(bucket, [source])
+
+
+def _note_cost_sources(bucket: Dict[str, Any], sources: Any) -> None:
+    """Union ``sources`` into ``bucket["cost_sources"]`` (sorted, unique)."""
+    seen = set(bucket.get("cost_sources") or ())
+    seen.update(s for s in (sources or ()) if isinstance(s, str) and s != "mixed")
+    if seen:
+        bucket["cost_sources"] = sorted(seen)
 
 
 def _as_number(value: Any) -> float:
@@ -185,14 +198,10 @@ def _add_cost_to_usage(
     # ADR-049 D4: cache-write tokens ride the same aggregation; absent => 0.
     cache_write = usage.get("cache_write_tokens", 0) or 0
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
-    total_usage["cost_estimated_usd"] = (
-        total_usage.get("cost_estimated_usd", 0.0) + estimated
-    )
+    total_usage["cost_estimated_usd"] = total_usage.get("cost_estimated_usd", 0.0) + estimated
     _merge_cost_source(total_usage, source)
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
-    total_usage["cache_write_tokens"] = (
-        total_usage.get("cache_write_tokens", 0) + cache_write
-    )
+    total_usage["cache_write_tokens"] = total_usage.get("cache_write_tokens", 0) + cache_write
     # Track whether ANY cost was reported so the summary can tell a genuine
     # $0 (free/local) from unknown cost (None) — a present cost, even 0.0, is
     # "known".
@@ -244,11 +253,23 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
         "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
         "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
-        "cache_write_tokens": sum(
-            s.get("cache_write_tokens", 0) for s in by_stage.values()
-        ),
+        "cache_write_tokens": sum(s.get("cache_write_tokens", 0) for s in by_stage.values()),
         "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
+        # #707: provenance has to reach the total, because the total is what
+        # every consumer reads. Before this, `cost_source` and
+        # `cost_estimated_usd` stopped at the per-model buckets, so the #694
+        # "(incl. ~$X estimated)" disclosure and the ADR-056 rule "only
+        # provider-reported cost leaves the process" both read keys that were
+        # never here, and held only in tests that hand-built a total.
+        "cost_estimated_usd": sum(
+            _as_number(s.get("cost_estimated_usd")) for s in by_stage.values()
+        ),
     }
+    for stage_usage in by_stage.values():
+        _merge_cost_source(grand_total, stage_usage.get("cost_source"))
+        _note_cost_sources(grand_total, stage_usage.get("cost_sources"))
+    if any(s.get("cost_incomplete") for s in by_stage.values()):
+        grand_total["cost_incomplete"] = True
     numeric_keys = (
         "prompt_tokens",
         "completion_tokens",
@@ -278,6 +299,7 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
                 model_usage.get("cost_estimated_usd")
             )
             _merge_cost_source(agg, model_usage.get("cost_source"))
+            _note_cost_sources(agg, model_usage.get("cost_sources"))
             if model_usage.get("cost_known"):
                 agg["cost_known"] = True
             if model_usage.get("cost_incomplete"):

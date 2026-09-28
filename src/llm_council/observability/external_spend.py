@@ -25,12 +25,15 @@ and compares it to this constant in both directions. A test that compared the
 constant to itself would pass through any rename, which is the failure mode
 this guards. `skills-telemetry` holds the mirror-image test on their side.
 
-Pinned against `skills-telemetry` `stdtel/artefact.py` at commit `3d93d8b`.
+Pinned against the published contract: `stdtel` 0.5.0 (`contract_version` 2,
+`stdtel-conform --print-contract`). v1 was pinned at commit `3d93d8b`; v2 (#707)
+added cost provenance.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 import re
 from typing import Any, Dict, Optional, Tuple
@@ -56,6 +59,15 @@ OPERATION_CONSULT = "consult"
 OPERATION_VERIFY = "verify"
 OPERATIONS = frozenset({OPERATION_CONSULT, OPERATION_VERIFY})
 
+#: The published contract version this module implements. CI diffs it against
+#: `stdtel-conform --print-contract`; a new version is announced on #707.
+CONTRACT_VERSION = 2
+
+#: The contract's `std.external.cost_source` vocabulary. Council's own labels
+#: (`registry_estimate`, `local_zero`, `mixed`) are internal and are rejected by
+#: `stdtel-conform`; they are translated below and never sent.
+CONTRACT_COST_SOURCES = frozenset({"provider", "local"})
+
 #: Exhaustive. Anything not here is dropped by the collector without complaint,
 #: so this set is a contract, not a convenience. `std.scope.*` is deliberately
 #: absent: stdtel sets it, not the emitter.
@@ -67,6 +79,8 @@ EXTERNAL_ATTRIBUTES = frozenset(
         "std.external.system",
         "std.external.operation",
         "std.external.cost_usd",
+        "std.external.cost_source",
+        "std.external.cost_estimated_usd",
         "std.external.requests",
         "std.external.duration_ms",
         "gen_ai.request.model",
@@ -154,31 +168,63 @@ def claude_session_id() -> Optional[str]:
     return raw if raw and _CLAUDE_SESSION_RE.match(raw) else None
 
 
-def _observed_cost(usage_summary: Dict[str, Any]) -> Optional[float]:
-    """The cost to report, or None to omit the attribute entirely.
+def _finite_amount(value: Any) -> Optional[float]:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    value = float(value)
+    return value if math.isfinite(value) and value >= 0 else None
 
-    Two rules, both of which this release has had to state at other layers:
 
-    * An unobserved cost is **omitted**, never sent as 0 or null. A zero is a
-      measurement — free tiers and fully cached responses really do cost
-      nothing — and collapsing the two makes downstream averages wrong in a way
-      nobody can see.
-    * A **registry estimate is not an observation of spend**. #694 lets council
-      price a call from `registry.yaml` when a provider reports nothing; that
-      figure is honest locally, where it sits beside its `cost_source` label,
-      but the external contract has no attribute for provenance. An estimate
-      arriving as `std.external.cost_usd` would be indistinguishable from a
-      bill the moment a warehouse summed it.
+def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
+    """The contract-v2 cost attributes for one run, each present only if known.
+
+    Contract v2 (#707) separates what was **observed** from what was
+    **estimated**:
+
+    * ``std.external.cost_usd`` carries only observed spend. For a mixed run
+      that is the total minus the estimated portion. Nothing downstream can
+      catch a mistake here, because both numbers would look valid.
+    * ``std.external.cost_source`` says how the observed part was come by:
+      ``provider`` if any of it was provider-reported, else ``local`` (a
+      structural zero). It is sent only alongside a ``cost_usd``.
+    * ``std.external.cost_estimated_usd`` carries a #694 registry estimate, in
+      its own attribute, so an estimate is never summed as a bill.
+
+    Two rules this release has stated at every other layer still hold. An
+    unobserved amount is **omitted**, never sent as 0 or null: a zero is a
+    measurement. And an **incomplete** total, where some call reported no cost
+    and the registry had no price, sends no ``cost_usd``: the observed sum is
+    then a lower bound, and v2 has no attribute that says so.
     """
     total = usage_summary.get("total") or {}
-    if not total.get("cost_known"):
-        return None
-    if total.get("cost_source") in ("registry_estimate", "mixed"):
-        return None
-    if total.get("cost_estimated_usd"):
-        return None
-    cost = total.get("cost_usd")
-    return float(cost) if isinstance(cost, (int, float)) and not isinstance(cost, bool) else None
+    attrs: Dict[str, Any] = {}
+
+    estimated = _finite_amount(total.get("cost_estimated_usd"))
+    if estimated:
+        attrs["std.external.cost_estimated_usd"] = estimated
+
+    if not total.get("cost_known") or total.get("cost_incomplete"):
+        return attrs
+    sources = set(total.get("cost_sources") or ())
+    if not sources and total.get("cost_source") not in (None, "mixed"):
+        sources = {total["cost_source"]}
+    if "provider" in sources:
+        contract_source = "provider"
+    elif "local_zero" in sources:
+        contract_source = "local"
+    else:
+        # Nothing observed: an estimate-only run, or a source we do not know
+        # how to map. Either way, no cost_usd.
+        return attrs
+
+    reported = _finite_amount(total.get("cost_usd"))
+    if reported is None:
+        return attrs
+    observed = reported - (estimated or 0.0)
+    # Float subtraction can leave -1e-18 where the answer is zero.
+    attrs["std.external.cost_usd"] = max(0.0, round(observed, 12))
+    attrs["std.external.cost_source"] = contract_source
+    return attrs
 
 
 def build_span_attributes(
@@ -211,9 +257,7 @@ def build_span_attributes(
         "gen_ai.operation.name": "chat",
     }
 
-    cost = _observed_cost(usage_summary)
-    if cost is not None:
-        attrs["std.external.cost_usd"] = cost
+    attrs.update(cost_attributes(usage_summary))
 
     if by_model:
         attrs["std.external.requests"] = len(by_model)

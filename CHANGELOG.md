@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The rule that an estimate never leaves as a bill held only in tests** ([#707](https://github.com/amiable-dev/llm-council/issues/707)). ADR-056's emitter decided whether a cost was provider-reported by reading `cost_source` and `cost_estimated_usd` off the usage `total`. `_build_usage_summary` only ever put those keys on the per-model buckets, so on every real consult and verify the guard read keys that were not there, and a registry estimate would have gone out as `std.external.cost_usd`. It never leaked, because no endpoint was configured anywhere. The same gap meant #694's "(incl. ~$X estimated)" disclosure appeared in its unit test and on no actual run. The total now carries `cost_source`, `cost_sources`, `cost_estimated_usd` and `cost_incomplete`, and the new tests build every usage summary through the real aggregators rather than by hand.
+
+### Changed
+
+- **External spend telemetry adopts the skills-telemetry contract v2** ([#707](https://github.com/amiable-dev/llm-council/issues/707), `stdtel` 0.5.0). Spans now carry `std.external.cost_source` (`provider` or `local`) beside an observed `cost_usd`, and a registry estimate in its own `std.external.cost_estimated_usd`, so estimate-only and mixed runs report what they know instead of dropping it. A mixed run's `cost_usd` is the observed part only. An incomplete total, where some call reported no cost and had no registry price, sends no `cost_usd`, because v2 cannot mark it as a lower bound. A new CI job diffs the allowlist against `stdtel-conform --print-contract` and runs the checker on spans council builds; council's own longhand test remains the gate.
+- **Operator note:** under Claude Code, `OTEL_EXPORTER_OTLP_ENDPOINT` must be set in the llm-council MCP server's `env` block. A shell export is removed before the server starts.
+
 ## [0.50.0] - 2026-09-24
 
 **Council can now account for what it spends.** Before this release the expensive path left no local record at all, the test suite was polluting the record that did exist, the one cost fallback was unreachable, and nothing reported spend outward. Five issues, and a single thread running through them: **a value that was never measured must never be written as a zero, because a zero is a measurement.** That rule had to be stated at four separate layers before it held — the record, the reader, the aggregate, and the external span.
