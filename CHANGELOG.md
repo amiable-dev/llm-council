@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A provider's `content: null` crashed verify after stage 1 had completed** ([#709](https://github.com/amiable-dev/llm-council/issues/709)). Observed live on 2026-09-28: all four stage-1 answers were in, then the run died with `'NoneType' object has no attribute 'lower'`, reported as UNCLEAR with no reason. Stage 2 read `content` with `.get("content", "")`, whose default does not apply to a stored None. Every provider-result read in the stages now uses `or ""`, and a reviewer that returned nothing is recorded as an abstention. Tested end to end through stage 2 on both the batch and incremental paths.
+- **A stage-2 entry with `parsed_ranking: None` raised in six places** ([#680](https://github.com/amiable-dev/llm-council/issues/680)): the aggregate, dissent (three sites), bias audit and the HTTP council path all read it with `.get("parsed_ranking", {})`. One helper, `parsed_ranking_of`, now serves them all, and an AST test fails if the dict-default form returns.
+- **Raw scores reached the aggregate's sort key unguarded** ([#679](https://github.com/amiable-dev/llm-council/issues/679)): a bool scored 0.1, NaN poisoned the ordering, and nothing clamped to [0, 1]. They now go through the same coercion as every other score.
+
 ## [0.51.0] - 2026-09-28
 
 **External spend telemetry, turned on properly.** skills-telemetry published contract v2 with cost provenance, and adopting it found that v0.50.0's central promise, that an estimate never leaves the process as a bill, held only in tests. This release makes it hold on real runs, adopts v2, and adds the CI check that keeps council and the contract in step. It is the prerequisite for setting `OTEL_EXPORTER_OTLP_ENDPOINT` anywhere.
