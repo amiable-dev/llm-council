@@ -136,13 +136,43 @@ def _merge_cost_source(bucket: Dict[str, Any], source: Optional[str]) -> None:
     stays separately visible in ``cost_estimated_usd``. A call with no source
     contributes nothing rather than overwriting a known one.
     """
-    if not source:
+    if not source or not isinstance(source, str):
         return
     existing = bucket.get("cost_source")
     if existing is None:
         bucket["cost_source"] = source
     elif existing != source:
         bucket["cost_source"] = "mixed"
+    # #707: `mixed` says the sources disagreed but not WHICH were present, and
+    # the external contract has to know whether any observed part came from a
+    # provider. The set of sources seen rides alongside the collapsed label.
+    # A sorted list rather than a set, because this dict is serialised.
+    _note_cost_sources(bucket, [source])
+
+
+def _note_cost_sources(bucket: Dict[str, Any], sources: Any) -> None:
+    """Union ``sources`` into ``bucket["cost_sources"]`` (sorted, unique)."""
+    if isinstance(sources, str):  # a bare label, not a collection of them
+        sources = [sources]
+    if not isinstance(sources, (list, tuple, set, frozenset)):
+        return
+    stored = bucket.get("cost_sources")
+    seen = (
+        {stored}
+        if isinstance(stored, str)
+        else set(stored)
+        if isinstance(stored, (list, tuple, set, frozenset))
+        else set()
+    )
+    seen.update(s for s in sources if isinstance(s, str) and s != "mixed")
+    if seen:
+        bucket["cost_sources"] = sorted(seen)
+
+
+#: Sources whose figure is an observation of spend: a provider's bill, or a
+#: local model's structural zero. `registry_estimate` is known but estimated.
+OBSERVED_COST_SOURCES = ("provider", "local_zero")
+KNOWN_COST_SOURCES = OBSERVED_COST_SOURCES + ("registry_estimate",)
 
 
 def _as_number(value: Any) -> float:
@@ -155,13 +185,24 @@ def _as_number(value: Any) -> float:
     """
     if isinstance(value, bool) or value is None:
         return 0
-    if isinstance(value, (int, float)):
-        return value if math.isfinite(value) else 0
+    # #707 gate: `math.isfinite` raises OverflowError on an int too large for a
+    # float, and JSON parses integers exactly, so a provider can send one. The
+    # conversion and the check both sit inside the guard.
     try:
         parsed = float(value)
-    except (TypeError, ValueError):
+        return (value if isinstance(value, (int, float)) else parsed) if math.isfinite(parsed) else 0
+    except (TypeError, ValueError, OverflowError):
         return 0
-    return parsed if math.isfinite(parsed) else 0
+
+
+def _is_usable_cost(value: Any) -> bool:
+    """A finite, non-negative number that is not a bool."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value >= 0
+    except OverflowError:  # an int beyond float range
+        return False
 
 
 def _add_cost_to_usage(
@@ -175,28 +216,49 @@ def _add_cost_to_usage(
     ``total_usage["by_model"][model]`` (reviewer-primary attribution).
     """
     raw_cost = usage.get("cost")
-    cost = _as_number(raw_cost)
+    # #707 gate: a cost is KNOWN only if it is a usable measurement. `_as_number`
+    # turns garbage (a string, NaN, a bool, a negative) into 0, and `cost_known`
+    # used to be set for anything that was not None, so a malformed figure went
+    # out as a provider-measured $0.00. Unusable is unobserved.
+    usable = _is_usable_cost(raw_cost)
+    cost = float(raw_cost) if usable and raw_cost is not None else 0.0
     # #694: provenance rides with the figure. An estimate that cannot be told
     # apart from a measurement is worse than no figure, because it WILL be
-    # summed with real ones.
-    source = usage.get("cost_source")
+    # summed with real ones. A source is recorded only for a usable figure:
+    # a label on nothing observed would claim an observation.
+    raw_source = usage.get("cost_source")
+    source = raw_source if usable and isinstance(raw_source, str) else None
     estimated = cost if source == "registry_estimate" else 0.0
-    cached = usage.get("cached_tokens", 0) or 0
+    # #707 gate, round 3: provenance is tracked PER AMOUNT, not only as a set of
+    # labels. With labels alone, one provider-reported call made the whole sum
+    # read as provider spend, including amounts that carried no label at all.
+    # `cost_observed_usd` holds exactly the observed money; an amount council
+    # cannot attribute (no label, an unknown label, or a `local_zero` that is
+    # not zero) marks the total `cost_unattributed`, and nothing that needs
+    # provenance is reported from it.
+    attributed = source in KNOWN_COST_SOURCES and not (source == "local_zero" and cost > 0)
+    observed = cost if attributed and source in OBSERVED_COST_SOURCES else 0.0
+    # #707 gate: through `_as_number` like the primary counts. A raw `+` on a
+    # provider's string count raised TypeError here, on the deliberation path,
+    # failing a run that had already completed and been billed.
+    cached = _as_number(usage.get("cached_tokens"))
     # ADR-049 D4: cache-write tokens ride the same aggregation; absent => 0.
-    cache_write = usage.get("cache_write_tokens", 0) or 0
+    cache_write = _as_number(usage.get("cache_write_tokens"))
+    # #707 gate: `std.external.requests` is a count of calls. It was
+    # `len(by_model)`, which counts a model reviewed in all three stages once.
+    total_usage["requests"] = total_usage.get("requests", 0) + 1
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
-    total_usage["cost_estimated_usd"] = (
-        total_usage.get("cost_estimated_usd", 0.0) + estimated
-    )
+    total_usage["cost_estimated_usd"] = total_usage.get("cost_estimated_usd", 0.0) + estimated
+    total_usage["cost_observed_usd"] = total_usage.get("cost_observed_usd", 0.0) + observed
+    if usable and not attributed:
+        total_usage["cost_unattributed"] = True
     _merge_cost_source(total_usage, source)
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
-    total_usage["cache_write_tokens"] = (
-        total_usage.get("cache_write_tokens", 0) + cache_write
-    )
+    total_usage["cache_write_tokens"] = total_usage.get("cache_write_tokens", 0) + cache_write
     # Track whether ANY cost was reported so the summary can tell a genuine
     # $0 (free/local) from unknown cost (None) — a present cost, even 0.0, is
     # "known".
-    if raw_cost is not None:
+    if usable:
         total_usage["cost_known"] = True
     else:
         # #692 gate: `cost_known` means "at least one call reported a cost", so
@@ -222,10 +284,14 @@ def _add_cost_to_usage(
         bucket["total_tokens"] += _as_number(usage.get("total_tokens"))
         bucket["cost_usd"] += cost
         bucket["cost_estimated_usd"] = bucket.get("cost_estimated_usd", 0.0) + estimated
+        bucket["cost_observed_usd"] = bucket.get("cost_observed_usd", 0.0) + observed
+        if usable and not attributed:
+            bucket["cost_unattributed"] = True
         _merge_cost_source(bucket, source)
         bucket["cached_tokens"] += cached
         bucket["cache_write_tokens"] = bucket.get("cache_write_tokens", 0) + cache_write
-        if raw_cost is not None:
+        bucket["requests"] = bucket.get("requests", 0) + 1
+        if usable:
             bucket["cost_known"] = True
         else:
             bucket["cost_incomplete"] = True
@@ -239,16 +305,34 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     by both council entry points so the HTTP and MCP paths report identically.
     """
     grand_total = {
-        "prompt_tokens": sum(s.get("prompt_tokens", 0) for s in by_stage.values()),
-        "completion_tokens": sum(s.get("completion_tokens", 0) for s in by_stage.values()),
-        "total_tokens": sum(s.get("total_tokens", 0) for s in by_stage.values()),
-        "cost_usd": sum(s.get("cost_usd", 0.0) for s in by_stage.values()),
-        "cached_tokens": sum(s.get("cached_tokens", 0) for s in by_stage.values()),
-        "cache_write_tokens": sum(
-            s.get("cache_write_tokens", 0) for s in by_stage.values()
-        ),
+        "prompt_tokens": sum(_as_number(s.get("prompt_tokens")) for s in by_stage.values()),
+        "completion_tokens": sum(_as_number(s.get("completion_tokens")) for s in by_stage.values()),
+        "total_tokens": sum(_as_number(s.get("total_tokens")) for s in by_stage.values()),
+        "cost_usd": sum(_as_number(s.get("cost_usd")) for s in by_stage.values()),
+        "cached_tokens": sum(_as_number(s.get("cached_tokens")) for s in by_stage.values()),
+        "cache_write_tokens": sum(_as_number(s.get("cache_write_tokens")) for s in by_stage.values()),
         "cost_known": any(s.get("cost_known", False) for s in by_stage.values()),
+        # #707: provenance has to reach the total, because the total is what
+        # every consumer reads. Before this, `cost_source` and
+        # `cost_estimated_usd` stopped at the per-model buckets, so the #694
+        # "(incl. ~$X estimated)" disclosure and the ADR-056 rule "only
+        # provider-reported cost leaves the process" both read keys that were
+        # never here, and held only in tests that hand-built a total.
+        "cost_estimated_usd": sum(
+            _as_number(s.get("cost_estimated_usd")) for s in by_stage.values()
+        ),
+        "cost_observed_usd": sum(
+            _as_number(s.get("cost_observed_usd")) for s in by_stage.values()
+        ),
+        "requests": sum(int(_as_number(s.get("requests"))) for s in by_stage.values()),
     }
+    for stage_usage in by_stage.values():
+        _merge_cost_source(grand_total, stage_usage.get("cost_source"))
+        _note_cost_sources(grand_total, stage_usage.get("cost_sources"))
+    if any(s.get("cost_incomplete") for s in by_stage.values()):
+        grand_total["cost_incomplete"] = True
+    if any(s.get("cost_unattributed") for s in by_stage.values()):
+        grand_total["cost_unattributed"] = True
     numeric_keys = (
         "prompt_tokens",
         "completion_tokens",
@@ -274,10 +358,17 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             )
             for key in numeric_keys:  # never iterate the bool cost_known
                 agg[key] += _as_number(model_usage.get(key))
+            agg["requests"] = agg.get("requests", 0) + int(_as_number(model_usage.get("requests")))
             agg["cost_estimated_usd"] = agg.get("cost_estimated_usd", 0.0) + _as_number(
                 model_usage.get("cost_estimated_usd")
             )
+            agg["cost_observed_usd"] = agg.get("cost_observed_usd", 0.0) + _as_number(
+                model_usage.get("cost_observed_usd")
+            )
+            if model_usage.get("cost_unattributed"):
+                agg["cost_unattributed"] = True
             _merge_cost_source(agg, model_usage.get("cost_source"))
+            _note_cost_sources(agg, model_usage.get("cost_sources"))
             if model_usage.get("cost_known"):
                 agg["cost_known"] = True
             if model_usage.get("cost_incomplete"):

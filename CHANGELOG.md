@@ -14,6 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The gate's text output now lists **Files reviewed** and what was omitted, so a CI step summary shows the subject of the verdict.
 - `council-gate.yml` installs `version: latest`. The action's default pin had rotted at 0.45.0, so no gate fix could reach the gate.
 
+## [0.51.0] - 2026-09-28
+
+**External spend telemetry, turned on properly.** skills-telemetry published contract v2 with cost provenance, and adopting it found that v0.50.0's central promise, that an estimate never leaves the process as a bill, held only in tests. This release makes it hold on real runs, adopts v2, and adds the CI check that keeps council and the contract in step. It is the prerequisite for setting `OTEL_EXPORTER_OTLP_ENDPOINT` anywhere.
+
+### Fixed
+
+- **The rule that an estimate never leaves as a bill held only in tests** ([#707](https://github.com/amiable-dev/llm-council/issues/707)). ADR-056's emitter decided whether a cost was provider-reported by reading `cost_source` and `cost_estimated_usd` off the usage `total`. `_build_usage_summary` only ever put those keys on the per-model buckets, so on every real consult and verify the guard read keys that were not there, and a registry estimate would have gone out as `std.external.cost_usd`. It never leaked, because no endpoint was configured anywhere. The same gap meant #694's "(incl. ~$X estimated)" disclosure appeared in its unit test and on no actual run. The total now carries `cost_source`, `cost_sources`, `cost_estimated_usd` and `cost_incomplete`, and the new tests build every usage summary through the real aggregators rather than by hand.
+
+- **`std.external.requests` counts calls, not models** ([#707](https://github.com/amiable-dev/llm-council/issues/707)). It was `len(by_model)`, so a council whose four members each answered, reviewed, and one of them synthesised reported 4 requests for 9 calls. The usage aggregate now counts calls.
+- **A malformed provider cost is unobserved, not a measured zero** ([#707](https://github.com/amiable-dev/llm-council/issues/707)). A string, NaN, bool or negative `cost` was coerced to 0 while still marking the run's cost as known, so it would have gone out as a provider-reported $0.00. Cache-token counts now go through the same coercion as the primary counts; a string count used to raise inside a run that had already been billed.
+
+### Changed
+
+- **External spend telemetry adopts the skills-telemetry contract v2** ([#707](https://github.com/amiable-dev/llm-council/issues/707), `stdtel` 0.5.0). Spans now carry `std.external.cost_source` (`provider` or `local`) beside an observed `cost_usd`, and a registry estimate in its own `std.external.cost_estimated_usd`, so estimate-only and mixed runs report what they know instead of dropping it. A mixed run's `cost_usd` is the observed part only. An incomplete total, where some call reported no cost and had no registry price, sends no cost attributes at all, because v2 cannot mark either amount as a lower bound. A new CI job diffs the allowlist against `stdtel-conform --print-contract` and runs the checker on spans council builds; council's own longhand test remains the gate.
+- **Operator note:** under Claude Code, `OTEL_EXPORTER_OTLP_ENDPOINT` must be set in the llm-council MCP server's `env` block. A shell export is removed before the server starts.
+
 ## [0.50.0] - 2026-09-24
 
 **Council can now account for what it spends.** Before this release the expensive path left no local record at all, the test suite was polluting the record that did exist, the one cost fallback was unreachable, and nothing reported spend outward. Five issues, and a single thread running through them: **a value that was never measured must never be written as a zero, because a zero is a measurement.** That rule had to be stated at four separate layers before it held — the record, the reader, the aggregate, and the external span.

@@ -118,10 +118,22 @@ set but the extra missing, `council_health_check` reports
 `external_telemetry.reason = "sdk_missing"` rather than staying silent — so you
 can tell **"nothing was spent"** from **"nothing was recorded"**.
 
-Only a **provider-reported** cost is emitted. A registry estimate stays local,
-where it sits beside its `cost_source` label; the external contract has no
-attribute for provenance, so an estimate there would be indistinguishable from a
-bill once summed.
+**Under Claude Code, set the endpoint in the MCP server's `env` block**, in
+whichever config registers llm-council (user scope is usually `~/.claude.json`):
+
+```json
+"env": { "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318" }
+```
+
+A shell `export` does **not** work: Claude Code removes this variable from the
+environment it starts MCP servers with, and nothing reports that it did. Use the
+base URL; the SDK appends `/v1/traces`. Restart Claude Code afterwards, because
+an MCP server reads its environment only at launch.
+
+Observed cost goes out as `std.external.cost_usd` with a `cost_source` of
+`provider` or `local`. A registry estimate goes out separately as
+`std.external.cost_estimated_usd` and never in `cost_usd`, so an estimate is
+never summed as a bill. An unobserved amount is omitted, never sent as zero.
 
 ## Gateway Options
 

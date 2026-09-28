@@ -78,6 +78,38 @@ jobs:
       - name: Run type checker
         run: mypy src/llm_council --ignore-missing-imports || echo "Type checking warnings (non-blocking)"
 
+  # #707: detect drift from the skills-telemetry external contract. Council's
+  # own longhand test (tests/test_issue695_external_spend.py, run by Test) is
+  # the GATE; this is a second opinion from the published source. The stdtel
+  # pin is a released version, not a branch, so a run is reproducible: bump it
+  # when a new contract_version is announced on #707.
+  external-contract:
+    name: External Contract
+    runs-on: ubuntu-latest
+    env:
+      STDTEL: "stdtel==0.5.0"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78  # v7
+
+      - name: Install council with the otel extra
+        run: uv pip install --system -e ".[otel]"
+
+      - name: Diff the allowlist against the published contract
+        run: uvx --from "$STDTEL" stdtel-conform --print-contract | python scripts/check_external_contract.py
+
+      - name: Run stdtel-conform on spans council actually builds
+        run: |
+          python scripts/dump_external_spans.py > spans.json
+          uvx --from "$STDTEL" stdtel-conform spans.json
+
   # TODO: Reinstate when CROSS_REPO_TOKEN is configured (see #202)
   # Trigger smoke tests in the proprietary council-cloud repo
   # This ensures OSS changes don't break the cloud integration

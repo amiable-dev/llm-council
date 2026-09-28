@@ -17,9 +17,10 @@ few known-bad ones absent, which is what the upstream project's tests did
 before #87: renaming `std.external.requests` would have satisfied all of them
 while council kept sending the old key.
 
-The set below is therefore transcribed by hand from
-`skills-telemetry` `stdtel/artefact.py` at commit `3d93d8b`, and compared both
-ways. An addition fails with "extend it"; a removal or rename fails with
+The set below is therefore transcribed by hand from the published contract,
+`stdtel` 0.5.0 (`uvx --from "stdtel==0.5.0" stdtel-conform --print-contract`,
+`contract_version` 2), and compared both ways. v1 was transcribed from
+`stdtel/artefact.py` at `3d93d8b`; v2 added the two cost-provenance keys (#707). An addition fails with "extend it"; a removal or rename fails with
 "raise it on #695 first". `skills-telemetry` holds the mirror-image test.
 """
 
@@ -29,9 +30,10 @@ import pytest
 
 from llm_council.observability import external_spend as ext
 
-# Transcribed by hand from stdtel/artefact.py @ 3d93d8b:
-#   ALLOWED[KIND_EXTERNAL] = _COMMON | {external-specific keys}
-# minus SCOPE_KEYS, which stdtel sets on receipt and an emitter must not send.
+# Transcribed by hand from `stdtel-conform --print-contract`, stdtel 0.5.0,
+# contract_version 2, minus the std.scope.* keys, which stdtel sets on receipt
+# and an emitter must not send. Do NOT generate this from the command: a copy
+# pulled at build time lets a rename flow straight through.
 PUBLISHED_EXTERNAL_ATTRIBUTES = {
     # _COMMON
     "std.artefact.kind",
@@ -50,7 +52,12 @@ PUBLISHED_EXTERNAL_ATTRIBUTES = {
     "std.external.duration_ms",
     "gen_ai.request.model",
     "gen_ai.operation.name",
+    # contract_version 2 (#707)
+    "std.external.cost_source",
+    "std.external.cost_estimated_usd",
 }
+
+PUBLISHED_CONTRACT_VERSION = 2
 
 SCOPE_KEYS_SET_BY_STDTEL = {
     "std.scope.name",
@@ -70,6 +77,13 @@ def _clean_env(monkeypatch):
 
 
 def _usage(cost=0.05, cost_known=True, **total_extra):
+    """A hand-built summary, kept for shape tests only. Cost-provenance
+    behaviour is tested through the real aggregators in
+    test_issue707_contract_v2.py, because a hand-built total is what hid #707."""
+    total_extra.setdefault("cost_source", "provider" if cost_known else None)
+    # The emitter reads observed spend only from `cost_observed_usd` (#707).
+    if cost_known and total_extra["cost_source"] == "provider":
+        total_extra.setdefault("cost_observed_usd", cost)
     total = {
         "prompt_tokens": 1000,
         "completion_tokens": 500,
@@ -100,6 +114,12 @@ class TestTheAllowlistMatchesThePublishedContract:
             f"constant does not. If the contract gained an attribute, extend "
             f"EXTERNAL_ATTRIBUTES. If it was renamed, council is still sending "
             f"the old key and the new column is silently null."
+        )
+
+    def test_the_contract_version_is_the_one_transcribed(self):
+        assert ext.CONTRACT_VERSION == PUBLISHED_CONTRACT_VERSION, (
+            "the module claims a contract version this longhand copy was not "
+            "transcribed from. Re-transcribe from --print-contract first."
         )
 
     def test_scope_keys_are_not_ours_to_send(self):
@@ -167,10 +187,9 @@ class TestCostIsOmittedRatherThanFaked:
         )
 
     def test_a_registry_estimate_is_not_reported_as_spend(self):
-        """ADR-056 D4. #694's estimate is honest locally, where it sits beside
-        its `cost_source` label — but the external contract has no provenance
-        attribute, so an estimate arriving as `std.external.cost_usd` is
-        indistinguishable from a bill the moment a warehouse sums it."""
+        """ADR-056 D4, still true under contract v2: an estimate arriving as
+        `std.external.cost_usd` is indistinguishable from a bill the moment a
+        warehouse sums it. v2 gives it its own attribute instead (#707)."""
         attrs = ext.build_span_attributes(
             operation="consult",
             usage_summary=_usage(cost=0.05, cost_source="registry_estimate"),
