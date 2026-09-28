@@ -17,18 +17,24 @@ logger = logging.getLogger(__name__)
 
 
 # Verdict patterns in synthesis text
+# #630: an approval word preceded by NOT is a rejection. Without the
+# lookbehind, "NOT RECOMMENDED" counted as both, and "NOT APPROVED" /
+# "NOT ACCEPTED" / "NOT PASS" matched ONLY the approve patterns, so a rejection
+# read as PASS. Whitespace is collapsed before matching, so one space suffices.
+_NOT = r"(?<!\bNOT )"
+
 APPROVED_PATTERNS = [
-    r"\bAPPROVED\b",
-    r"\bPASS(?:ED)?\b",
-    r"\bACCEPTED\b",
-    r"\bRECOMMENDED\b",
+    _NOT + r"\bAPPROVED\b",
+    _NOT + r"\bPASS(?:ED)?\b",
+    _NOT + r"\bACCEPTED\b",
+    _NOT + r"\bRECOMMENDED\b",
 ]
 
 REJECTED_PATTERNS = [
     r"\bREJECTED\b",
     r"\bFAIL(?:ED)?\b",
     r"\bDENIED\b",
-    r"\bNOT\s+RECOMMENDED\b",
+    r"\bNOT (?:RECOMMENDED|APPROVED|ACCEPTED|PASS(?:ED)?)\b",
 ]
 
 # Default rubric dimensions
@@ -58,7 +64,7 @@ def extract_verdict_from_synthesis(
     # AttributeError. `.get("response", "")` is insufficient: the key is usually
     # present with a None value, so the "" default never applies.
     response = (stage3_result or {}).get("response") or ""
-    response_upper = response.upper()
+    response_upper = re.sub(r"\s+", " ", response.upper())
 
     # Check for explicit verdict markers
     approved_count = 0

@@ -15,6 +15,7 @@ import hmac
 import json
 import logging
 import os
+import secrets
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone, timedelta
 from enum import Enum
@@ -65,8 +66,56 @@ def _get_bias_consent_level() -> int:
         return 1  # LOCAL_ONLY default
 
 
-# Hash secret from environment
-BIAS_HASH_SECRET = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
+def _hash_secret_path() -> Path:
+    """Where the per-install query-hash secret lives: beside the bias store,
+    unless ``LLM_COUNCIL_HASH_SECRET_FILE`` says otherwise (tests set it, so no
+    test writes into the operator's HOME, #693)."""
+    override = os.getenv("LLM_COUNCIL_HASH_SECRET_FILE", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return _get_bias_store_path().parent / "hash_secret"
+
+
+def _resolve_hash_secret() -> Optional[str]:
+    """The HMAC key for query hashing, or None to skip hashing.
+
+    #614: this used to fall back to a PUBLISHED default when
+    ``LLM_COUNCIL_HASH_SECRET`` was unset. With a known key, anyone holding the
+    store can confirm a guessed query is in it, which is the dictionary attack
+    the HMAC exists to prevent. The fallback is now a random per-install
+    secret, created once with mode 0600 and reused, so grouping still works
+    across sessions. If it cannot be read or created, hashing is skipped: a
+    missing hash loses a grouping key, a known key loses the privacy.
+    """
+    configured = os.getenv("LLM_COUNCIL_HASH_SECRET", "").strip()
+    if configured:
+        return configured
+    path = _hash_secret_path()
+    try:
+        existing = path.read_text().strip()
+        if existing:
+            return existing
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        logger.warning("query hashing skipped: cannot read %s (%s)", path, type(exc).__name__)
+        return None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        secret = secrets.token_hex(32)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(secret + "\n")
+        return secret
+    except FileExistsError:
+        # Another process created it between our read and our create.
+        try:
+            return path.read_text().strip() or None
+        except OSError:
+            return None
+    except OSError as exc:
+        logger.warning("query hashing skipped: cannot create %s (%s)", path, type(exc).__name__)
+        return None
 
 
 # =============================================================================
@@ -205,7 +254,8 @@ def hash_query_if_enabled(
     """Generate HMAC hash for query grouping (opt-in only).
 
     Only generates hash at RESEARCH consent level.
-    Uses LLM_COUNCIL_HASH_SECRET env var or default dev secret.
+    Keyed by LLM_COUNCIL_HASH_SECRET, else a random per-install secret
+    (#614). Returns None if no secret can be had.
 
     Args:
         query: The query text to hash
@@ -221,7 +271,9 @@ def hash_query_if_enabled(
     query_sample = query[:100]
 
     # HMAC with deployment-specific secret
-    secret = os.getenv("LLM_COUNCIL_HASH_SECRET", "default-dev-secret-do-not-use-in-prod")
+    secret = _resolve_hash_secret()
+    if secret is None:
+        return None
     hash_bytes = hmac.new(secret.encode(), query_sample.encode(), hashlib.sha256).hexdigest()
 
     # Truncate to 16 chars

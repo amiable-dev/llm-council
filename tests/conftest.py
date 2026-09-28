@@ -45,6 +45,10 @@ def isolate_performance_store(tmp_path, monkeypatch):
     monkeypatch.setenv(
         "LLM_COUNCIL_PERFORMANCE_STORE", str(tmp_path / "performance_metrics.jsonl")
     )
+    # #614: the query-hash secret is created on first use beside the bias
+    # store. Without this, any RESEARCH-consent test would write one into the
+    # operator's real ~/.llm-council.
+    monkeypatch.setenv("LLM_COUNCIL_HASH_SECRET_FILE", str(tmp_path / "hash_secret"))
     # Pin the ENABLED inputs too, not just the path. A developer or CI shell
     # carrying LLM_COUNCIL_PERFORMANCE_TRACKING=false would otherwise silently
     # turn persistence off and fail the tests that assert a record was written
