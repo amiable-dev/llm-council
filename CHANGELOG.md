@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The HTTP API token is compared in constant time** ([#656](https://github.com/amiable-dev/llm-council/issues/656)). `verify_token` used `!=`, which stops at the first differing byte: the textbook timing side channel. It now uses `hmac.compare_digest` on UTF-8 bytes, like the webhook signature check already did, so a non-ASCII token is a 401 rather than a 500.
+- **Query hashing no longer falls back to a published secret** ([#614](https://github.com/amiable-dev/llm-council/issues/614)). With `LLM_COUNCIL_HASH_SECRET` unset, RESEARCH-consent query hashes were keyed by a default string printed in the docs, so anyone holding the bias store could confirm whether a guessed query was in it. The fallback is now a random per-install secret, created once with mode 0600 beside the bias store (`LLM_COUNCIL_HASH_SECRET_FILE` to relocate it). If it cannot be created, hashing is skipped rather than done with a known key. The dead module-level `BIAS_HASH_SECRET` is removed. Hashes made under the old default will not match new ones; they were never private.
+
+### Fixed
+
+- **A negated approval read as PASS on the legacy verdict path** ([#630](https://github.com/amiable-dev/llm-council/issues/630)). "NOT RECOMMENDED" counted as both approve and reject, which the ticket reported. Worse: "NOT APPROVED", "NOT ACCEPTED" and "NOT PASS" matched only the approve patterns, so a rejection came out as **PASS at 0.80 confidence**. Approval words preceded by NOT are now rejections, and whitespace is collapsed before matching. The structured-findings path was never affected.
+
 ## [0.51.0] - 2026-09-28
 
 **External spend telemetry, turned on properly.** skills-telemetry published contract v2 with cost provenance, and adopting it found that v0.50.0's central promise, that an estimate never leaves the process as a bill, held only in tests. This release makes it hold on real runs, adopts v2, and adds the CI check that keeps council and the contract in step. It is the prerequisite for setting `OTEL_EXPORTER_OTLP_ENDPOINT` anywhere.
