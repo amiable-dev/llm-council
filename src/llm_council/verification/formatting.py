@@ -27,6 +27,12 @@ RUBRIC_DIMENSIONS = [
 ]
 
 
+def _list_of(value: Any, kind: type) -> List[Any]:
+    """The items of ``value`` that are ``kind``; [] unless it is a list. A
+    malformed receipt must not crash the banner that reports it."""
+    return [item for item in value if isinstance(item, kind)] if isinstance(value, list) else []
+
+
 def _coverage_lines(coverage: Dict[str, Any]) -> List[str]:
     """#704: name what was reviewed and what was not.
 
@@ -36,8 +42,8 @@ def _coverage_lines(coverage: Dict[str, Any]) -> List[str]:
     """
     if not coverage:
         return []
-    reviewed = coverage.get("reviewed") or []
-    omitted = coverage.get("omitted") or []
+    reviewed = _list_of(coverage.get("reviewed"), str)
+    omitted = _list_of(coverage.get("omitted"), dict)
     lines = [f"### Files reviewed ({len(reviewed)})"]
     lines.extend(f"- {path}" for path in reviewed[:50])
     if len(reviewed) > 50:
@@ -269,7 +275,9 @@ def format_verification_result_compact(result: Dict[str, Any]) -> str:
     verdict = raw_verdict.upper()
     emoji = VERDICT_EMOJIS.get(raw_verdict, "❓")
     confidence = result.get("confidence") or 0.0
-    exit_code = result.get("exit_code", 2)
+    exit_code = result.get("exit_code")
+    if exit_code is None:
+        exit_code = 2
 
     # ADR-040: Append timeout/partial indicators for observability
     suffix = ""

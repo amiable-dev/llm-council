@@ -406,3 +406,25 @@ class TestGateRound3:
             {"error": "no_reviewable_content", "expansion_warnings": [f"w{i}" for i in range(13)]}
         )
         assert "and 3 more" in text
+
+
+class TestGateRound4:
+    """Council gate on #710, round 4 (PASS); its two remaining majors."""
+
+    def test_the_compact_form_normalises_a_null_exit_code(self):
+        from llm_council.verification.formatting import format_verification_result_compact
+
+        line = format_verification_result_compact({"verdict": "pass", "exit_code": None})
+        assert "exit=None" not in line and "exit=2" in line
+
+    def test_a_malformed_receipt_cannot_crash_the_banner_that_reports_it(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {
+                "error": "no_reviewable_content",
+                "coverage": {"reviewed": "a.py", "omitted": ["x.png", None, {"path": "y.bin", "reason": "binary"}]},
+            }
+        )
+        assert "NOTHING REVIEWED" in text
+        assert "y.bin (binary)" in text
