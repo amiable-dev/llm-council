@@ -39,6 +39,11 @@ jobs:
     name: External Contract (advisory)
     runs-on: ubuntu-latest
     continue-on-error: true
+    # Explicit bash runs with `-eo pipefail`; the implicit shell does not, so
+    # an unreachable stdtel in `a | b` would report b's exit code.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
 
