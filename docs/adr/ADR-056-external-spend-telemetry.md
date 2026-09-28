@@ -68,6 +68,8 @@ This is the same rule #692 and #693 turn on, and it is the third layer at which 
 
 **A registry estimate is not an observation of spend.** #694 lets council price a call from `registry.yaml` when the provider reports nothing, labelled `cost_source="registry_estimate"`. That figure is honest locally, where it sits beside its label, but the external contract has no attribute for provenance — a `std.external.cost_usd` carrying an estimate would be indistinguishable from a bill once it reached a warehouse and was summed. **Only provider-reported cost is emitted**; an estimated cost is treated as unobserved and the attribute is omitted.
 
+*Superseded in part by the 2026-09-28 amendment below: contract v2 gives an estimate its own attribute, so it is now sent there rather than dropped. It still never reaches `cost_usd`.*
+
 ### D5 — `session.id` is the Claude session, or absent
 
 Stamped from `CLAUDE_CODE_SESSION_ID`, which Claude Code exports to processes the agent spawns. Council's own ids are not it: the verify path uses an 8-character truncated UUID and the council path a full one, and neither joins to anything on the telemetry side. Their checker rejects a `session.id` that is not in the harness's format, so this mistake fails loudly rather than producing rows that join to nothing.
@@ -119,3 +121,27 @@ The obvious objection is that council should not implement against a contract th
 **Depend on `stdtel` and use its `external_activation()` helper.** Rejected in D7. It would guarantee the attribute set matches — which is real value — at the cost of pulling a harness-integration package into an MCP server. D2's two-way test buys most of that guarantee without the coupling.
 
 **Send an estimated cost with a marker attribute.** Rejected: there is no attribute for it in the allowlist, and adding one is their decision, not council's. Omitting is the behaviour the contract already defines for an unobserved cost.
+
+## Amendment 2026-09-28 — contract v2 (#707)
+
+`skills-telemetry` published `contract_version` 2 (`stdtel` 0.5.0, skills-telemetry#89). It is additive: two attributes for cost provenance.
+
+| council `cost_source` | sent |
+|---|---|
+| `provider` | `std.external.cost_usd` = the billed amount, `std.external.cost_source = "provider"` |
+| `local_zero` | `std.external.cost_usd = 0.0`, `std.external.cost_source = "local"` |
+| `registry_estimate` | `std.external.cost_estimated_usd` only, **no** `cost_usd` |
+| `mixed` | `cost_usd` = the observed part only; `cost_estimated_usd` = the estimated part; `cost_source` describes the observed part (`provider` if any of it was provider-reported) |
+
+`registry_estimate`, `local_zero` and `mixed` stay internal names; `stdtel-conform` rejects them. D4's rule stands: an unobserved amount is omitted, never 0 and never null, and that now applies to `cost_estimated_usd` as well.
+
+**An incomplete total sends no cost attributes at all.** When a call reported no cost and the registry had no price for it, the observed sum is a lower bound, and so is any estimated part, and v2 has no attribute saying so. Sending either would present a lower bound as a total, which is the objection #692 raised locally. A completeness marker is requested for v3 on #707.
+
+**D4 did not hold in production before this amendment.** Its "only provider-reported cost is emitted" rule read `cost_source` and `cost_estimated_usd` off the usage `total`, but `_build_usage_summary` only ever put those keys on the per-model buckets. The rule held in its unit tests, which hand-built a total carrying them, and on no real run. It never leaked, because no endpoint was configured anywhere. The same gap made #694's "(incl. ~$X estimated)" cost-line disclosure appear in tests only. The total now carries `cost_source`, `cost_sources` (the set seen, because `mixed` loses which sources were present), `cost_estimated_usd` and `cost_incomplete`; the #707 tests build every usage summary through the real aggregators.
+
+**Provenance is tracked per amount, not as a set of labels.** The first v2 draft picked `cost_source` from the set of labels a run had seen, and derived `cost_usd` as total minus estimate. The council gate found both unsound. With labels alone, one provider-reported call vouched for the whole sum, including an amount that carried no label at all. And subtraction let a corrupt estimate field leak into, or eat into, the reported cost. The aggregate now keeps `cost_observed_usd` itself, summed per call from `provider` and `local_zero` figures. That figure is what `cost_usd` carries. A usable amount council cannot attribute (no label, an unknown label, or a non-zero `local_zero`) marks the total `cost_unattributed`, and then no cost attribute is sent.
+
+**CI.** The longhand test stays the gate. A second job diffs `EXTERNAL_ATTRIBUTES` against `uvx --from "stdtel==0.5.0" stdtel-conform --print-contract` (excluding the `std.scope.*` keys stdtel sets), and runs `stdtel-conform` on spans built by `scripts/dump_external_spans.py`. The pin is a released version; bump it when a new `contract_version` is announced.
+
+**Operator setup.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` in the llm-council MCP server's `env` block. Claude Code strips that variable from the launching shell's environment before starting an MCP server (verified upstream on 2.1.283), so a shell export silently does nothing.
+
