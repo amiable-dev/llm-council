@@ -901,6 +901,51 @@ async def run_verification(
             tier=request.tier,
         )
 
+        # #704: nothing to review is an error, not a verdict. When the caller
+        # named no paths and discovery resolved none, the prompt's subject is
+        # empty, and a council asked to judge nothing produces an arbitrary
+        # verdict: the required CI gate passed three PRs and failed a fourth
+        # over the same empty subject. Stop before any model is called. An
+        # explicit `target_paths=[]` is the caller asking for zero files
+        # (#584, evidence-only review), so it is not this case.
+        #
+        # Keyed on the receipt SAYING zero files, not on its absence: the real
+        # fetch path always writes one, and "no receipt" is a different failure
+        # (the #555 conservation marker's job), not evidence of an empty subject.
+        _receipt = (evidence_render_info.get("expansion") or {}).get("coverage")
+        if request.target_paths is None and _receipt is not None and not _receipt.get("reviewed"):
+            omitted = _receipt.get("omitted") or []
+            omitted_text = (
+                ", ".join(f"{o['path']} ({o['reason']})" for o in omitted[:20])
+                if omitted
+                else "no changed files were found"
+            )
+            empty_result: Dict[str, Any] = {
+                "verification_id": verification_id,
+                "verdict": "unclear",
+                "confidence": 0.0,
+                "exit_code": 2,
+                "error": "no_reviewable_content",
+                "rubric_scores": {},
+                "blocking_issues": [],
+                "rationale": (
+                    f"No reviewable content resolved from snapshot "
+                    f"{request.snapshot_id}. The council did not run. "
+                    f"Omitted: {omitted_text}. Pass target_paths, or check that "
+                    f"the snapshot is a commit whose changes include text files."
+                ),
+                "transcript_location": str(transcript_dir),
+                "partial": True,
+                "timeout_fired": False,
+                "completed_stages": [],
+                "coverage": _receipt,
+                "expansion_warnings": list(
+                    (evidence_render_info.get("expansion") or {}).get("expansion_warnings") or []
+                ),
+            }
+            _persist_result_safe(store, verification_id, empty_result)
+            return empty_result
+
         # Get tier-appropriate models and timeouts (Issue #325)
         tier_contract = create_tier_contract(request.tier)
         tier_timeout = get_tier_timeout(request.tier)

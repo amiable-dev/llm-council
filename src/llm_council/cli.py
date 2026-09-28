@@ -822,6 +822,12 @@ def install_skills(
             print("No skills to install.")
 
 
+#: `gate` exit code when the council never ran because nothing was reviewable
+#: (#704). Outside 0/1/2 on purpose: llm-council-action treats any other code
+#: as an error, which is the only mapping that cannot read as a result.
+GATE_EXIT_NOTHING_REVIEWED = 3
+
+
 def run_gate(
     snapshot: str,
     file_paths: Optional[list] = None,
@@ -895,6 +901,13 @@ def run_gate(
         else:
             formatted = format_verification_result(result)
             print(formatted)
+
+        # #704: a gate that reviewed nothing must not pass. Exit 2 is UNCLEAR,
+        # which llm-council-action turns into a PASSING check with a warning
+        # unless `fail-on-unclear` is set, so an empty subject gets its own
+        # code, which the action maps to an error.
+        if result.get("error") == "no_reviewable_content":
+            return GATE_EXIT_NOTHING_REVIEWED
 
         # Return appropriate exit code
         exit_code = result.get("exit_code", 2)
