@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Source files stay small enough for the council to review** ([#720](https://github.com/amiable-dev/llm-council/issues/720)). Verify caps input at 50K characters, so a larger file cannot be reviewed; a diff passed as evidence is not accepted in its place. A new test holds every source file to 40K, with the five files already over it grandfathered at their current size as a ceiling that can only fall. `verification/api.py` (55K) is split into `api.py`, `pipeline.py` and `prompt.py` with no behaviour change; imports from `verification.api` keep working, and test patches now target the module that consumes the name.
+
 ## [0.52.0] - 2026-09-28
 
 **The gate reviews code again, and the privacy controls hold.** The required quality gate had been reviewing an empty prompt on every PR, because the subject of a merge commit resolved to nothing; it now reviews the change, and a verify with nothing to review stops before any model call (`gate` exits 3). Stage 2 survives malformed reviewer output instead of crashing a completed run. On security: the API token is compared in constant time, query hashing never falls back to a published key, a negated approval ("NOT APPROVED") no longer reads as PASS, and bias persistence honours consent `OFF`, fails closed, and keeps its store and key private. Hashes made under the old default key will not match new ones.

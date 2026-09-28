@@ -385,6 +385,7 @@ class TestBuildPromptPropagatesTier:
     @pytest.mark.asyncio
     async def test_build_prompt_passes_tier_to_fetcher(self):
         from llm_council.verification import api
+        from llm_council.verification import prompt as verify_prompt
 
         captured = {}
 
@@ -400,7 +401,7 @@ class TestBuildPromptPropagatesTier:
             )
 
         with patch.object(
-            api,
+            verify_prompt,
             "_fetch_files_for_verification_async_with_metadata",
             side_effect=fake_fetch_with_metadata,
         ):
@@ -431,6 +432,7 @@ class TestBuilderRenderInfoCarriesTruncation:
     @pytest.mark.asyncio
     async def test_render_info_expansion_includes_truncation_warning(self):
         from llm_council.verification import api
+        from llm_council.verification import prompt as verify_prompt
 
         warning_substr = "docs/big.md"
 
@@ -445,7 +447,7 @@ class TestBuilderRenderInfoCarriesTruncation:
             )
 
         with patch.object(
-            api,
+            verify_prompt,
             "_fetch_files_for_verification_async_with_metadata",
             side_effect=fake_fetch_with_metadata,
         ):

@@ -30,7 +30,11 @@ class TestFlagRemoved:
         assert hits == [], f"flag still referenced in: {hits}"
 
     def test_api_no_longer_wires_calibrate_into_the_gate(self):
-        api_src = pathlib.Path("src/llm_council/verification/api.py").read_text()
+        # #720: api.py was split; the pipeline half holds the result assembly.
+        api_src = "".join(
+            pathlib.Path(f"src/llm_council/verification/{m}.py").read_text()
+            for m in ("api", "pipeline", "prompt")
+        )
         assert "calibrated_confidence_enabled" not in api_src
         # the reporting fill (confidence_calibrated from the persisted mapping)
         # must survive the demotion — reporting is kept, gating is removed

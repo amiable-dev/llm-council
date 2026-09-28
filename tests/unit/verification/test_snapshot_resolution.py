@@ -55,7 +55,7 @@ class TestBuilderRaisesOnEmptyResolution:
 
         # Mock the expansion to simulate the daemon-doesnt-have-this-SHA case.
         with patch(
-            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+            "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
         ) as mock_fetch:
             mock_fetch.return_value = (
@@ -96,7 +96,7 @@ class TestBuilderRaisesOnEmptyResolution:
         from llm_council.verification.api import _build_verification_prompt
 
         with patch(
-            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+            "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
         ) as mock_fetch:
             mock_fetch.return_value = (
@@ -123,7 +123,7 @@ class TestBuilderRaisesOnEmptyResolution:
         from llm_council.verification.api import _build_verification_prompt
 
         with patch(
-            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+            "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
         ) as mock_fetch:
             mock_fetch.return_value = (
@@ -149,7 +149,7 @@ class TestBuilderRaisesOnEmptyResolution:
         from llm_council.verification.api import _build_verification_prompt
 
         with patch(
-            "llm_council.verification.api._fetch_files_for_verification_async_with_metadata",
+            "llm_council.verification.prompt._fetch_files_for_verification_async_with_metadata",
             new_callable=AsyncMock,
         ) as mock_fetch:
             mock_fetch.return_value = (
@@ -233,12 +233,12 @@ class TestPipelineSurfacesExpansionMetadata:
 
         with (
             patch(
-                "llm_council.verification.api.stage1_collect_responses_with_status"
+                "llm_council.verification.pipeline.stage1_collect_responses_with_status"
             ) as mock_stage1,
-            patch("llm_council.verification.api.stage2_collect_rankings") as mock_stage2,
-            patch("llm_council.verification.api.stage3_synthesize_final") as mock_stage3,
-            patch("llm_council.verification.api.calculate_aggregate_rankings") as mock_agg,
-            patch("llm_council.verification.api.build_verification_result") as mock_build,
+            patch("llm_council.verification.pipeline.stage2_collect_rankings") as mock_stage2,
+            patch("llm_council.verification.pipeline.stage3_synthesize_final") as mock_stage3,
+            patch("llm_council.verification.pipeline.calculate_aggregate_rankings") as mock_agg,
+            patch("llm_council.verification.pipeline.build_verification_result") as mock_build,
             patch("llm_council.verification.api.VerificationContextManager") as mock_ctx_mgr,
             patch(
                 "llm_council.verification.api._build_verification_prompt",
