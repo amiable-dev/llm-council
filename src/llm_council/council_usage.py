@@ -152,10 +152,20 @@ def _merge_cost_source(bucket: Dict[str, Any], source: Optional[str]) -> None:
 
 def _note_cost_sources(bucket: Dict[str, Any], sources: Any) -> None:
     """Union ``sources`` into ``bucket["cost_sources"]`` (sorted, unique)."""
+    if isinstance(sources, str):  # a bare label, not a collection of them
+        sources = [sources]
+    if not isinstance(sources, (list, tuple, set, frozenset)):
+        return
     seen = set(bucket.get("cost_sources") or ())
-    seen.update(s for s in (sources or ()) if isinstance(s, str) and s != "mixed")
+    seen.update(s for s in sources if isinstance(s, str) and s != "mixed")
     if seen:
         bucket["cost_sources"] = sorted(seen)
+
+
+#: Sources whose figure is an observation of spend: a provider's bill, or a
+#: local model's structural zero. `registry_estimate` is known but estimated.
+OBSERVED_COST_SOURCES = ("provider", "local_zero")
+KNOWN_COST_SOURCES = OBSERVED_COST_SOURCES + ("registry_estimate",)
 
 
 def _as_number(value: Any) -> float:
@@ -209,8 +219,18 @@ def _add_cost_to_usage(
     # apart from a measurement is worse than no figure, because it WILL be
     # summed with real ones. A source is recorded only for a usable figure:
     # a label on nothing observed would claim an observation.
-    source = usage.get("cost_source") if usable else None
+    raw_source = usage.get("cost_source")
+    source = raw_source if usable and isinstance(raw_source, str) else None
     estimated = cost if source == "registry_estimate" else 0.0
+    # #707 gate, round 3: provenance is tracked PER AMOUNT, not only as a set of
+    # labels. With labels alone, one provider-reported call made the whole sum
+    # read as provider spend, including amounts that carried no label at all.
+    # `cost_observed_usd` holds exactly the observed money; an amount council
+    # cannot attribute (no label, an unknown label, or a `local_zero` that is
+    # not zero) marks the total `cost_unattributed`, and nothing that needs
+    # provenance is reported from it.
+    attributed = source in KNOWN_COST_SOURCES and not (source == "local_zero" and cost > 0)
+    observed = cost if attributed and source in OBSERVED_COST_SOURCES else 0.0
     # #707 gate: through `_as_number` like the primary counts. A raw `+` on a
     # provider's string count raised TypeError here, on the deliberation path,
     # failing a run that had already completed and been billed.
@@ -222,6 +242,9 @@ def _add_cost_to_usage(
     total_usage["requests"] = total_usage.get("requests", 0) + 1
     total_usage["cost_usd"] = total_usage.get("cost_usd", 0.0) + cost
     total_usage["cost_estimated_usd"] = total_usage.get("cost_estimated_usd", 0.0) + estimated
+    total_usage["cost_observed_usd"] = total_usage.get("cost_observed_usd", 0.0) + observed
+    if usable and not attributed:
+        total_usage["cost_unattributed"] = True
     _merge_cost_source(total_usage, source)
     total_usage["cached_tokens"] = total_usage.get("cached_tokens", 0) + cached
     total_usage["cache_write_tokens"] = total_usage.get("cache_write_tokens", 0) + cache_write
@@ -254,6 +277,9 @@ def _add_cost_to_usage(
         bucket["total_tokens"] += _as_number(usage.get("total_tokens"))
         bucket["cost_usd"] += cost
         bucket["cost_estimated_usd"] = bucket.get("cost_estimated_usd", 0.0) + estimated
+        bucket["cost_observed_usd"] = bucket.get("cost_observed_usd", 0.0) + observed
+        if usable and not attributed:
+            bucket["cost_unattributed"] = True
         _merge_cost_source(bucket, source)
         bucket["cached_tokens"] += cached
         bucket["cache_write_tokens"] = bucket.get("cache_write_tokens", 0) + cache_write
@@ -288,6 +314,9 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "cost_estimated_usd": sum(
             _as_number(s.get("cost_estimated_usd")) for s in by_stage.values()
         ),
+        "cost_observed_usd": sum(
+            _as_number(s.get("cost_observed_usd")) for s in by_stage.values()
+        ),
         "requests": sum(int(_as_number(s.get("requests"))) for s in by_stage.values()),
     }
     for stage_usage in by_stage.values():
@@ -295,6 +324,8 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         _note_cost_sources(grand_total, stage_usage.get("cost_sources"))
     if any(s.get("cost_incomplete") for s in by_stage.values()):
         grand_total["cost_incomplete"] = True
+    if any(s.get("cost_unattributed") for s in by_stage.values()):
+        grand_total["cost_unattributed"] = True
     numeric_keys = (
         "prompt_tokens",
         "completion_tokens",
@@ -324,6 +355,11 @@ def _build_usage_summary(by_stage: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             agg["cost_estimated_usd"] = agg.get("cost_estimated_usd", 0.0) + _as_number(
                 model_usage.get("cost_estimated_usd")
             )
+            agg["cost_observed_usd"] = agg.get("cost_observed_usd", 0.0) + _as_number(
+                model_usage.get("cost_observed_usd")
+            )
+            if model_usage.get("cost_unattributed"):
+                agg["cost_unattributed"] = True
             _merge_cost_source(agg, model_usage.get("cost_source"))
             _note_cost_sources(agg, model_usage.get("cost_sources"))
             if model_usage.get("cost_known"):

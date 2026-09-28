@@ -324,18 +324,14 @@ class TestGateRound1:
         )
         assert _span(summary)["std.external.requests"] == 5
 
-    def test_an_estimate_larger_than_the_total_sends_no_cost(self, caplog):
-        """Not float residue: aggregation corruption. Publishing it as a
-        measured 0.0 would hide it."""
+    def test_the_observed_amount_never_depends_on_the_estimate_field(self):
+        """Round 3 replaced "total minus estimate" with an observed amount the
+        aggregate tracks itself. A corrupt estimate can neither leak into the
+        cost nor subtract from it."""
         summary = _run([("a/one", _call(0.03, "provider"))])
-        summary["total"]["cost_estimated_usd"] = 0.05
-        attrs = _span(summary)
-        assert COST not in attrs
-
-    def test_float_residue_is_still_a_clean_zero(self):
-        summary = _run([("ollama/x", _call(0.0, "local_zero"))])
-        summary["total"]["cost_estimated_usd"] = 1e-18
-        assert _span(summary)[COST] == 0.0
+        for corrupt in (0.05, "x", float("nan"), None):
+            summary["total"]["cost_estimated_usd"] = corrupt
+            assert _span(summary)[COST] == pytest.approx(0.03)
 
     def test_a_cost_with_no_provenance_is_omitted_and_logged(self, caplog):
         import logging
@@ -475,3 +471,70 @@ class TestGateRound2:
             [("ollama/x", _call(0.0, "local_zero"))],
         ):
             assert _span(_run(calls))[SOURCE] in ext.CONTRACT_COST_SOURCES
+
+
+class TestGateRound3:
+    """Council gate on #708, round 3: provenance per amount, not per label set."""
+
+    @pytest.mark.parametrize("stray", [None, "cache_hit", 7])
+    def test_an_unattributed_amount_does_not_ride_in_as_provider_spend(self, stray, caplog):
+        """One provider call used to make the WHOLE sum read as provider
+        spend, including an amount that carried no label at all."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger=ext.logger.name):
+            summary = _run(
+                [("a/one", _call(0.03, "provider")), ("b/two", _call(0.02, stray))]
+            )
+            attrs = _span(summary)
+        assert summary["total"]["cost_unattributed"] is True
+        assert COST not in attrs
+        assert SOURCE not in attrs
+        assert "provenance" in caplog.text
+
+    def test_a_non_zero_local_zero_is_not_local_spend(self):
+        """`local_zero` asserts a structural zero. A positive figure under it
+        is a contradiction, not an observation."""
+        summary = _run([("ollama/x", _call(0.5, "local_zero"))])
+        assert summary["total"]["cost_unattributed"] is True
+        assert COST not in _span(summary)
+
+    def test_the_observed_amount_is_tracked_by_the_aggregate(self):
+        summary = _run(
+            [("a/one", _call(0.03, "provider")), ("ollama/x", _call(0.0, "local_zero"))],
+            [("b/two", _call(0.02, "registry_estimate"))],
+        )
+        assert summary["total"]["cost_observed_usd"] == pytest.approx(0.03)
+        assert summary["by_model"]["a/one"]["cost_observed_usd"] == pytest.approx(0.03)
+
+    def test_an_overflowing_estimate_does_not_suppress_the_rest(self):
+        summary = _run([("a/one", _call(0.03, "provider"))])
+        summary["total"]["cost_estimated_usd"] = 10**400
+        attrs = _span(summary)
+        assert attrs[COST] == pytest.approx(0.03)
+        assert ESTIMATE not in attrs
+
+    def test_a_negative_sub_millisecond_duration_is_not_a_measured_zero(self):
+        attrs = ext.build_span_attributes(
+            operation="consult",
+            usage_summary=_run([("a/one", _call(0.01, "provider"))]),
+            duration_ms=-0.4,
+        )
+        assert "std.external.duration_ms" not in attrs
+
+    def test_a_count_beyond_int64_is_omitted(self):
+        summary = _run([("a/one", _call(0.01, "provider"))])
+        summary["total"]["prompt_tokens"] = 2**63
+        assert "gen_ai.usage.input_tokens" not in _span(summary)
+
+    def test_an_ipv6_endpoint_keeps_its_brackets(self, monkeypatch):
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://[::1]:4318")
+        monkeypatch.setattr(ext, "_sdk_available", lambda: True)
+        assert ext.telemetry_status()["endpoint"] == "http://[::1]:4318"
+
+    def test_a_bare_string_of_sources_is_not_split_into_characters(self):
+        from llm_council.council_usage import _note_cost_sources
+
+        bucket = {}
+        _note_cost_sources(bucket, "provider")
+        assert bucket["cost_sources"] == ["provider"]

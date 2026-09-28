@@ -151,8 +151,9 @@ def _redact_endpoint(endpoint: str) -> str:
         parts = urlsplit(endpoint)
         if not parts.scheme or not parts.hostname:
             return "<configured>"
-        port = f":{parts.port}" if parts.port else ""
-        return f"{parts.scheme}://{parts.hostname}{port}"
+        # From netloc, minus any userinfo, so an IPv6 literal keeps its brackets.
+        host = parts.netloc.rsplit("@", 1)[-1]
+        return f"{parts.scheme}://{host}"
     except ValueError:
         return "<configured>"
 
@@ -192,15 +193,18 @@ def claude_session_id() -> Optional[str]:
     return raw if raw and _CLAUDE_SESSION_RE.fullmatch(raw) else None
 
 
-#: Below this, a negative difference is float residue, not an inconsistency.
-_RESIDUE = 1e-9
+#: OTLP carries integers as int64.
+_INT64_MAX = 2**63 - 1
 
 
 def _finite_amount(value: Any) -> Optional[float]:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    value = float(value)
-    return value if math.isfinite(value) and value >= 0 else None
+    try:
+        amount = float(value)  # OverflowError for an int beyond float range
+    except OverflowError:
+        return None
+    return amount if math.isfinite(amount) and amount >= 0 else None
 
 
 def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
@@ -209,9 +213,11 @@ def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
     Contract v2 (#707) separates what was **observed** from what was
     **estimated**:
 
-    * ``std.external.cost_usd`` carries only observed spend. For a mixed run
-      that is the total minus the estimated portion. Nothing downstream can
-      catch a mistake here, because both numbers would look valid.
+    * ``std.external.cost_usd`` carries only observed spend: the aggregate's
+      own ``cost_observed_usd``, summed per call from provider and local
+      figures. It is never derived by subtracting an estimate from a total,
+      and nothing downstream could catch it if it were wrong, because every
+      candidate number looks valid.
     * ``std.external.cost_source`` says how the observed part was come by:
       ``provider`` if any of it was provider-reported, else ``local`` (a
       structural zero). It is sent only alongside a ``cost_usd``.
@@ -221,8 +227,10 @@ def cost_attributes(usage_summary: Dict[str, Any]) -> Dict[str, Any]:
     Two rules this release has stated at every other layer still hold. An
     unobserved amount is **omitted**, never sent as 0 or null: a zero is a
     measurement. And an **incomplete** total, where some call reported no cost
-    and the registry had no price, sends no ``cost_usd``: the observed sum is
-    then a lower bound, and v2 has no attribute that says so.
+    and the registry had no price, sends no cost attributes at all: both sums
+    are then lower bounds, and v2 has no attribute that says so. An
+    **unattributed** total, where some usable amount had no mappable
+    provenance, sends none either.
     """
     try:
         return _cost_attributes(usage_summary.get("total") or {})
@@ -237,14 +245,31 @@ def _cost_attributes(total: Dict[str, Any]) -> Dict[str, Any]:
     # attribute that says so. So nothing is sent, not even the estimate.
     if total.get("cost_incomplete"):
         return attrs
+    # A usable amount council could not attribute (no label, an unknown one, or
+    # a non-zero `local_zero`) is inside the total with no provenance. Sending
+    # the rest would still describe a total that is not what it says.
+    if total.get("cost_unattributed"):
+        logger.debug("omitting cost attributes: part of the total has no mappable provenance")
+        return attrs
 
     raw_sources = total.get("cost_sources")
-    sources = {x for x in raw_sources if isinstance(x, str)} if isinstance(raw_sources, (list, tuple, set, frozenset)) else set()
+    sources = (
+        {x for x in raw_sources if isinstance(x, str)}
+        if isinstance(raw_sources, (list, tuple, set, frozenset))
+        else set()
+    )
     # A hand-built total (an older caller, or a test fixture) may carry only
     # the collapsed label. The real aggregate always carries the set.
     label = total.get("cost_source")
     if not sources and isinstance(label, str) and label != "mixed":
         sources = {label}
+    unknown = sources - {"provider", "local_zero", "registry_estimate"}
+    if unknown or (not sources and total.get("cost_known")):
+        logger.debug(
+            "omitting a cost with no mappable provenance from the external span: %s",
+            sorted(unknown) or "none",
+        )
+        return attrs
 
     estimated = _finite_amount(total.get("cost_estimated_usd"))
     # Keyed on the SOURCE as well as the amount: a model the registry prices at
@@ -260,33 +285,17 @@ def _cost_attributes(total: Dict[str, Any]) -> Dict[str, Any]:
     elif "local_zero" in sources:
         contract_source = "local"
     else:
-        if sources - {"registry_estimate"} or not sources:
-            # No provenance, or a label council does not know how to map. v2
-            # requires a source beside a cost_usd, and inventing one would
-            # claim an observation, so the cost is omitted, but not silently.
-            logger.debug(
-                "omitting a cost with no mappable provenance from the external span: %s",
-                sorted(sources) or "none",
-            )
-        return attrs
-    assert contract_source in CONTRACT_COST_SOURCES
+        return attrs  # estimate only: nothing was observed
 
-    reported = _finite_amount(total.get("cost_usd"))
-    if reported is None:
+    # The observed amount is tracked on its own by the aggregate, so it is
+    # never derived by subtracting an estimate from a total. A hand-built total
+    # without it may use `cost_usd` only when nothing in it was estimated.
+    observed = _finite_amount(total.get("cost_observed_usd"))
+    if observed is None and "registry_estimate" not in sources:
+        observed = _finite_amount(total.get("cost_usd"))
+    if observed is None:
         return attrs
-    observed = reported - (estimated or 0.0)
-    if observed < -_RESIDUE:
-        # An estimate larger than the total it is part of is not float residue;
-        # the aggregate is inconsistent. Publishing it as a measured 0.0 would
-        # hide that, so the observed amount is withheld.
-        logger.debug(
-            "omitting cost_usd: estimated portion exceeds the total (%s > %s)",
-            estimated,
-            reported,
-        )
-        return attrs
-    # Float subtraction can leave -1e-18 where the answer is zero.
-    attrs["std.external.cost_usd"] = max(0.0, round(observed, 12))
+    attrs["std.external.cost_usd"] = observed
     attrs["std.external.cost_source"] = contract_source
     return attrs
 
@@ -297,9 +306,9 @@ def _count(value: Any) -> Optional[int]:
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value if value >= 0 else None
+        return value if 0 <= value <= _INT64_MAX else None
     if isinstance(value, float) and math.isfinite(value) and value >= 0 and value.is_integer():
-        return int(value)
+        return int(value) if value <= _INT64_MAX else None
     return None
 
 
@@ -322,7 +331,6 @@ def build_span_attributes(
 
     usage_summary = usage_summary or {}
     total = usage_summary.get("total") or {}
-    by_model = usage_summary.get("by_model") or {}
 
     attrs: Dict[str, Any] = {
         "std.artefact.kind": ARTEFACT_KIND,
@@ -339,10 +347,11 @@ def build_span_attributes(
     # requests. A total without the counter omits the attribute; the distinct-
     # model count it used to fall back to is knowingly wrong.
     requests = _count(total.get("requests"))
-    if requests:
+    if requests is not None:
         attrs["std.external.requests"] = requests
-    # A duration may be fractional milliseconds; truncate, but reject the rest.
-    if isinstance(duration_ms, float) and math.isfinite(duration_ms):
+    # A duration may be fractional milliseconds. Reject a negative BEFORE
+    # truncating, or -0.4 would become a measured 0.
+    if isinstance(duration_ms, float) and math.isfinite(duration_ms) and duration_ms >= 0:
         duration_ms = int(duration_ms)
     duration = _count(duration_ms)
     if duration is not None:
@@ -456,5 +465,6 @@ def _build_tracer() -> Optional[Any]:
 def _reset_for_tests() -> None:
     """Drop the memoised tracer so a test can change the environment."""
     global _tracer, _tracer_attempted
-    _tracer = None
-    _tracer_attempted = False
+    with _tracer_lock:
+        _tracer = None
+        _tracer_attempted = False
