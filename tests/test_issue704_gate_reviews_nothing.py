@@ -158,12 +158,11 @@ class TestAnEmptySubjectIsAnErrorNotAVerdict:
         """#584: `target_paths=[]` means "review zero files" (e.g. evidence
         only). The caller asked for it, so it is not this error."""
         _repo, sha = binary_only_repo
-        from llm_council.verification.api import _build_verification_prompt
-
-        _query, info = asyncio.run(
-            _build_verification_prompt(snapshot_id=sha, target_paths=[], tier="balanced")
-        )
-        assert info["expansion"]["coverage"]["reviewed"] == []
+        # Through run_verification, where the guard lives: with `[]` the run
+        # must get PAST the guard and reach the (patched, raising) pipeline. A
+        # regression to a truthiness check would return the error instead.
+        with pytest.raises(AssertionError, match="council ran"):
+            _verify(sha, target_paths=[])
 
 
 class TestTheGateCannotPassOverNothing:
@@ -228,5 +227,90 @@ class TestTheWorkflowGatesTheFixedCode:
         """The action installs llm-council-core from PyPI, defaulting to an old
         pin. Without an explicit `version:` the fix above never reaches the
         gate that needed it."""
-        text = self.WORKFLOW.read_text()
-        assert "version: latest" in text
+        import yaml
+
+        workflow = yaml.safe_load(self.WORKFLOW.read_text())
+        steps = workflow["jobs"]["quality-gate"]["steps"]
+        gate = next(s for s in steps if "llm-council-action" in s.get("uses", ""))
+        assert gate["with"]["version"] == "latest"
+
+
+@pytest.fixture
+def root_commit_repo(tmp_path, monkeypatch):
+    repo = tmp_path / "root"
+    repo.mkdir()
+    _git(repo, "init", "-q", ".")
+    _git(repo, "config", "user.email", "t@t")
+    _git(repo, "config", "user.name", "t")
+    (repo / "main.py").write_text("print('hi')\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "root")
+    monkeypatch.setattr(file_ops, "_cached_git_root", str(repo))
+    monkeypatch.chdir(repo)
+    return repo, _git(repo, "rev-parse", "HEAD")
+
+
+class TestGateRound1:
+    """Council gate on #710, round 1."""
+
+    def test_a_root_commit_reviews_the_files_it_added(self, root_commit_repo):
+        """A root commit has no `^1`. It did add files, and those are its
+        changes; reviewing nothing would now be a hard error."""
+        _repo, sha = root_commit_repo
+        assert _discover(sha)["expanded_paths"] == ["main.py"]
+
+    def test_a_missing_parent_is_reported_as_such(self, pr_repo, monkeypatch):
+        """A shallow clone lacks the parent. That is a discovery failure, and
+        the result must say so rather than read as 'nothing reviewable'."""
+        _repo, merge, _head = pr_repo
+        real = asyncio.create_subprocess_exec
+
+        async def no_parent(*args, **kwargs):
+            if "diff-tree" in args and any(str(a).endswith("^1") for a in args):
+                args = tuple("0" * 40 + "^1" if str(a).endswith("^1") else a for a in args)
+            return await real(*args, **kwargs)
+
+        monkeypatch.setattr(file_ops.asyncio, "create_subprocess_exec", no_parent)
+        warnings = " ".join(_discover(merge)["expansion_warnings"])
+        assert "parent" in warnings
+
+    def test_the_nothing_reviewed_output_names_transcript_and_omissions(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        text = format_verification_result(
+            {
+                "error": "no_reviewable_content",
+                "rationale": "nothing",
+                "transcript_location": "/tmp/t704",
+                "coverage": {
+                    "reviewed": [],
+                    "omitted": [{"path": "logo.png", "reason": "binary", "origin": "discovered"}],
+                },
+            }
+        )
+        assert "/tmp/t704" in text
+        assert "logo.png (binary)" in text
+
+    def test_the_compact_form_does_not_read_as_a_verdict(self):
+        from llm_council.verification.formatting import format_verification_result_compact
+
+        line = format_verification_result_compact(
+            {"error": "no_reviewable_content", "verdict": "unclear", "exit_code": 2}
+        )
+        assert "NOTHING REVIEWED" in line
+        assert "UNCLEAR" not in line
+
+    def test_the_compact_form_survives_a_null_verdict_and_confidence(self):
+        from llm_council.verification.formatting import format_verification_result_compact
+
+        line = format_verification_result_compact({"verdict": None, "confidence": None})
+        assert "UNCLEAR" in line
+
+    def test_a_truncated_omission_list_says_so(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        omitted = [{"path": f"f{i}.png", "reason": "binary"} for i in range(25)]
+        text = format_verification_result(
+            {"verdict": "pass", "confidence": 0.9, "coverage": {"reviewed": ["a.py"], "omitted": omitted}}
+        )
+        assert "and 5 more" in text

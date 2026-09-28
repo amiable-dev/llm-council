@@ -1139,6 +1139,24 @@ async def _fetch_files_for_verification_async(
     return content
 
 
+async def _diff_tree_names(git_root: Optional[str], *revs: str) -> Tuple[int, List[str]]:
+    """`git diff-tree --no-commit-id --name-only -r <revs>`: (returncode, paths)."""
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        *revs,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=git_root,  # Use git root to avoid CWD dependency
+    )
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
+    rc = proc.returncode if proc.returncode is not None else 1
+    return rc, [f for f in stdout.decode("utf-8").strip().split("\n") if f]
+
+
 async def _fetch_files_for_verification_async_with_metadata(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
@@ -1207,45 +1225,40 @@ async def _fetch_files_for_verification_async_with_metadata(
         # Not `-m --first-parent`: diff-tree ignores `--first-parent`, and `-m`
         # alone diffs against EVERY parent, which pulls in whatever the base
         # branch did meanwhile. For an ordinary commit the two-tree form is
-        # identical to the one-argument form. A root commit has no `^1`, so
-        # git fails and discovery finds nothing, exactly as before; the empty-
-        # subject check in the caller then stops the run.
+        # identical to the one-argument form.
+        #
+        # `^1` does not resolve for a root commit, or in a shallow clone that
+        # lacks the parent. Discovery then falls back to the one-argument form
+        # with `--root` (a root commit's changes are every file it added), and
+        # SAYS it fell back: a missing parent is a discovery failure, and must
+        # not read as "nothing reviewable" when the caller then stops.
         try:
             semaphore = await _get_git_semaphore()
             async with semaphore:
-                proc = await asyncio.create_subprocess_exec(
-                    "git",
-                    "diff-tree",
-                    "--no-commit-id",
-                    "--name-only",
-                    "-r",
-                    f"{snapshot_id}^1",
-                    snapshot_id,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=git_root,  # Use git root to avoid CWD dependency
+                rc, changed = await _diff_tree_names(
+                    git_root, f"{snapshot_id}^1", snapshot_id
                 )
-
-                stdout, _ = await asyncio.wait_for(
-                    proc.communicate(), timeout=ASYNC_SUBPROCESS_TIMEOUT
-                )
-
-                if proc.returncode == 0:
-                    changed = [f for f in stdout.decode("utf-8").strip().split("\n") if f]
-                    # #543: THIS is the bug. These paths went straight to the
-                    # fetcher — no text check, no garbage check, no warning — so
-                    # `target_paths=None` (the default at run_verification and the
-                    # MCP verify tool) transmitted secrets, binaries and lockfiles.
-                    # Every candidate producer goes through the selector now.
-                    selected, omitted = await select_blobs(
-                        snapshot_id, [(f, "discovered") for f in changed]
+                if rc != 0:
+                    expansion_metadata["expansion_warnings"].append(
+                        f"could not diff {snapshot_id} against its first parent "
+                        f"(a root commit, or a shallow clone missing the parent); "
+                        f"used the commit's own diff instead"
                     )
-                    files_to_fetch = [b.path for b in selected]
-                    all_omissions = omitted
-                    expansion_metadata["expanded_paths"] = files_to_fetch
-                    expansion_metadata["expansion_warnings"] = [
-                        o.as_warning() for o in omitted
-                    ]
+                    rc, changed = await _diff_tree_names(git_root, "--root", snapshot_id)
+
+            if rc == 0:
+                # #543: THIS is the bug. These paths went straight to the
+                # fetcher — no text check, no garbage check, no warning — so
+                # `target_paths=None` (the default at run_verification and the
+                # MCP verify tool) transmitted secrets, binaries and lockfiles.
+                # Every candidate producer goes through the selector now.
+                selected, omitted = await select_blobs(
+                    snapshot_id, [(f, "discovered") for f in changed]
+                )
+                files_to_fetch = [b.path for b in selected]
+                all_omissions = omitted
+                expansion_metadata["expanded_paths"] = files_to_fetch
+                expansion_metadata["expansion_warnings"].extend(o.as_warning() for o in omitted)
         except Exception as e:
             # #584: this used to be a bare `except Exception: pass` — a real
             # failure (missing git binary, corrupt repo, timeout) left

@@ -27,6 +27,31 @@ RUBRIC_DIMENSIONS = [
 ]
 
 
+def _coverage_lines(coverage: Dict[str, Any]) -> List[str]:
+    """#704: name what was reviewed and what was not.
+
+    A verdict line alone cannot show that the council reviewed nothing, which
+    is how an empty-subject gate passed three PRs unnoticed. With the files
+    listed, a reader of the CI step summary sees the subject of the verdict.
+    """
+    if not coverage:
+        return []
+    reviewed = coverage.get("reviewed") or []
+    omitted = coverage.get("omitted") or []
+    lines = [f"### Files reviewed ({len(reviewed)})"]
+    lines.extend(f"- {path}" for path in reviewed[:50])
+    if len(reviewed) > 50:
+        lines.append(f"- … and {len(reviewed) - 50} more")
+    if omitted:
+        listed = ", ".join(f"{o.get('path')} ({o.get('reason')})" for o in omitted[:20])
+        more = f", … and {len(omitted) - 20} more" if len(omitted) > 20 else ""
+        # Blank line first: directly after a list it would render as part of
+        # the last bullet.
+        lines.extend(["", f"**Omitted ({len(omitted)})**: {listed}{more}"])
+    lines.append("")
+    return lines
+
+
 def format_verification_result(result: Dict[str, Any]) -> str:
     """
     Format verification result for human-readable display.
@@ -84,6 +109,11 @@ def format_verification_result(result: Dict[str, Any]) -> str:
         rationale = result.get("rationale", "")
         if rationale:
             lines.append(f"**Detail**: {rationale}")
+            lines.append("")
+        lines.extend(_coverage_lines(result.get("coverage") or {}))
+        transcript = result.get("transcript_location", "")
+        if transcript:
+            lines.append(f"**Transcript**: {transcript}")
         return "\n".join(lines)
 
     # Header with verdict and emoji
@@ -164,18 +194,7 @@ def format_verification_result(result: Dict[str, Any]) -> str:
     # council reviewed nothing, which is how an empty-subject gate passed three
     # PRs unnoticed. With the files listed, a reader of the CI step summary
     # can see the subject the verdict is about.
-    coverage = result.get("coverage") or {}
-    if coverage:
-        reviewed = coverage.get("reviewed") or []
-        omitted = coverage.get("omitted") or []
-        lines.append(f"### Files reviewed ({len(reviewed)})")
-        lines.extend(f"- {path}" for path in reviewed[:50])
-        if len(reviewed) > 50:
-            lines.append(f"- … and {len(reviewed) - 50} more")
-        if omitted:
-            listed = ", ".join(f"{o.get('path')} ({o.get('reason')})" for o in omitted[:20])
-            lines.append(f"**Omitted ({len(omitted)})**: {listed}")
-        lines.append("")
+    lines.extend(_coverage_lines(result.get("coverage") or {}))
 
     # Transcript location
     transcript = result.get("transcript_location", "")
@@ -209,11 +228,18 @@ def format_verification_result_compact(result: Dict[str, Any]) -> str:
     Returns:
         Single-line formatted string
     """
-    verdict = result.get("verdict", "unclear").upper()
-    emoji = VERDICT_EMOJIS.get(result.get("verdict", "unclear"), "❓")
-    confidence = result.get("confidence", 0.0)
-    exit_code = result.get("exit_code", 2)
     verification_id = result.get("verification_id", "unknown")
+    # #704: a run the council never made is not a verdict, in one line either.
+    if result.get("error") == "no_reviewable_content":
+        return f"🚫 NOTHING REVIEWED (council did not run) [{verification_id}]"
+    if result.get("error") == "input_too_large":
+        return f"🚫 INPUT TOO LARGE (council did not run) [{verification_id}]"
+
+    raw_verdict = (result.get("verdict") or "unclear").lower()
+    verdict = raw_verdict.upper()
+    emoji = VERDICT_EMOJIS.get(raw_verdict, "❓")
+    confidence = result.get("confidence") or 0.0
+    exit_code = result.get("exit_code", 2)
 
     # ADR-040: Append timeout/partial indicators for observability
     suffix = ""
