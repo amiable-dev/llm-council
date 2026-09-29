@@ -15,13 +15,17 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Optional
 
+from llm_council.openrouter import STATUS_TIMEOUT
+
 #: Tiers in increasing global-deadline order (test-pinned against the
 #: contracts). ``frontier`` is deliberately absent: it is a model-lifecycle
 #: tier, not a bigger budget, so it is never suggested and never escalated from.
 TIER_LADDER = ("quick", "balanced", "high", "reasoning")
 
 #: ``error_status`` the chairman call reports when its own timeout fired.
-_STAGE3_TIMEOUT_STATUS = "timeout"
+#: Shared with the provider layer so a rename cannot silently disable the
+#: #686 path while tests keep passing on a duplicated literal.
+_STAGE3_TIMEOUT_STATUS = STATUS_TIMEOUT
 
 
 def retry_hint(
@@ -59,12 +63,17 @@ def retry_hint(
                 f"the same or a lower tier; a lower tier has less time, not more."
             ),
         }
+    where = (
+        f"tier={tier} is the top of the ladder"
+        if tier == TIER_LADDER[-1]
+        else f"tier={tier} is not a deadline tier, so there is nothing to escalate to"
+    )
     return {
         "action": "reduce_scope",
         "suggested_tier": None,
         "reason": reason,
         "message": (
-            f"tier={tier} has no higher tier to escalate to. Reduce the scope "
+            f"{where}. Reduce the scope "
             f"(fewer or smaller target_paths). Do not retry at the same or a "
             f"lower tier; a lower tier has less time, not more."
         ),

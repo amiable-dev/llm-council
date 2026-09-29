@@ -96,12 +96,6 @@ class TestTheResponseCarriesIt:
 
         assert "retry_hint" in VerifyResponse.model_fields
 
-    def test_the_timeout_rationale_no_longer_says_faster_tier(self):
-        import pathlib
-
-        src = pathlib.Path("src/llm_council/verification/api.py").read_text()
-        assert "faster tier" not in src
-
     def test_the_formatted_output_shows_the_hint(self):
         from llm_council.verification.formatting import format_verification_result
 
@@ -120,7 +114,41 @@ class TestTheResponseCarriesIt:
                 "rationale": "",
             }
         )
-        assert "high" in text and "Retry" in text
+        assert "| Next step | Retry at tier=high:" in text
+
+    def test_the_formatted_output_shows_reduce_scope_at_the_top(self):
+        from llm_council.verification.formatting import format_verification_result
+
+        hint = retry_hint("reasoning", unclear_reason="timeout", completed_stages=[])
+        text = format_verification_result(
+            {
+                "verdict": "unclear",
+                "confidence": 0.0,
+                "exit_code": 2,
+                "unclear_reason": "timeout",
+                "retry_hint": hint,
+                "rubric_scores": {},
+                "blocking_issues": [],
+                "rationale": "",
+            }
+        )
+        assert "top of the ladder. Reduce the scope" in text
+        assert "Retry at tier=" not in text
+
+
+def test_every_deadline_tier_is_on_the_ladder():
+    """A new budget tier left off the ladder would silently get reduce_scope."""
+    from llm_council.tier_contract import TIER_AGGREGATORS
+
+    lifecycle_tiers = {"frontier"}
+    assert set(TIER_AGGREGATORS) - lifecycle_tiers == set(TIER_LADDER)
+
+
+def test_the_status_is_shared_with_the_provider_layer():
+    from llm_council.openrouter import STATUS_TIMEOUT
+    from llm_council.verification import escalation
+
+    assert escalation._STAGE3_TIMEOUT_STATUS is STATUS_TIMEOUT
 
 
 API = "llm_council.verification.api"
@@ -176,7 +204,23 @@ class TestEndToEnd:
         assert result["retry_hint"]["suggested_tier"] == "balanced"
         assert result["retry_hint"]["reason"] == "synthesis_starved"
         assert "faster tier" not in result["rationale"]
-        assert "higher tier" in result["rationale"]
+        assert "Retry at tier=balanced" in result["rationale"]
+
+    async def test_a_screening_error_does_not_leak_the_cache_context(self, monkeypatch):
+        """#724 review: the context was set before the try whose finally clears
+        it, so an exception in screening leaked it into the next verify."""
+        from llm_council import cache_context
+
+        async def boom(**kwargs):
+            raise RuntimeError("screen exploded")
+
+        monkeypatch.setattr(f"{API}.screening_mode", lambda: "shadow")
+        monkeypatch.setattr(f"{API}.evaluate_screen", boom)
+        with pytest.raises(RuntimeError, match="screen exploded"):
+            await _verify(
+                "balanced", stage3={"return_value": ({"model": "m", "response": "ok"}, {}, None)}
+            )
+        assert cache_context.get_cache_context() is None
 
     async def test_a_chairman_call_timeout_carries_the_hint(self):
         stage3_result = {"model": "m", "response": "Error", "error_status": "timeout"}
@@ -188,6 +232,20 @@ class TestEndToEnd:
         assert result["unclear_reason"] == "infra_failure"
         assert result["retry_hint"]["action"] == "escalate_tier"
         assert result["retry_hint"]["suggested_tier"] == "high"
+
+    async def test_a_timeout_at_the_top_tier_says_reduce_scope_not_escalate(self):
+        """The rationale must agree with the hint: there is no tier above
+        reasoning, so telling the operator to go higher would be #597 again."""
+        import asyncio
+
+        async def hang(*a, **k):
+            await asyncio.sleep(3600)
+
+        result = await _verify("reasoning", stage3={"side_effect": hang}, multiplier=0.0005)
+        assert result["retry_hint"]["action"] == "reduce_scope"
+        assert "higher tier" not in result["rationale"]
+        assert "Retry at tier=" not in result["rationale"]
+        assert "Reduce the scope" in result["rationale"]
 
     async def test_a_clean_pass_has_no_hint(self):
         result = await _verify(
