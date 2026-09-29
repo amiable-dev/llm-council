@@ -19,6 +19,7 @@ from typing import Dict, Any, Optional, Tuple, List
 
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config
+from .chairman import current_tier, resolve_chairman
 
 
 def _get_cache_config():
@@ -50,7 +51,7 @@ def _council_models() -> list:
 
 
 def _chairman_model() -> str:
-    return _get_council_config().chairman
+    return resolve_chairman()  # #725: the tier in scope, else the default tier's
 
 
 def _synthesis_mode() -> str:
@@ -102,7 +103,10 @@ def get_cache_key(query: str) -> str:
     cache_input = {
         "query": query,
         "council_models": sorted(COUNCIL_MODELS),
-        "chairman": CHAIRMAN_MODEL,
+        # #725: the chairman depends on the tier in scope, so resolve it per
+        # key (CHAIRMAN_MODEL is an import-time snapshot) and key on the tier.
+        "chairman": _chairman_model(),
+        "tier": current_tier(),
         "synthesis_mode": SYNTHESIS_MODE,
         "exclude_self_votes": EXCLUDE_SELF_VOTES,
         "style_normalization": STYLE_NORMALIZATION,

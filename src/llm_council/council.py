@@ -76,7 +76,7 @@ def _get_chairman_model() -> str:
     patched = _check_patched_attr("CHAIRMAN_MODEL")
     if patched is not None:
         return patched
-    return _get_council_config().chairman
+    return resolve_chairman()  # #725, see chairman.py
 
 
 def _get_chairman_disabled() -> bool:
@@ -269,6 +269,7 @@ from llm_council.council_rankings import (  # noqa: E402
     rankings_to_position_tuples,
     should_track_shadow_votes,
 )
+from llm_council.chairman import resolve_chairman, reset_current_tier, set_current_tier  # noqa: E402
 from llm_council.council_stages import (  # noqa: E402
     generate_conversation_title,
     generate_partial_warning,
@@ -394,10 +395,7 @@ async def run_council_with_fallback(
 
     requested_models = len(council_models)
 
-    # #648: Stage 2/3 budgets, derived from the tier's per-model timeout (which
-    # already carries LLM_COUNCIL_TIMEOUT_MULTIPLIER) and floored at the old
-    # hard-coded 120s default. Without this both stages ran at 120s regardless
-    # of tier, so a reasoning-tier chairman was cut off at 40% of its budget.
+    # #648: stage 2/3 budgets from the tier's per-model timeout, floored at 120s.
     stage_timeout = resolve_stage_timeout(per_model_timeout)
 
     # Initialize result structure per ADR-012 schema
@@ -417,7 +415,8 @@ async def run_council_with_fallback(
         },
     }
 
-    # ADR-025a: Start EventBridge for webhook notifications
+    # #725: the tier picks the chairman; reset in the finally below.
+    tier_token = set_current_tier(tier_contract)
     try:
         await event_bridge.start()
 
@@ -904,8 +903,8 @@ async def run_council_with_fallback(
         return result
 
     finally:
-        # ADR-025a: Always shutdown EventBridge to ensure cleanup
-        try:
+        reset_current_tier(tier_token)
+        try:  # ADR-025a: always shut the EventBridge down
             await event_bridge.shutdown()
         except Exception:
             pass  # Shutdown failure shouldn't raise

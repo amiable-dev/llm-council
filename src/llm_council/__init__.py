@@ -32,6 +32,7 @@ from llm_council.council import (
 
 # ADR-032: Migrated to unified_config
 from llm_council.unified_config import get_config
+from llm_council.chairman import resolve_chairman
 
 
 def _get_council_config():
@@ -41,7 +42,7 @@ def _get_council_config():
 
 # Module-level aliases for backwards compatibility (re-exports)
 COUNCIL_MODELS = _get_council_config().models
-CHAIRMAN_MODEL = _get_council_config().chairman
+CHAIRMAN_MODEL = resolve_chairman()  # #725: the default tier's chairman, never None
 SYNTHESIS_MODE = _get_council_config().synthesis_mode
 EXCLUDE_SELF_VOTES = _get_council_config().exclude_self_votes
 STYLE_NORMALIZATION = _get_council_config().style_normalization

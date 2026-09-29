@@ -145,7 +145,13 @@ class TestTierContractAggregatorIntegration:
 
     @pytest.mark.asyncio
     async def test_tier_contract_aggregator_used_in_synthesis(self):
-        """Synthesis should use tier_contract.aggregator_model when provided."""
+        """The contract carries its tier's aggregator.
+
+        This only checks the constant the contract is built from. That the
+        synthesis call USES it is asserted in
+        tests/test_issue725_per_tier_chairman.py (#725, #607): for a long time
+        this test's old docstring claimed that coverage while nothing read the
+        field."""
         from llm_council.tier_contract import create_tier_contract, TIER_AGGREGATORS
 
         quick_contract = create_tier_contract("quick")

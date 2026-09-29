@@ -1437,7 +1437,8 @@ class TestCouncilConfig:
 
         # Defaults from config.py (Aug-2026 model refresh, #635)
         assert "openai/gpt-5.6-sol" in config.models
-        assert config.chairman == "anthropic/claude-opus-5"
+        # #725: unset by default, so each tier synthesises with its aggregator.
+        assert config.chairman is None
         assert config.synthesis_mode == "consensus"
         assert config.exclude_self_votes is True
         assert config.style_normalization is False
@@ -1897,7 +1898,8 @@ class TestADR032Serialization:
 
         assert "council" in config_dict
         assert "models" in config_dict["council"]
-        assert "chairman" in config_dict["council"]
+        # #725: an unset chairman (None) may be omitted from the dump.
+        assert config_dict["council"].get("chairman") is None
 
     def test_timeouts_serializes_to_dict(self):
         """Timeouts config should serialize to dict."""
