@@ -50,7 +50,10 @@ def _council_models() -> list:
 
 
 def _chairman_model() -> str:
-    return _get_council_config().chairman
+    # #725: the resolved chairman (run_full_council has no tier in scope).
+    from .chairman import resolve_chairman
+
+    return resolve_chairman()
 
 
 def _synthesis_mode() -> str:

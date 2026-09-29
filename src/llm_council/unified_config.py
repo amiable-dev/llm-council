@@ -721,10 +721,8 @@ class CouncilConfig(BaseModel):
         default_factory=lambda: default_pool_models()[TierConfig().default],
         alias="LLM_COUNCIL_MODELS",
     )
-    chairman: str = Field(
-        default="anthropic/claude-opus-5",
-        alias="LLM_COUNCIL_CHAIRMAN",
-    )
+    # #725: None=per tier
+    chairman: Optional[str] = Field(default=None, alias="LLM_COUNCIL_CHAIRMAN")
     chairman_disabled: bool = Field(
         default=False,
         alias="LLM_COUNCIL_CHAIRMAN_DISABLED",

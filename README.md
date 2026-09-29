@@ -1360,7 +1360,7 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LLM_COUNCIL_MODELS` | Comma-separated model list | GPT-5.1, Gemini 3 Pro, Claude 4.5, Grok 4 |
-| `LLM_COUNCIL_CHAIRMAN` | Chairman model | google/gemini-3-pro-preview |
+| `LLM_COUNCIL_CHAIRMAN` | Chairman model for every tier (unset: each tier's own aggregator, #725) | unset |
 | `LLM_COUNCIL_MODE` | `consensus` or `debate` | consensus |
 | `LLM_COUNCIL_EXCLUDE_SELF_VOTES` | Exclude self-votes | true |
 | `LLM_COUNCIL_STYLE_NORMALIZATION` | Enable style normalization | false |

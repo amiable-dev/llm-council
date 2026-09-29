@@ -110,7 +110,11 @@ def test_default_models_used():
 
             # Should have default models
             assert len(config.council.models) >= 2
-            assert len(config.council.chairman) > 0
+            # #725: unset by default; it resolves to the tier's aggregator.
+            from llm_council.chairman import resolve_chairman
+
+            assert config.council.chairman is None
+            assert len(resolve_chairman()) > 0
 
     # Cleanup
     unified_config.reload_config()

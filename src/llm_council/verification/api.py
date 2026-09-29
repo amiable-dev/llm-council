@@ -137,6 +137,7 @@ def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any
 # these from verification.api; patch them where they are CONSUMED.
 from .prompt import _build_preflight_info, _build_verification_prompt  # noqa: F401,E402
 from .escalation import retry_hint  # noqa: E402
+from llm_council.chairman import reset_current_tier, set_current_tier  # noqa: E402
 from .pipeline import (  # noqa: F401,E402
     ProgressCallback,
     _emit_posthog_generations,
@@ -408,6 +409,9 @@ async def run_verification(
             "evidence_warnings": None,
         }
 
+        # #725: the tier picks the chairman. wait_for runs the pipeline as a
+        # task, which copies this context; reset in the finally below.
+        tier_token = set_current_tier(request.tier)
         try:
             result = await asyncio.wait_for(
                 _run_verification_pipeline(
@@ -575,6 +579,7 @@ async def run_verification(
             # ADR-049 D2: request-scoped cache context must not leak into a
             # subsequent verification handled by the same task.
             clear_cache_context()
+            reset_current_tier(tier_token)
 
 
 @router.post("/verify", response_model=VerifyResponse)

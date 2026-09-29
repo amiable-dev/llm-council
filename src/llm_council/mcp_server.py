@@ -53,8 +53,10 @@ def _get_council_models() -> list:
 
 
 def _get_chairman_model() -> str:
-    """Get chairman model from unified config."""
-    return get_config().council.chairman
+    """The default tier's chairman, or the configured one (#725)."""
+    from .chairman import resolve_chairman
+
+    return resolve_chairman()
 
 
 def _get_openrouter_api_key() -> str:
