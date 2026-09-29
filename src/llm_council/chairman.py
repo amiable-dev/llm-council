@@ -10,50 +10,96 @@ Precedence, highest first:
 
 1. an explicit ``council.chairman`` (config file or ``LLM_COUNCIL_CHAIRMAN``),
    which applies to every tier — an operator's choice always wins;
-2. the tier in scope: its contract's ``aggregator_model``;
-3. no tier in scope (``run_full_council``, the health probe, import-time
+2. the tier contract in scope: its ``aggregator_model`` (read off the contract
+   the orchestrator holds, so a customised contract is honoured);
+3. no contract in scope (``run_full_council``, the health probe, import-time
    exports): the default tier's aggregator.
 
-The tier in scope is request-scoped (a ContextVar, like ``cache_context``), set
-by the two orchestrators around the work and reset in their ``finally``.
+The contract in scope is request-scoped (a ContextVar, like ``cache_context``),
+set by the two orchestrators around the work and reset in their ``finally``.
 Test patches on ``llm_council.council.CHAIRMAN_MODEL`` still win: that check
 stays in ``council._get_chairman_model``.
+
+Resolution never raises. It runs at import time (``llm_council.CHAIRMAN_MODEL``,
+the cache module), so a bad tier name must degrade to a known aggregator — with
+a log line, because a silently mis-scoped chairman is the bug #725 fixes.
 """
 
 from __future__ import annotations
 
+import logging
 from contextvars import ContextVar, Token
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, Union
 
-_current_tier: ContextVar[Optional[str]] = ContextVar("llm_council_tier", default=None)
+if TYPE_CHECKING:
+    from .tier_contract import TierContract
+
+logger = logging.getLogger(__name__)
+
+#: Used only if even the configured default tier is unknown.
+_LAST_RESORT_TIER = "high"
+
+_current_contract: ContextVar[Optional["TierContract"]] = ContextVar(
+    "llm_council_tier_contract", default=None
+)
 
 
-def set_current_tier(tier: Optional[str]) -> Token:
-    """Scope ``tier`` to the current request; pass the token to reset it."""
-    return _current_tier.set(tier)
+def set_current_tier(tier: Union["TierContract", str, None]) -> Token:
+    """Scope a tier (a contract, or a tier name) to the current request.
+
+    Pass the returned token to ``reset_current_tier`` in a ``finally``.
+    """
+    contract = _contract_for(tier) if isinstance(tier, str) else tier
+    return _current_contract.set(contract)
 
 
 def reset_current_tier(token: Token) -> None:
-    _current_tier.reset(token)
+    _current_contract.reset(token)
 
 
 def current_tier() -> Optional[str]:
-    return _current_tier.get()
+    contract = _current_contract.get()
+    return contract.tier if contract is not None else None
+
+
+def _contract_for(tier: str) -> Optional["TierContract"]:
+    """The contract for a tier name, or None if the name is unknown."""
+    from .tier_contract import TIER_AGGREGATORS, create_tier_contract
+
+    if tier.lower() not in TIER_AGGREGATORS:
+        return None
+    return create_tier_contract(tier)
+
+
+def _default_contract() -> "TierContract":
+    from .unified_config import get_config
+
+    default = get_config().tiers.default
+    contract = _contract_for(default)
+    if contract is None:
+        logger.warning(
+            "chairman: default tier %r is unknown; using %r's aggregator",
+            default,
+            _LAST_RESORT_TIER,
+        )
+        contract = _contract_for(_LAST_RESORT_TIER)
+    assert contract is not None  # _LAST_RESORT_TIER is a shipped tier
+    return contract
 
 
 def resolve_chairman(tier: Optional[str] = None) -> str:
-    """The synthesis model for ``tier`` (default: the tier in scope)."""
-    from .tier_contract import create_tier_contract
+    """The synthesis model for ``tier`` (default: the contract in scope)."""
     from .unified_config import get_config
 
-    config = get_config()
-    configured = (config.council.chairman or "").strip()
+    configured = (get_config().council.chairman or "").strip()
     if configured:
         return configured
-    default_tier = config.tiers.default
-    try:
-        return create_tier_contract(tier or current_tier() or default_tier).aggregator_model
-    except ValueError:
-        # An unknown tier name: fall back to the default tier's aggregator
-        # rather than failing a synthesis over a label.
-        return create_tier_contract(default_tier).aggregator_model
+    if tier is not None:
+        contract = _contract_for(tier)
+        if contract is None:
+            logger.warning("chairman: unknown tier %r; using the default tier's", tier)
+    else:
+        contract = _current_contract.get()
+        if contract is None:
+            logger.debug("chairman: no tier in scope; using the default tier's")
+    return (contract or _default_contract()).aggregator_model

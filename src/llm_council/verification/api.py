@@ -316,9 +316,9 @@ async def run_verification(
             )
         )
 
-        # #724 review: the context is set above but the try/finally that clears
-        # it starts below, so an exception in screening or preflight leaked it
-        # into the next verification on this task (ADR-049 D2).
+        # #724/#725 review: the context is set above but the try/finally that
+        # clears it starts below, so everything in between is guarded: an
+        # exception here must not leak it into the next verify (ADR-049 D2).
         try:
             # ADR-047 P3 (#415): opt-in lightweight screening pre-gate.
             # off (default) = no screen call, byte-identical. shadow = screen +
@@ -389,29 +389,28 @@ async def run_verification(
                     await on_progress(0, len(tier_contract.allowed_models) * 2 + 2, preflight_msg)
                 except Exception:
                     pass
+            # ADR-040 Step 4: Global timeout wrapper with waterfall budgeting
+            global_deadline = (tier_contract.deadline_ms / 1000) * VERIFICATION_TIMEOUT_MULTIPLIER
+            deadline_at = time.monotonic() + global_deadline
+
+            # Shared mutable state that survives asyncio.CancelledError on timeout
+            partial_state: Dict[str, Any] = {
+                "completed_stages": [],
+                "stage1_results": None,
+                "stage2_results": None,
+                "label_to_model": None,
+                # ADR-042: carried through pipeline for transcript + dispositions.
+                "evidence_render_info": evidence_render_info,
+                "evidence_summary": None,
+                "evidence_warnings": None,
+            }
         except BaseException:
             clear_cache_context()
             raise
 
-        # ADR-040 Step 4: Global timeout wrapper with waterfall budgeting
-        global_deadline = (tier_contract.deadline_ms / 1000) * VERIFICATION_TIMEOUT_MULTIPLIER
-        deadline_at = time.monotonic() + global_deadline
-
-        # Shared mutable state that survives asyncio.CancelledError on timeout
-        partial_state: Dict[str, Any] = {
-            "completed_stages": [],
-            "stage1_results": None,
-            "stage2_results": None,
-            "label_to_model": None,
-            # ADR-042: carried through pipeline for transcript + dispositions.
-            "evidence_render_info": evidence_render_info,
-            "evidence_summary": None,
-            "evidence_warnings": None,
-        }
-
         # #725: the tier picks the chairman. wait_for runs the pipeline as a
         # task, which copies this context; reset in the finally below.
-        tier_token = set_current_tier(request.tier)
+        tier_token = set_current_tier(tier_contract)
         try:
             result = await asyncio.wait_for(
                 _run_verification_pipeline(

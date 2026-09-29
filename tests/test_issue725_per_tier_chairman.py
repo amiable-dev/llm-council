@@ -24,6 +24,9 @@ def _no_configured_chairman(monkeypatch):
     monkeypatch.setenv("LLM_COUNCIL_CONFIG", "/nonexistent/llm_council.yaml")
     unified_config.reload_config()
     yield
+    # Restore the environment BEFORE reloading, or the cached config keeps the
+    # test's values (monkeypatch's own finalizer runs after this one).
+    monkeypatch.undo()
     unified_config.reload_config()
 
 
@@ -68,6 +71,45 @@ class TestResolution:
         monkeypatch.setenv("LLM_COUNCIL_CHAIRMAN", "")
         unified_config.reload_config()
         assert resolve_chairman("balanced") == TIER_AGGREGATORS["balanced"]
+
+    def test_a_customised_contracts_aggregator_is_honoured(self):
+        """Review round 1: the resolver rebuilt the contract from the tier name,
+        discarding an aggregator_model the caller had set."""
+        import dataclasses
+
+        custom = dataclasses.replace(
+            create_tier_contract("balanced"), aggregator_model="custom/chair"
+        )
+        token = set_current_tier(custom)
+        try:
+            assert resolve_chairman() == "custom/chair"
+        finally:
+            reset_current_tier(token)
+
+    def test_an_unknown_default_tier_degrades_instead_of_raising(self, monkeypatch):
+        """Resolution runs at import time; a bad tiers.default must not crash
+        the package import."""
+        from llm_council import chairman
+        from llm_council.unified_config import get_config
+
+        monkeypatch.setattr(get_config().tiers, "default", "no-such-tier")
+        assert chairman.resolve_chairman() == TIER_AGGREGATORS[chairman._LAST_RESORT_TIER]
+        assert chairman.resolve_chairman("also-bad") == TIER_AGGREGATORS["high"]
+
+    def test_the_cache_key_follows_the_tier_in_scope(self):
+        """Review round 1 critical: the key embedded an import-time chairman and
+        no tier, so one tier's cached synthesis could be served for another."""
+        from llm_council.cache import get_cache_key
+
+        keys = set()
+        for tier in ("quick", "balanced", "high", "reasoning"):
+            token = set_current_tier(tier)
+            try:
+                keys.add(get_cache_key("same query"))
+            finally:
+                reset_current_tier(token)
+        assert len(keys) == 4
+        assert get_cache_key("same query") == get_cache_key("same query")
 
     def test_the_public_constant_is_still_a_string(self):
         import llm_council
@@ -148,6 +190,20 @@ class TestTheSynthesisCallUsesIt:
             await run_verification(VerifyRequest(snapshot_id="abc1234", tier=tier), store)
 
         assert seen["model"] == create_tier_contract(tier).aggregator_model
+        assert current_tier() is None
+
+    @pytest.mark.asyncio
+    async def test_the_tier_is_reset_when_the_run_raises(self):
+        from llm_council.council import run_council_with_fallback
+
+        with patch(
+            "llm_council.council.stage1_collect_responses_with_status",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("boom"),
+        ):
+            await run_council_with_fallback(
+                "q", bypass_cache=True, tier_contract=create_tier_contract("balanced")
+            )
         assert current_tier() is None
 
     @pytest.mark.asyncio

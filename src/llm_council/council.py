@@ -416,7 +416,7 @@ async def run_council_with_fallback(
     }
 
     # #725: the tier picks the chairman; reset in the finally below.
-    tier_token = set_current_tier(tier_contract.tier if tier_contract else None)
+    tier_token = set_current_tier(tier_contract)
     try:
         await event_bridge.start()
 
