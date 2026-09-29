@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-09-29
+
+**Verify stops running out of time in synthesis, and each tier gets its own chairman.** Balanced and high verifies kept returning `unclear(infra_failure)` on deliberations that had finished. Three causes, fixed together:
+- every tier synthesised with `claude-opus-5` (about 188s median), because the per-tier chairman ADR-022 defined was never read (#725);
+- stage 3 was capped at the per-model budget instead of getting the rest of the deadline (#686);
+- the advice after a timeout said to retry at a faster tier, which has less time, not more (#597).
+
+**Behaviour change:** with no chairman configured, `quick`/`balanced`/`high` now synthesise with `claude-haiku-4.5`/`claude-sonnet-5`/`gpt-5.6-sol`. `LLM_COUNCIL_CHAIRMAN=anthropic/claude-opus-5` restores the previous single chairman.
+
+`verification/api.py` is also split so the council can review it, and a new test keeps every source file under the review cap (#720).
+
 ### Fixed
 
 - **A starved verify told you to retry at a faster tier, which makes it worse** ([#597](https://github.com/amiable-dev/llm-council/issues/597)). A lower tier has a shorter deadline, so re-running the same or a lower tier during a slow-provider window starves the chairman harder; the timeout rationale said "Consider using a faster tier". It now says to retry higher, and the response carries a machine-readable `retry_hint` (`action`, `suggested_tier`, `reason`, `message`) whenever the run ran out of time: when the global deadline fired, or when the chairman call hit its own timeout, which is reported as `infra_failure` but is starvation. A genuine infra failure gets no hint. At `reasoning` the hint is to reduce scope. The hint is advice only; nothing re-runs automatically.
