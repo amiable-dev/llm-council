@@ -17,6 +17,9 @@ Precedence, highest first:
 
 The contract in scope is request-scoped (a ContextVar, like ``cache_context``),
 set by the two orchestrators around the work and reset in their ``finally``.
+It propagates into asyncio tasks (``wait_for`` copies the context) and
+``asyncio.to_thread``, but NOT into a bare ``run_in_executor`` or a manually
+started thread: stage 3 run there would read no tier and use the default's.
 Test patches on ``llm_council.council.CHAIRMAN_MODEL`` still win: that check
 stays in ``council._get_chairman_model``.
 
@@ -49,7 +52,12 @@ def set_current_tier(tier: Union["TierContract", str, None]) -> Token:
 
     Pass the returned token to ``reset_current_tier`` in a ``finally``.
     """
-    contract = _contract_for(tier) if isinstance(tier, str) else tier
+    if isinstance(tier, str):
+        contract = _contract_for(tier)
+        if contract is None:
+            logger.warning("chairman: unknown tier %r in scope; using the default tier's", tier)
+    else:
+        contract = tier
     return _current_contract.set(contract)
 
 
@@ -66,25 +74,25 @@ def _contract_for(tier: str) -> Optional["TierContract"]:
     """The contract for a tier name, or None if the name is unknown."""
     from .tier_contract import TIER_AGGREGATORS, create_tier_contract
 
-    if tier.lower() not in TIER_AGGREGATORS:
+    name = tier.lower()
+    if name not in TIER_AGGREGATORS:
         return None
-    return create_tier_contract(tier)
+    return create_tier_contract(name)
 
 
-def _default_contract() -> "TierContract":
+def _default_aggregator() -> str:
+    from .tier_contract import TIER_AGGREGATORS
     from .unified_config import get_config
 
     default = get_config().tiers.default
     contract = _contract_for(default)
-    if contract is None:
-        logger.warning(
-            "chairman: default tier %r is unknown; using %r's aggregator",
-            default,
-            _LAST_RESORT_TIER,
-        )
-        contract = _contract_for(_LAST_RESORT_TIER)
-    assert contract is not None  # _LAST_RESORT_TIER is a shipped tier
-    return contract
+    if contract is not None:
+        return contract.aggregator_model
+    logger.warning(
+        "chairman: default tier %r is unknown; using %r's aggregator", default, _LAST_RESORT_TIER
+    )
+    # A dict lookup, not an assert: `python -O` strips asserts, and this runs at import.
+    return TIER_AGGREGATORS[_LAST_RESORT_TIER]
 
 
 def resolve_chairman(tier: Optional[str] = None) -> str:
@@ -102,4 +110,4 @@ def resolve_chairman(tier: Optional[str] = None) -> str:
         contract = _current_contract.get()
         if contract is None:
             logger.debug("chairman: no tier in scope; using the default tier's")
-    return (contract or _default_contract()).aggregator_model
+    return contract.aggregator_model if contract is not None else _default_aggregator()

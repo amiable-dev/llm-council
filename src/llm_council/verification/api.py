@@ -577,8 +577,8 @@ async def run_verification(
         finally:
             # ADR-049 D2: request-scoped cache context must not leak into a
             # subsequent verification handled by the same task.
+            reset_current_tier(tier_token)  # first: cannot raise, so it always runs
             clear_cache_context()
-            reset_current_tier(tier_token)
 
 
 @router.post("/verify", response_model=VerifyResponse)

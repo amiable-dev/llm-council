@@ -72,6 +72,14 @@ class TestResolution:
         unified_config.reload_config()
         assert resolve_chairman("balanced") == TIER_AGGREGATORS["balanced"]
 
+    def test_a_mixed_case_tier_name_resolves(self):
+        assert resolve_chairman("Balanced") == TIER_AGGREGATORS["balanced"]
+        token = set_current_tier("HIGH")
+        try:
+            assert resolve_chairman() == TIER_AGGREGATORS["high"]
+        finally:
+            reset_current_tier(token)
+
     def test_a_customised_contracts_aggregator_is_honoured(self):
         """Review round 1: the resolver rebuilt the contract from the tier name,
         discarding an aggregator_model the caller had set."""
@@ -194,6 +202,9 @@ class TestTheSynthesisCallUsesIt:
 
     @pytest.mark.asyncio
     async def test_the_tier_is_reset_when_the_run_raises(self):
+        """run_council_with_fallback turns a stage error into an error result
+        rather than raising (ADR-012), so there is no pytest.raises here; what
+        matters is that the tier does not outlive the run either way."""
         from llm_council.council import run_council_with_fallback
 
         with patch(
