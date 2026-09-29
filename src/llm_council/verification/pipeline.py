@@ -38,6 +38,7 @@ from llm_council.verification.verdict_extractor import (
 from llm_council.verdict import parse_evidence_dispositions
 
 
+from .escalation import retry_hint
 from .constants import (
     MAX_EVIDENCE_CHARS_RATIO,
     TIER_MAX_CHARS,
@@ -551,6 +552,15 @@ async def _run_verification_pipeline(
         "confidence_calibrated": confidence_calibrated,
         "exit_code": exit_code,
         "unclear_reason": unclear_reason,
+        # #597: a chairman call that hit its own timeout is starvation.
+        "retry_hint": retry_hint(
+            request.tier,
+            unclear_reason=unclear_reason,
+            completed_stages=partial_state.get("completed_stages", []),
+            stage3_error_status=(
+                stage3_result.get("error_status") if isinstance(stage3_result, dict) else None
+            ),
+        ),
         "rubric_scores": verification_output["rubric_scores"],
         "blocking_issues": verification_output["blocking_issues"],
         # ADR-051 (#486): structured findings + telemetry diagnostics (empty

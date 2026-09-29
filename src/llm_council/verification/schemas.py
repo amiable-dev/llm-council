@@ -542,6 +542,17 @@ class VerifyResponse(BaseModel):
             " None for pass/fail."
         ),
     )
+    # #597: what to do after a starved run. Advice only; nothing re-runs.
+    retry_hint: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Set when the run ran out of time (global deadline, or the chairman"
+            " call's own timeout). {action: escalate_tier|reduce_scope,"
+            " suggested_tier, reason: synthesis_starved|deadline_exhausted,"
+            " message}. Retry UP a tier: a lower tier has a shorter deadline."
+            " None otherwise, including genuine infra failures."
+        ),
+    )
     # ADR-040: Timeout guardrail fields
     timeout_fired: bool = Field(
         default=False,

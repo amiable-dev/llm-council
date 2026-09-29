@@ -77,10 +77,30 @@ on top of:
 
 - **`infra_failure`** — the chairman call itself errored (billing, auth,
   rate limit). Check your gateway/billing, then **retry**; never treat it as
-  a review outcome.
+  a review outcome. Exception: if `retry_hint` is set, the chairman call
+  *timed out* — that is starvation, so follow the hint (below).
 - **`low_confidence`** — deliberation completed below the confidence
   threshold. Common policy: accept-and-audit when `blocking_issues` is empty.
-- **`timeout`** — the tier deadline fired. Re-tier or reduce input scope.
+- **`timeout`** — the tier deadline fired. Retry at a **higher** tier or
+  reduce input scope; `retry_hint` says which.
+
+### `retry_hint`: retry up, never down (#597)
+
+When a run ran out of time — the global deadline fired, or the chairman call
+hit its own timeout — the response carries a `retry_hint`:
+
+```json
+{"action": "escalate_tier", "suggested_tier": "high",
+ "reason": "synthesis_starved", "message": "Retry at tier=high: ..."}
+```
+
+`reason` is `synthesis_starved` when peer review had finished (only the
+chairman ran out of time) and `deadline_exhausted` otherwise. At `reasoning`
+there is no higher tier, so `action` is `reduce_scope` and `suggested_tier` is
+`null`. Retrying at the **same or a lower** tier during a slow-provider window
+is self-defeating: a lower tier has a *shorter* deadline, so it starves the
+chairman harder. The hint is advice only; nothing is re-run automatically.
+A genuine infra failure (auth, billing, rate limit) gets no hint.
 - **`chairman_disabled`** — `chairman_disabled=true` (config or
   `LLM_COUNCIL_CHAIRMAN_DISABLED`) skipped chairman synthesis, so no verdict
   was ever computed; `rationale` carries the top-ranked peer response for
@@ -261,6 +281,7 @@ that ignore unknown fields keep working.
 | `exit_code` | int | `0` PASS · `1` FAIL · `2` UNCLEAR (CLI/`gate`). |
 | `confidence` | float | Raw council-agreement confidence, 0–1. |
 | `confidence_calibrated` | float? | `confidence` after the fitted monotonic mapping (ADR-047); equals raw until a mapping is fitted. |
+| `retry_hint` | object? | #597: set when the run ran out of time. `{action: escalate_tier\|reduce_scope, suggested_tier, reason: synthesis_starved\|deadline_exhausted, message}`; `None` otherwise. See [retry_hint](#retry_hint-retry-up-never-down-597). |
 | `unclear_reason` | string? | `infra_failure` \| `low_confidence` \| `timeout` \| `chairman_disabled` \| `incomplete_coverage` (#556, see above); `None` for pass/fail. |
 | `rationale` | string | Chairman synthesis explanation. |
 | `transcript_location` | string | Path to the full `.council/logs/<id>/` transcript. |

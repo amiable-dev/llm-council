@@ -136,6 +136,7 @@ def _persist_result_safe(store: Any, verification_id: str, result: Dict[str, Any
 # #720: split below the review cap. Re-exported for callers that import
 # these from verification.api; patch them where they are CONSUMED.
 from .prompt import _build_preflight_info, _build_verification_prompt  # noqa: F401,E402
+from .escalation import retry_hint  # noqa: E402
 from .pipeline import (  # noqa: F401,E402
     ProgressCallback,
     _emit_posthog_generations,
@@ -314,75 +315,82 @@ async def run_verification(
             )
         )
 
-        # ADR-047 P3 (#415): opt-in lightweight screening pre-gate.
-        # off (default) = no screen call, byte-identical. shadow = screen +
-        # log only. active = short-circuit on a unanimous screen pass.
-        # Blocking-capable requests are NEVER screened (invariant in
-        # screen_eligibility). Soft-fail: any screen error => full council.
-        screening_info: Optional[Dict[str, Any]] = None
-        mode = screening_mode()
-        if mode != "off":
-            decision = await evaluate_screen(
-                verification_id=verification_id,
-                verification_query=verification_query,
-                mode=mode,
-                content_chars=len(verification_query),
-                target_paths=request.target_paths,
-                rubric_focus=request.rubric_focus,
-                evidence=request.evidence,
-            )
-            if mode == "active" and decision.screen_pass and decision.scores:
-                decision.acted = True
+        # #724 review: the context is set above but the try/finally that clears
+        # it starts below, so an exception in screening or preflight leaked it
+        # into the next verification on this task (ADR-049 D2).
+        try:
+            # ADR-047 P3 (#415): opt-in lightweight screening pre-gate.
+            # off (default) = no screen call, byte-identical. shadow = screen +
+            # log only. active = short-circuit on a unanimous screen pass.
+            # Blocking-capable requests are NEVER screened (invariant in
+            # screen_eligibility). Soft-fail: any screen error => full council.
+            screening_info: Optional[Dict[str, Any]] = None
+            mode = screening_mode()
+            if mode != "off":
+                decision = await evaluate_screen(
+                    verification_id=verification_id,
+                    verification_query=verification_query,
+                    mode=mode,
+                    content_chars=len(verification_query),
+                    target_paths=request.target_paths,
+                    rubric_focus=request.rubric_focus,
+                    evidence=request.evidence,
+                )
+                if mode == "active" and decision.screen_pass and decision.scores:
+                    decision.acted = True
+                    log_decision(decision)
+                    screen_confidence = round(min(decision.scores.values()) / 10.0, 2)
+                    screen_result = {
+                        "verification_id": verification_id,
+                        "verdict": "pass",
+                        "confidence": screen_confidence,
+                        "exit_code": 0,
+                        "rubric_scores": decision.scores,
+                        "blocking_issues": [],
+                        "rationale": (
+                            "PASS via screening judge (ADR-047 P3): a single "
+                            "quick-tier model scored every rubric dimension at or "
+                            "above the screen minimum, the input was small, and "
+                            "the request was not blocking-capable. AUDIT NOTE: the "
+                            "full council did not deliberate; decision logged to "
+                            ".council/screening/decisions.jsonl."
+                        ),
+                        "transcript_location": str(transcript_dir),
+                        "partial": False,
+                        "timeout_fired": False,
+                        "completed_stages": [],
+                        "screening": {
+                            "mode": mode,
+                            "eligible": True,
+                            "scores": decision.scores,
+                            "acted": True,
+                        },
+                    }
+                    _persist_result_safe(store, verification_id, screen_result)
+                    clear_cache_context()
+                    return screen_result
                 log_decision(decision)
-                screen_confidence = round(min(decision.scores.values()) / 10.0, 2)
-                screen_result = {
-                    "verification_id": verification_id,
-                    "verdict": "pass",
-                    "confidence": screen_confidence,
-                    "exit_code": 0,
-                    "rubric_scores": decision.scores,
-                    "blocking_issues": [],
-                    "rationale": (
-                        "PASS via screening judge (ADR-047 P3): a single "
-                        "quick-tier model scored every rubric dimension at or "
-                        "above the screen minimum, the input was small, and "
-                        "the request was not blocking-capable. AUDIT NOTE: the "
-                        "full council did not deliberate; decision logged to "
-                        ".council/screening/decisions.jsonl."
-                    ),
-                    "transcript_location": str(transcript_dir),
-                    "partial": False,
-                    "timeout_fired": False,
-                    "completed_stages": [],
-                    "screening": {
-                        "mode": mode,
-                        "eligible": True,
-                        "scores": decision.scores,
-                        "acted": True,
-                    },
+                screening_info = {
+                    "mode": mode,
+                    "eligible": decision.eligible,
+                    "reasons": decision.reasons,
+                    "scores": decision.scores,
+                    "screen_pass": decision.screen_pass,
+                    "acted": False,
                 }
-                _persist_result_safe(store, verification_id, screen_result)
-                clear_cache_context()
-                return screen_result
-            log_decision(decision)
-            screening_info = {
-                "mode": mode,
-                "eligible": decision.eligible,
-                "reasons": decision.reasons,
-                "scores": decision.scores,
-                "screen_pass": decision.screen_pass,
-                "acted": False,
-            }
 
-        # ADR-040 Step 6: Pre-flight info as first progress callback
-        if on_progress:
-            preflight_msg = _build_preflight_info(
-                len(verification_query), tier_contract, request.tier
-            )
-            try:
-                await on_progress(0, len(tier_contract.allowed_models) * 2 + 2, preflight_msg)
-            except Exception:
-                pass
+            # ADR-040 Step 6: Pre-flight info as first progress callback
+            if on_progress:
+                preflight_msg = _build_preflight_info(
+                    len(verification_query), tier_contract, request.tier
+                )
+                try:
+                    await on_progress(0, len(tier_contract.allowed_models) * 2 + 2, preflight_msg)
+                except Exception:
+                    pass
+        except BaseException:
+            clear_cache_context()
+            raise
 
         # ADR-040 Step 4: Global timeout wrapper with waterfall budgeting
         global_deadline = (tier_contract.deadline_ms / 1000) * VERIFICATION_TIMEOUT_MULTIPLIER
@@ -484,12 +492,17 @@ async def run_verification(
             except Exception:
                 logger.debug("Failed to salvage advisory signal on timeout", exc_info=True)
 
+            hint = retry_hint(
+                request.tier, unclear_reason="timeout", completed_stages=completed
+            )
             timeout_result = {
                 "verification_id": verification_id,
                 "verdict": "unclear",
                 "confidence": salvaged_confidence,
                 "exit_code": 2,
                 "unclear_reason": "timeout",  # ADR-047 P1 (#413)
+                # #597: retry UP a tier; a lower one has less time, not more.
+                "retry_hint": hint,
                 "rubric_scores": salvaged_rubric,
                 "blocking_issues": [],
                 "rationale": (
@@ -497,7 +510,7 @@ async def run_verification(
                     f"(tier={request.tier}, deadline={tier_contract.deadline_ms}ms "
                     f"x {VERIFICATION_TIMEOUT_MULTIPLIER} multiplier). "
                     f"Completed stages: {completed}.{advisory_note} "
-                    f"Consider using a faster tier or reducing input scope."
+                    f"{hint['message'] if hint else ''}"
                 ),
                 "transcript_location": str(transcript_dir),
                 "partial": True,
