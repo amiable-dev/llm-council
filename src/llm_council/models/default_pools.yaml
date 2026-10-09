@@ -49,8 +49,9 @@
 pools:
   # QUICK: fast models for simple queries.
   quick:
-    # flash-lite 3.2s/$0.0038, v4-flash 12.2s/$0.0007, haiku-4.5 15.1s/$0.0192
-    # (priciest, best reasoner of the three) — all inside the 30s budget.
+    # flash-lite 3.2s/$0.0038, v4-flash 12.2s/$0.0007 (but times out at the
+    # 20s per-model limit ~40% of the time, #736), haiku-5.5 8.1s smoke n=5
+    # (best reasoner of the three; replaced haiku-4.5 15.1s/$0.0192, #734).
     # gpt-5.6-luna is NOT here: it measures 35.3s, over the budget of the tier
     # whose whole point is speed. It remains in `balanced`, where 35.3s fits
     # the 90s budget comfortably. Any pool member can be selected, so the
