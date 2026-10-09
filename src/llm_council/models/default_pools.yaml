@@ -30,6 +30,14 @@
 # rather than an omission: ADR-029 wants >=30 days and >=100 sessions, and the
 # 2026-09-18 intake is six days old.
 #
+# CATALOGUE CHECKED AGAIN 2026-10-09. Default tiers unchanged. Two Anthropic
+# successors added to frontier (below), grok-4.7 price corrected in the
+# registry. Still nothing promoted — and promotion cannot happen yet on any
+# date: the ADR-029 audition package (`audition/`, `graduation.py`) is not
+# imported by any council, verify or selection path, so frontier members
+# accrue no audition sessions. The ">=30 days" clock does not run until that
+# is wired (#730).
+#
 # Latency figures below are means from a real performance store
 # (`~/.llm-council/performance_metrics.jsonl`), snapshot 2026-09-18, and are
 # mirrored in tests/test_tier_pool_hygiene.py::MEASURED_LATENCY_S, which
@@ -97,6 +105,11 @@ pools:
     # because nothing has measured them yet; gemini-3.1-pro-preview sits here
     # for the same reason.
     models:
+      # 2026-10-09 intake: successors of sonnet-5 (balanced) and haiku-4.5
+      # (quick). haiku-5.5 is a tenth of haiku-4.5's price, so it is the
+      # likeliest cost win in this file — but it has to earn the seat.
+      - anthropic/claude-sonnet-5.5
+      - anthropic/claude-haiku-5.5
       # 2026-09-24 intake (#696): the direct successors of models already on a
       # council. ADVISORY here until real sessions earn them a default seat.
       - anthropic/claude-opus-5.5
