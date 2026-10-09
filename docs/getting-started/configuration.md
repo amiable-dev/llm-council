@@ -22,7 +22,7 @@ council:
       quick:
         models:
           - google/gemini-3.5-flash-lite
-          - anthropic/claude-haiku-4.5
+          - anthropic/claude-haiku-5.5
         timeout_seconds: 30
 
   gateways:
@@ -88,7 +88,7 @@ alone they agree: `LLM_COUNCIL_MODELS` defaults to the `high` pool.
 |----------|-------------|
 | `OPENROUTER_API_KEY` | OpenRouter API key |
 | `LLM_COUNCIL_MODELS` | Comma-separated model list |
-| `LLM_COUNCIL_CHAIRMAN` | Chairman model; unset ⇒ each tier's aggregator (quick haiku-4.5, balanced sonnet-5, high gpt-5.6-sol, reasoning opus-5); a value applies to every tier (#725) |
+| `LLM_COUNCIL_CHAIRMAN` | Chairman model; unset ⇒ each tier's aggregator (quick haiku-5.5, balanced sonnet-5.5, high gpt-5.6-sol, reasoning opus-5; #734); a value applies to every tier (#725) |
 | `LLM_COUNCIL_CHAIRMAN_DISABLED` | Skip chairman synthesis, return top-ranked response directly. **Never enable for `council-verify`/`council-gate`** — see [Verification guide](../guides/verify.md#reading-an-unclear-verdict-adr-047). |
 
 ### Feature Flags

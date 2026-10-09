@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Model catalogue checked 2026-10-09.** Default tier pools are unchanged.
-  - `anthropic/claude-sonnet-5.5` and `anthropic/claude-haiku-5.5` registered and added to `frontier` (ADVISORY votes). Haiku 5.5 costs a tenth of Haiku 4.5, which holds a `quick` seat and is the quick-tier chairman. Like every new model, it has to audition before it can take that seat, and audition is not yet wired (#730).
+- **Model catalogue checked 2026-10-09: Claude 5.5 successors promoted (#734).**
+  - **Behaviour change:** `anthropic/claude-haiku-5.5` replaces `claude-haiku-4.5` in `quick` as both member and chairman, at a tenth of the price ($0.10/$0.50 per million tokens). `anthropic/claude-sonnet-5.5` replaces `claude-sonnet-5` in `balanced` as both member and chairman, at the same price.
+    - This is an owner decision that skips the ADR-029 audition, which cannot run until #730 is fixed. A live smoke run gated it instead: 5 councils per tier. Members averaged 8.1s (Haiku 5.5) and 11.0s (Sonnet 5.5) against budgets of 30s and 90s. Every synthesis came from the new chairman.
+    - To restore the old members, set `tiers.pools.quick` / `tiers.pools.balanced` in `llm_council.yaml`. `LLM_COUNCIL_CHAIRMAN=<model>` restores one chairman, but it applies to every tier.
   - `x-ai/grok-4.7` registry price corrected to $2/$6 per million tokens (was $1.60/$4.80), cache read $0.50. xAI is its only provider, so the cost fallback was under-billing it.
   - Prompt caching: Opus 5's minimum cacheable prefix is 512 tokens, not 1,024, so verify prompts between 512 and 1,023 tokens now cache on it. Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1 get their documented 512 instead of the 4,096 fallback.
 

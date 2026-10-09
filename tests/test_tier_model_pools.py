@@ -113,8 +113,8 @@ class TestDefaultTierModelPools:
         # #690: quick's aggregator was luna, labelled "speed-matched" while
         # exceeding the tier's own budget.
         assert TIER_AGGREGATORS == {
-            "quick": "anthropic/claude-haiku-4.5",
-            "balanced": "anthropic/claude-sonnet-5",
+            "quick": "anthropic/claude-haiku-5.5",
+            "balanced": "anthropic/claude-sonnet-5.5",
             "high": "openai/gpt-5.6-sol",
             "reasoning": "anthropic/claude-opus-5",
             "frontier": "anthropic/claude-opus-5",
