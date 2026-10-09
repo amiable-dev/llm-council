@@ -264,12 +264,16 @@ models:
     modalities: ["text", "vision"]
     quality_tier: "frontier"
 
+  # 2026-10-09: corrected from 0.0016/0.0048/0.0004. xAI is the only
+  # provider, so this is a real price, not multi-provider headline drift.
+  # Prompts over 200K tokens bill at 2x (0.004/0.012/0.001); the registry has
+  # one price per class, so long-context calls are under-estimated here.
   - id: "x-ai/grok-4.7"
     context_window: 500000
     pricing:
-      prompt: 0.0016
-      completion: 0.0048
-      cache_read: 0.0004
+      prompt: 0.002
+      completion: 0.006
+      cache_read: 0.0005
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
@@ -283,6 +287,37 @@ models:
       cache_write_5m: 0.0125
       cache_write_1h: 0.02
     supported_parameters: ["temperature", "top_p", "tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  # 2026-10-09 catalogue check. Direct successors of two models that hold
+  # default seats today (sonnet-5 in balanced, haiku-4.5 in quick). Frontier
+  # only, ADVISORY, like the #696 intake. Prices match platform.claude.com.
+  # Cache reads are NOT the house 0.1x: Anthropic prices them at 0.05x on
+  # Sonnet 5.5 (and Opus 5.5), 0.1x on Haiku 5.5. `:batch` variants excluded.
+  - id: "anthropic/claude-sonnet-5.5"
+    context_window: 1000000
+    pricing:
+      prompt: 0.002
+      completion: 0.01
+      cache_read: 0.0001
+      cache_write_5m: 0.0025
+      cache_write_1h: 0.004
+    supported_parameters: ["tools", "reasoning"]
+    modalities: ["text", "vision"]
+    quality_tier: "frontier"
+
+  # Haiku 5.5 bills prompts over 100K tokens at 5x (0.0005/0.0025, cache read
+  # 0.00005); one price per class here, so long prompts are under-estimated.
+  - id: "anthropic/claude-haiku-5.5"
+    context_window: 1000000
+    pricing:
+      prompt: 0.0001
+      completion: 0.0005
+      cache_read: 0.00001
+      cache_write_5m: 0.000125
+      cache_write_1h: 0.0002
+    supported_parameters: ["tools", "reasoning"]
     modalities: ["text", "vision"]
     quality_tier: "frontier"
 

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Model catalogue checked 2026-10-09.** Default tier pools are unchanged.
+  - `anthropic/claude-sonnet-5.5` and `anthropic/claude-haiku-5.5` registered and added to `frontier` (ADVISORY votes). Haiku 5.5 costs a tenth of Haiku 4.5, which holds a `quick` seat and is the quick-tier chairman. Like every new model, it has to audition before it can take that seat, and audition is not yet wired (#730).
+  - `x-ai/grok-4.7` registry price corrected to $2/$6 per million tokens (was $1.60/$4.80), cache read $0.50. xAI is its only provider, so the cost fallback was under-billing it.
+  - Prompt caching: Opus 5's minimum cacheable prefix is 512 tokens, not 1,024, so verify prompts between 512 and 1,023 tokens now cache on it. Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1 get their documented 512 instead of the 4,096 fallback.
+
 ## [0.53.0] - 2026-09-29
 
 **Verify stops running out of time in synthesis, and each tier gets its own chairman.** Balanced and high verifies kept returning `unclear(infra_failure)` on deliberations that had finished. Three causes, fixed together:

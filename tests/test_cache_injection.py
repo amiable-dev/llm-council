@@ -163,6 +163,22 @@ class TestInjection:
         assert anthropic_min_prefix_tokens("anthropic/claude-unknown-99") == 4096
         assert anthropic_min_prefix_tokens("anthropic/claude-opus-4.8") == 1024
 
+    def test_min_prefix_matches_anthropic_docs_2026_10_09(self):
+        # The minimum is not monotonic across generations, so each id is
+        # pinned individually. opus-5 was 1024 here while the docs say 512,
+        # which skipped caching on 512-1023-token verify prefixes.
+        for model in (
+            "anthropic/claude-opus-5",
+            "anthropic/claude-opus-5.5",
+            "anthropic/claude-sonnet-5.5",
+            "anthropic/claude-haiku-5.5",
+            "anthropic/claude-fable-5",
+            "anthropic/claude-fable-5.1",
+        ):
+            assert anthropic_min_prefix_tokens(model) == 512, model
+        assert anthropic_min_prefix_tokens("anthropic/claude-sonnet-5") == 1024
+        assert anthropic_min_prefix_tokens("anthropic/claude-haiku-4.5") == 4096
+
 
 class TestContextLifecycle:
     def test_set_get_clear(self):
