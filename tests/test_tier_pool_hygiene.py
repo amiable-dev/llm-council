@@ -90,6 +90,14 @@ MEASURED_LATENCY_S = {
     "openai/gpt-5.6-sol-pro": 131.7,
     "z-ai/glm-5.3": 147.5,
     "anthropic/claude-opus-5": 195.2,
+    # #734: NOT from the store. Owner-directed promotion overriding the ADR-029
+    # audition, which cannot run (#730). Smoke-measured 2026-10-09 with
+    # run_council_with_fallback from the branch, n=5 per tier, stage-1 latency
+    # of a real council (quick: 8.5/7.9/3.5/8.4/12.2; balanced:
+    # 13.3/7.9/5.3/16.5/11.9). Every run returned content, and every synthesis
+    # was written by the new chairman (never single_model_raw).
+    "anthropic/claude-haiku-5.5": 8.1,
+    "anthropic/claude-sonnet-5.5": 11.0,
 }
 
 # Tracked debt, not exemptions: each entry must STILL be a live violation, or

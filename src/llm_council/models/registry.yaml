@@ -290,9 +290,9 @@ models:
     modalities: ["text", "vision"]
     quality_tier: "frontier"
 
-  # 2026-10-09 catalogue check. Direct successors of two models that hold
-  # default seats today (sonnet-5 in balanced, haiku-4.5 in quick). Frontier
-  # only, ADVISORY, like the #696 intake. Prices match platform.claude.com.
+  # 2026-10-09 catalogue check. Direct successors of sonnet-5 and haiku-4.5,
+  # PROMOTED into their seats (balanced / quick, member + chairman) by owner
+  # decision (#734) after a live smoke run. Prices match platform.claude.com.
   # Cache reads are NOT the house 0.1x: Anthropic prices them at 0.05x on
   # Sonnet 5.5 (and Opus 5.5), 0.1x on Haiku 5.5. `:batch` variants excluded.
   - id: "anthropic/claude-sonnet-5.5"

@@ -103,9 +103,13 @@ if TYPE_CHECKING:
 # forty lines away in a different dict, and missed because a pool review looks
 # at pools. haiku-4.5 (15.1s) is the fastest registry entry that can actually
 # synthesise a council.
+#
+# #734: quick and balanced moved to the 5.5 successors of the same models,
+# promoted by owner decision and gated on a live smoke run (latencies in
+# tests/test_tier_pool_hygiene.py::MEASURED_LATENCY_S).
 TIER_AGGREGATORS: Dict[str, str] = {
-    "quick": "anthropic/claude-haiku-4.5",  # Speed-matched: 15.1s < 30s budget
-    "balanced": "anthropic/claude-sonnet-5",  # Quality-matched
+    "quick": "anthropic/claude-haiku-5.5",  # Speed-matched: must fit 30s budget
+    "balanced": "anthropic/claude-sonnet-5.5",  # Quality-matched
     "high": "openai/gpt-5.6-sol",  # Full capability
     "reasoning": "anthropic/claude-opus-5",  # Can understand reasoning outputs
     "frontier": "anthropic/claude-opus-5",  # Best available for cutting-edge synthesis (ADR-027)

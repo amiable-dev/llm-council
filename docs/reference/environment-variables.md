@@ -29,7 +29,7 @@
 
 | Variable | Description | Default |
 |---|---|---|
-| `LLM_COUNCIL_CHAIRMAN` | Chairman model override: unset ⇒ each tier's aggregator (quick haiku-4.5, balanced sonnet-5, high gpt-5.6-sol, reasoning opus-5); a value applies to every tier (#725) | unset |
+| `LLM_COUNCIL_CHAIRMAN` | Chairman model override: unset ⇒ each tier's aggregator (quick haiku-5.5, balanced sonnet-5.5, high gpt-5.6-sol, reasoning opus-5; #734); a value applies to every tier (#725) | unset |
 | `LLM_COUNCIL_CHAIRMAN_DISABLED` | Skip Stage 3 chairman synthesis; return the top-ranked Stage 1 response directly. **Never enable for BINARY-verdict use (`council-verify`/`council-gate`) — no verdict is computed, the verify API reports `verdict: unclear`, `unclear_reason: chairman_disabled`.** | false |
 | `LLM_COUNCIL_EXCLUDE_SELF_VOTES` | Exclude self-votes in stage 2 | true |
 | `LLM_COUNCIL_MAX_REVIEWERS` | Stratified sampling: max reviewers per response | all |
