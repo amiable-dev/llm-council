@@ -30,6 +30,16 @@
 # rather than an omission: ADR-029 wants >=30 days and >=100 sessions, and the
 # 2026-09-18 intake is six days old.
 #
+# CATALOGUE CHECKED AGAIN 2026-10-09 (#734). Two successors PROMOTED straight
+# into their predecessors' seats, member and chairman, by owner decision:
+# haiku-5.5 replaces haiku-4.5 in `quick` (a tenth of the price) and
+# sonnet-5.5 replaces sonnet-5 in `balanced`. This deliberately skips the
+# ADR-029 audition, which cannot run anyway: the `audition/` package and
+# `graduation.py` are imported by no council, verify or selection path, so
+# frontier members accrue no sessions and the ">=30 days" clock never starts
+# (#730). The promotion was instead gated on a live smoke run at both tiers
+# (latencies below). grok-4.7's registry price was corrected the same day.
+#
 # Latency figures below are means from a real performance store
 # (`~/.llm-council/performance_metrics.jsonl`), snapshot 2026-09-18, and are
 # mirrored in tests/test_tier_pool_hygiene.py::MEASURED_LATENCY_S, which
@@ -39,8 +49,9 @@
 pools:
   # QUICK: fast models for simple queries.
   quick:
-    # flash-lite 3.2s/$0.0038, v4-flash 12.2s/$0.0007, haiku-4.5 15.1s/$0.0192
-    # (priciest, best reasoner of the three) — all inside the 30s budget.
+    # flash-lite 3.2s/$0.0038, v4-flash 12.2s/$0.0007 (but times out at the
+    # 20s per-model limit ~40% of the time, #736), haiku-5.5 8.1s smoke n=5
+    # (best reasoner of the three; replaced haiku-4.5 15.1s/$0.0192, #734).
     # gpt-5.6-luna is NOT here: it measures 35.3s, over the budget of the tier
     # whose whole point is speed. It remains in `balanced`, where 35.3s fits
     # the 90s budget comfortably. Any pool member can be selected, so the
@@ -48,7 +59,7 @@ pools:
     models:
       - google/gemini-3.5-flash-lite
       - deepseek/deepseek-v4-flash
-      - anthropic/claude-haiku-4.5
+      - anthropic/claude-haiku-5.5
     timeout_seconds: 30
     peer_review: lightweight
 
@@ -59,7 +70,7 @@ pools:
     # scored path picks on metadata.
     models:
       - openai/gpt-5.6-luna
-      - anthropic/claude-sonnet-5
+      - anthropic/claude-sonnet-5.5
       - deepseek/deepseek-v4-flash
       - google/gemini-3.7-flash
     timeout_seconds: 90

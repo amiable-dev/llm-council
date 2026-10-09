@@ -166,7 +166,7 @@ class TestTheSynthesisCallUsesIt:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("tier", ["balanced", "high"])
     async def test_verify_synthesises_with_the_tiers_aggregator(self, tier):
-        """The #686 case: balanced verify's chairman is sonnet-5, not opus-5."""
+        """The #686 case: balanced verify's chairman is the tier aggregator, not opus-5."""
         from unittest.mock import MagicMock
 
         from llm_council.verification.api import VerifyRequest, run_verification

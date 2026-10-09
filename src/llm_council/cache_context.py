@@ -46,13 +46,19 @@ _VALID_TTLS = ("5m", "1h")
 MAX_BREAKPOINTS = 4  # Anthropic hard limit per request
 
 # Verified per-model minimum cacheable prefix (tokens) — ADR-049 research
-# matrix, checked 2026-07-04. Unknown models get the CONSERVATIVE maximum:
-# marking a below-minimum prefix is silently uncached, so when in doubt we
-# require the larger prefix rather than emit a useless breakpoint.
+# matrix, re-checked 2026-10-09 against platform.claude.com prompt-caching
+# docs. Unknown models get the CONSERVATIVE maximum: marking a below-minimum
+# prefix is silently uncached, so when in doubt we require the larger prefix
+# rather than emit a useless breakpoint. NOT monotonic across generations —
+# Sonnet 5 is 1024 while its successor and Opus 5 are 512.
 _ANTHROPIC_MIN_PREFIX: Dict[str, int] = {
     "anthropic/claude-fable-5": 512,
+    "anthropic/claude-fable-5.1": 512,
+    "anthropic/claude-opus-5": 512,
+    "anthropic/claude-opus-5.5": 512,
+    "anthropic/claude-sonnet-5.5": 512,
+    "anthropic/claude-haiku-5.5": 512,
     "anthropic/claude-opus-4.8": 1024,
-    "anthropic/claude-opus-5": 1024,
     "anthropic/claude-sonnet-5": 1024,
     "anthropic/claude-haiku-4.5": 4096,
 }

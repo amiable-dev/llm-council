@@ -92,6 +92,27 @@ MEASURED_LATENCY_S = {
     "anthropic/claude-opus-5": 195.2,
 }
 
+# Owner-directed promotions that SKIPPED the ADR-029 audition (which cannot run
+# while #730 stands). Kept apart from the store snapshot above so the override
+# is visible and checkable rather than self-attested: each entry names its
+# deciding issue and carries the raw smoke samples, and
+# `TestOwnerPromotionsAreAuditable` recomputes the mean from them. Samples are
+# stage-1 latency from run_council_with_fallback on the promoting branch
+# (2026-10-09). Every run returned content, and the new chairman wrote every
+# synthesis.
+MIN_SMOKE_SAMPLES = 5
+OWNER_PROMOTIONS = {
+    "anthropic/claude-haiku-5.5": {
+        "issue": "#734", "date": "2026-10-09",
+        "samples_s": [8.5, 7.9, 3.5, 8.4, 12.2], "mean_s": 8.1,
+    },
+    "anthropic/claude-sonnet-5.5": {
+        "issue": "#734", "date": "2026-10-09",
+        "samples_s": [13.3, 7.9, 5.3, 16.5, 11.9], "mean_s": 11.0,
+    },
+}
+MEASURED_LATENCY_S.update({m: p["mean_s"] for m, p in OWNER_PROMOTIONS.items()})
+
 # Tracked debt, not exemptions: each entry must STILL be a live violation, or
 # `test_tracked_debt_is_still_a_real_violation` fails and the entry has to go.
 KNOWN_BUDGET_VIOLATIONS = {
@@ -100,7 +121,10 @@ KNOWN_BUDGET_VIOLATIONS = {
     # makes verify report unclear(infra_failure) on a completed deliberation.
     # The fix is a contract decision — stage floor vs waterfall share vs a
     # faster chairman — not a pool edit.
-    ("high", "anthropic/claude-opus-5"): "#686",
+    # #686 (closed 2026-09-28) fixed the CHAIRMAN half by giving high its own
+    # chairman (#725). Opus 5 is still a high MEMBER, and still over budget,
+    # so the debt moved to #736, which is open. A waiver must cite an open issue.
+    ("high", "anthropic/claude-opus-5"): "#736",
 }
 
 # Matched against tokens of the id's LAST path segment, split on -, :, . and _,
@@ -314,6 +338,35 @@ class TestEveryPoolMemberFitsItsTierBudget:
                     f"{issue} is resolved, drop the waiver"
                 )
         assert not stale, "\n  ".join(stale)
+
+
+class TestOwnerPromotionsAreAuditable:
+    """A promotion that skips audition must say who decided, and must carry
+    evidence the test can recompute. A bare number in MEASURED_LATENCY_S would
+    be self-attested (Council, PR #733 round 1)."""
+
+    @pytest.mark.parametrize("model", sorted(OWNER_PROMOTIONS))
+    def test_promotion_is_recorded_with_recomputable_evidence(self, model):
+        p = OWNER_PROMOTIONS[model]
+        assert re.fullmatch(r"#\d+", p["issue"]), f"{model}: no deciding issue"
+        assert len(p["samples_s"]) >= MIN_SMOKE_SAMPLES, f"{model}: n too small"
+        assert round(sum(p["samples_s"]) / len(p["samples_s"]), 1) == p["mean_s"]
+
+    @pytest.mark.parametrize("model", sorted(OWNER_PROMOTIONS))
+    def test_promoted_model_sits_in_a_default_tier_not_frontier(self, pools, model):
+        homes = [t for t in DEFAULT_TIERS if model in _models(pools, t)]
+        assert homes, f"{model} is recorded as promoted but holds no default seat"
+        assert model not in _models(pools, AUDITION_TIER), (
+            f"{model} is promoted and still auditioning in {AUDITION_TIER}"
+        )
+
+    @pytest.mark.parametrize("model", sorted(OWNER_PROMOTIONS))
+    def test_every_sample_fits_the_tier_budget(self, pools, model):
+        # The mean hides the tail that makes a seat time out (#736).
+        for tier in DEFAULT_TIERS:
+            if model in _models(pools, tier):
+                worst = max(OWNER_PROMOTIONS[model]["samples_s"])
+                assert worst <= _budget(pools, tier), (model, tier, worst)
 
 
 class TestAuditionGatesDefaultTiers:

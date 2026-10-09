@@ -101,6 +101,14 @@ static head alone (~500 tokens) does NOT clear the bar; the head+evidence
 segment usually does. Breakpoint placement must respect this or hits will
 silently be zero.
 
+> **Erratum (2026-10-09):** the minimums above were correct for July 2026
+> but Opus 5 is **512**, not 1,024 (the code carried 1,024 until this
+> date). Current values, from Anthropic's prompt-caching docs: Fable 5/5.1,
+> Opus 5/5.5, Sonnet 5.5, Haiku 5.5 — 512; Opus 4.8, Sonnet 5 — 1,024;
+> Haiku 4.5 — 4,096. `cache_context._ANTHROPIC_MIN_PREFIX` is the live
+> table. Cache-read prices are also no longer a flat 0.1×: 0.05× on Opus
+> 5.5/Sonnet 5.5 and 0.025× on Fable 5.1.
+
 ### 2. Capability modeling — per route, with verified values
 
 Extend `RouterCapabilities` (`gateway/base.py`) with a caching descriptor:
