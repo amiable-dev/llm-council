@@ -96,6 +96,22 @@ def test_docs_has_architecture():
     assert docs_path.exists(), "docs/architecture/ must exist"
 
 
+def test_docs_has_openclaw_oauth_engineering_contracts(mkdocs_config: dict):
+    """Verify OpenClaw OAuth requirements and coverage docs are published."""
+    docs_path = Path(__file__).parent.parent / "docs"
+    required_files = [
+        docs_path / "requirements" / "openclaw-oauth-gateway.md",
+        docs_path / "testing" / "openclaw-oauth-gateway.md",
+    ]
+
+    for file_path in required_files:
+        assert file_path.exists(), f"{file_path.relative_to(docs_path)} must exist"
+
+    nav = str(mkdocs_config.get("nav", []))
+    assert "OpenClaw OAuth Requirements" in nav
+    assert "OpenClaw OAuth Test Coverage" in nav
+
+
 @pytest.mark.slow
 def test_mkdocs_build_succeeds():
     """Verify mkdocs build completes without errors.
