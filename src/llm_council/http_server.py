@@ -20,8 +20,9 @@ Or programmatically:
 """
 
 import hmac
+from contextlib import asynccontextmanager
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Security
 from fastapi.responses import StreamingResponse
@@ -107,7 +108,15 @@ from llm_council.verification.schemas import EvidenceItem
 # FastAPI app instance
 from llm_council import __version__ as _package_version
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """#739: give in-flight background webhook deliveries a moment on shutdown."""
+    yield
+    await drain_webhook_deliveries()
+
+
 app = FastAPI(
+    lifespan=_lifespan,
     title="LLM Council",
     description=(
         "Multi-LLM deliberation over HTTP: 3-stage council runs "
@@ -229,10 +238,6 @@ async def server_card() -> dict:
     from .server_card import build_server_card
 
     return build_server_card()
-
-
-# #739: give in-flight background webhook deliveries a moment on shutdown.
-app.add_event_handler("shutdown", drain_webhook_deliveries)
 
 
 def _authorize_request_webhook(url: str) -> None:

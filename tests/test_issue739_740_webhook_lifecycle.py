@@ -255,3 +255,16 @@ class TestWiredIntoTheRealOrchestrator:
             )
         assert response.status_code == 200
         assert run.call_args.kwargs["webhook_delivery"] == "background"
+
+    def test_server_shutdown_drains_background_deliveries(self):
+        # Via the lifespan API — the on_event/add_event_handler hooks are gone
+        # from current FastAPI/Starlette.
+        from fastapi.testclient import TestClient
+
+        from llm_council import http_server
+
+        with patch.object(http_server, "drain_webhook_deliveries", new_callable=AsyncMock) as drain:
+            with TestClient(http_server.app) as client:
+                assert client.get("/health").status_code == 200
+                drain.assert_not_awaited()
+            drain.assert_awaited_once()
