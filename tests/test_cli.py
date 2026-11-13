@@ -84,7 +84,7 @@ class TestCLIServeOptions:
     """Tests for HTTP serve command options."""
 
     def test_serve_default_host_and_port(self):
-        """Default serve should use 0.0.0.0:8000."""
+        """Default serve binds loopback only: 127.0.0.1:8000 (was 0.0.0.0)."""
         from llm_council import cli
 
         mock_uvicorn = MagicMock()
@@ -104,7 +104,7 @@ class TestCLIServeOptions:
                 cli.main()
 
         call_kwargs = mock_uvicorn.run.call_args[1]
-        assert call_kwargs.get("host") == "0.0.0.0"
+        assert call_kwargs.get("host") == "127.0.0.1"
         assert call_kwargs.get("port") == 8000
 
     def test_serve_custom_port(self):
@@ -152,3 +152,55 @@ class TestCLIServeOptions:
 
         call_kwargs = mock_uvicorn.run.call_args[1]
         assert call_kwargs.get("host") == "127.0.0.1"
+
+
+class TestServeExposureWarning:
+    """Follow-up to GHSA-r7rh-j9cj-h9hh: exposing the server is a deliberate act.
+
+    `serve` used to bind every interface by default with no authentication,
+    which was the precondition for the advisory. It now binds loopback, and
+    says so loudly when asked to bind wider without a token.
+    """
+
+    def _serve(self, host, monkeypatch, token=None):
+        from llm_council import cli
+
+        if token is None:
+            monkeypatch.delenv("LLM_COUNCIL_API_TOKEN", raising=False)
+        else:
+            monkeypatch.setenv("LLM_COUNCIL_API_TOKEN", token)
+        mock_uvicorn = MagicMock()
+        with patch.dict(
+            "sys.modules",
+            {"uvicorn": mock_uvicorn, "llm_council.http_server": MagicMock(app=MagicMock())},
+        ):
+            cli.serve_http(host=host, port=8000)
+        return mock_uvicorn
+
+    def test_function_default_is_loopback(self):
+        import inspect
+
+        from llm_council import cli
+
+        assert inspect.signature(cli.serve_http).parameters["host"].default == "127.0.0.1"
+
+    @pytest.mark.parametrize("host", ["0.0.0.0", "::", "192.168.1.20", "example.internal"])
+    def test_warns_when_exposed_without_a_token(self, host, monkeypatch, capsys):
+        uvicorn = self._serve(host, monkeypatch)
+        err = capsys.readouterr().err
+        assert "LLM_COUNCIL_API_TOKEN" in err
+        assert "without authentication" in err
+        uvicorn.run.assert_called_once()  # a warning, never a refusal
+
+    @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2"])
+    def test_silent_on_loopback(self, host, monkeypatch, capsys):
+        self._serve(host, monkeypatch)
+        assert capsys.readouterr().err == ""
+
+    def test_silent_when_exposed_with_a_token(self, monkeypatch, capsys):
+        self._serve("0.0.0.0", monkeypatch, token="s3cret")
+        assert capsys.readouterr().err == ""
+
+    def test_empty_token_counts_as_no_token(self, monkeypatch, capsys):
+        self._serve("0.0.0.0", monkeypatch, token="")
+        assert "LLM_COUNCIL_API_TOKEN" in capsys.readouterr().err

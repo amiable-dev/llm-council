@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `llm-council serve` now listens on `127.0.0.1` by default, not `0.0.0.0`.** The server used to accept connections on every network interface with no authentication unless you configured otherwise, which was the precondition for GHSA-r7rh-j9cj-h9hh and let anyone on the same network run councils on your API key. **If other machines or containers need to reach the server, start it with `--host 0.0.0.0`** and set `LLM_COUNCIL_API_TOKEN`. The bundled Dockerfile, `railway.json` and Render configuration already pass `--host 0.0.0.0` and are unaffected. Binding a non-loopback address without a token now prints a warning at startup; the server still starts.
+
 ### Fixed
 
 - **`/v1/council/run` now delivers `council.complete` and `council.error` webhooks** ([#740](https://github.com/amiable-dev/llm-council/issues/740)). The endpoint only ever sent `council.deliberation_start`, so a caller using the default `webhook_events` received nothing. `council.complete` carries the result (`stage1`, `stage2`, `stage3`); `council.error` is sent when the run raises or every model fails. Reported by @ogzerber.

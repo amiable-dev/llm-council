@@ -11,11 +11,11 @@ pip install "llm-council-core[http]"
 ## Starting the Server
 
 ```bash
-# Default: 0.0.0.0:8000
+# Default: 127.0.0.1:8000 (this machine only)
 llm-council serve
 
-# Custom host and port
-llm-council serve --host 127.0.0.1 --port 9000
+# Accept connections from other machines (set LLM_COUNCIL_API_TOKEN first)
+llm-council serve --host 0.0.0.0 --port 9000
 ```
 
 ## OpenAPI Specification

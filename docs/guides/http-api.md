@@ -19,6 +19,8 @@ export LLM_COUNCIL_API_TOKEN=$(openssl rand -hex 16)
 llm-council serve --port 8000
 ```
 
+The server listens on `127.0.0.1` by default, so only this machine can reach it. To accept connections from other machines or from another container, pass `--host 0.0.0.0`, and set `LLM_COUNCIL_API_TOKEN` when you do: without a token, anyone who can reach the port can run councils on your API key. The bundled Docker, Railway and Render configurations already pass `--host 0.0.0.0`.
+
 ## Authentication
 
 When `LLM_COUNCIL_API_TOKEN` is set, all protected endpoints require Bearer token authentication:

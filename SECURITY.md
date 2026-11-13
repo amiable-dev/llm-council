@@ -76,6 +76,8 @@ Please include:
 
 ### Network Security
 
+- `llm-council serve` listens on `127.0.0.1` by default. Pass `--host 0.0.0.0` only when other machines need to reach it, and set `LLM_COUNCIL_API_TOKEN` when you do
+
 - Use HTTPS for all external communications
 - Configure webhook HTTPS enforcement: `LLM_COUNCIL_WEBHOOK_HTTPS_ONLY=true`
 - Review gateway configurations for sensitive data exposure

@@ -1228,7 +1228,8 @@ The library includes a built-in HTTP server with SSE streaming:
 # Install with HTTP server support
 pip install "llm-council-core[http]"
 
-# Start the server
+# Start the server (listens on 127.0.0.1; add --host 0.0.0.0 to expose it,
+# and set LLM_COUNCIL_API_TOKEN when you do)
 llm-council serve
 ```
 

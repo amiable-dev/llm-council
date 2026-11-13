@@ -11,7 +11,7 @@ It is a single Python package (`src/llm_council/`) exposing a CLI, an HTTP/REST 
 ## Running & Developing
 
 - Install / setup: `make setup` (deps + `.env`), or `make install` (deps only).
-- Run the HTTP API: `llm-council serve [--host H] [--port 8000]` (default port **8000**). Entry point is `llm_council.cli:main`; the FastAPI app lives in `src/llm_council/http_server.py`.
+- Run the HTTP API: `llm-council serve [--host H] [--port 8000]` (default **127.0.0.1:8000** — loopback since 0.54; was `0.0.0.0`. A non-loopback bind with no `LLM_COUNCIL_API_TOKEN` warns on stderr and still starts; the bundled Dockerfile/railway.json pass `--host 0.0.0.0` explicitly). Entry point is `llm_council.cli:main`; the FastAPI app lives in `src/llm_council/http_server.py`.
 - Other CLI subcommands: `setup-key` (store API key in keychain, ADR-013), `bias-report` (cross-session bias analysis, ADR-018), `install-skills`, `gate`, `ignore` (inspect the verify file-selection trust boundary — `--print-defaults`/`--explain`/`--init`, ADR-053).
 - Quality gates: `make test` / `make test-fast` / `make test-cov`, `make lint` (ruff), `make typecheck` (mypy), `make check` (lint+typecheck), `make fix`. ~120 test files in `tests/`.
 - `tests/test_openrouter.py` verifies OpenRouter connectivity and that a model identifier resolves before you add it to the council.
