@@ -16,12 +16,13 @@ Usage:
 Or programmatically:
     from llm_council.http_server import app
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 """
 
 import hmac
+from contextlib import asynccontextmanager
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Security
 from fastapi.responses import StreamingResponse
@@ -91,6 +92,7 @@ async def verify_token(
 # Dependency for protected endpoints
 auth_dependency = Depends(verify_token)
 from llm_council.webhooks.sse import council_event_generator, get_sse_headers
+from llm_council.webhooks.run_session import drain_webhook_deliveries
 from llm_council.webhooks.types import WebhookConfig
 from llm_council.webhooks.url_guard import (
     ALLOWED_HOSTS_ENV,
@@ -106,7 +108,15 @@ from llm_council.verification.schemas import EvidenceItem
 # FastAPI app instance
 from llm_council import __version__ as _package_version
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """#739: give in-flight background webhook deliveries a moment on shutdown."""
+    yield
+    await drain_webhook_deliveries()
+
+
 app = FastAPI(
+    lifespan=_lifespan,
     title="LLM Council",
     description=(
         "Multi-LLM deliberation over HTTP: 3-stage council runs "
@@ -254,10 +264,10 @@ def _authorize_request_webhook(url: str) -> None:
                 f"{ALLOWED_HOSTS_ENV}."
             ),
         )
-    from llm_council.webhooks.dispatcher import DEFAULT_HTTPS_ONLY
+    from llm_council.webhooks.dispatcher import webhook_settings
 
     try:
-        check_webhook_url(url, https_only=DEFAULT_HTTPS_ONLY)
+        check_webhook_url(url, https_only=webhook_settings()[2])
     except WebhookTargetError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
@@ -343,6 +353,8 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
             models=request.models,
             per_model_timeout=high_tier_per_model,
             webhook_config=webhook_config,
+            # #739: the response must not wait on the caller's webhook receiver.
+            webhook_delivery="background",
             verdict_type=verdict_type_enum,
             include_dissent=request.include_dissent or False,
         )

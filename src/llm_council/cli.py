@@ -225,8 +225,12 @@ def main():
     )
     serve_parser.add_argument(
         "--host",
-        default="0.0.0.0",
-        help="Host to bind to (default: 0.0.0.0)",
+        default="127.0.0.1",
+        help=(
+            "Host to bind to (default: 127.0.0.1, this machine only). "
+            "Use 0.0.0.0 to accept connections from other machines, and set "
+            "LLM_COUNCIL_API_TOKEN when you do"
+        ),
     )
     serve_parser.add_argument(
         "--port",
@@ -576,8 +580,25 @@ def cmd_ignore(args) -> int:
     return 0
 
 
-def serve_http(host: str = "0.0.0.0", port: int = 8000):
+def _is_loopback_host(host: str) -> bool:
+    """True when ``host`` only accepts connections from this machine."""
+    import ipaddress
+
+    if host.strip().lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+def serve_http(host: str = "127.0.0.1", port: int = 8000):
     """Start the HTTP server.
+
+    Binds loopback by default: exposing the server is a deliberate act
+    (``--host 0.0.0.0``). Binding wider with no ``LLM_COUNCIL_API_TOKEN``
+    prints a warning and still starts — the unauthenticated, all-interfaces
+    default was the precondition for GHSA-r7rh-j9cj-h9hh.
 
     Requires the [http] extra: pip install 'llm-council-core[http]'
     """
@@ -590,6 +611,17 @@ def serve_http(host: str = "0.0.0.0", port: int = 8000):
         print("\nTo use the HTTP server, install with:", file=sys.stderr)
         print("    pip install 'llm-council-core[http]'", file=sys.stderr)
         sys.exit(1)
+
+    import os
+
+    if not _is_loopback_host(host) and not os.environ.get("LLM_COUNCIL_API_TOKEN"):
+        print(
+            f"WARNING: binding {host} without authentication. Anyone who can reach "
+            f"port {port} can run councils on your API key.\n"
+            "         Set LLM_COUNCIL_API_TOKEN to require a bearer token, or bind "
+            "127.0.0.1 to keep the server local.",
+            file=sys.stderr,
+        )
 
     uvicorn.run(app, host=host, port=port)
 
