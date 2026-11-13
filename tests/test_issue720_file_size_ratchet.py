@@ -23,7 +23,7 @@ LIMIT = 40_000
 #: Oversized when #720 landed. Each entry is a debt to split, not a licence.
 CEILINGS = {
     "unified_config.py": 68_651,
-    "verification/file_ops.py": 55_710,
+    "verification/file_ops.py": 55_676,
     "council.py": 54_253,
     "council_stages.py": 51_417,
     "mcp_server.py": 46_083,

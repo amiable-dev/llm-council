@@ -510,9 +510,9 @@ class TestConcurrencyLimiting:
         from llm_council.verification.api import MAX_CONCURRENT_GIT_OPS
 
         # Should be between 1 and 50 (reasonable for preventing DoS)
-        assert (
-            1 <= MAX_CONCURRENT_GIT_OPS <= 50
-        ), f"MAX_CONCURRENT_GIT_OPS={MAX_CONCURRENT_GIT_OPS} should be between 1 and 50"
+        assert 1 <= MAX_CONCURRENT_GIT_OPS <= 50, (
+            f"MAX_CONCURRENT_GIT_OPS={MAX_CONCURRENT_GIT_OPS} should be between 1 and 50"
+        )
 
 
 class TestStreamingMemoryBounded:
@@ -547,7 +547,12 @@ class TestStreamingMemoryBounded:
         mock_proc.stdout = mock_stdout
         mock_proc.stderr = mock_stderr
         mock_proc.returncode = 0
-        mock_proc.kill = MagicMock()
+        # What had been read when the process was killed. Bytes read AFTER the
+        # kill are the drain that lets the pipe close (see
+        # tests/test_git_show_large_file_hang.py): they are discarded, never
+        # kept, so they are not part of the memory bound this test is about.
+        read_at_kill: list = []
+        mock_proc.kill = MagicMock(side_effect=lambda: read_at_kill.append(sum(bytes_read_tracker)))
         mock_proc.wait = AsyncMock()
 
         with (
@@ -573,11 +578,14 @@ class TestStreamingMemoryBounded:
 
             # Should have read in chunks (8KB each based on implementation)
             assert len(bytes_read_tracker) > 1, "Should read in multiple chunks"
-            # Total bytes read should be approximately MAX_FILE_CHARS + 1 (for truncation check)
-            total_read = sum(bytes_read_tracker)
-            assert (
-                total_read <= MAX_FILE_CHARS + 8192 + 1
-            ), f"Should not buffer entire file: read {total_read} bytes"
+            # Bytes read before the kill should be approximately
+            # MAX_FILE_CHARS + 1 (for the truncation check)...
+            assert read_at_kill, "process should be killed once the limit is reached"
+            assert read_at_kill[0] <= MAX_FILE_CHARS + 8192 + 1, (
+                f"Should not buffer entire file: read {read_at_kill[0]} bytes before the kill"
+            )
+            # ...and nothing read afterwards is kept.
+            assert len(content) <= MAX_FILE_CHARS + 200
             assert truncated is True
 
     @pytest.mark.asyncio
