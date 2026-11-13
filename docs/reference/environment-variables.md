@@ -189,6 +189,7 @@ Opt-in emission of `$ai_generation` events to PostHog. Off by default — with n
 | Variable | Description | Default |
 |---|---|---|
 | `LLM_COUNCIL_WEBHOOKS_ENABLED` | Webhook notifications (ADR-025) | false |
+| `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS` | Comma-separated `host` or `host:port` entries (exact match) the server may send webhooks to even when they are private, loopback or plain http — e.g. `localhost:5678,n8n`. Every other destination must be https and resolve to public addresses. Also the only destinations a caller may name when `LLM_COUNCIL_API_TOKEN` is unset | — (none) |
 | `LLM_COUNCIL_WEBHOOK_RETRIES` | Webhook retry attempts | 3 |
 | `LLM_COUNCIL_WEBHOOK_TIMEOUT` | Webhook POST timeout (s) | 5.0 |
 

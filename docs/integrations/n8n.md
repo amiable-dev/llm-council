@@ -320,6 +320,8 @@ Council deliberation involves multiple LLM calls. For faster responses:
 
 1. **Always verify HMAC signatures** on webhook endpoints
 2. **Use HTTPS** for all production webhooks
+   - The council only delivers to `https` destinations that resolve to public addresses. If n8n runs on the same machine or a private network (`http://localhost:5678`, `http://n8n:5678`), list its host on the council server: `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS=localhost:5678,n8n`
+   - Set `LLM_COUNCIL_API_TOKEN` on the council server; without it, `webhook_url` is refused unless the host is allowlisted
 3. **Rotate webhook secrets** periodically
 4. **Validate timestamp** to prevent replay attacks
 5. **Store API keys** in n8n credentials, not workflow JSON

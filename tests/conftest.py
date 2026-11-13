@@ -155,3 +155,20 @@ def pytest_configure(config):
     )
     config.addinivalue_line("markers", "integration: marks tests as integration tests")
     config.addinivalue_line("markers", "vcr: marks tests to use VCR cassette recording")
+
+
+@pytest.fixture(autouse=True)
+def hermetic_webhook_dns(monkeypatch):
+    """GHSA-r7rh-j9cj-h9hh: the webhook guard resolves the destination before
+    connecting, so a webhook test would otherwise do real DNS. `example.com`
+    names resolve to a fixed public address; anything else fails loudly —
+    a test that needs another answer patches `url_guard._resolve_host` itself.
+    """
+    from llm_council.webhooks import url_guard
+
+    async def fake_resolve(host, port):
+        if host == "example.com" or host.endswith(".example.com"):
+            return ["93.184.216.34"]
+        raise OSError(f"hermetic_webhook_dns: no test DNS record for {host!r}")
+
+    monkeypatch.setattr(url_guard, "_resolve_host", fake_resolve)

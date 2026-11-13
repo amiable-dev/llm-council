@@ -232,6 +232,14 @@ class TestStatelessDesign:
 class TestWebhookIntegration:
     """Tests for webhook parameter support in HTTP API (Issue #76)."""
 
+    @pytest.fixture(autouse=True)
+    def _allowlisted_destination(self, monkeypatch):
+        # These tests cover parameter plumbing on a token-less server. Who may
+        # name a destination is tests/test_webhook_ssrf_guard.py's job; here
+        # the operator has allowlisted the host (GHSA-r7rh-j9cj-h9hh).
+        monkeypatch.delenv("LLM_COUNCIL_API_TOKEN", raising=False)
+        monkeypatch.setenv("LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS", "example.com")
+
     def test_accepts_webhook_url_parameter(self):
         """CouncilRequest should accept webhook_url parameter."""
         from llm_council.http_server import app

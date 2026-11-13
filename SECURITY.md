@@ -6,9 +6,8 @@ We release patches for security vulnerabilities in the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.38.x  | :white_check_mark: |
-| 0.37.x  | :white_check_mark: |
-| < 0.37  | :x:                |
+| 0.53.x  | :white_check_mark: |
+| < 0.53  | :x:                |
 
 Security fixes ship as patch releases on the latest minor. We do not backport to
 unsupported minors; upgrade to a supported version.
@@ -72,7 +71,8 @@ Please include:
 
 - Keep `.env` files in `.gitignore`
 - Use `LLM_COUNCIL_SUPPRESS_WARNINGS=false` in production
-- Review webhook URLs before enabling (HTTPS required by default)
+- Set `LLM_COUNCIL_API_TOKEN` on any server reachable by others; without it, caller-supplied webhooks are refused
+- Webhooks are delivered only to `https` destinations that resolve to public addresses; allowlist anything else with `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS`
 
 ### Network Security
 
