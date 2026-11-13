@@ -743,14 +743,22 @@ This prevents well-written hallucinations from ranking well.
 
 ```bash
 # Enable rubric scoring
-export LLM_COUNCIL_RUBRIC_SCORING=true
+export RUBRIC_SCORING_ENABLED=true
+```
 
-# Customize weights (must sum to 1.0)
-export LLM_COUNCIL_WEIGHT_ACCURACY=0.40
-export LLM_COUNCIL_WEIGHT_RELEVANCE=0.10
-export LLM_COUNCIL_WEIGHT_COMPLETENESS=0.20
-export LLM_COUNCIL_WEIGHT_CONCISENESS=0.10
-export LLM_COUNCIL_WEIGHT_CLARITY=0.20
+Weights are set in `llm_council.yaml`, not through environment variables. They must sum to 1.0 and name all five dimensions (defaults shown):
+
+```yaml
+council:
+  evaluation:
+    rubric:
+      enabled: true
+      weights:
+        accuracy: 0.35
+        relevance: 0.10
+        completeness: 0.20
+        conciseness: 0.15
+        clarity: 0.20
 ```
 
 ### Safety Gate (ADR-016)
@@ -769,10 +777,17 @@ Responses that fail safety checks are capped at score 0 regardless of other dime
 
 ```bash
 # Enable safety gate
-export LLM_COUNCIL_SAFETY_GATE=true
+export SAFETY_GATE_ENABLED=true
+```
 
-# Customize score cap (default: 0)
-export LLM_COUNCIL_SAFETY_SCORE_CAP=0.0
+The score cap (default 0) is set in `llm_council.yaml`:
+
+```yaml
+council:
+  evaluation:
+    safety:
+      enabled: true
+      score_cap: 0.0
 ```
 
 ### Bias Auditing (ADR-015)
@@ -802,11 +817,18 @@ These are **per-session indicators** (red flags for extreme anomalies), not stat
 
 ```bash
 # Enable bias auditing
-export LLM_COUNCIL_BIAS_AUDIT=true
+export BIAS_AUDIT_ENABLED=true
+```
 
-# Customize thresholds (optional)
-export LLM_COUNCIL_LENGTH_CORRELATION_THRESHOLD=0.3
-export LLM_COUNCIL_POSITION_VARIANCE_THRESHOLD=0.5
+The thresholds are optional and set in `llm_council.yaml` (defaults shown):
+
+```yaml
+council:
+  evaluation:
+    bias:
+      audit_enabled: true
+      length_correlation_threshold: 0.3
+      position_variance_threshold: 0.5
 ```
 
 ### Cross-Session Bias Aggregation (ADR-018)
@@ -815,13 +837,20 @@ For statistically meaningful bias detection across multiple sessions, enable bia
 
 ```bash
 # Enable bias persistence (stores metrics locally)
-export LLM_COUNCIL_BIAS_PERSISTENCE=true
+export BIAS_PERSISTENCE_ENABLED=true
+```
 
-# Consent level: 0=off, 1=local only (default), 2=anonymous, 3=enhanced, 4=research
-export LLM_COUNCIL_BIAS_CONSENT=1
+The consent level and store path are set in `llm_council.yaml` (defaults shown):
 
-# Store path (default: ~/.llm-council/bias_metrics.jsonl)
-export LLM_COUNCIL_BIAS_STORE=~/.llm-council/bias_metrics.jsonl
+```yaml
+council:
+  evaluation:
+    bias:
+      persistence_enabled: true
+      # OFF, LOCAL_ONLY, ANONYMOUS, ENHANCED or RESEARCH
+      consent_level: LOCAL_ONLY
+      # Relative paths resolve against the working directory
+      store_path: data/bias_metrics.jsonl
 ```
 
 **Generate cross-session bias reports:**
@@ -1053,7 +1082,7 @@ The fast path includes built-in quality monitoring:
 Configure monitoring:
 
 ```bash
-export LLM_COUNCIL_SHADOW_SAMPLE_RATE=0.05  # 5% shadow sampling
+export LLM_COUNCIL_SHADOW_SAMPLING_RATE=0.05  # 5% shadow sampling
 export LLM_COUNCIL_ROLLBACK_ENABLED=true
 export LLM_COUNCIL_ROLLBACK_WINDOW=100  # rolling window size
 ```

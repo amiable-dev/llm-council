@@ -78,11 +78,26 @@ class TestEnvReferenceDrift:
         )
 
     def test_readme_mentions_only_real_vars(self):
+        # #745: match the name ANYWHERE, not only in backticks. Names inside
+        # fenced blocks (`export LLM_COUNCIL_X=...`) used to be invisible, which
+        # is how fifteen variables no code reads stayed documented. A token
+        # ending in `_` is a prefix (`LLM_COUNCIL_MODELS_*`), not a name.
         readme = (REPO / "README.md").read_text()
-        mentioned = set(re.findall(r"`(LLM_COUNCIL_[A-Z0-9_]+)`", readme))
+        mentioned = {
+            name
+            for name in re.findall(r"\bLLM_COUNCIL_[A-Z0-9_]+", readme)
+            if not name.endswith("_")
+        }
         real = _env_reads_in_src()
         phantom = sorted(mentioned - real)
         assert not phantom, f"README documents nonexistent env vars: {phantom}"
+
+    def test_readme_guard_sees_inside_code_blocks(self):
+        # The guard's own teeth: the pattern must catch a bare `export` line.
+        sample = "```bash\nexport LLM_COUNCIL_NOT_A_REAL_SETTING=1\n```"
+        assert re.findall(r"\bLLM_COUNCIL_[A-Z0-9_]+", sample) == [
+            "LLM_COUNCIL_NOT_A_REAL_SETTING"
+        ]
 
 
 class TestAdrNavDrift:
