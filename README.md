@@ -23,6 +23,29 @@
   <em>A multi-LLM deliberation system where multiple LLMs collaboratively answer questions through peer review and synthesis. Available as a Python library, MCP server, or HTTP API.</em>
 </p>
 
+<!-- security-advisory:GHSA-r7rh-j9cj-h9hh:start
+     Added 2026-11-13 with v0.53.1. Remove once v0.55.0 has shipped (tracked in #742).
+     Add the CVE identifier here when one is assigned. -->
+> [!IMPORTANT]
+> **Security advisory: upgrade to 0.53.1 or later if you run the HTTP server.**
+>
+> [GHSA-r7rh-j9cj-h9hh](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-r7rh-j9cj-h9hh) — server-side request forgery through webhooks (CWE-918, Medium, CVSS 5.3). CVE identifier pending. Reported by [@ogzerber](https://github.com/ogzerber).
+>
+> **Affected:** versions 0.14.0 to 0.53.0, when `llm-council serve` is reachable by callers you do not trust. The MCP server and the Python library are not affected.
+>
+> **What was wrong:** `POST /v1/council/run` sent a webhook to whatever `webhook_url` the caller supplied. A caller could make the server send requests to its own loopback services and to private hosts, and could tell from the response time whether a loopback port was open. On a server with no `LLM_COUNCIL_API_TOKEN`, this needed no credentials.
+>
+> **What we changed in 0.53.1:**
+> - Webhooks are delivered only to `https` destinations that resolve to public addresses. Loopback, private, link-local and cloud-metadata addresses are refused.
+> - A server with no `LLM_COUNCIL_API_TOKEN` rejects requests that carry `webhook_url` (HTTP 403).
+> - Plain `http://localhost` webhooks are no longer allowed by default.
+> - `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS` lets an operator permit a specific private or plain-http destination, such as a local n8n.
+>
+> **What you should do:** upgrade with `pip install -U llm-council-core`. If you send webhooks to a local or private receiver, add its host to `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS`. If you cannot upgrade yet, bind the server to loopback (`llm-council serve --host 127.0.0.1`) and set `LLM_COUNCIL_API_TOKEN`.
+>
+> **Still to come:** moving webhook delivery off the request path ([#739](https://github.com/amiable-dev/llm-council/issues/739)), delivering the documented completion and error events ([#740](https://github.com/amiable-dev/llm-council/issues/740)), and making the documented webhook settings take effect ([#741](https://github.com/amiable-dev/llm-council/issues/741)).
+<!-- security-advisory:GHSA-r7rh-j9cj-h9hh:end -->
+
 ## What is This?
 
 Instead of asking a single LLM for answers, this MCP server:
