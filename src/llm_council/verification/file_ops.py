@@ -1045,6 +1045,12 @@ async def _fetch_file_at_commit_async(
                             truncated = True
                             # Kill process to avoid wasting resources on remaining data
                             proc.kill()
+                            # ...and discard the rest to EOF: an unread
+                            # stdout made proc.wait() below hang (see there).
+                            # Capped: a killed child leaves little behind.
+                            for _ in range(64):
+                                if not await proc.stdout.read(65536):  # type: ignore[union-attr]
+                                    break
 
                 await asyncio.wait_for(read_with_limit(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
 
@@ -1055,26 +1061,20 @@ async def _fetch_file_at_commit_async(
 
             # Wait for process to complete (already killed if truncated).
             #
-            # BUG (found via a real-world verify() hang, ~15min, no ADR-040
-            # protection reaches this code): reading only stdout here, never
-            # stderr, is the classic Python subprocess pipe deadlock. If the
-            # child (e.g. `git show` triggering an LFS smudge filter, a
-            # submodule warning, or CRLF notices) writes enough to `stderr`
-            # to fill the OS pipe buffer while nobody drains it, the child
-            # blocks *inside the kernel* on that write — it can fully close
-            # stdout (giving EOF, so read_with_limit() above returns cleanly)
-            # while never actually exiting. A bare `await proc.wait()` here
-            # then hangs indefinitely: this file-fetch runs entirely BEFORE
-            # the ADR-040 global deadline wrapper even starts (prompt
-            # building happens ahead of run_verification's asyncio.wait_for),
-            # so nothing else bounds it either.
+            # Bounded, because up to Python 3.12 asyncio only wakes wait()
+            # once EVERY pipe has disconnected, not when the process exits. A
+            # pipe whose reader has paused with data still buffered never
+            # disconnects, so wait() can block on a dead process. The drain
+            # above closes the stdout case (a file past ~160 KB: CHANGELOG.md
+            # on every council-gate run); a child writing >128 KB of stderr
+            # would still land here. This runs BEFORE the ADR-040 global
+            # deadline starts, so nothing else bounds it.
             try:
                 await asyncio.wait_for(proc.wait(), timeout=ASYNC_SUBPROCESS_TIMEOUT)
             except asyncio.TimeoutError:
                 logger.warning(
-                    "git show for %s:%s produced all stdout but did not exit "
-                    "within %ss — likely blocked writing to an unread stderr "
-                    "pipe (LFS/submodule/CRLF chatter); force-killed",
+                    "git show for %s:%s did not report exit within %ss — "
+                    "likely an undrained stdout/stderr pipe; force-killed",
                     safe_log(snapshot_id),
                     safe_log(file_path),
                     ASYNC_SUBPROCESS_TIMEOUT,
