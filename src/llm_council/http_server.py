@@ -91,6 +91,7 @@ async def verify_token(
 # Dependency for protected endpoints
 auth_dependency = Depends(verify_token)
 from llm_council.webhooks.sse import council_event_generator, get_sse_headers
+from llm_council.webhooks.run_session import drain_webhook_deliveries
 from llm_council.webhooks.types import WebhookConfig
 from llm_council.webhooks.url_guard import (
     ALLOWED_HOSTS_ENV,
@@ -230,6 +231,10 @@ async def server_card() -> dict:
     return build_server_card()
 
 
+# #739: give in-flight background webhook deliveries a moment on shutdown.
+app.add_event_handler("shutdown", drain_webhook_deliveries)
+
+
 def _authorize_request_webhook(url: str) -> None:
     """May this request name ``url`` as a webhook destination? (GHSA-r7rh-j9cj-h9hh)
 
@@ -254,10 +259,10 @@ def _authorize_request_webhook(url: str) -> None:
                 f"{ALLOWED_HOSTS_ENV}."
             ),
         )
-    from llm_council.webhooks.dispatcher import DEFAULT_HTTPS_ONLY
+    from llm_council.webhooks.dispatcher import webhook_settings
 
     try:
-        check_webhook_url(url, https_only=DEFAULT_HTTPS_ONLY)
+        check_webhook_url(url, https_only=webhook_settings()[2])
     except WebhookTargetError as e:
         raise HTTPException(status_code=400, detail=str(e)) from None
 
@@ -343,6 +348,8 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
             models=request.models,
             per_model_timeout=high_tier_per_model,
             webhook_config=webhook_config,
+            # #739: the response must not wait on the caller's webhook receiver.
+            webhook_delivery="background",
             verdict_type=verdict_type_enum,
             include_dissent=request.include_dissent or False,
         )

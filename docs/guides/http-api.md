@@ -72,7 +72,7 @@ curl -X POST http://localhost:8000/v1/council/run \
 | `verdict_type` | string | No | `synthesis` (default), `binary`, or `tie_breaker` |
 | `include_dissent` | boolean | No | Include minority opinions (default: false) |
 | `webhook_url` | string | No | URL for webhook notifications — see [Webhook destinations](#webhook-destinations) |
-| `webhook_events` | string[] | No | Events to subscribe to |
+| `webhook_events` | string[] | No | Events to subscribe to (default `council.complete`, `council.error`) — see [Webhook events](#webhook-events) |
 | `webhook_secret` | string | No | HMAC secret for webhook verification |
 | `evidence` | object[] | No | Caller-supplied grounding context (#619, ADR-042) — see below |
 
@@ -187,6 +187,22 @@ curl -X POST http://localhost:8000/v1/council/run \
     "webhook_secret": "your-hmac-secret"
   }'
 ```
+
+### Webhook events
+
+`POST /v1/council/run` delivers three events to `webhook_url`:
+
+| Event | When | `data` |
+|-------|------|--------|
+| `council.deliberation_start` | The run begins | `query` (first 100 characters), `models` |
+| `council.complete` | The run produced an answer | `status`, `model_count`, `cache_hit`, `result` (`stage1`, `stage2`, `stage3`) |
+| `council.error` | The run raised, or every model failed | `status`, `error`, and `error_type` when it raised |
+
+Every event carries the same `request_id`, and the terminal events carry `duration_ms`.
+
+Webhooks are delivered in the background. The HTTP response does not wait for your receiver, so it can arrive before `council.complete` does, and a slow or failing receiver does not slow the run. Each event is attempted up to `LLM_COUNCIL_WEBHOOK_RETRIES` times with a `LLM_COUNCIL_WEBHOOK_TIMEOUT` second timeout.
+
+Per-stage events (`stage1.response`, `stage2.review` and so on) are available from `GET /v1/council/stream`, not from this endpoint.
 
 ### Webhook destinations
 

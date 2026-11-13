@@ -198,6 +198,7 @@ from llm_council.webhooks import (
     EventBridge,
     DispatchMode,
 )
+from llm_council.webhooks.run_session import deliver_council_webhooks
 
 
 # =============================================================================
@@ -910,6 +911,7 @@ async def run_council_with_fallback(
             pass  # Shutdown failure shouldn't raise
 
 
+@deliver_council_webhooks
 async def run_full_council(
     user_query: str,
     bypass_cache: bool = False,
@@ -917,6 +919,7 @@ async def run_full_council(
     *,
     per_model_timeout: Optional[float] = None,
     webhook_config: Optional[WebhookConfig] = None,
+    webhook_delivery: str = "await",
     verdict_type: VerdictType = VerdictType.SYNTHESIS,
     include_dissent: bool = False,
 ) -> Tuple[List, List, Dict, Dict]:
@@ -940,7 +943,8 @@ async def run_full_council(
             the historical 120s. NOTE: it deliberately does NOT re-budget Stage 1,
             which retains stage1_collect_responses' own default — widening that is
             a separate change, outside #648.
-        webhook_config: Optional WebhookConfig for real-time event notifications (ADR-025a)
+        webhook_config, webhook_delivery: consumed by @deliver_council_webhooks
+            (webhooks/run_session.py), which owns the whole event lifecycle
         verdict_type: Type of verdict to render (ADR-025b Jury Mode):
             - SYNTHESIS: Default behavior, unstructured natural language synthesis
             - BINARY: Go/no-go decision (approved/rejected)
@@ -954,25 +958,6 @@ async def run_full_council(
     # #648: Stage 2/3 budgets (see resolve_stage_timeout). None ⇒ the 120s floor,
     # i.e. byte-identical to the pre-#648 behaviour for callers that don't pass one.
     stage_timeout = resolve_stage_timeout(per_model_timeout)
-
-    # ADR-025a: Initialize EventBridge for webhook notifications
-    event_bridge: Optional[EventBridge] = None
-    if webhook_config:
-        event_bridge = EventBridge(
-            webhook_config=webhook_config,
-            mode=DispatchMode.SYNC,
-        )
-        await event_bridge.start()
-
-        # Emit council start event
-        from llm_council.layer_contracts import LayerEventType, LayerEvent
-
-        await event_bridge.emit(
-            LayerEvent(
-                event_type=LayerEventType.L3_COUNCIL_START,
-                data={"query": user_query[:100], "models": models or _get_council_models()},
-            )
-        )
 
     # Check cache first (unless bypassed)
     cache_key = get_cache_key(user_query)

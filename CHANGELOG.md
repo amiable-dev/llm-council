@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`/v1/council/run` now delivers `council.complete` and `council.error` webhooks** ([#740](https://github.com/amiable-dev/llm-council/issues/740)). The endpoint only ever sent `council.deliberation_start`, so a caller using the default `webhook_events` received nothing. `council.complete` carries the result (`stage1`, `stage2`, `stage3`); `council.error` is sent when the run raises or every model fails. Reported by @ogzerber.
+- **Webhook delivery no longer delays the council run or the HTTP response** ([#739](https://github.com/amiable-dev/llm-council/issues/739)). Delivery ran inline before the run started, so a slow receiver held up the caller for up to three attempts. Events are now queued and delivered by a background worker. **Behaviour change:** the HTTP response can arrive before `council.complete` is delivered. Library callers of `run_full_council` still get every event delivered before the call returns; pass `webhook_delivery="background"` to opt out.
+- **`LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` and `LLM_COUNCIL_WEBHOOK_TIMEOUT` now take effect** ([#741](https://github.com/amiable-dev/llm-council/issues/741)). The first was documented but read by nothing; the second was read and then ignored, so the timeout was always 5 seconds. The YAML keys `webhooks.timeout_seconds` and `webhooks.https_only` had the same problem and are fixed too. `LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` fails safe: only an explicit `false`, `0`, `no` or `off` turns it off, and private or loopback destinations still need `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS`.
+
 ## [0.53.1] - 2026-11-13
 
 **Security release: webhook destinations are now restricted.** Upgrade if you run `llm-council serve` anywhere other callers can reach it. Two behaviour changes come with the fix; both are listed below.

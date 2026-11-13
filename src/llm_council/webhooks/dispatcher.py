@@ -7,7 +7,7 @@ HTTPS, public-address-only, DNS-pinned — GHSA-r7rh-j9cj-h9hh).
 
 import asyncio
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -30,23 +30,28 @@ def _get_webhook_config():
     return None
 
 
-# Default configuration (can be overridden via environment)
-try:
-    webhook_config = _get_webhook_config()
-    if webhook_config:
-        DEFAULT_TIMEOUT = getattr(webhook_config, "timeout", 5.0)
-        DEFAULT_MAX_RETRIES = getattr(webhook_config, "max_retries", 3)
-        DEFAULT_HTTPS_ONLY = getattr(webhook_config, "https_only", True)
-    else:
-        # Fallback if config not available
-        DEFAULT_TIMEOUT = 5.0
-        DEFAULT_MAX_RETRIES = 3
-        DEFAULT_HTTPS_ONLY = True
-except (ImportError, AttributeError):
-    # Fallback if config not available
-    DEFAULT_TIMEOUT = 5.0
-    DEFAULT_MAX_RETRIES = 3
-    DEFAULT_HTTPS_ONLY = True
+# Fallbacks, used only when the unified config cannot be read.
+DEFAULT_TIMEOUT = 5.0
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_HTTPS_ONLY = True
+
+
+def webhook_settings() -> Tuple[float, int, bool]:
+    """(timeout seconds, max attempts, https_only) from the unified config.
+
+    Read at CALL time (#741). These used to be frozen into module constants at
+    import, and the timeout was looked up under the wrong attribute name
+    (``timeout`` for ``timeout_seconds``), so ``LLM_COUNCIL_WEBHOOK_TIMEOUT``
+    and the YAML key never took effect.
+    """
+    config = _get_webhook_config()
+    if config is None:
+        return DEFAULT_TIMEOUT, DEFAULT_MAX_RETRIES, DEFAULT_HTTPS_ONLY
+    return (
+        float(getattr(config, "timeout_seconds", DEFAULT_TIMEOUT)),
+        int(getattr(config, "max_retries", DEFAULT_MAX_RETRIES)),
+        bool(getattr(config, "https_only", DEFAULT_HTTPS_ONLY)),
+    )
 
 
 class WebhookDispatcher:
@@ -62,20 +67,24 @@ class WebhookDispatcher:
 
     def __init__(
         self,
-        timeout: float = DEFAULT_TIMEOUT,
-        max_retries: int = DEFAULT_MAX_RETRIES,
-        https_only: bool = DEFAULT_HTTPS_ONLY,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+        https_only: Optional[bool] = None,
     ):
         """Initialize the dispatcher.
+
+        An argument left as None takes its value from the unified config
+        (``webhook_settings``) at construction time.
 
         Args:
             timeout: Request timeout in seconds.
             max_retries: Maximum retry attempts.
             https_only: Require HTTPS (except operator-allowlisted hosts).
         """
-        self._timeout = timeout
-        self._max_retries = max_retries
-        self._https_only = https_only
+        cfg_timeout, cfg_retries, cfg_https_only = webhook_settings()
+        self._timeout = cfg_timeout if timeout is None else timeout
+        self._max_retries = cfg_retries if max_retries is None else max_retries
+        self._https_only = cfg_https_only if https_only is None else https_only
 
     @staticmethod
     def _request_parts(target: WebhookTarget) -> Tuple[Any, Dict[str, str], Dict[str, Any]]:

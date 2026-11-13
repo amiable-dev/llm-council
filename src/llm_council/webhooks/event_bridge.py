@@ -32,7 +32,7 @@ GitHub Issue: #82
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Awaitable, Callable, Dict, Optional, Union
 from uuid import uuid4
@@ -269,6 +269,39 @@ class EventBridge:
                 "Event type %s has no webhook mapping, skipping",
                 event.event_type.value,
             )
+            return
+
+        await self._publish(payload)
+
+    async def emit_webhook(
+        self,
+        event_type: WebhookEventType,
+        data: Dict[str, Any],
+        duration_ms: Optional[int] = None,
+    ) -> None:
+        """Emit a webhook event that has no LayerEvent behind it (#740).
+
+        Same subscription filter, callback and dispatch path as ``emit``.
+
+        Raises:
+            RuntimeError: If the bridge is not started.
+        """
+        if not self._running:
+            raise RuntimeError("EventBridge not started. Call start() first.")
+        await self._publish(
+            WebhookPayload(
+                event=event_type.value,
+                request_id=self.request_id or "",
+                # Naive UTC, matching LayerEvent.timestamp.
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                data=data,
+                duration_ms=duration_ms,
+            )
+        )
+
+    async def _publish(self, payload: WebhookPayload) -> None:
+        """Filter by subscription, run the local callback, then dispatch."""
+        if self.webhook_config is None and self.on_event is None:
             return
 
         # Check if subscriber is interested in this event

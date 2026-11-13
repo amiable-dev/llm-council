@@ -1145,8 +1145,10 @@ result = await dispatcher.dispatch(config, payload)
 | `council.stage1.complete` | All initial responses received | response_count |
 | `model.vote_cast` | A model submitted rankings | voter, ranking |
 | `council.stage2.complete` | All rankings complete | aggregate_rankings |
-| `council.complete` | Final answer ready | stage3_response, duration_ms |
-| `council.error` | Error occurred | error, partial_results |
+| `council.complete` | Final answer ready | status, model_count, result (stage1, stage2, stage3), duration_ms |
+| `council.error` | Run failed, or every model failed | status, error, duration_ms |
+
+`POST /v1/council/run` delivers `council.deliberation_start`, `council.complete` and `council.error`; the stage events are delivered on the streaming path. Delivery never delays the run or the HTTP response.
 
 **HMAC Signature Verification:**
 
@@ -1357,7 +1359,8 @@ For detailed documentation, see the [Skills Guide](https://llm-council.dev/guide
 |----------|-------------|---------|
 | `LLM_COUNCIL_WEBHOOK_TIMEOUT` | Webhook POST timeout (seconds) | 5.0 |
 | `LLM_COUNCIL_WEBHOOK_RETRIES` | Max retry attempts | 3 |
-| *(YAML)* webhooks `https_only` | Require HTTPS (except localhost; no env var) | true |
+| `LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` | Require HTTPS for webhook destinations. Only an explicit `false`/`0`/`no`/`off` turns it off; public-address checks still apply | true |
+| `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS` | Hosts allowed to be private, loopback or plain http (`host` or `host:port`, comma-separated) | none |
 
 #### Council Configuration
 

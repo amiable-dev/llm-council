@@ -1361,20 +1361,17 @@ def _apply_env_overrides(config: UnifiedConfig) -> UnifiedConfig:
             "timeout_seconds"
         ] = float(ollama_timeout)
 
-    # Webhook overrides (ADR-025a)
-    webhooks_enabled = os.getenv("LLM_COUNCIL_WEBHOOKS_ENABLED")
-    if webhooks_enabled:
-        config_dict.setdefault("webhooks", {})["enabled"] = webhooks_enabled.lower() in (
-            "true",
-            "1",
-            "yes",
-        )
-    webhook_timeout = os.getenv("LLM_COUNCIL_WEBHOOK_TIMEOUT")
-    if webhook_timeout:
-        config_dict.setdefault("webhooks", {})["timeout_seconds"] = float(webhook_timeout)
-    webhook_retries = os.getenv("LLM_COUNCIL_WEBHOOK_RETRIES")
-    if webhook_retries:
-        config_dict.setdefault("webhooks", {})["max_retries"] = int(webhook_retries)
+    # Webhook overrides (ADR-025a). #741: HTTPS_ONLY fails safe — only an
+    # explicit false-y value turns it off.
+    wh = config_dict.setdefault("webhooks", {})
+    if v := os.getenv("LLM_COUNCIL_WEBHOOKS_ENABLED"):
+        wh["enabled"] = v.lower() in ("true", "1", "yes")
+    if v := os.getenv("LLM_COUNCIL_WEBHOOK_HTTPS_ONLY"):
+        wh["https_only"] = v.strip().lower() not in ("false", "0", "no", "off")
+    if v := os.getenv("LLM_COUNCIL_WEBHOOK_TIMEOUT"):
+        wh["timeout_seconds"] = float(v)
+    if v := os.getenv("LLM_COUNCIL_WEBHOOK_RETRIES"):
+        wh["max_retries"] = int(v)
 
     # Model Intelligence overrides (ADR-026)
     model_intelligence_enabled = os.getenv("LLM_COUNCIL_MODEL_INTELLIGENCE")
