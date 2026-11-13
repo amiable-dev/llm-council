@@ -24,7 +24,8 @@
 </p>
 
 <!-- security-advisory:GHSA-r7rh-j9cj-h9hh:start
-     Added 2026-11-13 with v0.53.1. Remove once v0.55.0 has shipped (tracked in #742).
+     Added 2026-11-13 with v0.53.1; follow-up line updated for v0.54.0.
+     Remove once v0.55.0 has shipped (tracked in #742).
      Add the CVE identifier here when one is assigned. -->
 > [!IMPORTANT]
 > **Security advisory: upgrade to 0.53.1 or later if you run the HTTP server.**
@@ -43,7 +44,7 @@
 >
 > **What you should do:** upgrade with `pip install -U llm-council-core`. If you send webhooks to a local or private receiver, add its host to `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS`. If you cannot upgrade yet, bind the server to loopback (`llm-council serve --host 127.0.0.1`) and set `LLM_COUNCIL_API_TOKEN`.
 >
-> **Still to come:** moving webhook delivery off the request path ([#739](https://github.com/amiable-dev/llm-council/issues/739)), delivering the documented completion and error events ([#740](https://github.com/amiable-dev/llm-council/issues/740)), and making the documented webhook settings take effect ([#741](https://github.com/amiable-dev/llm-council/issues/741)).
+> **Further hardening in 0.54.0:** `llm-council serve` now listens on `127.0.0.1` by default, so exposing the server is a deliberate `--host 0.0.0.0`. Webhook delivery no longer runs on the request path ([#739](https://github.com/amiable-dev/llm-council/issues/739)), the documented completion and error events are delivered ([#740](https://github.com/amiable-dev/llm-council/issues/740)), and the documented webhook settings take effect ([#741](https://github.com/amiable-dev/llm-council/issues/741)).
 <!-- security-advisory:GHSA-r7rh-j9cj-h9hh:end -->
 
 ## What is This?
