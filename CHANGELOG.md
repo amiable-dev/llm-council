@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.53.1] - 2026-11-13
+
+**Security release: webhook destinations are now restricted.** Upgrade if you run `llm-council serve` anywhere other callers can reach it. Two behaviour changes come with the fix; both are listed below.
+
+### Security
+
+- **Webhook destinations are now restricted (SSRF, [GHSA-r7rh-j9cj-h9hh](https://github.com/amiable-dev/llm-council/security/advisories/GHSA-r7rh-j9cj-h9hh), CWE-918).** `POST /v1/council/run` sent a webhook to whatever `webhook_url` the caller supplied. Any `https` URL was accepted, as was plain `http` to `localhost`, so a caller could make the server POST to its own loopback services, open TLS connections to private hosts, and learn whether a loopback port was open from the response time. On a server without `LLM_COUNCIL_API_TOKEN` this needed no credentials. Affects every release since the HTTP API gained webhooks in 0.14.0. Reported by @ogzerber.
+  - The server now resolves the webhook host and refuses loopback, private, link-local and metadata addresses, however the URL is spelled. It connects to the address it checked, so a second DNS answer cannot differ, and it does not follow redirects. A refused destination causes no connection and no retries.
+  - **Behaviour change:** a server without `LLM_COUNCIL_API_TOKEN` now answers `403` to any request carrying `webhook_url`.
+  - **Behaviour change:** plain `http://localhost` webhooks are no longer allowed by default.
+  - New `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS` (comma-separated `host` or `host:port`) is the operator's exception to all of the above, for destinations such as a local n8n.
+
 ## [0.53.0] - 2026-09-29
 
 **Verify stops running out of time in synthesis, and each tier gets its own chairman.** Balanced and high verifies kept returning `unclear(infra_failure)` on deliberations that had finished. Three causes, fixed together:

@@ -1,13 +1,13 @@
 """Webhook dispatcher for LLM Council (ADR-025).
 
 This module provides async webhook delivery with retry logic,
-HMAC authentication, and HTTPS enforcement.
+HMAC authentication, and destination enforcement (``url_guard``:
+HTTPS, public-address-only, DNS-pinned — GHSA-r7rh-j9cj-h9hh).
 """
 
 import asyncio
 import time
-from typing import List
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Tuple
 
 import httpx
 
@@ -16,6 +16,7 @@ from llm_council.unified_config import get_config
 
 from .types import WebhookConfig, WebhookPayload, WebhookDeliveryResult
 from .hmac_auth import generate_webhook_headers
+from .url_guard import WebhookTarget, WebhookTargetError, resolve_webhook_target
 
 
 def _get_webhook_config():
@@ -54,7 +55,8 @@ class WebhookDispatcher:
     Features:
     - Automatic retry on 5xx and 429 errors
     - HMAC signature authentication
-    - HTTPS enforcement (with localhost exception)
+    - Destination guard: HTTPS, public addresses only, DNS-pinned connect
+      (operator allowlist: LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS)
     - Exponential backoff on retries
     """
 
@@ -69,38 +71,29 @@ class WebhookDispatcher:
         Args:
             timeout: Request timeout in seconds.
             max_retries: Maximum retry attempts.
-            https_only: Require HTTPS (except localhost).
+            https_only: Require HTTPS (except operator-allowlisted hosts).
         """
         self._timeout = timeout
         self._max_retries = max_retries
         self._https_only = https_only
 
-    def _is_url_allowed(self, url: str) -> bool:
-        """Check if URL is allowed based on HTTPS policy.
+    @staticmethod
+    def _request_parts(target: WebhookTarget) -> Tuple[Any, Dict[str, str], Dict[str, Any]]:
+        """(url, extra headers, httpx extensions) that connect to the CHECKED address.
 
-        Localhost URLs are always allowed for development.
-
-        Args:
-            url: The webhook URL to check.
-
-        Returns:
-            True if URL is allowed, False otherwise.
+        For a DNS name the socket goes to ``pinned_ip`` — the address the guard
+        approved — while ``Host`` and TLS (SNI + certificate verification, via
+        httpx's ``sni_hostname``) still use the name. Resolving again here would
+        let a second DNS answer differ from the one that was checked.
         """
-        if not self._https_only:
-            return True
-
-        parsed = urlparse(url)
-
-        # Allow HTTPS
-        if parsed.scheme == "https":
-            return True
-
-        # Allow localhost/127.0.0.1 for development
-        host = parsed.hostname or ""
-        if host in ("localhost", "127.0.0.1", "::1"):
-            return True
-
-        return False
+        if target.allowlisted or target.pinned_ip is None or target.pinned_ip == target.host:
+            return target.url, {}, {}
+        original = httpx.URL(target.url)
+        pinned = original.copy_with(host=target.pinned_ip)
+        extensions: Dict[str, Any] = {}
+        if target.scheme == "https":
+            extensions["sni_hostname"] = target.host
+        return pinned, {"Host": original.netloc.decode("ascii")}, extensions
 
     def _should_retry(self, status_code: int) -> bool:
         """Determine if a request should be retried based on status code.
@@ -156,14 +149,15 @@ class WebhookDispatcher:
                 error=None,
             )
 
-        # Check URL policy
-        if not self._is_url_allowed(config.url):
-            return WebhookDeliveryResult(
-                success=False,
-                status_code=0,
-                attempt=1,
-                error=f"HTTPS required. URL must use https:// (got: {config.url})",
-            )
+        # Destination guard. Resolved ONCE, before the retry loop: a rejected
+        # target makes no connection and no retries (nothing to time), and an
+        # accepted one is pinned for every attempt. The error never echoes the
+        # caller-controlled URL (it is logged).
+        try:
+            target = await resolve_webhook_target(config.url, https_only=self._https_only)
+        except WebhookTargetError as e:
+            return WebhookDeliveryResult(success=False, status_code=0, attempt=1, error=str(e))
+        request_url, pin_headers, extensions = self._request_parts(target)
 
         # Serialize payload
         payload_json = payload.model_dump_json()
@@ -172,6 +166,7 @@ class WebhookDispatcher:
         headers = {
             "Content-Type": "application/json",
             **generate_webhook_headers(payload_json, config.secret),
+            **pin_headers,
         }
 
         # Attempt delivery with retries
@@ -182,11 +177,16 @@ class WebhookDispatcher:
             start_time = time.time()
 
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                # follow_redirects=False is load-bearing: a redirect would be
+                # an unchecked second destination.
+                async with httpx.AsyncClient(
+                    timeout=self._timeout, follow_redirects=False
+                ) as client:
                     response = await client.post(
-                        config.url,
+                        request_url,
                         content=payload_json,
                         headers=headers,
+                        extensions=extensions,
                     )
 
                 latency_ms = int((time.time() - start_time) * 1000)

@@ -71,7 +71,7 @@ curl -X POST http://localhost:8000/v1/council/run \
 | `api_key` | string | No | OpenRouter API key (overrides env var) |
 | `verdict_type` | string | No | `synthesis` (default), `binary`, or `tie_breaker` |
 | `include_dissent` | boolean | No | Include minority opinions (default: false) |
-| `webhook_url` | string | No | URL for webhook notifications |
+| `webhook_url` | string | No | URL for webhook notifications — see [Webhook destinations](#webhook-destinations) |
 | `webhook_events` | string[] | No | Events to subscribe to |
 | `webhook_secret` | string | No | HMAC secret for webhook verification |
 | `evidence` | object[] | No | Caller-supplied grounding context (#619, ADR-042) — see below |
@@ -188,6 +188,20 @@ curl -X POST http://localhost:8000/v1/council/run \
   }'
 ```
 
+### Webhook destinations
+
+The server connects to the `webhook_url` a caller supplies, so the destination is restricted:
+
+- **It must be `https` and resolve to public addresses.** Loopback, private, link-local and cloud-metadata addresses are refused, whether written as a literal or reached through a DNS name. The server connects to the address it checked, and does not follow redirects.
+- **A server without `LLM_COUNCIL_API_TOKEN` refuses caller-supplied webhooks** with `403`, because anyone who can reach the port could otherwise point it at a third party.
+- **`LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS` is the operator's exception to both rules.** List `host` or `host:port` entries (comma-separated, exact match) to permit a private or plain-http destination, such as a local n8n:
+
+```bash
+export LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS=localhost:5678,n8n
+```
+
+A URL that can be rejected without a DNS lookup returns `400`. A name that resolves to a non-public address is accepted by the request and then not delivered; the server logs the refusal.
+
 ## Verdict Types
 
 | Type | Description | Use Case |
@@ -200,8 +214,9 @@ curl -X POST http://localhost:8000/v1/council/run \
 
 | Status | Description |
 |--------|-------------|
-| 400 | Missing required field or invalid request |
+| 400 | Missing required field, invalid request, or a `webhook_url` that is not permitted |
 | 401 | Missing or invalid API token |
+| 403 | `webhook_url` supplied to a server with no `LLM_COUNCIL_API_TOKEN` and the host is not in `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS` |
 | 500 | Internal server error |
 
 **Example error:**

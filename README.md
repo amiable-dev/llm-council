@@ -1177,8 +1177,12 @@ export LLM_COUNCIL_WEBHOOK_TIMEOUT=5.0
 # Max retry attempts (default: 3)
 export LLM_COUNCIL_WEBHOOK_RETRIES=3
 
-# Require HTTPS (except localhost) - default: true
+# Require HTTPS - default: true
 export LLM_COUNCIL_WEBHOOK_HTTPS_ONLY=true
+
+# Webhooks only go to https destinations that resolve to public addresses.
+# To reach a private or plain-http one (e.g. local n8n), allowlist its host:
+export LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS=localhost:5678
 ```
 
 ### SSE Streaming (ADR-025)

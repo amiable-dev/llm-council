@@ -92,6 +92,12 @@ async def verify_token(
 auth_dependency = Depends(verify_token)
 from llm_council.webhooks.sse import council_event_generator, get_sse_headers
 from llm_council.webhooks.types import WebhookConfig
+from llm_council.webhooks.url_guard import (
+    ALLOWED_HOSTS_ENV,
+    WebhookTargetError,
+    check_webhook_url,
+    is_allowlisted,
+)
 from llm_council.verdict import VerdictType
 from llm_council.consult_evidence import prepare_consult_evidence
 from llm_council.tier_contract import create_tier_contract
@@ -224,6 +230,38 @@ async def server_card() -> dict:
     return build_server_card()
 
 
+def _authorize_request_webhook(url: str) -> None:
+    """May this request name ``url`` as a webhook destination? (GHSA-r7rh-j9cj-h9hh)
+
+    The server connects to whatever URL the caller supplies, so:
+
+    - With no ``LLM_COUNCIL_API_TOKEN`` the caller is anyone who can reach the
+      port. They may only name a destination the operator allowlisted (403).
+    - Any caller is refused a URL the guard can reject without a DNS lookup —
+      bad scheme, plain http, a private/loopback literal (400). Names are
+      resolved and re-checked at dispatch (``webhooks/url_guard.py``).
+
+    The detail never echoes the URL.
+    """
+    if is_allowlisted(url):
+        return
+    if get_api_token() is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Caller-supplied webhooks are disabled on an unauthenticated server. "
+                "Set LLM_COUNCIL_API_TOKEN, or list the webhook host in "
+                f"{ALLOWED_HOSTS_ENV}."
+            ),
+        )
+    from llm_council.webhooks.dispatcher import DEFAULT_HTTPS_ONLY
+
+    try:
+        check_webhook_url(url, https_only=DEFAULT_HTTPS_ONLY)
+    except WebhookTargetError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
 @app.post(
     "/v1/council/run",
     response_model=CouncilResponse,
@@ -257,6 +295,7 @@ async def council_run(request: CouncilRequest) -> CouncilResponse:
     # Build webhook config if URL provided (ADR-025a Issue #76)
     webhook_config = None
     if request.webhook_url:
+        _authorize_request_webhook(request.webhook_url)
         webhook_config = WebhookConfig(
             url=request.webhook_url,
             events=request.webhook_events or ["council.complete", "council.error"],

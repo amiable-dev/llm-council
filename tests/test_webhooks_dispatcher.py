@@ -313,8 +313,12 @@ class TestDispatcherHTTPSOnly:
         assert "https" in result.error.lower()
 
     @pytest.mark.asyncio
-    async def test_https_only_allows_localhost(self):
-        """Should allow localhost HTTP for development."""
+    async def test_localhost_requires_operator_allowlist(self, monkeypatch):
+        """http://localhost is delivered only when the operator allowlists it.
+
+        The unconditional localhost exception was the SSRF in
+        GHSA-r7rh-j9cj-h9hh; see tests/test_webhook_ssrf_guard.py.
+        """
         from llm_council.webhooks.dispatcher import WebhookDispatcher
         from llm_council.webhooks.types import WebhookConfig, WebhookPayload
 
@@ -330,10 +334,15 @@ class TestDispatcherHTTPSOnly:
                 return_value=mock_response
             )
 
-            result = await dispatcher.dispatch(config, payload)
+            monkeypatch.delenv("LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS", raising=False)
+            refused = await dispatcher.dispatch(config, payload)
+            assert refused.success is False
+            mock_client.assert_not_called()
 
-        # localhost should be allowed even with https_only
-        assert result.success is True
+            monkeypatch.setenv("LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS", "localhost:8080")
+            allowed = await dispatcher.dispatch(config, payload)
+
+        assert allowed.success is True
 
 
 class TestBatchDispatch:
@@ -347,8 +356,8 @@ class TestBatchDispatch:
 
         dispatcher = WebhookDispatcher()
         configs = [
-            WebhookConfig(url="https://example1.com/webhook"),
-            WebhookConfig(url="https://example2.com/webhook"),
+            WebhookConfig(url="https://one.example.com/webhook"),
+            WebhookConfig(url="https://two.example.com/webhook"),
         ]
         payload = WebhookPayload(
             event="council.complete", request_id="req-123", timestamp=datetime.now(), data={}
