@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-11-14
+
+**Python 3.10 support ends, and the `[mcp]` and `[ollama]` extras require patched dependencies.** There are no changes to how councils run.
+
+**Breaking:** the package now requires Python 3.11 or later. On Python 3.10, `pip` keeps installing 0.55.0.
+
 ### Removed
 - **Python 3.10 is no longer supported.** **Breaking:** the package now requires Python 3.11 or later, which is what the README and installation guide already stated. Python 3.10 reached end of life in October 2026, and a dependency of the `[ollama]` extra (`filelock`) has open advisories that are fixed only in releases needing 3.11. On Python 3.10, `pip` keeps installing 0.55.0.
 
