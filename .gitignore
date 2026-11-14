@@ -71,3 +71,6 @@ site/
 !.epic-loop/config.yaml
 .slopconfig.yaml
 .clawpatch/
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/

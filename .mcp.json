@@ -17,6 +17,12 @@
       "env": {
         "REPO_PATH": "/Users/christopherjoseph/projects/amiable/llm-council"
       }
+    },
+    "graft": {
+      "command": "graft",
+      "args": [
+        "mcp"
+      ]
     }
   }
 }
