@@ -100,7 +100,8 @@ MEASURED_LATENCY_S = {
 #
 # Samples are stage-1 latency from run_council_with_fallback on the promoting
 # branch, 2026-11-14: five councils per tier, each tier's own contract and the
-# MCP consult timeouts, short questions. All 20 councils returned a synthesis
+# MCP consult timeouts, short questions. `high` was run twice (before and
+# after gemini-4-argon took its seat). All 25 councils returned a synthesis
 # and every member answered every run. A model seated in two tiers carries
 # both tiers' samples (first five = the lower tier).
 #
@@ -125,6 +126,8 @@ OWNER_PROMOTIONS = {
         "samples_s": [6.5, 6.9, 4.1, 5.5, 4.5, 6.4, 7.4, 4.1, 5.4, 5.0],
         "mean_s": 5.6,
     },
+    # Took deepseek-v4-pro-0813's `high` seat (owner decision, 2026-11-14).
+    "google/gemini-4-argon": {**_SMOKE, "samples_s": [9.1, 8.6, 11.3, 6.3, 6.6], "mean_s": 8.4},
     "openai/gpt-6.1-sol-pro": {**_SMOKE, "samples_s": [7.8, 8.1, 7.4, 6.2, 10.8], "mean_s": 8.1},
 }
 MEASURED_LATENCY_S.update({m: p["mean_s"] for m, p in OWNER_PROMOTIONS.items()})

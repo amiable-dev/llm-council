@@ -86,6 +86,10 @@ class TestDefaultTierModelPools:
         # #685: the preview left the default council for frontier (ADR-027),
         # and glm-5.3 took the seat — measured, cheaper, a fourth provider.
         assert "z-ai/glm-5.3" in high
+        # #734: the first stable Google flagship since that preview took the
+        # seat of the member peers ranked lowest, deepseek-v4-pro-0813.
+        assert "google/gemini-4-argon" in high
+        assert "deepseek/deepseek-v4-pro-0813" not in high
         assert "google/gemini-3.1-pro-preview" not in high
         assert "google/gemini-3.1-pro-preview" not in _DEFAULT_TIER_MODEL_POOLS["reasoning"]
         assert "z-ai/glm-5.3" in _DEFAULT_TIER_MODEL_POOLS["reasoning"]
@@ -104,7 +108,7 @@ class TestDefaultTierModelPools:
             "anthropic/claude-fable-5.1",
             "anthropic/claude-fable-5.2",
             "openai/gpt-6-astra",
-            "google/gemini-4-argon",
+            "google/gemini-4-carbon",
         ):
             assert newcomer in frontier, f"{newcomer} should be auditioning"
         # gpt-5.5-pro exits (Pareto-dominated by the GPT-5.6 family)

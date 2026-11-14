@@ -49,6 +49,8 @@
 #   high              gpt-5.6-sol         -> gpt-6.1-sol (member and chairman)
 #   high, reasoning   claude-opus-5       -> claude-opus-5.5
 #   reasoning         gpt-5.6-sol-pro     -> gpt-6.1-sol-pro
+# One seat changed vendor: gemini-4-argon replaced deepseek-v4-pro-0813 in
+# `high` (see that tier). deepseek-v4-pro-0813 keeps its `reasoning` seat.
 # Unchanged because nothing newer exists in the line: gemini-3.5-flash-lite,
 # deepseek-v4-pro-0813, glm-5.3. Smoke: 5 councils per tier, 20 of 20 returned
 # a synthesis, every member answered every run. Samples are in
@@ -98,11 +100,15 @@ pools:
     # four, adds a fourth distinct provider, and costs less per run ($0.183 vs
     # $0.245). #734: gpt-6.1-sol (5.2s smoke, half gpt-5.6-sol's price) and
     # opus-5.5 (5.5s smoke) replaced their predecessors; opus-5 measured 195.2s
-    # store against this tier's 180s.
+    # store against this tier's 180s. gemini-4-argon (8.4s smoke) took
+    # deepseek-v4-pro-0813's seat by owner decision: of the two cheaper
+    # members, peers ranked deepseek below glm-5.3 in 74 of the 85 recorded
+    # sessions where both answered in time (2026-09-24 to 2026-11-13), 7 the
+    # other way. Costs more: $2/$10 per million tokens against $0.11/$4.44.
     models:
       - openai/gpt-6.1-sol
       - anthropic/claude-opus-5.5
-      - deepseek/deepseek-v4-pro-0813
+      - google/gemini-4-argon
       - z-ai/glm-5.3
     timeout_seconds: 180
 
@@ -126,10 +132,8 @@ pools:
     # for the same reason.
     models:
       # 2026-11-14 intake (#734): new since the last check, no predecessor on
-      # a default council. Gemini 4 is the first stable Google flagship since
-      # the 3.1 preview; whether one takes a `high` seat is an owner decision.
+      # a default council. gemini-4-argon went straight to `high`.
       - anthropic/claude-fable-5.2
-      - google/gemini-4-argon
       - google/gemini-4-carbon
       - google/gemini-4-hydrogen
       # 2026-09-24 intake (#696)
