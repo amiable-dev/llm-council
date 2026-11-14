@@ -64,9 +64,9 @@ class TestDefaultTierModelPools:
 
         reasoning_models = _DEFAULT_TIER_MODEL_POOLS["reasoning"]
         model_names = " ".join(reasoning_models).lower()
-        # Should include o1, deepseek-r1, or similar reasoning models
+        # A `-pro` id is the vendor's high-reasoning-effort serving of a model.
         assert any(
-            r in model_names for r in ["o1", "r1", "gpt-5"]
+            m.endswith("-pro") or "-pro-" in m for m in model_names.split()
         ), "Reasoning tier should have reasoning model variants"
 
     def test_default_pools_are_the_sep_2026_refresh(self):
@@ -86,25 +86,29 @@ class TestDefaultTierModelPools:
         # #685: the preview left the default council for frontier (ADR-027),
         # and glm-5.3 took the seat — measured, cheaper, a fourth provider.
         assert "z-ai/glm-5.3" in high
+        # #734: the first stable Google flagship since that preview took the
+        # seat of the member peers ranked lowest, deepseek-v4-pro-0813.
+        assert "google/gemini-4-argon" in high
+        assert "deepseek/deepseek-v4-pro-0813" not in high
         assert "google/gemini-3.1-pro-preview" not in high
         assert "google/gemini-3.1-pro-preview" not in _DEFAULT_TIER_MODEL_POOLS["reasoning"]
         assert "z-ai/glm-5.3" in _DEFAULT_TIER_MODEL_POOLS["reasoning"]
 
-        # #685: luna measures 35.3s against quick's 30s budget. It keeps its
-        # balanced seat, where 35.3s fits the 90s budget.
-        assert "openai/gpt-5.6-luna" not in _DEFAULT_TIER_MODEL_POOLS["quick"]
-        assert "openai/gpt-5.6-luna" in _DEFAULT_TIER_MODEL_POOLS["balanced"]
+        # #685: gpt-5.6-luna measured 35.3s against quick's 30s budget, so
+        # the Luna seat is balanced's. #734 gave it to the successor.
+        assert not any("luna" in m for m in _DEFAULT_TIER_MODEL_POOLS["quick"])
+        assert "openai/gpt-6-luna" in _DEFAULT_TIER_MODEL_POOLS["balanced"]
 
         frontier = _DEFAULT_TIER_MODEL_POOLS["frontier"]
         assert "anthropic/claude-fable-5" in frontier
         assert "x-ai/grok-4.6" in frontier
         assert "google/gemini-3.1-pro-preview" in frontier
-        # The 2026-09 flagships audition here; nothing has measured them yet.
+        # Flagships with no predecessor on a default council audition here.
         for newcomer in (
             "anthropic/claude-fable-5.1",
+            "anthropic/claude-fable-5.2",
             "openai/gpt-6-astra",
-            "google/gemini-3.8-flash",
-            "deepseek/deepseek-v4.1-flash",
+            "google/gemini-4-carbon",
         ):
             assert newcomer in frontier, f"{newcomer} should be auditioning"
         # gpt-5.5-pro exits (Pareto-dominated by the GPT-5.6 family)
@@ -113,11 +117,11 @@ class TestDefaultTierModelPools:
         # #690: quick's aggregator was luna, labelled "speed-matched" while
         # exceeding the tier's own budget.
         assert TIER_AGGREGATORS == {
-            "quick": "anthropic/claude-haiku-4.5",
-            "balanced": "anthropic/claude-sonnet-5",
-            "high": "openai/gpt-5.6-sol",
-            "reasoning": "anthropic/claude-opus-5",
-            "frontier": "anthropic/claude-opus-5",
+            "quick": "anthropic/claude-haiku-5.5",
+            "balanced": "anthropic/claude-sonnet-5.5",
+            "high": "openai/gpt-6.1-sol",
+            "reasoning": "anthropic/claude-opus-5.5",
+            "frontier": "anthropic/claude-opus-5.5",
         }
 
     def test_high_tier_is_default_equivalent(self):

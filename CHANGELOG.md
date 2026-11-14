@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Default councils now seat the current model from each vendor ([#734](https://github.com/amiable-dev/llm-council/issues/734)).** **Behaviour change:** every tier's default members change, and so do all four default chairmen. Checked against the OpenRouter catalogue on 2026-11-14; each successor took its predecessor's seat.
+
+  | Tier | Was | Now | Price per million tokens (in/out) |
+  |---|---|---|---|
+  | quick (member, chairman) | `claude-haiku-4.5` | `claude-haiku-5.5` | $1/$5 → $0.10/$0.50 |
+  | quick, balanced | `deepseek-v4-flash` | `deepseek-v4.1-flash` | similar |
+  | balanced (member, chairman) | `claude-sonnet-5` | `claude-sonnet-5.5` | unchanged, $2/$10 |
+  | balanced | `gpt-5.6-luna` | `gpt-6-luna` | $0.20/$1.20 → $0.10/$0.50 |
+  | balanced | `gemini-3.7-flash` | `gemini-3.8-flash` | $0.75/$3.75 → $0.825/$4.125 |
+  | high (member, chairman) | `gpt-5.6-sol` | `gpt-6.1-sol` | $4/$20 → $2/$10 |
+  | high, reasoning (member); reasoning, frontier (chairman) | `claude-opus-5` | `claude-opus-5.5` | $5/$25 → $4/$20 |
+  | reasoning | `gpt-5.6-sol-pro` | `gpt-6.1-sol-pro` | $4/$20 → $2/$10 |
+  | high | `deepseek-v4-pro-0813` | `gemini-4-argon` | $0.11/$4.44 → $2/$10 |
+
+  - `high` gains a Google model for the first time since the Gemini 3.1 preview was removed. Gemini 4 Argon replaces DeepSeek V4 Pro there, the member that peer review ranked lowest: across recorded sessions where both it and GLM 5.3 answered in time, reviewers placed GLM higher in 74 of 85. It costs more per token. DeepSeek V4 Pro keeps its `reasoning` seat.
+  - `gemini-3.5-flash-lite` and `glm-5.3` keep their seats; nothing newer exists in those lines.
+  - This is an owner decision that skips the ADR-029 audition, which cannot run until #730 is fixed. A live smoke run gated it instead: 5 councils per tier on 2026-11-14, with the final line-ups. All 20 returned a synthesis and every member answered every run, with the slowest single answer at 13.1s (balanced, 90s budget) and 13.8s (high, 180s budget). The samples are short consult prompts, so they show each seat works; they do not forecast latency on verify-sized prompts.
+  - Two effects on known problems: `claude-opus-5` no longer sits in `high`, where it measured 195s against a 180s budget; and `deepseek-v4-flash`, which timed out in about 40% of quick runs (#736), is gone. Balanced councils completed with full peer review in 5 of 5 runs (1 of 6 before). Quick still returned a partial synthesis in 3 of 5, so that half of #736 stands.
+  - To restore old members, set `tiers.pools.<tier>` in `llm_council.yaml`. `LLM_COUNCIL_CHAIRMAN=<model>` restores one chairman, but it applies to every tier.
+  - New in `frontier` (advisory votes only): `claude-fable-5.2`, `gemini-4-carbon`, `gemini-4-hydrogen`. Left `frontier`: `gpt-6-sol`, `gpt-6-sol-pro` (superseded by 6.1), `gpt-5.6-sol-pro`, and the models promoted above.
+  - `google/gemini-3.8-flash` registry price corrected to $0.825/$4.125 per million tokens (was $0.75/$3.75).
+  - `x-ai/grok-4.7` registry price corrected to $2/$6 per million tokens (was $1.60/$4.80), cache read $0.50. xAI is its only provider, so the cost fallback was under-billing it.
+  - Prompt caching: Opus 5's minimum cacheable prefix is 512 tokens, not 1,024, so verify prompts between 512 and 1,023 tokens now cache on it. Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1 get their documented 512 instead of the 4,096 fallback.
+
 ## [0.54.0] - 2026-11-14
 
 **`llm-council serve` now listens on this machine only, and webhooks on `/v1/council/run` work as documented.** This release finishes the hardening that followed GHSA-r7rh-j9cj-h9hh (fixed in 0.53.1).
