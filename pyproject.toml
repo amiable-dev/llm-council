@@ -3,7 +3,7 @@ name = "llm-council-core"
 dynamic = ["version"]
 description = "Multi-LLM council system with peer review and synthesis"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Amiable" }]
 maintainers = [{ email = "contact@amiable.dev" }]
@@ -22,7 +22,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -76,7 +75,7 @@ otel = [
 # All server dependencies
 all = ["llm-council-core[http,mcp]"]
 # Development dependencies
-dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0", "ruff>=0.1.0", "pytest-cov>=4.0.0", "tomli>=2.0.0; python_version<'3.11'", "pytest-recording>=0.13.0", "vcrpy>=6.0.0", "mypy>=1.0.0", "hypothesis>=6.100.0", "types-PyYAML>=6.0.0"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21.0", "ruff>=0.1.0", "pytest-cov>=4.0.0", "pytest-recording>=0.13.0", "vcrpy>=6.0.0", "mypy>=1.0.0", "hypothesis>=6.100.0", "types-PyYAML>=6.0.0"]
 # Documentation dependencies
 docs = ["mkdocs-material>=9.7.7", "mkdocs>=1.5.0"]
 
@@ -113,7 +112,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]

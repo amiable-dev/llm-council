@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Python 3.10 is no longer supported.** **Breaking:** the package now requires Python 3.11 or later, which is what the README and installation guide already stated. Python 3.10 reached end of life in October 2026, and a dependency of the `[ollama]` extra (`filelock`) has open advisories that are fixed only in releases needing 3.11. On Python 3.10, `pip` keeps installing 0.55.0.
+
 ### Security
 - **Dependency floors raised for two extras.** `llm-council-core[mcp]` now requires `mcp>=1.30.0` (was 1.28.1) and `llm-council-core[ollama]` requires `litellm>=1.100.4` (was 1.50.0), so a fresh install can no longer resolve to a release with a published advisory. Neither advisory set is known to be reachable through LLM Council: the MCP server runs over stdio, and LiteLLM is used as a client library, not as its proxy.
-- **Lockfile refreshed** for the development and CI environment: `pyjwt` 2.15.1, `aiohttp` 3.14.5, `urllib3` 2.8.0, `certifi` 2026.10.23, `filelock` 4.2.10, `fsspec` 2026.9.0, `multidict` 7.2.1 and `opentelemetry-*` 1.45.2. These are transitive; the published wheel does not pin them. On Python 3.10, `filelock` stays at 4.1.0 because later releases need Python 3.11.
+- **Lockfile refreshed** for the development and CI environment: `pyjwt` 2.15.1, `aiohttp` 3.14.5, `urllib3` 2.8.0, `certifi` 2026.10.23, `filelock` 4.2.10, `fsspec` 2026.9.0, `multidict` 7.2.1 and `opentelemetry-*` 1.45.2. These are transitive; the published wheel does not pin them.
 - A model id is stripped of line breaks before it is written to the pricing-lookup debug log (CodeQL `py/log-injection`).
 
 ### Changed
