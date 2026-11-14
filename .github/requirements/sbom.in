@@ -1,0 +1,3 @@
+# SBOM generator for security.yml and release-security.yml.
+# Regenerate: uv pip compile --upgrade --generate-hashes --universal --python-version 3.12 .github/requirements/sbom.in -o .github/requirements/sbom.txt
+cyclonedx-bom==8.0.1

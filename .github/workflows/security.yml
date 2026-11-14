@@ -197,8 +197,11 @@ jobs:
 
       - name: Generate SBOM
         run: |
-          pip install cyclonedx-bom==4.6.0
-          cyclonedx-py environment -o sbom.json --output-format JSON
+          # The SBOM tool is hash-pinned and lives in its own venv, so it neither
+          # changes nor appears in the environment it describes.
+          python -m venv "$RUNNER_TEMP/sbom-tool"
+          "$RUNNER_TEMP/sbom-tool/bin/pip" install --require-hashes -r .github/requirements/sbom.txt
+          "$RUNNER_TEMP/sbom-tool/bin/cyclonedx-py" environment "$(command -v python)" -o sbom.json --output-format JSON
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6
