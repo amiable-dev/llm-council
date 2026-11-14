@@ -96,35 +96,44 @@ MEASURED_LATENCY_S = {
 # while #730 stands). Kept apart from the store snapshot above so the override
 # is visible and checkable rather than self-attested: each entry names its
 # deciding issue and carries the raw smoke samples, and
-# `TestOwnerPromotionsAreAuditable` recomputes the mean from them. Samples are
-# stage-1 latency from run_council_with_fallback on the promoting branch
-# (2026-10-09). Every run returned content, and the new chairman wrote every
-# synthesis.
+# `TestOwnerPromotionsAreAuditable` recomputes the mean from them.
+#
+# Samples are stage-1 latency from run_council_with_fallback on the promoting
+# branch, 2026-11-14: five councils per tier, each tier's own contract and the
+# MCP consult timeouts, short questions. All 20 councils returned a synthesis
+# and every member answered every run. A model seated in two tiers carries
+# both tiers' samples (first five = the lower tier).
+#
+# NOT comparable with the store means above: those average real sessions,
+# verify-sized prompts included, and these are short consult prompts. They
+# show the seat works and fits; they are not a forecast of verify latency.
 MIN_SMOKE_SAMPLES = 5
+_SMOKE = {"issue": "#734", "date": "2026-11-14"}
 OWNER_PROMOTIONS = {
-    "anthropic/claude-haiku-5.5": {
-        "issue": "#734", "date": "2026-10-09",
-        "samples_s": [8.5, 7.9, 3.5, 8.4, 12.2], "mean_s": 8.1,
+    "anthropic/claude-haiku-5.5": {**_SMOKE, "samples_s": [3.2, 4.0, 2.0, 1.6, 1.9], "mean_s": 2.5},
+    "anthropic/claude-sonnet-5.5": {**_SMOKE, "samples_s": [3.9, 6.5, 3.4, 4.8, 3.8], "mean_s": 4.5},
+    "deepseek/deepseek-v4.1-flash": {
+        **_SMOKE,
+        "samples_s": [3.7, 5.4, 2.0, 0.9, 1.9, 13.1, 1.9, 2.9, 1.4, 6.4],
+        "mean_s": 4.0,
     },
-    "anthropic/claude-sonnet-5.5": {
-        "issue": "#734", "date": "2026-10-09",
-        "samples_s": [13.3, 7.9, 5.3, 16.5, 11.9], "mean_s": 11.0,
+    "openai/gpt-6-luna": {**_SMOKE, "samples_s": [3.4, 2.3, 4.0, 3.4, 3.3], "mean_s": 3.3},
+    "google/gemini-3.8-flash": {**_SMOKE, "samples_s": [6.5, 7.0, 6.0, 4.1, 5.2], "mean_s": 5.8},
+    "openai/gpt-6.1-sol": {**_SMOKE, "samples_s": [5.6, 6.2, 4.5, 3.6, 5.9], "mean_s": 5.2},
+    "anthropic/claude-opus-5.5": {
+        **_SMOKE,
+        "samples_s": [6.5, 6.9, 4.1, 5.5, 4.5, 6.4, 7.4, 4.1, 5.4, 5.0],
+        "mean_s": 5.6,
     },
+    "openai/gpt-6.1-sol-pro": {**_SMOKE, "samples_s": [7.8, 8.1, 7.4, 6.2, 10.8], "mean_s": 8.1},
 }
 MEASURED_LATENCY_S.update({m: p["mean_s"] for m, p in OWNER_PROMOTIONS.items()})
 
 # Tracked debt, not exemptions: each entry must STILL be a live violation, or
 # `test_tracked_debt_is_still_a_real_violation` fails and the entry has to go.
 KNOWN_BUDGET_VIOLATIONS = {
-    # The configured chairman averages 195.2s against high's 180s budget (re-measured 2026-09-24; it came
-    # down from 204.3s and is still over), which
-    # makes verify report unclear(infra_failure) on a completed deliberation.
-    # The fix is a contract decision — stage floor vs waterfall share vs a
-    # faster chairman — not a pool edit.
-    # #686 (closed 2026-09-28) fixed the CHAIRMAN half by giving high its own
-    # chairman (#725). Opus 5 is still a high MEMBER, and still over budget,
-    # so the debt moved to #736, which is open. A waiver must cite an open issue.
-    ("high", "anthropic/claude-opus-5"): "#736",
+    # Empty since #734: opus-5 (195.2s against high's 180s, ex-#686/#736) left
+    # high and reasoning for opus-5.5.
 }
 
 # Matched against tokens of the id's LAST path segment, split on -, :, . and _,

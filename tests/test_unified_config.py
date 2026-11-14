@@ -1435,8 +1435,8 @@ class TestCouncilConfig:
 
         config = CouncilConfig()
 
-        # Defaults from config.py (Aug-2026 model refresh, #635)
-        assert "openai/gpt-5.6-sol" in config.models
+        # Derived from the `high` pool (#690); gpt-6.1-sol holds the seat (#734)
+        assert "openai/gpt-6.1-sol" in config.models
         # #725: unset by default, so each tier synthesises with its aggregator.
         assert config.chairman is None
         assert config.synthesis_mode == "consensus"
