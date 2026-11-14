@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `x-ai/grok-4.7` registry price corrected to $2/$6 per million tokens (was $1.60/$4.80), cache read $0.50. xAI is its only provider, so the cost fallback was under-billing it.
   - Prompt caching: Opus 5's minimum cacheable prefix is 512 tokens, not 1,024, so verify prompts between 512 and 1,023 tokens now cache on it. Opus 5.5, Sonnet 5.5, Haiku 5.5 and Fable 5.1 get their documented 512 instead of the 4,096 fallback.
 
-## [0.54.0] - 2026-11-13
+## [0.54.0] - 2026-11-14
 
 **`llm-council serve` now listens on this machine only, and webhooks on `/v1/council/run` work as documented.** This release finishes the hardening that followed GHSA-r7rh-j9cj-h9hh (fixed in 0.53.1).
 
