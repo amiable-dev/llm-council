@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-13
+
+**`llm-council serve` now listens on this machine only, and webhooks on `/v1/council/run` work as documented.** This release finishes the hardening that followed GHSA-r7rh-j9cj-h9hh (fixed in 0.53.1).
+
+**Breaking:** the HTTP server's default bind address changes from `0.0.0.0` to `127.0.0.1`. If other machines or containers need to reach it, start it with `--host 0.0.0.0` and set `LLM_COUNCIL_API_TOKEN`. The bundled Docker, Railway and Render configurations already do this.
+
+Other behaviour changes: callers using the default webhook events now receive `council.complete` and `council.error`, which were never sent before; the HTTP response no longer waits for webhook delivery; and `LLM_COUNCIL_WEBHOOK_TIMEOUT` now applies.
+
 ### Changed
 
 - **Breaking: `llm-council serve` now listens on `127.0.0.1` by default, not `0.0.0.0`.** The server used to accept connections on every network interface with no authentication unless you configured otherwise, which was the precondition for GHSA-r7rh-j9cj-h9hh and let anyone on the same network run councils on your API key. **If other machines or containers need to reach the server, start it with `--host 0.0.0.0`** and set `LLM_COUNCIL_API_TOKEN`. The bundled Dockerfile, `railway.json` and Render configuration already pass `--host 0.0.0.0` and are unaffected. Binding a non-loopback address without a token now prints a warning at startup; the server still starts.
@@ -16,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/v1/council/run` now delivers `council.complete` and `council.error` webhooks** ([#740](https://github.com/amiable-dev/llm-council/issues/740)). The endpoint only ever sent `council.deliberation_start`, so a caller using the default `webhook_events` received nothing. `council.complete` carries the result (`stage1`, `stage2`, `stage3`); `council.error` is sent when the run raises or every model fails. Reported by @ogzerber.
 - **Webhook delivery no longer delays the council run or the HTTP response** ([#739](https://github.com/amiable-dev/llm-council/issues/739)). Delivery ran inline before the run started, so a slow receiver held up the caller for up to three attempts. Events are now queued and delivered by a background worker. **Behaviour change:** the HTTP response can arrive before `council.complete` is delivered. Library callers of `run_full_council` still get every event delivered before the call returns; pass `webhook_delivery="background"` to opt out.
 - **`LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` and `LLM_COUNCIL_WEBHOOK_TIMEOUT` now take effect** ([#741](https://github.com/amiable-dev/llm-council/issues/741)). The first was documented but read by nothing; the second was read and then ignored, so the timeout was always 5 seconds. The YAML keys `webhooks.timeout_seconds` and `webhooks.https_only` had the same problem and are fixed too. `LLM_COUNCIL_WEBHOOK_HTTPS_ONLY` fails safe: only an explicit `false`, `0`, `no` or `off` turns it off, and private or loopback destinations still need `LLM_COUNCIL_WEBHOOK_ALLOWED_HOSTS`.
+- **The README documented fifteen settings under names nothing reads** ([#745](https://github.com/amiable-dev/llm-council/issues/745)). Four were wrong names for real variables (`RUBRIC_SCORING_ENABLED`, `SAFETY_GATE_ENABLED`, `BIAS_AUDIT_ENABLED`, `BIAS_PERSISTENCE_ENABLED`), `LLM_COUNCIL_SHADOW_SAMPLE_RATE` is really `LLM_COUNCIL_SHADOW_SAMPLING_RATE`, and ten (rubric weights, safety score cap, bias thresholds, consent level, store path) can only be set in `llm_council.yaml`. The README now shows the working name or YAML for each, and the docs check covers names inside code blocks. If you set any of the old names, they never had an effect.
 - **Verify and the council gate no longer lose a very large file to a 10-second hang** ([#746](https://github.com/amiable-dev/llm-council/issues/746)). Fetching a file far larger than the read limit, in practice `CHANGELOG.md`, stalled for 10 seconds on Python 3.12 and earlier and then reached the council as `[Error: git show ... hung]` instead of its truncated content. The fetch stopped reading the file once it had enough, and on those Python versions that left the wait for `git` to exit blocked on a process that had already exited. The log message blamed stderr; the cause was stdout.
 
 ## [0.53.1] - 2026-11-13
