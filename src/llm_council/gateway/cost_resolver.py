@@ -22,6 +22,7 @@ import logging
 import math
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from ..log_safety import safe_log
 from .types import UsageInfo
 
 # Gateways that never incur a marginal per-call API cost.
@@ -62,7 +63,7 @@ def registry_pricing_lookup(model_id: str) -> Dict[str, float]:
         # run) — but not silently: leave a debug trace for diagnosis.
         logging.getLogger(__name__).debug(
             "pricing lookup failed for %s; cost will be unknown",
-            model_id,
+            safe_log(model_id),
             exc_info=True,
         )
         return {}

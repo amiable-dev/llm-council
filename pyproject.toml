@@ -51,15 +51,17 @@ http = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
 # uvicorn for running the HTTP server.
 mcp = [
     "llm-council-core[http]",
-    # Floor 1.28.1: GHSA fixes for HTTP-transport principal verification,
-    # experimental task-handler isolation, and WS Host/Origin validation.
+    # Floor 1.30.0: fixes for cross-origin redirects in the HTTP client
+    # transports, bearer tokens issued for another resource server, and
+    # server-chosen $ref fetches (on top of the 1.28.1 GHSA fixes).
     # Ceiling <2: the SDK v2 migration (Tasks wiring, #425) is its own change.
-    "mcp>=1.28.1,<2",
+    "mcp>=1.30.0,<2",
 ]
 # Secure key storage via system keychain - install with: pip install "llm-council-core[secure]"
 secure = ["keyring>=23.0.0"]
 # Ollama local LLM support via LiteLLM - install with: pip install "llm-council-core[ollama]"
-ollama = ["litellm>=1.50.0"]
+# Floor 1.100.4: GHSA-7hp6-4w63-5g45 and GHSA-g5ff-637f-6q2m (LiteLLM proxy).
+ollama = ["litellm>=1.100.4"]
 # PostHog LLM Analytics emission (ADR-050) - install with: pip install "llm-council-core[posthog]"
 posthog = ["posthog>=3.0.0"]
 # External spend telemetry as OTLP spans (ADR-056) - install with:

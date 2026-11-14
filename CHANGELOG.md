@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Dependency floors raised for two extras.** `llm-council-core[mcp]` now requires `mcp>=1.30.0` (was 1.28.1) and `llm-council-core[ollama]` requires `litellm>=1.100.4` (was 1.50.0), so a fresh install can no longer resolve to a release with a published advisory. Neither advisory set is known to be reachable through LLM Council: the MCP server runs over stdio, and LiteLLM is used as a client library, not as its proxy.
+- **Lockfile refreshed** for the development and CI environment: `pyjwt` 2.15.1, `aiohttp` 3.14.5, `urllib3` 2.8.0, `certifi` 2026.10.23, `filelock` 4.2.10, `fsspec` 2026.9.0, `multidict` 7.2.1 and `opentelemetry-*` 1.45.2. These are transitive; the published wheel does not pin them. On Python 3.10, `filelock` stays at 4.1.0 because later releases need Python 3.11.
+- A model id is stripped of line breaks before it is written to the pricing-lookup debug log (CodeQL `py/log-injection`).
+
+### Changed
+- CI installs the linter, type checker and nightly bench from `uv.lock` instead of the latest release on PyPI, and the SBOM generator from a hash-pinned requirements file in its own virtual environment. Release SBOMs therefore no longer list the generator's own dependencies.
+
 ## [0.55.0] - 2026-11-14
 
 **Every default council now uses the current model from each vendor.** Members and chairmen change in all four tiers, so answers, latency and cost will differ from 0.54.0 without any change on your side.

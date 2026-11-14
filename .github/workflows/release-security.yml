@@ -40,9 +40,12 @@ jobs:
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
-          pip install cyclonedx-bom==4.6.0
+          # The SBOM tool is hash-pinned and lives in its own venv, so it neither
+          # changes nor appears in the environment it describes.
+          python -m venv "$RUNNER_TEMP/sbom-tool"
+          "$RUNNER_TEMP/sbom-tool/bin/pip" install --require-hashes -r .github/requirements/sbom.txt
           SBOM_FILE="llm-council-${REF_NAME}-sbom.json"
-          cyclonedx-py environment -o "$SBOM_FILE" --output-format JSON
+          "$RUNNER_TEMP/sbom-tool/bin/cyclonedx-py" environment "$(command -v python)" -o "$SBOM_FILE" --output-format JSON
           echo "filename=$SBOM_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Upload SBOM artifact
