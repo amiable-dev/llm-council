@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.54.0] - 2026-11-13
+## [0.54.0] - 2026-11-14
 
 **`llm-council serve` now listens on this machine only, and webhooks on `/v1/council/run` work as documented.** This release finishes the hardening that followed GHSA-r7rh-j9cj-h9hh (fixed in 0.53.1).
 
