@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A model id is stripped of line breaks before it is written to the pricing-lookup debug log (CodeQL `py/log-injection`).
 
 ### Changed
-- CI installs the linter, type checker and nightly bench from `uv.lock` instead of the latest release on PyPI, and the SBOM generator from a hash-pinned requirements file in its own virtual environment. Release SBOMs therefore no longer list the generator's own dependencies.
+- CI installs the linter, type checker and nightly bench from `uv.lock` instead of the latest release on PyPI, and the SBOM generator from a hash-pinned requirements file in its own virtual environment. The generator moves from `cyclonedx-bom` 4.6.0 to 8.0.1, because 4.6.0 requires an `lxml` release with a known XXE advisory. Release SBOMs are now CycloneDX 1.6 (was 1.5) and no longer list the generator's own dependencies.
 
 ## [0.55.0] - 2026-11-14
 
