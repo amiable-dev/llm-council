@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-11-14
+
+**Every default council now uses the current model from each vendor.** Members and chairmen change in all four tiers, so answers, latency and cost will differ from 0.54.0 without any change on your side.
+
+**Behaviour change:** if you rely on the previous line-up, pin it with `tiers.pools.<tier>` in `llm_council.yaml` before upgrading. The table below lists each seat that changed and its price.
+
 ### Changed
 - **Default councils now seat the current model from each vendor ([#734](https://github.com/amiable-dev/llm-council/issues/734)).** **Behaviour change:** every tier's default members change, and so do all four default chairmen. Checked against the OpenRouter catalogue on 2026-11-14; each successor took its predecessor's seat.
 
