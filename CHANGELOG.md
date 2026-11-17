@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The nightly fuzzing job now finishes.** It asked the fuzzer to run for exactly GitHub's 6-hour job limit, so every run since the job was added on 23 August 2026 was killed before it could save its corpus or report a crash. It now fuzzes for one hour, with a 90-minute job limit and a manual trigger. This affects this repository's CI only.
+
 ## [0.56.1] - 2026-11-17
 
 **`verify` and `gate` review the code again on changes that are large or that touch large documentation files.** Files are sized to the room left in the prompt and taken source-first, and the coverage receipt lists only what the council was shown.
