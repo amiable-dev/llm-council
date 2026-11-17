@@ -13,6 +13,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install the [http] dependencies first, at the exact versions and hashes in
+# uv.lock. deploy/railway/requirements.txt is exported from the lockfile;
+# tests/test_pinned_requirements.py fails when the two drift apart.
+COPY deploy/railway/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
+
 # Copy project files
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
@@ -22,8 +28,10 @@ COPY src/ ./src/
 ARG VERSION=0.0.0.dev0
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${VERSION}
 
-# Install with HTTP support
-RUN pip install --no-cache-dir ".[http]"
+# Install the package itself; its dependencies are already in place.
+# Editable (-e) so the install runs from /app/src: OpenSSF Scorecard accepts a
+# local install as pinned only in the form `--no-deps -e`.
+RUN pip install --no-cache-dir --no-deps -e .
 
 # Create non-root user for security (ADR-038 requirement)
 RUN useradd --create-home --shell /bin/bash appuser

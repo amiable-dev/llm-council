@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Docker image installs its dependencies at the exact versions and hashes in `uv.lock`.** `deploy/railway/Dockerfile` (used by Railway, Render and `docker-compose.yml`) previously ran `pip install ".[http]"`, which resolved whatever was newest on the day of the build. It now installs `deploy/railway/requirements.txt` with `--require-hashes`, then the package itself as an editable install from `/app/src`. The ClusterFuzzLite build does the same from `.clusterfuzzlite/requirements.txt`. Both files are exported from `uv.lock`, and `tests/test_pinned_requirements.py` fails when they fall behind it; the failure message gives the command to regenerate them.
+
 ## [0.56.0] - 2026-11-17
 
 **Python 3.10 support ends, and the `[mcp]` and `[ollama]` extras require patched dependencies.** There are no changes to how councils run.
