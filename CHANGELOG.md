@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.56.1] - 2026-11-17
+
+**`verify` and `gate` review the code again on changes that are large or that touch large documentation files.** Files are sized to the room left in the prompt and taken source-first, and the coverage receipt lists only what the council was shown.
+
+**Behaviour change:** if you pass `target_paths` and a file you named does not fit the tier's input limit, a `pass` now becomes `unclear` (`incomplete_coverage`). Such files were previously reported as reviewed.
+
 ### Fixed
 - **`verify` and `gate` no longer refuse a change for being about as large as the tier's input limit (#747).** The files under review were allowed to fill the whole limit (30,000 characters at `balanced`), and the instructions, evidence and review target were then added on top, so the finished prompt exceeded the limit and the run ended as `input_too_large` before any model was called. The files are now given the room that is left. In this repository's CI, 9 of the 18 gate runs after 28 September 2026 (counted on 14 November) were refused this way.
 - **Source code is reviewed before documentation.** Files were taken in path order until the budget ran out, so a change that also touched `CHANGELOG.md`, `CLAUDE.md` or `README.md` could spend the whole budget on those and show the council no code. The order is now source, tests, configuration, then documentation. A file that does not fit is skipped and the smaller files after it are still considered; before, the first file that did not fit ended the review.
