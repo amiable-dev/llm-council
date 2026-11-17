@@ -24,6 +24,7 @@ from .evidence_render import (
     _build_evidence_section,
     _neutralize_evidence_items,
 )
+from .subject_budget import subject_room
 from .file_ops import (
     _fetch_files_for_verification_async_with_metadata,
     _get_git_root_async,
@@ -75,26 +76,6 @@ async def _build_verification_prompt(
     if rubric_focus:
         focus_section = f"\n\n**Focus Area**: {rubric_focus}\nPay particular attention to {rubric_focus.lower()}-related concerns."
 
-    # Fetch actual file contents (async to avoid blocking event loop).
-    # Issue #340: use the metadata-aware variant so we can surface
-    # expansion warnings on the response — and hard-fail when caller-
-    # supplied target_paths resolved to zero files (otherwise the council
-    # silently reviews a boilerplate-only prompt).
-    file_contents, expansion_metadata = await _fetch_files_for_verification_async_with_metadata(
-        snapshot_id, target_paths, tier=tier
-    )
-
-    if target_paths and not expansion_metadata.get("expanded_paths"):
-        # #581: name the repository that was searched. The daemon resolves one
-        # root process-wide from its spawn cwd, so "not found" is frequently
-        # "found nothing HERE" — which the operator cannot tell without this.
-        raise SnapshotResolutionError(
-            snapshot_id=snapshot_id,
-            unresolved_paths=list(target_paths),
-            expansion_warnings=list(expansion_metadata.get("expansion_warnings", [])),
-            repo_root=await _get_git_root_async(),
-        )
-
     evidence_instructions = _build_evidence_instructions(bool(kept_evidence))
 
     # ADR-049 D1: stable-prefix-first assembly. Segments render in stability
@@ -121,15 +102,44 @@ At the end of your review, provide a clear verdict:
 
 Be specific and cite file paths and line numbers when identifying issues.
 """
-    subject = f"""
-## Code to Review
-
-{file_contents}
-"""
+    subject_open = "\n## Code to Review\n\n"
+    subject_close = "\n"
     volatile_tail = f"""
 ## Review Target
 
 Commit under review: `{snapshot_id}`"""
+
+    # Fetch actual file contents (async to avoid blocking event loop).
+    # Issue #340: use the metadata-aware variant so we can surface
+    # expansion warnings on the response — and hard-fail when caller-
+    # supplied target_paths resolved to zero files (otherwise the council
+    # silently reviews a boilerplate-only prompt).
+    #
+    # #747: the files get the room that is LEFT, not the whole tier cap. They
+    # used to be sized against the cap on their own, and the instructions,
+    # evidence and tail were added on top, so a change of about the cap's size
+    # was refused as `input_too_large` before any model was called.
+    file_contents, expansion_metadata = await _fetch_files_for_verification_async_with_metadata(
+        snapshot_id,
+        target_paths,
+        tier=tier,
+        max_chars=subject_room(
+            tier, static_head, evidence_section, subject_open, subject_close, volatile_tail
+        ),
+    )
+
+    if target_paths and not expansion_metadata.get("expanded_paths"):
+        # #581: name the repository that was searched. The daemon resolves one
+        # root process-wide from its spawn cwd, so "not found" is frequently
+        # "found nothing HERE" — which the operator cannot tell without this.
+        raise SnapshotResolutionError(
+            snapshot_id=snapshot_id,
+            unresolved_paths=list(target_paths),
+            expansion_warnings=list(expansion_metadata.get("expansion_warnings", [])),
+            repo_root=await _get_git_root_async(),
+        )
+
+    subject = subject_open + file_contents + subject_close
 
     prompt = static_head + evidence_section + subject + volatile_tail
 

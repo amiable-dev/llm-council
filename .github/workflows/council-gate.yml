@@ -65,11 +65,18 @@ jobs:
           version: latest
           confidence-threshold: ${{ github.event.inputs.confidence-threshold || '0.75' }}
           rubric-focus: General
+          # #747: UNCLEAR means the council reached no verdict, most often
+          # because it never ran (input refused, no credit, timeout). That used
+          # to show a green tick. This check is not required, so a red one
+          # does not block a merge.
+          fail-on-unclear: true
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && steps.check-key.outputs.has_key == 'true'
+        # !cancelled(): the gate step now fails on FAIL and UNCLEAR, and those
+        # are the verdicts most worth posting.
+        if: ${{ !cancelled() && github.event_name == 'pull_request' && steps.check-key.outputs.has_key == 'true' }}
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd  # v8
         env:
           COUNCIL_VERDICT: ${{ steps.council.outputs.verdict }}
@@ -85,12 +92,14 @@ jobs:
 
             const emoji = verdict === 'PASS' ? '✅' : verdict === 'FAIL' ? '❌' : '⚠️';
             const status = verdict || 'UNKNOWN';
+            const note = verdict === 'PASS' || verdict === 'FAIL' ? '' :
+              '\n\n**The council reached no verdict on this change.** See the workflow run for the reason.';
 
             const body = `## ${emoji} LLM Council Quality Gate: ${status}
 
             **Confidence Score:** ${confidence}
             **Threshold:** ${threshold}
-            **Snapshot:** \`${sha}\`
+            **Snapshot:** \`${sha}\`${note}
 
             ---
             *Evaluated by [LLM Council](https://github.com/amiable-dev/llm-council) using [llm-council-action](https://github.com/amiable-dev/llm-council-action)*`;

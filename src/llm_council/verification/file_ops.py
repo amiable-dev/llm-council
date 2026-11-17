@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..log_safety import safe_log
+from .subject_budget import assemble_subject, coverage_receipt
 from .constants import (
     ASYNC_SUBPROCESS_TIMEOUT,
     GARBAGE_FILENAMES,
@@ -1174,6 +1175,7 @@ async def _fetch_files_for_verification_async_with_metadata(
     snapshot_id: str,
     target_paths: Optional[List[str]] = None,
     tier: str = "balanced",
+    max_chars: Optional[int] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """
     Fetch file contents for verification prompt with expansion metadata.
@@ -1190,6 +1192,7 @@ async def _fetch_files_for_verification_async_with_metadata(
         snapshot_id: Git commit SHA
         target_paths: Optional list of specific paths (files or directories)
         tier: Active tier name; controls per-file / per-batch char budgets
+        max_chars: Room left for the returned text (#747); None = the tier cap
 
     Returns:
         Tuple of (formatted content string, metadata dict)
@@ -1203,13 +1206,6 @@ async def _fetch_files_for_verification_async_with_metadata(
     }
     all_omissions: List[Omission] = []
     git_root = await _get_git_root_async()
-
-    # Issue #342: derive per-file and per-batch caps from the tier so the
-    # legacy 15K per-file limit cannot silently amputate a single big file
-    # at the reasoning tier (which has 50K of headroom).
-    tier_budget = TIER_MAX_CHARS.get(tier, 50000)
-    per_file_budget = tier_budget
-    per_batch_budget = tier_budget
 
     # ADR-034 v2.6: Expand directories in target_paths
     #
@@ -1295,95 +1291,32 @@ async def _fetch_files_for_verification_async_with_metadata(
                 f"git diff-tree discovery failed ({e}); reviewing zero changed files"
             )
 
-    # #555 coverage receipt: typed omissions + conservation invariant. Built here
-    # so every path select_blobs saw is accounted for, whichever branch produced
-    # it. `reviewed ∪ omitted == candidates` (disjoint) holds by construction —
-    # the invariant is a defensive marker (ADR-051 C4), never a crash.
-    reviewed_set = list(dict.fromkeys(files_to_fetch))  # de-dup, order-stable
-    omitted_records = [
-        {"path": o.path, "reason": o.reason, "origin": o.origin} for o in all_omissions
-    ]
-    rset, oset = set(reviewed_set), {o["path"] for o in omitted_records}
-    conservation_ok = rset.isdisjoint(oset)
-    if not conservation_ok:
-        logger.error(
-            "coverage conservation violated: %d paths in both reviewed and omitted",
-            len(rset & oset),
+    # #747: fit the files to the room the caller has left (the tier cap minus
+    # the prompt around them), in review-value order. The receipt is built
+    # AFTER fitting, so `reviewed` is what the council was actually shown.
+    #
+    # The raw fetch is CALLED here and nowhere else (test-pinned): the fitter
+    # receives this closure, never the primitive, and only ever sees paths that
+    # came out of `select_blobs`.
+    content, fit_warnings, not_fitted = (
+        await assemble_subject(
+            snapshot_id,
+            files_to_fetch,
+            tier,
+            lambda sha, path, max_file_chars: _fetch_file_at_commit_async(
+                sha, path, max_file_chars=max_file_chars
+            ),
+            max_chars,
         )
-    expansion_metadata["coverage"] = {
-        "requested": list(target_paths) if target_paths else None,
-        "reviewed": reviewed_set,
-        "omitted": omitted_records,
-        "explicit_omitted": any(o.origin == "explicit" for o in all_omissions),
-        "truncated": bool(expansion_metadata.get("paths_truncated")),
-        "conservation_ok": conservation_ok,
-    }
-
-    if not files_to_fetch:
-        return "[No files specified and could not determine changed files]", expansion_metadata
-
-    # Fetch files with early termination when limit is reached
-    # This avoids wasting resources on files we won't include
-    sections: List[str] = []
-    total_chars = 0
-
-    # Limit concurrent fetches to avoid DoS on large commits
-    # Fetch in batches of up to 5 files at a time
-    BATCH_SIZE = 5
-    files_fetched = 0
-    budget_exceeded = False
-
-    for i in range(0, len(files_to_fetch), BATCH_SIZE):
-        # Check limit before fetching next batch
-        if budget_exceeded:
-            break
-
-        batch = files_to_fetch[i : i + BATCH_SIZE]
-        results = await asyncio.gather(
-            *[
-                _fetch_file_at_commit_async(snapshot_id, fp, max_file_chars=per_file_budget)
-                for fp in batch
-            ]
-        )
-
-        for file_path, (content, truncated) in zip(batch, results):
-            # #584: check the PROJECTED total, not the current one. The old
-            # `total_chars >= per_batch_budget` check ran before this file's
-            # content was added, so a single file up to the full per-file
-            # budget could push total_chars past per_batch_budget before the
-            # *next* file's check ever caught it — overshooting by up to one
-            # whole per-file budget's worth of characters.
-            #
-            # `total_chars > 0` guards the FIRST file: a truncated file's
-            # returned content is `content[:limit] + marker_text`, so its
-            # length is slightly ABOVE per_file_budget (== per_batch_budget)
-            # on its own. Without this guard the projected-total check would
-            # drop the first file entirely instead of including it truncated
-            # (a Council review of this exact PR caught the regression) —
-            # CLAUDE.md documents "reasoning/high can read a full 50K file"
-            # as a guarantee, so the first file is always included.
-            if total_chars > 0 and total_chars + len(content) > per_batch_budget:
-                sections.append(
-                    f"\n... [remaining files omitted, {per_batch_budget} char limit reached]"
-                )
-                budget_exceeded = True
-                break
-
-            total_chars += len(content)
-            files_fetched += 1
-            section = f"### {file_path}\n```\n{content}\n```"
-            sections.append(section)
-
-            # Issue #342: surface per-file truncation. Previously the
-            # `truncated` boolean was bound and immediately discarded so
-            # callers had no structured signal — only the inline
-            # `[truncated, ...]` marker inside the file body itself.
-            if truncated:
-                expansion_metadata["expansion_warnings"].append(
-                    f"file '{file_path}' truncated at {per_file_budget} chars "
-                    f"({tier} tier per-file budget)"
-                )
-
-    return "\n\n".join(sections), expansion_metadata
-
-
+        if files_to_fetch
+        else ("[No files specified and could not determine changed files]", [], [])
+    )
+    expansion_metadata["expansion_warnings"].extend(fit_warnings)
+    expansion_metadata["coverage"] = coverage_receipt(
+        target_paths,
+        files_to_fetch,
+        [{"path": o.path, "reason": o.reason, "origin": o.origin} for o in all_omissions],
+        bool(expansion_metadata.get("paths_truncated")),
+        not_fitted,
+    )
+    return content, expansion_metadata
