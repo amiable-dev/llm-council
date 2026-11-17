@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.56.0] - 2026-11-14
+## [0.56.0] - 2026-11-17
 
 **Python 3.10 support ends, and the `[mcp]` and `[ollama]` extras require patched dependencies.** There are no changes to how councils run.
 
