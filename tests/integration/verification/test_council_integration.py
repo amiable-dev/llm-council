@@ -32,7 +32,7 @@ def _one_reviewable_file():
     snapshot resolution.
     """
 
-    async def fetch(snapshot_id, target_paths=None, tier="balanced"):
+    async def fetch(snapshot_id, target_paths=None, tier="balanced", max_chars=None):
         return "### app.py\n```\nx = 1\n```", {
             "expanded_paths": ["app.py"],
             "paths_truncated": False,

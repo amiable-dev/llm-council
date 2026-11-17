@@ -389,7 +389,7 @@ class TestBuildPromptPropagatesTier:
 
         captured = {}
 
-        async def fake_fetch_with_metadata(snapshot_id, target_paths, tier="balanced"):
+        async def fake_fetch_with_metadata(snapshot_id, target_paths, tier="balanced", max_chars=None):
             captured["tier"] = tier
             return (
                 "### docs/x.md\n```\nstub\n```",
@@ -436,7 +436,7 @@ class TestBuilderRenderInfoCarriesTruncation:
 
         warning_substr = "docs/big.md"
 
-        async def fake_fetch_with_metadata(snapshot_id, target_paths, tier="balanced"):
+        async def fake_fetch_with_metadata(snapshot_id, target_paths, tier="balanced", max_chars=None):
             return (
                 "### docs/big.md\n```\nstub\n```",
                 {

@@ -40,6 +40,20 @@ is about.
 | `high` | ~180s | **360s** | 50K chars | security-critical reviews |
 | `reasoning` | ~600s | **1200s** | 50K chars | complex architectural decisions |
 
+**Max input** is the size of the whole prompt: the review instructions, any
+evidence, and the files. The files get what is left, about 1,000 characters
+less than the figure in the table when no evidence is passed.
+
+When the files do not all fit, they are taken in this order: source, tests,
+configuration, documentation. A file that does not fit is skipped, and smaller
+files after it are still considered. If the very first file is larger than the
+room available, it is cut to fit so that something is reviewed. Every file
+that was left out is named in `expansion_warnings` and appears in
+`coverage.omitted` with reason `too_large`; `coverage.reviewed` lists only what
+the council was shown. A left-out file that you named in `target_paths` turns
+a `pass` into `unclear` (see [coverage accounting](#coverage-accounting-adr-053)); one that came from
+the commit's diff does not.
+
 !!! warning "`verify` runs to **twice** the tier budget — size `MCP_TIMEOUT` for that"
 
     `run_verification` wraps the pipeline in a global deadline of
