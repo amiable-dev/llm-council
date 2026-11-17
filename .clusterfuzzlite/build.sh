@@ -1,8 +1,13 @@
 #!/bin/bash -eu
 
 # Only the package itself is needed to import the fuzzed module — no
-# server/mcp extras, keeps the build minimal.
-pip3 install $SRC/llm-council
+# server/mcp extras, keeps the build minimal. Its dependencies come from
+# requirements.txt, exported from uv.lock with hashes
+# (tests/test_pinned_requirements.py fails when the two drift apart).
+pip3 install --require-hashes -r $SRC/llm-council/.clusterfuzzlite/requirements.txt
+# Editable (-e): OpenSSF Scorecard accepts a local install as pinned only in
+# the form `--no-deps -e`.
+pip3 install --no-deps -e $SRC/llm-council
 
 # --collect-data: PyInstaller bundles code, not package data. Since #690 the
 # tier pools live in llm_council/models/default_pools.yaml and are loaded at
