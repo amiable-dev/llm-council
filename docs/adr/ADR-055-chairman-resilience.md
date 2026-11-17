@@ -1,6 +1,6 @@
 # ADR-055: Chairman Resilience — Dynamic Fallback for Stage-3 Synthesis
 
-**Status:** Proposed 2026-08-27 — **rev 2** after council review. Review requested.
+**Status:** Proposed 2026-08-27 — **rev 3** (2026-09-29), aligned with #725 (merged in #726). Review requested.
 **Date:** 2026-08-27
 **Decision Makers:** llm-council maintainers
 **Proposed by:** [#598](https://github.com/amiable-dev/llm-council/issues/598), which is explicit that this needs an ADR before code: it changes deliberation behaviour and cost, and every other resilience mechanism in this repo got one first.
@@ -9,6 +9,7 @@
 
 **Review history:**
 
+- **rev 3** — no new review round; a factual realignment. [#725](https://github.com/amiable-dev/llm-council/issues/725) shipped the model-selection change that rev 2 deliberately deferred: the maintainer chose to honour ADR-022, so the primary chairman is now `chairman.resolve_chairman()` — an explicit `council.chairman` / `LLM_COUNCIL_CHAIRMAN` for every tier, else the running tier's `aggregator_model`. `council.chairman` now defaults to `None`, which also dissolves rev 1's objection that operator intent was undetectable. Changed here: the dead-config section (resolved), D2's primary and its step 2, D6's facts (every tier's default chairman is now a member of its own pool — a new open question), the Consequences line about `aggregator_model` being read, and P0 of the decomposition (done). No decision in D1, D3, D4 or D5 changes.
 - **rev 2** — council review of rev 1 (`verify`, tier=high, structured findings, snapshot `89a3c55a`, **fail** @ 0.86, 4 critical / 8 major / 3 minor, `verification_id` `66ab5ebf`). The review confirmed rev 1's code facts (accuracy 10.0/10) and rejected it on **decision consistency**, which was the right call. All four criticals accepted and fixed; the most consequential change is structural rather than editorial. Rev 1 made `tier_contract.aggregator_model` the *primary* chairman source, which (a) required detecting whether `council.chairman` was "explicitly set" — undetectable, because `unified_config.py:763` gives it a non-`None` default of `anthropic/claude-opus-5`, so a merged config cannot distinguish operator intent from the shipped default — and (b) coupled a MINOR-release model-selection change to a resilience feature. **Rev 2 leaves the primary chairman untouched** and uses `aggregator_model` only as a fallback candidate, which dissolves both problems and the back-compat claim rev 1 could not support. Also accepted: D4's budget rule said "floored" where it meant capped (making the per-model timeout a *lower* bound that extended the very deadline D4 promised not to extend); the one-attempt guarantee was unenforceable across two wiring sites; D2's chain had no defined terminus and collapsed to no candidate at `quick` and for `frontier`→`reasoning` (both map to `claude-opus-5`); D3 forced verdict-derivation and synthesis-provenance into one enum. Rev 1's self-contradiction on member promotion (rejected in D2, reserved in Alternatives) is resolved. **Meta:** three of the four criticals were internal contradictions between sections written minutes apart — the failure mode a single author is worst-placed to catch, which is the case for this review step existing.
 - **rev 1** — initial draft.
 
@@ -50,7 +51,9 @@ aggregation step — and the chairman is chosen for capability, which is
 correlated with latency, which is what makes it likely to be the one that
 drops out.
 
-### A related config defect, deliberately kept separate
+### A related config defect — kept separate, since resolved by #725
+
+> **rev 3:** everything below describes the state before #725. The primary chairman is now resolved per tier; the #607-class test has been replaced by `tests/test_issue725_per_tier_chairman.py`, which asserts the model the synthesis call is made with. The section is kept because rev 2's reasoning about scope still explains why the two changes shipped separately.
 
 `TierContract.aggregator_model` is **dead config**. ADR-022 defined a per-tier
 aggregator (`TIER_AGGREGATORS`, `tier_contract.py:122`) and
@@ -128,18 +131,20 @@ model, are **not model-specific** — swapping to another model at the same
 provider is deterministically doomed. D2 therefore diversifies by provider for
 these statuses.
 
-### D2 — Target: primary unchanged; an ordered, terminating candidate list
+### D2 — Target: the #725 primary; an ordered, terminating candidate list
 
-**The primary chairman is `council.chairman`, exactly as today.** No change, no
-config-provenance detection, no behaviour change for any deployment. Rev 1's
-chain is gone.
+**The primary chairman is `resolve_chairman()` (#725):** an explicit
+`council.chairman` for every tier, else the running tier's `aggregator_model`.
+This ADR does not change it; it adds what happens when the primary fails.
 
 On an infra trigger, build the **fallback candidate list** by concatenating, in
 order:
 
 1. `council.chairman_fallback` — an explicit operator list (new config, default
    empty). Operator intent wins outright.
-2. `tier_contract.aggregator_model` — ADR-022's per-tier intent, finally read.
+2. `tier_contract.aggregator_model` — ADR-022's per-tier intent. Since #725
+   this *is* the primary unless an operator configured one, so dedup removes
+   it; it survives only when an explicit `council.chairman` failed.
 3. `TIER_AGGREGATORS[t]` for each tier `t` in the fixed order
    `["reasoning", "high", "balanced", "quick"]`, starting **after** the running
    tier's position, and wrapping is **not** performed.
@@ -295,9 +300,11 @@ opposite latency profiles: a member is one of N parallel calls whose slow tail
 is absorbed, while the chairman is a serial single-attempt call on the critical
 path where the same latency is fatal. Selecting one model for both optimises
 against itself and makes the failures correlated — one timeout removes a member
-*and* the aggregator, which is exactly what #660 observed. Today
-`llm_council.yaml` has `anthropic/claude-opus-5` in both `high`'s pool and
-`council.chairman`.
+*and* the aggregator, which is exactly what #660 observed. **rev 3:** since
+#725 this holds for *every* tier's default: each tier's aggregator is also a
+member of that tier's shipped pool (quick `claude-haiku-4.5`, balanced
+`claude-sonnet-5`, high `gpt-5.6-sol`, reasoning `claude-opus-5`). The warning
+below would therefore fire on every default configuration — see open question 5.
 
 **Decision: emit a config-load warning, surfaced in
 `council_health_check.config_warnings`; do not reject the config.** Hard
@@ -319,8 +326,8 @@ no flag.
 
 **Positive.** The aggregator role gains the graceful degradation the member role
 has had since ADR-027. A chairman-specific outage stops being a total loss.
-`aggregator_model` starts being read for the first time since ADR-022 — without
-changing who synthesises today. Every degraded verdict is labelled at the point
+`aggregator_model`, read as the primary since #725, gains a defined successor
+when it fails. Every degraded verdict is labelled at the point
 a consumer reads it, and self-synthesis is visible on both paths.
 
 **Negative / accepted.**
@@ -397,6 +404,14 @@ remain eligible at D2 step 4, in pool order, never Borda order.
 4. **Does the self-synthesis test need to extend to stage-2 reviewers?** A
    fallback chairman that also *reviewed* has seen the anonymisation mapping's
    effects, though not the mapping. Probably immaterial; worth a reviewer's eye.
+5. **(rev 3) Every default chairman now chairs a pool it belongs to.** After
+   #725, D6's warning fires on every shipped tier, which makes it noise unless
+   the pools or `TIER_AGGREGATORS` change. Options: (a) drop the aggregator
+   from its own tier's pool, which costs a strong member at every tier;
+   (b) keep the overlap, label it (`chairman_self_reviewing`, already symmetric
+   per D6) and suppress the warning for the shipped defaults; (c) make the
+   warning opt-in. This is a model-selection question for the maintainer, like
+   #725 itself; this ADR should not decide it.
 
 **Resolved since rev 1.** "Should `high`'s chairman be its declared aggregator
 (`openai/gpt-5.6-sol`) rather than `anthropic/claude-opus-5`?" is **removed
@@ -410,10 +425,9 @@ resolve. It becomes a standalone #635-class model-selection ticket.
 
 Do not start before review. Suggested child tickets for the `adr-epic` flow:
 
-- **P0 — Decoupled config hygiene.** Reconcile `TIER_AGGREGATORS` vs
-  `council.chairman` (a model-selection decision), and replace the #607-class
-  test with one asserting the model the synthesis call *received*. Independent
-  of everything below; ships on its own.
+- **P0 — Decoupled config hygiene. DONE in #725** (per-tier primary, and the
+  #607-class test replaced by one asserting the model the synthesis call
+  *received*).
 - **P1 — Observability first.** `L3_CHAIRMAN_FALLBACK` event type + shadow-mode
   decision log **with the denominator**. No behaviour change; produces the data
   D5's flip criterion needs.
