@@ -2,13 +2,24 @@ name: ClusterFuzzLite batch fuzzing
 on:
   schedule:
     - cron: '0 4 * * *'  # 04:00 UTC nightly
+  workflow_dispatch:
+    inputs:
+      fuzz-seconds:
+        description: 'How long to fuzz, in seconds'
+        required: false
+        default: '3600'
 
 permissions: read-all
 
 jobs:
   Batch:
-    name: Batch fuzzing (6h)
+    name: Batch fuzzing (1h)
     runs-on: ubuntu-latest
+    # The fuzzing time must leave room for the build and for the end-of-run
+    # step that saves the corpus and reports crashes. It was 21600 s, exactly
+    # GitHub's 6-hour job limit, so every nightly run from 2026-08-23 was
+    # killed mid-fuzz: no corpus was ever saved and no crash could be reported.
+    timeout-minutes: 90
     # Guard against fork surprises, matches the bench.yml pattern.
     if: github.repository == 'amiable-dev/llm-council'
     steps:
@@ -21,6 +32,8 @@ jobs:
         uses: google/clusterfuzzlite/actions/run_fuzzers@884713a6c30a92e5e8544c39945cd7cb630abcd1  # v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          fuzz-seconds: 21600
+          # One hour a night. The corpus is kept between runs, so each night
+          # builds on the last.
+          fuzz-seconds: ${{ inputs.fuzz-seconds || '3600' }}
           mode: 'batch'
           sanitizer: address
