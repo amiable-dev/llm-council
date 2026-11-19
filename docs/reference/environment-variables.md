@@ -19,9 +19,12 @@
 | `LLM_COUNCIL_CIRCUIT_BREAKER` | Enable per-model circuit breaker (ADR-030) | true |
 | `LLM_COUNCIL_CIRCUIT_MIN_REQUESTS` | Minimum requests before a breaker can trip | 10 |
 | `LLM_COUNCIL_CIRCUIT_THRESHOLD` | Failure-rate threshold to open a breaker | 0.25 |
-| `LLM_COUNCIL_DEFAULT_GATEWAY` | Default gateway (openrouter/requesty/direct) | openrouter |
+| `LLM_COUNCIL_DEFAULT_GATEWAY` | Default gateway (openrouter/requesty/direct/auto/ollama/openclaw) | openrouter |
 | `LLM_COUNCIL_GATEWAY_FALLBACK_CHAIN` | Comma-separated gateway fallback order (ADR-023) | — |
 | `NOT_DIAMOND_API_KEY` | Not Diamond routing API key (ADR-020, optional) | — |
+| `OPENCLAW_CONFIG_PATH` | OpenClaw configuration used for local gateway discovery | ~/.openclaw/openclaw.json |
+| `OPENCLAW_GATEWAY_PORT` | Override the discovered local OpenClaw gateway port | OpenClaw config or 18789 |
+| `OPENCLAW_GATEWAY_TOKEN` | Override the local OpenClaw operator gateway token; this is not a provider OAuth credential | OpenClaw config |
 | `OPENROUTER_API_KEY` | OpenRouter API key (primary gateway) | — |
 | `REQUESTY_API_KEY` | Requesty API key | — |
 
